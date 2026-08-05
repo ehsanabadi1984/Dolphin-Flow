@@ -1,0 +1,18 @@
+Decision:
+
+Use separated frontend architecture.
+
+
+Frontend:
+
+React
+
+
+Backend Communication:
+
+REST API
+
+
+Reason:
+
+Better UX, scalability, future mobile support.
