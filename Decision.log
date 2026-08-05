@@ -16,3 +16,5 @@ REST API
 Reason:
 
 Better UX, scalability, future mobile support.
+
+Development environment runs inside WSL2 and Git operations are managed from WSL. Windows Git clients are optional visualization tools.
