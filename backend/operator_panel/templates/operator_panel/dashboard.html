@@ -1,0 +1,256 @@
+{% extends "operator_panel/base.html" %}
+
+{% block title %}
+    داشبورد | Dolphin Flow
+{% endblock %}
+
+{% block content %}
+
+<section class="df-content">
+
+    <div class="df-welcome">
+
+        <h1>
+            صبح بخیر،
+            {{ request.user.get_full_name|default:request.user.username }}
+        </h1>
+
+        <p>
+            وضعیت کلی فرآیندهای تعمیرات را از اینجا مشاهده کنید.
+        </p>
+
+    </div>
+
+
+    <section class="df-kpis">
+
+        <div class="df-card df-kpi">
+            <div class="df-kpi-label">
+                فرم‌های امروز
+            </div>
+
+            <div class="df-kpi-value">
+                24
+            </div>
+
+            <div class="df-kpi-meta">
+                +12٪ نسبت به دیروز
+            </div>
+        </div>
+
+
+        <div class="df-card df-kpi">
+            <div class="df-kpi-label">
+                در انتظار اقدام
+            </div>
+
+            <div class="df-kpi-value">
+                08
+            </div>
+
+            <div class="df-kpi-meta">
+                نیازمند بررسی
+            </div>
+        </div>
+
+
+        <div class="df-card df-kpi">
+            <div class="df-kpi-label">
+                در حال تعمیر
+            </div>
+
+            <div class="df-kpi-value">
+                11
+            </div>
+
+            <div class="df-kpi-meta">
+                فعال
+            </div>
+        </div>
+
+
+        <div class="df-card df-kpi">
+            <div class="df-kpi-label">
+                آماده تحویل
+            </div>
+
+            <div class="df-kpi-value">
+                05
+            </div>
+
+            <div class="df-kpi-meta">
+                آماده ارسال
+            </div>
+        </div>
+
+    </section>
+
+
+    <section class="df-grid">
+
+        <div class="df-card df-panel">
+
+            <div class="df-panel-header">
+
+                <div class="df-panel-title">
+                    آخرین فرم‌های تعمیر
+                </div>
+
+                <a href="#" class="df-panel-link">
+                    مشاهده همه
+                </a>
+
+            </div>
+
+            <div class="df-activity">
+
+                <div class="df-activity-item">
+
+                    <div class="df-activity-dot"></div>
+
+                    <div class="df-activity-main">
+
+                        <div class="df-activity-title">
+                            RF-1024 — شرکت نمونه
+                        </div>
+
+                        <div class="df-activity-meta">
+                            2 دستگاه · امروز، 09:42
+                        </div>
+
+                    </div>
+
+                    <span class="df-status df-status-info">
+                        پشتیبانی
+                    </span>
+
+                </div>
+
+
+                <div class="df-activity-item">
+
+                    <div class="df-activity-dot"></div>
+
+                    <div class="df-activity-main">
+
+                        <div class="df-activity-title">
+                            RF-1023 — علی احمدی
+                        </div>
+
+                        <div class="df-activity-meta">
+                            1 دستگاه · امروز، 09:18
+                        </div>
+
+                    </div>
+
+                    <span class="df-status df-status-warning">
+                        تعمیرات
+                    </span>
+
+                </div>
+
+
+                <div class="df-activity-item">
+
+                    <div class="df-activity-dot"></div>
+
+                    <div class="df-activity-main">
+
+                        <div class="df-activity-title">
+                            RF-1022 — سازمان نمونه
+                        </div>
+
+                        <div class="df-activity-meta">
+                            3 دستگاه · امروز، 08:51
+                        </div>
+
+                    </div>
+
+                    <span class="df-status df-status-success">
+                        آماده تحویل
+                    </span>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="df-card df-panel">
+
+            <div class="df-panel-header">
+
+                <div class="df-panel-title">
+                    فعالیت اخیر
+                </div>
+
+            </div>
+
+            <div class="df-activity">
+
+                <div class="df-activity-item">
+
+                    <div class="df-activity-dot"></div>
+
+                    <div class="df-activity-main">
+
+                        <div class="df-activity-title">
+                            فرم جدید ثبت شد
+                        </div>
+
+                        <div class="df-activity-meta">
+                            5 دقیقه پیش
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="df-activity-item">
+
+                    <div class="df-activity-dot"></div>
+
+                    <div class="df-activity-main">
+
+                        <div class="df-activity-title">
+                            دستگاه وارد مرحله تعمیر شد
+                        </div>
+
+                        <div class="df-activity-meta">
+                            18 دقیقه پیش
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="df-activity-item">
+
+                    <div class="df-activity-dot"></div>
+
+                    <div class="df-activity-main">
+
+                        <div class="df-activity-title">
+                            پرداخت تأیید شد
+                        </div>
+
+                        <div class="df-activity-meta">
+                            32 دقیقه پیش
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</section>
+
+{% endblock %}

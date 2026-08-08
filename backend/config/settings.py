@@ -36,6 +36,10 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 
 INSTALLED_APPS = [
     "accounts",
+    "customers",
+    "repairs",
+    "operator_panel",
+    "workflow",  
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -136,3 +140,7 @@ MAILERS = {
 }
 
 AUTH_USER_MODEL = "accounts.User"
+
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/operator/dashboard/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"

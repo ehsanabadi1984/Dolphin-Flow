@@ -2,17 +2,48 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 
-class User(AbstractUser):
-    class Role(models.TextChoices):
-        SYSTEM_ADMIN = "SYSTEM_ADMIN", "System Admin"
-        OPERATOR = "OPERATOR", "Operator"
+class Job(models.Model):
+    name = models.CharField(
+        max_length=150,
+        unique=True,
+    )
 
-    role = models.CharField(
-        max_length=20,
-        choices=Role.choices,
-        default=Role.OPERATOR,
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class User(AbstractUser):
+    job = models.ForeignKey(
+        Job,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="users",
     )
 
     def __str__(self):
         return self.get_full_name() or self.username
-# Create your models here.

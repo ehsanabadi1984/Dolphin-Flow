@@ -1,0 +1,35 @@
+
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{% block title %}Dolphin Flow{% endblock %}</title>
+
+    <link rel="stylesheet" href="{% static 'operator_panel/css/app.css' %}">
+</head>
+
+<body>
+
+<div class="df-layout">
+
+    {% include "operator_panel/sidebar.html" %}
+
+    <main class="df-main">
+
+        {% include "operator_panel/header.html" %}
+
+        {% block content %}
+        {% endblock %}
+
+    </main>
+
+</div>
+{% load static %}
+
+<script src="{% static 'operator_panel/js/app.js' %}"></script>
+</body>
+</html>
