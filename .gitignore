@@ -16,6 +16,7 @@ media/
 # Environment Variables
 .env
 .env.*
+!.env.example
 
 # Node
 node_modules/
