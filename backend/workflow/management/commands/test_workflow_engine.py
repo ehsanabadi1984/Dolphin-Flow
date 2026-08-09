@@ -75,6 +75,7 @@ class Command(BaseCommand):
         membership = WorkflowMembership.objects.create(
             workflow=workflow,
             user=user,
+            role=WorkflowMembership.Role.EXECUTOR,
             is_active=True,
         )
 

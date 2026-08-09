@@ -37,6 +37,13 @@ class Workflow(models.Model):
 
 
 class WorkflowMembership(models.Model):
+
+    class Role(models.TextChoices):
+        VIEWER = "VIEWER", "مشاهده‌کننده"
+        EXECUTOR = "EXECUTOR", "مجری"
+        MANAGER = "MANAGER", "مدیر"
+
+
     workflow = models.ForeignKey(
         Workflow,
         on_delete=models.PROTECT,
@@ -48,6 +55,12 @@ class WorkflowMembership(models.Model):
         on_delete=models.PROTECT,
         related_name="workflow_memberships",
     )
+
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+        default=Role.EXECUTOR,
+    )    
 
     is_active = models.BooleanField(
         default=True,
@@ -67,8 +80,11 @@ class WorkflowMembership(models.Model):
         ordering = ["workflow", "user"]
 
     def __str__(self):
-        return f"{self.workflow.name} - {self.user}"
-
+        return (
+            f"{self.workflow.name} - "
+            f"{self.user} - "
+            f"{self.get_role_display()}"
+        )
 class WorkflowStep(models.Model):
     workflow = models.ForeignKey(
         Workflow,
@@ -322,4 +338,91 @@ class WorkflowTransitionExecution(models.Model):
             f"{self.instance} - "
             f"{self.transition.name} - "
             f"{self.performed_by}"
+        )
+
+class WorkflowPermission(models.Model):
+    class Action(models.TextChoices):
+        VIEW = "VIEW", "مشاهده"
+        EXECUTE = "EXECUTE", "اجرا"
+        TRANSITION = "TRANSITION", "تغییر مرحله"
+        MANAGE = "MANAGE", "مدیریت"
+
+    class Effect(models.TextChoices):
+        ALLOW = "ALLOW", "مجاز"
+        DENY = "DENY", "ممنوع"
+
+    workflow = models.ForeignKey(
+        Workflow,
+        on_delete=models.PROTECT,
+        related_name="permissions",
+    )
+
+    step = models.ForeignKey(
+        WorkflowStep,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="permissions",
+    )
+
+    transition = models.ForeignKey(
+        WorkflowTransition,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="permissions",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="workflow_permissions",
+    )
+
+    role = models.CharField(
+        max_length=30,
+        choices=WorkflowMembership.Role.choices,
+        null=True,
+        blank=True,
+    )
+
+    action = models.CharField(
+        max_length=20,
+        choices=Action.choices,
+    )
+
+    effect = models.CharField(
+        max_length=10,
+        choices=Effect.choices,
+        default=Effect.ALLOW,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["workflow", "action"]
+
+    def __str__(self):
+        subject = self.user or self.role or "GLOBAL"
+
+        target = (
+            self.step
+            or self.transition
+            or self.workflow
+        )
+
+        return (
+            f"{self.workflow.name} - "
+            f"{subject} - "
+            f"{target} - "
+            f"{self.action} - "
+            f"{self.effect}"
         )
