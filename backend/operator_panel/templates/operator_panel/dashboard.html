@@ -85,6 +85,153 @@
 
     </section>
 
+<section class="df-grid">
+
+    <div class="df-card df-panel">
+
+        <div class="df-panel-header">
+
+            <div class="df-panel-title">
+                فرآیندهای قابل شروع
+            </div>
+
+        </div>
+
+        <div class="df-activity">
+
+            {% for workflow in workflows %}
+
+                <div class="df-activity-item">
+
+                    <div class="df-activity-dot"></div>
+
+                    <div class="df-activity-main">
+
+                        <div class="df-activity-title">
+                            {{ workflow.name }}
+                        </div>
+
+                        {% if workflow.description %}
+                            <div class="df-activity-meta">
+                                {{ workflow.description }}
+                            </div>
+                        {% endif %}
+
+                    </div>
+
+                    <form
+                        method="post"
+                        action="{% url 'operator_panel:start_workflow' workflow.pk %}"
+                    >
+                        {% csrf_token %}
+
+                        <button
+                            type="submit"
+                            class="df-status df-status-info"
+                        >
+                            شروع فرآیند
+                        </button>
+
+                    </form>
+
+                </div>
+
+            {% empty %}
+
+                <div class="df-activity-item">
+
+                    <div class="df-activity-main">
+
+                        <div class="df-activity-title">
+                            فرآیند فعالی برای شما وجود ندارد.
+                        </div>
+
+                        <div class="df-activity-meta">
+                            شما عضو هیچ Workflow فعالی نیستید.
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+
+    <div class="df-card df-panel">
+
+        <div class="df-panel-header">
+
+            <div class="df-panel-title">
+                فرآیندهای من
+            </div>
+
+        </div>
+
+        <div class="df-activity">
+
+            {% for instance in instances %}
+
+                <div class="df-activity-item">
+
+                    <div class="df-activity-dot"></div>
+
+                    <div class="df-activity-main">
+
+                        <div class="df-activity-title">
+
+                            {{ instance.workflow.name }}
+                            —
+                            #{{ instance.pk }}
+
+                        </div>
+
+                        <div class="df-activity-meta">
+
+                            {% if instance.current_step %}
+                                مرحله:
+                                {{ instance.current_step.name }}
+                            {% else %}
+                                بدون مرحله فعلی
+                            {% endif %}
+
+                        </div>
+
+                    </div>
+
+                    <a
+                        href="{% url 'operator_panel:workflow_instance' instance.pk %}"
+                        class="df-status df-status-success"
+                    >
+                        مشاهده
+                    </a>
+
+                </div>
+
+            {% empty %}
+
+                <div class="df-activity-item">
+
+                    <div class="df-activity-main">
+
+                        <div class="df-activity-title">
+                            هنوز فرآیندی برای شما ایجاد نشده است.
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+</section>
 
     <section class="df-grid">
 
