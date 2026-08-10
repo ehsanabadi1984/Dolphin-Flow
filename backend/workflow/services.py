@@ -1,9 +1,11 @@
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from .authorization import WorkflowAuthorizationService
 from .models import (
     WorkflowInstance,
+    WorkflowPermission,
     WorkflowStepExecution,
     WorkflowTransitionExecution,
 )
@@ -36,18 +38,14 @@ class WorkflowExecutionService:
             )
 
         # ---------------------------------------------------------
-        # 2. Validate workflow membership
+        # 2. Authorization
         # ---------------------------------------------------------
 
-        is_member = workflow.memberships.filter(
+        WorkflowAuthorizationService.require_permission(
             user=user,
-            is_active=True,
-        ).exists()
-
-        if not is_member:
-            raise PermissionDenied(
-                "کاربر عضو این فرآیند نیست."
-            )
+            workflow=workflow,
+            action=WorkflowPermission.Action.EXECUTE,
+        )
 
         # ---------------------------------------------------------
         # 3. Find the first active step
@@ -166,18 +164,15 @@ class WorkflowExecutionService:
             )
 
         # ---------------------------------------------------------
-        # 5. Validate workflow membership
+        # 5. Authorization
         # ---------------------------------------------------------
 
-        is_member = instance.workflow.memberships.filter(
+        WorkflowAuthorizationService.require_permission(
             user=user,
-            is_active=True,
-        ).exists()
-
-        if not is_member:
-            raise PermissionDenied(
-                "کاربر عضو این فرآیند نیست."
-            )
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.TRANSITION,
+            transition=transition,
+        )
 
         # ---------------------------------------------------------
         # 6. Create transition execution record

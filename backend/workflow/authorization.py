@@ -4,6 +4,17 @@ from .models import WorkflowPermission
 
 
 class WorkflowAuthorizationService:
+    """
+    Centralized authorization service for Workflow operations.
+
+    Authorization is resolved using:
+        1. Explicit user permission
+        2. Role-based permission
+        3. Deny by default
+
+    Explicit DENY always overrides ALLOW
+    at the same authorization level.
+    """
 
     @staticmethod
     def has_permission(
@@ -15,19 +26,13 @@ class WorkflowAuthorizationService:
         transition=None,
     ):
         """
-        Check whether a user is allowed to perform an action
-        within a workflow.
-
-        Permission resolution order:
-
-        1. Explicit user permission
-        2. Workflow role permission
-        3. Deny by default
+        Return True if the user is authorized to perform
+        the requested action.
         """
 
-        # ---------------------------------------------------------
+        # -----------------------------------------------------
         # 1. Basic user validation
-        # ---------------------------------------------------------
+        # -----------------------------------------------------
 
         if not user or not user.is_authenticated:
             return False
@@ -35,39 +40,56 @@ class WorkflowAuthorizationService:
         if not user.is_active:
             return False
 
-        # ---------------------------------------------------------
-        # 2. Collect active workflow roles
-        # ---------------------------------------------------------
+        if not workflow or not workflow.is_active:
+            return False
 
-        memberships = workflow.memberships.filter(
-            user=user,
-            is_active=True,
-        )
+        # -----------------------------------------------------
+        # 2. Collect active workflow roles
+        # -----------------------------------------------------
 
         roles = list(
-            memberships.values_list(
+            workflow.memberships.filter(
+                user=user,
+                is_active=True,
+            ).values_list(
                 "role",
                 flat=True,
             )
         )
 
-        # ---------------------------------------------------------
-        # 3. Find applicable permissions
-        # ---------------------------------------------------------
+        # No membership means no workflow authorization.
+        if not roles:
+            return False
+
+        # -----------------------------------------------------
+        # 3. Base permission queryset
+        # -----------------------------------------------------
 
         permissions = WorkflowPermission.objects.filter(
             workflow=workflow,
             action=action,
         )
 
-        if step is not None:
-            permissions = permissions.filter(
-                step=step,
-            )
+        # -----------------------------------------------------
+        # 4. Resolve authorization scope
+        # -----------------------------------------------------
 
-        elif transition is not None:
+        if transition is not None:
+
+            if transition.workflow_id != workflow.id:
+                return False
+
             permissions = permissions.filter(
                 transition=transition,
+            )
+
+        elif step is not None:
+
+            if step.workflow_id != workflow.id:
+                return False
+
+            permissions = permissions.filter(
+                step=step,
             )
 
         else:
@@ -76,55 +98,46 @@ class WorkflowAuthorizationService:
                 transition__isnull=True,
             )
 
-        # ---------------------------------------------------------
-        # 4. User-specific permissions
-        # ---------------------------------------------------------
+        # -----------------------------------------------------
+        # 5. Explicit user permissions
+        # -----------------------------------------------------
 
         user_permissions = permissions.filter(
             user=user,
         )
 
-        explicit_deny = user_permissions.filter(
+        if user_permissions.filter(
             effect=WorkflowPermission.Effect.DENY,
-        ).exists()
-
-        if explicit_deny:
+        ).exists():
             return False
 
-        explicit_allow = user_permissions.filter(
+        if user_permissions.filter(
             effect=WorkflowPermission.Effect.ALLOW,
-        ).exists()
-
-        if explicit_allow:
+        ).exists():
             return True
 
-        # ---------------------------------------------------------
-        # 5. Role-based permissions
-        # ---------------------------------------------------------
+        # -----------------------------------------------------
+        # 6. Role-based permissions
+        # -----------------------------------------------------
 
-        if roles:
-            role_permissions = permissions.filter(
-                role__in=roles,
-                user__isnull=True,
-            )
+        role_permissions = permissions.filter(
+            role__in=roles,
+            user__isnull=True,
+        )
 
-            role_deny = role_permissions.filter(
-                effect=WorkflowPermission.Effect.DENY,
-            ).exists()
+        if role_permissions.filter(
+            effect=WorkflowPermission.Effect.DENY,
+        ).exists():
+            return False
 
-            if role_deny:
-                return False
+        if role_permissions.filter(
+            effect=WorkflowPermission.Effect.ALLOW,
+        ).exists():
+            return True
 
-            role_allow = role_permissions.filter(
-                effect=WorkflowPermission.Effect.ALLOW,
-            ).exists()
-
-            if role_allow:
-                return True
-
-        # ---------------------------------------------------------
-        # 6. Deny by default
-        # ---------------------------------------------------------
+        # -----------------------------------------------------
+        # 7. Deny by default
+        # -----------------------------------------------------
 
         return False
 
@@ -138,7 +151,9 @@ class WorkflowAuthorizationService:
         transition=None,
     ):
         """
-        Require permission or raise PermissionDenied.
+        Require authorization.
+
+        Raises PermissionDenied when the user is not authorized.
         """
 
         allowed = WorkflowAuthorizationService.has_permission(

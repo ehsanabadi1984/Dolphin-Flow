@@ -1,0 +1,80 @@
+{% extends "operator_panel/base.html" %}
+
+{% block content %}
+
+<div class="workflow-instance">
+
+    <h1>{{ instance.workflow.name }}</h1>
+
+    <p>
+        Instance #{{ instance.pk }}
+    </p>
+
+    <p>
+        وضعیت:
+        {{ instance.get_status_display }}
+    </p>
+
+    {% if instance.current_step %}
+        <p>
+            مرحله فعلی:
+            <strong>
+                {{ instance.current_step.name }}
+            </strong>
+        </p>
+    {% endif %}
+
+    {% if error %}
+        <div class="error">
+            {{ error }}
+        </div>
+    {% endif %}
+
+    {% if instance.status == "ACTIVE" %}
+
+        <h2>Transitionهای قابل اجرا</h2>
+
+        {% if transitions %}
+
+            {% for transition in transitions %}
+
+                <form
+                    method="post"
+                    action="{% url 'operator_panel:execute_transition' instance.pk transition.pk %}"
+                >
+
+                    {% csrf_token %}
+
+                    <button type="submit">
+                        {{ transition.name }}
+                    </button>
+
+                    {% if transition.description %}
+                        <p>
+                            {{ transition.description }}
+                        </p>
+                    {% endif %}
+
+                </form>
+
+            {% endfor %}
+
+        {% else %}
+
+            <p>
+                هیچ Transition فعالی برای این مرحله وجود ندارد.
+            </p>
+
+        {% endif %}
+
+    {% else %}
+
+        <p>
+            این Workflow Instance دیگر فعال نیست.
+        </p>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}
