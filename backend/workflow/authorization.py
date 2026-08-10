@@ -168,5 +168,41 @@ class WorkflowAuthorizationService:
             raise PermissionDenied(
                 "کاربر اجازه انجام این عملیات را ندارد."
             )
-
+            
         return True
+
+
+    @staticmethod
+    def get_allowed_transitions(
+        *,
+        user,
+        workflow,
+        from_step,
+    ):
+        """
+        Return active transitions from the given step
+        that the user is authorized to execute.
+        """
+
+        transitions = (
+            workflow.transitions
+            .filter(
+                from_step=from_step,
+                is_active=True,
+            )
+            .select_related(
+                "from_step",
+                "to_step",
+            )
+        )
+
+        return [
+            transition
+            for transition in transitions
+            if WorkflowAuthorizationService.has_permission(
+                user=user,
+                workflow=workflow,
+                action=WorkflowPermission.Action.TRANSITION,
+                transition=transition,
+            )
+        ]

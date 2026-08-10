@@ -426,3 +426,218 @@ class WorkflowPermission(models.Model):
             f"{self.action} - "
             f"{self.effect}"
         )
+
+class FormDefinition(models.Model):
+    workflow = models.OneToOneField(
+        Workflow,
+        on_delete=models.PROTECT,
+        related_name="form_definition",
+    )
+
+    name = models.CharField(
+        max_length=150,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    def __str__(self):
+        return self.name
+
+
+class FormSection(models.Model):
+    form = models.ForeignKey(
+        FormDefinition,
+        on_delete=models.PROTECT,
+        related_name="sections",
+    )
+
+    name = models.CharField(
+        max_length=150,
+    )
+
+    code = models.CharField(
+        max_length=50,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    order = models.PositiveIntegerField(
+        default=0,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    class Meta:
+        ordering = ["order"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["form", "code"],
+                name="unique_form_section_code",
+            ),
+            models.UniqueConstraint(
+                fields=["form", "order"],
+                name="unique_form_section_order",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.form.name} - {self.name}"
+
+
+class FormField(models.Model):
+
+    class FieldType(models.TextChoices):
+        TEXT = "TEXT", "متن"
+        TEXTAREA = "TEXTAREA", "متن چندخطی"
+        NUMBER = "NUMBER", "عدد"
+        DATE = "DATE", "تاریخ"
+        DATETIME = "DATETIME", "تاریخ و زمان"
+        BOOLEAN = "BOOLEAN", "بله/خیر"
+        SELECT = "SELECT", "انتخابی"
+
+    section = models.ForeignKey(
+        FormSection,
+        on_delete=models.PROTECT,
+        related_name="fields",
+    )
+
+    name = models.CharField(
+        max_length=150,
+    )
+
+    code = models.CharField(
+        max_length=50,
+    )
+
+    field_type = models.CharField(
+        max_length=20,
+        choices=FieldType.choices,
+        default=FieldType.TEXT,
+    )
+
+    label = models.CharField(
+        max_length=200,
+    )
+
+    help_text = models.TextField(
+        blank=True,
+    )
+
+    is_required = models.BooleanField(
+        default=False,
+    )
+
+    order = models.PositiveIntegerField(
+        default=0,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    choices = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["order"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["section", "code"],
+                name="unique_form_field_code",
+            ),
+            models.UniqueConstraint(
+                fields=["section", "order"],
+                name="unique_form_field_order",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.section.name} - {self.label}"
+
+
+class FieldAccess(models.Model):
+    field = models.ForeignKey(
+        FormField,
+        on_delete=models.PROTECT,
+        related_name="access_rules",
+    )
+
+    step = models.ForeignKey(
+        WorkflowStep,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="field_access_rules",
+    )
+
+    role = models.CharField(
+        max_length=20,
+        choices=WorkflowMembership.Role.choices,
+        null=True,
+        blank=True,
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="field_access_rules",
+    )
+
+    can_view = models.BooleanField(
+        default=True,
+    )
+
+    can_edit = models.BooleanField(
+        default=False,
+    )
+
+    class Meta:
+        ordering = ["field"]
+
+    def __str__(self):
+        subject = self.user or self.role or "GLOBAL"
+        return f"{self.field} - {subject}"
+
+
+class FormData(models.Model):
+    instance = models.OneToOneField(
+        WorkflowInstance,
+        on_delete=models.PROTECT,
+        related_name="form_data",
+    )
+
+    data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    def __str__(self):
+        return f"Form data - {self.instance}"

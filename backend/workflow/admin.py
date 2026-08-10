@@ -12,6 +12,11 @@ from .models import (
     WorkflowTransition,
     WorkflowTransitionExecution,
     WorkflowPermission,
+    FormDefinition,
+    FormSection,
+    FormField,
+    FieldAccess,
+    FormData,
 )
 
 
@@ -622,3 +627,114 @@ class WorkflowTransitionExecutionAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(FormDefinition)
+class FormDefinitionAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "workflow",
+        "is_active",
+        "created_at",
+    )
+
+    list_filter = (
+        "is_active",
+    )
+
+    search_fields = (
+        "name",
+        "workflow__name",
+    )
+
+
+@admin.register(FormSection)
+class FormSectionAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "form",
+        "code",
+        "order",
+        "is_active",
+    )
+
+    list_filter = (
+        "is_active",
+        "form",
+    )
+
+    search_fields = (
+        "name",
+        "code",
+    )
+
+    ordering = (
+        "form",
+        "order",
+    )
+
+
+@admin.register(FormField)
+class FormFieldAdmin(admin.ModelAdmin):
+    list_display = (
+        "label",
+        "section",
+        "code",
+        "field_type",
+        "is_required",
+        "order",
+        "is_active",
+    )
+
+    list_filter = (
+        "field_type",
+        "is_required",
+        "is_active",
+    )
+
+    search_fields = (
+        "label",
+        "name",
+        "code",
+    )
+
+    ordering = (
+        "section",
+        "order",
+    )
+
+
+@admin.register(FieldAccess)
+class FieldAccessAdmin(admin.ModelAdmin):
+    list_display = (
+        "field",
+        "step",
+        "role",
+        "user",
+        "can_view",
+        "can_edit",
+    )
+
+    list_filter = (
+        "can_view",
+        "can_edit",
+        "role",
+    )
+
+    search_fields = (
+        "field__label",
+        "field__code",
+    )
+
+
+@admin.register(FormData)
+class FormDataAdmin(admin.ModelAdmin):
+    list_display = (
+        "instance",
+        "created_at",
+        "updated_at",
+    )
+
+    search_fields = (
+        "instance__workflow__name",
+    )

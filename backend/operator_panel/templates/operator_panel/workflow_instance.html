@@ -24,6 +24,193 @@
         </p>
     {% endif %}
 
+{% if dynamic_form %}
+
+<form
+    method="post"
+    action="{% url 'operator_panel:save_form_data' instance.pk %}"
+
+    <form
+    method="post"
+    action="{% url 'operator_panel:workflow_instance' instance.pk %}"
+>
+>
+    {% csrf_token %}
+
+    <section class="df-form">
+
+        <div class="df-form-header">
+
+            <h2>
+                {{ dynamic_form.form.name }}
+            </h2>
+
+        </div>
+
+        {% for section in dynamic_form.sections %}
+
+            <section class="df-form-section">
+
+                <div class="df-form-section-header">
+
+                    <h3>
+                        {{ section.section.name }}
+                    </h3>
+
+                    {% if section.section.description %}
+                        <p>
+                            {{ section.section.description }}
+                        </p>
+                    {% endif %}
+
+                </div>
+
+                <div class="df-form-fields">
+
+                    {% for item in section.fields %}
+
+                        <div class="df-form-field">
+
+                            <label
+                                for="field-{{ item.field.code }}"
+                            >
+                                {{ item.field.label }}
+
+                                {% if item.field.is_required %}
+                                    <span>*</span>
+                                {% endif %}
+                            </label>
+
+                            {% if item.field.help_text %}
+                                <small>
+                                    {{ item.field.help_text }}
+                                </small>
+                            {% endif %}
+
+
+                            {% if item.can_edit %}
+
+                                {% if item.field.field_type == "TEXT" %}
+
+                                    <input
+                                        id="field-{{ item.field.code }}"
+                                        type="text"
+                                        name="{{ item.field.code }}"
+                                        value="{{ item.value|default:'' }}"
+                                    >
+
+
+                                {% elif item.field.field_type == "TEXTAREA" %}
+
+                                    <textarea
+                                        id="field-{{ item.field.code }}"
+                                        name="{{ item.field.code }}"
+                                    >{{ item.value|default:'' }}</textarea>
+
+
+                                {% elif item.field.field_type == "NUMBER" %}
+
+                                    <input
+                                        id="field-{{ item.field.code }}"
+                                        type="number"
+                                        name="{{ item.field.code }}"
+                                        value="{{ item.value|default:'' }}"
+                                    >
+
+
+                                {% elif item.field.field_type == "DATE" %}
+
+                                    <input
+                                        id="field-{{ item.field.code }}"
+                                        type="date"
+                                        name="{{ item.field.code }}"
+                                        value="{{ item.value|default:'' }}"
+                                    >
+
+
+                                {% elif item.field.field_type == "DATETIME" %}
+
+                                    <input
+                                        id="field-{{ item.field.code }}"
+                                        type="datetime-local"
+                                        name="{{ item.field.code }}"
+                                        value="{{ item.value|default:'' }}"
+                                    >
+
+
+                                {% elif item.field.field_type == "BOOLEAN" %}
+
+                                    <input
+                                        id="field-{{ item.field.code }}"
+                                        type="checkbox"
+                                        name="{{ item.field.code }}"
+                                        {% if item.value %}
+                                            checked
+                                        {% endif %}
+                                    >
+
+
+                                {% elif item.field.field_type == "SELECT" %}
+
+                                    <select
+                                        id="field-{{ item.field.code }}"
+                                        name="{{ item.field.code }}"
+                                    >
+
+                                        {% for choice in item.field.choices %}
+
+                                            <option
+                                                value="{{ choice }}"
+                                                {% if item.value == choice %}
+                                                    selected
+                                                {% endif %}
+                                            >
+                                                {{ choice }}
+                                            </option>
+
+                                        {% endfor %}
+
+                                    </select>
+
+                                {% endif %}
+
+
+                            {% else %}
+
+                                <div class="df-form-readonly">
+                                    فقط مشاهده
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+                    {% endfor %}
+
+                </div>
+
+            </section>
+
+        {% endfor %}
+
+
+        <div class="df-form-actions">
+
+            <button
+                type="submit"
+                class="df-button"
+            >
+                ذخیره اطلاعات
+            </button>
+
+        </div>
+
+    </section>
+</form>
+</form>
+
+{% endif %}
+
     {% if error %}
         <div class="error">
             {{ error }}
