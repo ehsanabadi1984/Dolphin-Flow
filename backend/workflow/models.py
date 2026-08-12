@@ -1,3 +1,5 @@
+import re
+import uuid
 from django.conf import settings
 from django.db import models
 
@@ -98,6 +100,7 @@ class WorkflowStep(models.Model):
 
     code = models.CharField(
         max_length=50,
+        editable=False,
     )
 
     description = models.TextField(
@@ -133,6 +136,13 @@ class WorkflowStep(models.Model):
                 name="unique_workflow_step_order",
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = f"STEP_{uuid.uuid4().hex[:8].upper()}"
+
+        super().save(*args, **kwargs)
+
 
     def __str__(self):
         return f"{self.workflow.name} - {self.name}"
@@ -194,6 +204,205 @@ class WorkflowInstance(models.Model):
             f"#{self.pk}"
         )
 
+
+class DeviceType(models.Model):
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+    )
+
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+class DeviceModel(models.Model):
+    device_type = models.ForeignKey(
+        DeviceType,
+        on_delete=models.PROTECT,
+        related_name="models",
+    )
+
+    brand = models.CharField(
+        max_length=100,
+    )
+
+    name = models.CharField(
+        max_length=150,
+    )
+
+    code = models.CharField(
+        max_length=50,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["brand", "name"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device_type", "code"],
+                name="unique_device_model_code",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.brand} {self.name}"
+
+class Device(models.Model):
+    device_model = models.ForeignKey(
+        DeviceModel,
+        on_delete=models.PROTECT,
+        related_name="devices",
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.device_model}"
+
+class DeviceIdentifier(models.Model):
+
+    class IdentifierType(models.TextChoices):
+        IMEI = "IMEI", "IMEI"
+        SERIAL_NUMBER = "SERIAL_NUMBER", "شماره سریال"
+        MAC_ADDRESS = "MAC_ADDRESS", "MAC Address"
+
+    device = models.ForeignKey(
+        Device,
+        on_delete=models.PROTECT,
+        related_name="identifiers",
+    )
+
+    identifier_type = models.CharField(
+        max_length=30,
+        choices=IdentifierType.choices,
+    )
+
+    value = models.CharField(
+        max_length=150,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["identifier_type", "value"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "identifier_type",
+                    "value",
+                ],
+                name="unique_device_identifier",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.get_identifier_type_display()}: {self.value}"
+
+class InstanceDevice(models.Model):
+    instance = models.ForeignKey(
+        WorkflowInstance,
+        on_delete=models.PROTECT,
+        related_name="instance_devices",
+    )
+
+    device = models.ForeignKey(
+        Device,
+        on_delete=models.PROTECT,
+        related_name="workflow_instances",
+    )
+
+    reported_problem = models.TextField(
+        blank=True,
+    )
+
+    warranty_status = models.CharField(
+        max_length=30,
+        blank=True,
+    )
+
+    status = models.CharField(
+        max_length=30,
+        blank=True,
+    )
+    is_active = models.BooleanField(
+        default=True,
+    )
+    received_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["-received_at"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["instance", "device"],
+                name="unique_instance_device",
+            ),
+        ]
 
 class WorkflowStepExecution(models.Model):
     instance = models.ForeignKey(
@@ -264,6 +473,8 @@ class WorkflowTransition(models.Model):
 
     code = models.CharField(
         max_length=50,
+        blank=True,
+        editable=False,
     )
 
     description = models.TextField(
@@ -291,6 +502,12 @@ class WorkflowTransition(models.Model):
                 name="unique_workflow_transition_code",
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = f"TRANS_{uuid.uuid4().hex[:8].upper()}"
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return (
@@ -498,6 +715,56 @@ class FormSection(models.Model):
     def __str__(self):
         return f"{self.form.name} - {self.name}"
 
+class FormRepeatableGroup(models.Model):
+    section = models.ForeignKey(
+        FormSection,
+        on_delete=models.PROTECT,
+        related_name="repeatable_groups",
+    )
+
+    name = models.CharField(
+        max_length=150,
+    )
+
+    code = models.CharField(
+        max_length=50,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    order = models.PositiveIntegerField(
+        default=0,
+    )
+
+    is_required = models.BooleanField(
+        default=False,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    class Meta:
+        ordering = ["order"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["section", "code"],
+                name="unique_repeatable_group_code",
+            ),
+            models.UniqueConstraint(
+                fields=["section", "order"],
+                name="unique_repeatable_group_order",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.section.name} - "
+            f"{self.name}"
+        )
 
 class FormField(models.Model):
 
@@ -513,6 +780,14 @@ class FormField(models.Model):
     section = models.ForeignKey(
         FormSection,
         on_delete=models.PROTECT,
+        related_name="fields",
+    )
+
+    repeatable_group = models.ForeignKey(
+        FormRepeatableGroup,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name="fields",
     )
 
@@ -565,7 +840,17 @@ class FormField(models.Model):
             ),
             models.UniqueConstraint(
                 fields=["section", "order"],
+                condition=models.Q(
+                    repeatable_group__isnull=True,
+                ),
                 name="unique_form_field_order",
+            ),
+            models.UniqueConstraint(
+                fields=["repeatable_group", "order"],
+                condition=models.Q(
+                    repeatable_group__isnull=False,
+                ),
+                name="unique_repeatable_field_order",
             ),
         ]
 
