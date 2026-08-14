@@ -2,6 +2,7 @@ import re
 import uuid
 from django.conf import settings
 from django.db import models
+from django.core.exceptions import ValidationError
 
 
 class Workflow(models.Model):
@@ -644,6 +645,105 @@ class WorkflowPermission(models.Model):
             f"{self.effect}"
         )
 
+class Notification(models.Model):
+
+    class NotificationType(models.TextChoices):
+        WORKFLOW_STARTED = (
+            "WORKFLOW_STARTED",
+            "شروع فرآیند",
+        )
+        STEP_ENTERED = (
+            "STEP_ENTERED",
+            "ورود به مرحله",
+        )
+        TRANSITION_EXECUTED = (
+            "TRANSITION_EXECUTED",
+            "تغییر مرحله",
+        )
+        ACTION_REQUIRED = (
+            "ACTION_REQUIRED",
+            "نیاز به اقدام",
+        )
+        WORKFLOW_COMPLETED = (
+            "WORKFLOW_COMPLETED",
+            "تکمیل فرآیند",
+        )
+        WORKFLOW_CANCELLED = (
+            "WORKFLOW_CANCELLED",
+            "لغو فرآیند",
+        )
+        SLA_WARNING = (
+            "SLA_WARNING",
+            "هشدار SLA",
+        )
+        SLA_BREACHED = (
+            "SLA_BREACHED",
+            "نقض SLA",
+        )
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="notifications",
+    )
+
+    notification_type = models.CharField(
+        max_length=30,
+        choices=NotificationType.choices,
+    )
+
+    title = models.CharField(
+        max_length=200,
+    )
+
+    message = models.TextField()
+
+    workflow_instance = models.ForeignKey(
+        WorkflowInstance,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+
+    workflow_step = models.ForeignKey(
+        WorkflowStep,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+
+    transition_execution = models.ForeignKey(
+        WorkflowTransitionExecution,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+
+    is_read = models.BooleanField(
+        default=False,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return (
+            f"{self.recipient} - "
+            f"{self.title}"
+        )
+
 class FormDefinition(models.Model):
     workflow = models.OneToOneField(
         Workflow,
@@ -926,3 +1026,191 @@ class FormData(models.Model):
 
     def __str__(self):
         return f"Form data - {self.instance}"
+
+class BusinessCalendar(models.Model):
+    name = models.CharField(
+        max_length=150,
+        unique=True,
+    )
+
+    timezone = models.CharField(
+        max_length=64,
+        default="Asia/Tehran",
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    def __str__(self):
+        return self.name
+
+class WeeklySchedule(models.Model):
+
+    class Weekday(models.IntegerChoices):
+        MONDAY = 0, "Monday"
+        TUESDAY = 1, "Tuesday"
+        WEDNESDAY = 2, "Wednesday"
+        THURSDAY = 3, "Thursday"
+        FRIDAY = 4, "Friday"
+        SATURDAY = 5, "Saturday"
+        SUNDAY = 6, "Sunday"
+
+    calendar = models.ForeignKey(
+        BusinessCalendar,
+        on_delete=models.PROTECT,
+        related_name="weekly_schedules",
+    )
+
+    weekday = models.PositiveSmallIntegerField(
+        choices=Weekday.choices,
+    )
+
+    is_working = models.BooleanField(
+        default=True,
+    )
+
+    class Meta:
+        ordering = ["weekday"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["calendar", "weekday"],
+                name="unique_calendar_weekday",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.calendar.name} - {self.get_weekday_display()}"
+
+class WorkingInterval(models.Model):
+    weekly_schedule = models.ForeignKey(
+        WeeklySchedule,
+        on_delete=models.CASCADE,
+        related_name="intervals",
+    )
+
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+
+    class Meta:
+        ordering = ["start_time"]
+
+    def clean(self):
+        if self.start_time >= self.end_time:
+            raise ValidationError(
+                "زمان شروع باید قبل از زمان پایان باشد."
+            )
+
+        overlapping = WorkingInterval.objects.filter(
+            weekly_schedule=self.weekly_schedule,
+            start_time__lt=self.end_time,
+            end_time__gt=self.start_time,
+        )
+
+        if self.pk:
+            overlapping = overlapping.exclude(pk=self.pk)
+
+        if overlapping.exists():
+            raise ValidationError(
+                "بازه زمانی با یک بازه دیگر هم‌پوشانی دارد."
+            )
+
+    def __str__(self):
+        return f"{self.start_time} - {self.end_time}"
+
+class CalendarException(models.Model):
+
+    class Status(models.TextChoices):
+        WORKING = "WORKING", "Working"
+        NON_WORKING = "NON_WORKING", "Non-working"
+
+    calendar = models.ForeignKey(
+        BusinessCalendar,
+        on_delete=models.PROTECT,
+        related_name="exceptions",
+    )
+
+    date = models.DateField()
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+    )
+
+    title = models.CharField(
+        max_length=150,
+        blank=True,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["date"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["calendar", "date"],
+                name="unique_calendar_exception_date",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.calendar.name} - "
+            f"{self.date} - "
+            f"{self.status}"
+        )
+
+class CalendarExceptionInterval(models.Model):
+    exception = models.ForeignKey(
+        "CalendarException",
+        on_delete=models.CASCADE,
+        related_name="intervals",
+    )
+
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+
+    class Meta:
+        ordering = ["start_time"]
+
+    def clean(self):
+        if self.start_time >= self.end_time:
+            raise ValidationError(
+                "زمان شروع باید قبل از زمان پایان باشد."
+            )
+
+        if self.exception.status != CalendarException.Status.WORKING:
+            raise ValidationError(
+                "برای یک Exception غیرکاری نمی‌توان بازه زمانی تعریف کرد."
+            )
+
+        overlapping = CalendarExceptionInterval.objects.filter(
+            exception=self.exception,
+            start_time__lt=self.end_time,
+            end_time__gt=self.start_time,
+        )
+
+        if self.pk:
+            overlapping = overlapping.exclude(pk=self.pk)
+
+        if overlapping.exists():
+            raise ValidationError(
+                "بازه زمانی با یک بازه دیگر هم‌پوشانی دارد."
+            )
+
+
+    def __str__(self):
+        return f"{self.start_time} - {self.end_time}"
+

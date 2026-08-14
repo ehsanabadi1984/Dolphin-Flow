@@ -1058,3 +1058,174 @@ a {
 .df-success-modal-card .df-button {
     min-width: 120px;
 }
+
+.df-device-list {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(280px, 1fr)
+    );
+    gap: 16px;
+}
+
+
+.df-device-card {
+    position: relative;
+    overflow: hidden;
+
+    background: #171A20;
+
+    border: 1px solid rgba(255, 255, 255, .06);
+
+    border-radius: 18px;
+
+    padding: 18px;
+
+    transition:
+        transform .25s ease,
+        border-color .25s ease,
+        box-shadow .25s ease;
+}
+
+
+.df-device-card:hover {
+    transform: translateY(-2px);
+
+    border-color: rgba(255, 255, 255, .12);
+
+    box-shadow:
+        0 12px 30px rgba(0, 0, 0, .22);
+}
+
+
+.df-device-card-header {
+    display: flex;
+
+    align-items: flex-start;
+    justify-content: space-between;
+
+    gap: 16px;
+
+    margin-bottom: 18px;
+}
+
+
+.df-device-card-header h4 {
+    margin: 0 0 5px;
+
+    font-size: 16px;
+    font-weight: 600;
+}
+
+
+.df-device-card-header span {
+    font-size: 12px;
+
+    opacity: .55;
+}
+
+
+.df-device-status {
+    padding: 5px 9px;
+
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, .06);
+
+    font-size: 11px;
+
+    white-space: nowrap;
+}
+
+
+.df-device-card-body {
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+    gap: 12px;
+}
+
+
+.df-device-info {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 5px;
+
+    min-width: 0;
+}
+
+
+.df-device-info-wide {
+    grid-column: 1 / -1;
+}
+
+
+.df-device-info span {
+    font-size: 11px;
+
+    opacity: .5;
+}
+
+
+.df-device-info strong {
+    font-size: 13px;
+
+    font-weight: 500;
+
+    overflow-wrap: anywhere;
+}
+
+
+.df-device-card-footer {
+    display: flex;
+
+    justify-content: flex-end;
+
+    margin-top: 18px;
+
+    padding-top: 12px;
+
+    border-top:
+        1px solid rgba(255, 255, 255, .05);
+}
+
+
+.df-device-editable,
+.df-device-readonly {
+    font-size: 11px;
+
+    opacity: .6;
+}
+
+
+.df-empty-state {
+    padding: 20px;
+
+    border:
+        1px dashed rgba(255, 255, 255, .1);
+
+    border-radius: 14px;
+
+    text-align: center;
+
+    font-size: 13px;
+
+    opacity: .55;
+}
+
+
+@media (max-width: 640px) {
+
+    .df-device-card-body {
+        grid-template-columns: 1fr;
+    }
+
+    .df-device-info-wide {
+        grid-column: auto;
+    }
+
+}

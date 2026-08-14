@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from .notification_services import NotificationService
 
 from .authorization import WorkflowAuthorizationService
 from .models import (
@@ -8,6 +9,8 @@ from .models import (
     WorkflowPermission,
     WorkflowStepExecution,
     WorkflowTransitionExecution,
+    WorkflowMembership,
+    Notification,
 )
 
 
@@ -231,5 +234,38 @@ class WorkflowExecutionService:
                     "current_step",
                 ]
             )
+            # ---------------------------------------------------------
+            # 10. Notify executors of the destination step
+            # ---------------------------------------------------------
+
+            recipients = (
+                instance.workflow.memberships
+                .filter(
+                    is_active=True,
+                    role=WorkflowMembership.Role.EXECUTOR,
+                    user__is_active=True,
+                )
+                .select_related("user")
+            )
+
+            for membership in recipients:
+                NotificationService.create(
+                    recipient=membership.user,
+                    notification_type=(
+                        Notification.NotificationType.STEP_ENTERED
+                    ),
+                    title=(
+                        f"ورود فرآیند به مرحله "
+                        f"«{transition.to_step.name}»"
+                    ),
+                    message=(
+                        f"فرآیند «{instance.workflow.name}» "
+                        f"به مرحله «{transition.to_step.name}» "
+                        "وارد شد و نیاز به بررسی دارد."
+                    ),
+                    workflow_instance=instance,
+                    workflow_step=transition.to_step,
+                    transition_execution=transition_execution,
+                )
 
         return transition_execution

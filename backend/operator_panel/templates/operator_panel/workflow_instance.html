@@ -303,6 +303,173 @@
 
                 </div>
 
+                {% for group in section.repeatable_groups %}
+
+    {% if group.group.code == "devices" %}
+
+        <section class="df-repeatable-group df-device-group">
+
+            <div class="df-form-section-header">
+
+                <h3>
+                    {{ group.group.name }}
+                </h3>
+
+                <p>
+                    دستگاه‌های مرتبط با این فرآیند
+                </p>
+
+            </div>
+
+
+            {% if group.items %}
+
+                <div class="df-device-list">
+
+                    {% for device in group.items %}
+
+                        <article class="df-device-card">
+
+                            <div class="df-device-card-header">
+
+                                <div>
+
+                                    <h4>
+                                        {{ device.device_model }}
+                                    </h4>
+
+                                    <span>
+                                        دستگاه #{{ forloop.counter }}
+                                    </span>
+
+                                </div>
+
+                                <div class="df-device-status">
+                                    {{ device.status|default:"—" }}
+                                </div>
+
+                            </div>
+
+
+                            <div class="df-device-card-body">
+
+                                <div class="df-device-info">
+
+                                    <span>
+                                        IMEI
+                                    </span>
+
+                                    <strong>
+
+                                        {% for identifier in device.identifiers %}
+
+                                            {% if identifier.type == "IMEI" %}
+                                                {{ identifier.value }}
+                                            {% endif %}
+
+                                        {% empty %}
+
+                                            —
+
+                                        {% endfor %}
+
+                                    </strong>
+
+                                </div>
+
+
+                                <div class="df-device-info">
+
+                                    <span>
+                                        نوع دستگاه
+                                    </span>
+
+                                    <strong>
+                                        {{ device.device_type|default:"—" }}
+                                    </strong>
+
+                                </div>
+
+
+                                <div class="df-device-info">
+
+                                    <span>
+                                        مدل
+                                    </span>
+
+                                    <strong>
+                                        {{ device.device_model|default:"—" }}
+                                    </strong>
+
+                                </div>
+
+
+                                <div class="df-device-info">
+
+                                    <span>
+                                        گارانتی
+                                    </span>
+
+                                    <strong>
+                                        {{ device.warranty_status|default:"—" }}
+                                    </strong>
+
+                                </div>
+
+
+                                <div class="df-device-info df-device-info-wide">
+
+                                    <span>
+                                        شرح مشکل
+                                    </span>
+
+                                    <strong>
+                                        {{ device.reported_problem|default:"—" }}
+                                    </strong>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="df-device-card-footer">
+
+                                {% if group.fields.0.can_edit %}
+
+                                    <span class="df-device-editable">
+                                        قابل ویرایش
+                                    </span>
+
+                                {% else %}
+
+                                    <span class="df-device-readonly">
+                                        فقط مشاهده
+                                    </span>
+
+                                {% endif %}
+
+                            </div>
+
+                        </article>
+
+                    {% endfor %}
+
+                </div>
+
+            {% else %}
+
+                <div class="df-empty-state">
+                    هنوز دستگاهی برای این فرآیند ثبت نشده است.
+                </div>
+
+            {% endif %}
+
+        </section>
+
+    {% endif %}
+
+{% endfor %}
+
             </section>
 
         {% endfor %}

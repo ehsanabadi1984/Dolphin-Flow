@@ -19,6 +19,7 @@ from workflow.models import (
     WorkflowMembership,
     WorkflowStep,
     FormRepeatableGroup,
+    DeviceIdentifier,
 )
 
 
@@ -1328,4 +1329,393 @@ class DynamicFormServiceTests(TestCase):
         self.assertEqual(
             instance_device.status,
             "RECEIVED",
+        )
+
+    def test_save_form_rejects_device_field_without_edit_access(self):
+        instance = self.create_instance()
+
+        submitted_data = {
+            "Phone": "09120000000",
+            "customer_address": "آدرس تست",
+            "devices": [
+                {
+                    "imei": "555555555555555",
+                    "device_model_id": self.device_model.pk,
+                    "reported_problem": "مشکل اولیه",
+                    "warranty_status": "UNKNOWN",
+                    "status": "RECEIVED",
+                },
+            ],
+        }
+
+        # ابتدا دستگاه را با مجوز کامل ایجاد می‌کنیم.
+        DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=submitted_data,
+        )
+
+        instance_device = (
+            InstanceDevice.objects
+            .select_related(
+                "device",
+                "device__device_model",
+            )
+            .get(
+                instance=instance,
+            )
+        )
+
+        original_imei = (
+            instance_device
+            .device
+            .identifiers
+            .get(
+                identifier_type="IMEI",
+            )
+            .value
+        )
+
+        original_model = (
+            instance_device
+            .device
+            .device_model_id
+        )
+
+        # ---------------------------------------------------------
+        # حالا دسترسی ویرایش گروه را محدود می‌کنیم:
+        #
+        # Problem -> قابل ویرایش
+        # IMEI    -> فقط مشاهده
+        # Model   -> فقط مشاهده
+        # Warranty -> فقط مشاهده
+        # Status   -> فقط مشاهده
+        # ---------------------------------------------------------
+
+        devices_group = (
+            self.form
+            .sections
+            .filter(
+                repeatable_groups__code="devices",
+            )
+            .first()
+            .repeatable_groups
+            .get(
+                code="devices",
+            )
+        )
+
+        for field in devices_group.fields.all():
+            FieldAccess.objects.filter(
+                field=field,
+                step=instance.current_step,
+            ).update(
+                can_view=True,
+                can_edit=(
+                    field.code == "reported_problem"
+                ),
+            )
+
+        # ---------------------------------------------------------
+        # تلاش برای تغییر IMEI
+        # ---------------------------------------------------------
+
+        submitted_data["devices"][0]["imei"] = (
+            "666666666666666"
+        )
+
+        with self.assertRaises(ValidationError):
+            DynamicFormService.save_form_for_step(
+                instance=instance,
+                user=self.user,
+                submitted_data=submitted_data,
+            )
+
+        instance_device.refresh_from_db()
+
+        self.assertEqual(
+            instance_device.device.device_model_id,
+            original_model,
+        )
+
+        self.assertEqual(
+            instance_device.device.identifiers.get(
+                identifier_type="IMEI",
+            ).value,
+            original_imei,
+        )
+
+    def test_save_form_removing_device_from_submission_does_not_delete_instance_device(
+        self,
+    ):
+        instance = self.create_instance()
+
+        first_submission = {
+            "Phone": "09120000000",
+            "customer_address": "آدرس تست",
+            "devices": [
+                {
+                    "imei": "111111111111111",
+                    "device_model_id": self.device_model.pk,
+                    "reported_problem": "دستگاه اول",
+                    "warranty_status": "UNKNOWN",
+                    "status": "RECEIVED",
+                },
+                {
+                    "imei": "222222222222222",
+                    "device_model_id": self.device_model.pk,
+                    "reported_problem": "دستگاه دوم",
+                    "warranty_status": "UNKNOWN",
+                    "status": "RECEIVED",
+                },
+            ],
+        }
+
+        DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=first_submission,
+        )
+
+        instance_devices = list(
+            InstanceDevice.objects
+            .filter(instance=instance)
+            .order_by("pk")
+        )
+
+        self.assertEqual(
+            len(instance_devices),
+            2,
+        )
+
+        first_id = instance_devices[0].pk
+        second_id = instance_devices[1].pk
+
+        second_submission = {
+            "Phone": "09120000000",
+            "customer_address": "آدرس تست",
+            "devices": [
+                {
+                    "instance_device_id": first_id,
+                    "imei": "111111111111111",
+                    "device_model_id": self.device_model.pk,
+                    "reported_problem": "دستگاه اول",
+                    "warranty_status": "UNKNOWN",
+                    "status": "RECEIVED",
+                },
+            ],
+        }
+
+        DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=second_submission,
+        )
+
+        self.assertTrue(
+            InstanceDevice.objects.filter(
+                pk=second_id,
+                instance=instance,
+            ).exists()
+        )
+
+        self.assertEqual(
+            InstanceDevice.objects
+            .filter(instance=instance)
+            .count(),
+            2,
+        )
+    def test_save_form_updates_existing_device_imei_when_editable(
+        self,
+    ):
+        instance = self.create_instance()
+
+        first_submission = {
+            "Phone": "09120000000",
+            "customer_address": "آدرس تست",
+            "devices": [
+                {
+                    "imei": "333333333333333",
+                    "device_model_id": self.device_model.pk,
+                    "reported_problem": "مشکل اولیه",
+                    "warranty_status": "UNKNOWN",
+                    "status": "RECEIVED",
+                },
+            ],
+        }
+
+        DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=first_submission,
+        )
+
+        instance_device = (
+            InstanceDevice.objects
+            .select_related(
+                "device",
+                "device__device_model",
+            )
+            .get(instance=instance)
+        )
+
+        instance_device_id = instance_device.pk
+
+        second_submission = {
+            "Phone": "09120000000",
+            "customer_address": "آدرس تست",
+            "devices": [
+                {
+                    "instance_device_id": instance_device_id,
+                    "imei": "444444444444444",
+                    "device_model_id": self.device_model.pk,
+                    "reported_problem": "مشکل اولیه",
+                    "warranty_status": "UNKNOWN",
+                    "status": "RECEIVED",
+                },
+            ],
+        }
+
+        DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=second_submission,
+        )
+
+        self.assertTrue(
+            DeviceIdentifier.objects.filter(
+                device=instance_device.device,
+                identifier_type="IMEI",
+                value="444444444444444",
+            ).exists()
+        )
+
+        self.assertFalse(
+            DeviceIdentifier.objects.filter(
+                device=instance_device.device,
+                identifier_type="IMEI",
+                value="333333333333333",
+            ).exists()
+        )
+
+        self.assertEqual(
+            InstanceDevice.objects.filter(
+                instance=instance,
+            ).count(),
+            1,
+        )
+
+    def test_save_form_rejects_imei_belonging_to_another_device(
+        self,
+    ):
+        instance = self.create_instance()
+
+        first_submission = {
+            "Phone": "09120000000",
+            "customer_address": "آدرس تست",
+            "devices": [
+                {
+                    "imei": "111111111111111",
+                    "device_model_id": self.device_model.pk,
+                    "reported_problem": "دستگاه اول",
+                    "warranty_status": "UNKNOWN",
+                    "status": "RECEIVED",
+                },
+                {
+                    "imei": "222222222222222",
+                    "device_model_id": self.device_model.pk,
+                    "reported_problem": "دستگاه دوم",
+                    "warranty_status": "UNKNOWN",
+                    "status": "RECEIVED",
+                },
+            ],
+        }
+
+        DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=first_submission,
+        )
+
+        instance_devices = list(
+            InstanceDevice.objects
+            .filter(instance=instance)
+            .order_by("pk")
+        )
+
+        self.assertEqual(
+            len(instance_devices),
+            2,
+        )
+
+        first_device = instance_devices[0]
+        second_device = instance_devices[1]
+
+        first_device_id = first_device.device_id
+        second_device_id = second_device.device_id
+
+        second_submission = {
+            "Phone": "09120000000",
+            "customer_address": "آدرس تست",
+            "devices": [
+                {
+                    "instance_device_id": first_device.pk,
+                    "imei": "222222222222222",
+                    "device_model_id": self.device_model.pk,
+                    "reported_problem": "دستگاه اول",
+                    "warranty_status": "UNKNOWN",
+                    "status": "RECEIVED",
+                },
+                {
+                    "instance_device_id": second_device.pk,
+                    "imei": "222222222222222",
+                    "device_model_id": self.device_model.pk,
+                    "reported_problem": "دستگاه دوم",
+                    "warranty_status": "UNKNOWN",
+                    "status": "RECEIVED",
+                },
+            ],
+        }
+
+        with self.assertRaises(ValidationError):
+            DynamicFormService.save_form_for_step(
+                instance=instance,
+                user=self.user,
+                submitted_data=second_submission,
+            )
+
+        first_device.refresh_from_db()
+        second_device.refresh_from_db()
+
+        self.assertEqual(
+            first_device.device_id,
+            first_device_id,
+        )
+
+        self.assertEqual(
+            second_device.device_id,
+            second_device_id,
+        )
+
+        self.assertEqual(
+            DeviceIdentifier.objects.get(
+                device_id=first_device_id,
+                identifier_type="IMEI",
+            ).value,
+            "111111111111111",
+        )
+
+        self.assertEqual(
+            DeviceIdentifier.objects.get(
+                device_id=second_device_id,
+                identifier_type="IMEI",
+            ).value,
+            "222222222222222",
+        )
+
+        self.assertEqual(
+            InstanceDevice.objects.filter(
+                instance=instance,
+            ).count(),
+            2,
         )

@@ -1,23 +1,17 @@
-import os
-
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-
-import django
-
-django.setup()
-
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
+from django.test import TestCase
 
 from workflow.models import (
+    Notification,
     Workflow,
-    WorkflowStep,
-    WorkflowTransition,
     WorkflowInstance,
-    WorkflowStepExecution,
-    WorkflowTransitionExecution,
     WorkflowMembership,
     WorkflowPermission,
+    WorkflowStep,
+    WorkflowStepExecution,
+    WorkflowTransition,
+    WorkflowTransitionExecution,
 )
 from workflow.services import WorkflowExecutionService
 
@@ -25,248 +19,184 @@ from workflow.services import WorkflowExecutionService
 User = get_user_model()
 
 
-def reset_test_data():
-    WorkflowTransitionExecution.objects.filter(
-        instance__workflow__code="AUTH_EXEC_TEST"
-    ).delete()
+class WorkflowExecutionTests(TestCase):
 
-    WorkflowStepExecution.objects.filter(
-        instance__workflow__code="AUTH_EXEC_TEST"
-    ).delete()
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="auth_exec_user",
+            password="test-password",
+        )
 
-    WorkflowInstance.objects.filter(
-        workflow__code="AUTH_EXEC_TEST"
-    ).delete()
+        self.workflow = Workflow.objects.create(
+            name="Authorization Execution Test",
+            code="AUTH_EXEC_TEST",
+            is_active=True,
+        )
 
-    WorkflowPermission.objects.filter(
-        workflow__code="AUTH_EXEC_TEST"
-    ).delete()
+        self.step_one = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Test Step One",
+            code="AUTH_EXEC_STEP_ONE",
+            order=1,
+            is_active=True,
+        )
 
-    WorkflowTransition.objects.filter(
-        workflow__code="AUTH_EXEC_TEST"
-    ).delete()
+        self.step_two = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Test Step Two",
+            code="AUTH_EXEC_STEP_TWO",
+            order=2,
+            is_active=True,
+        )
 
-    WorkflowStep.objects.filter(
-        workflow__code="AUTH_EXEC_TEST"
-    ).delete()
+        self.step_three = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Test Step Three",
+            code="AUTH_EXEC_STEP_THREE",
+            order=3,
+            is_active=True,
+        )
 
-    WorkflowMembership.objects.filter(
-        workflow__code="AUTH_EXEC_TEST"
-    ).delete()
+        self.transition_one = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="Test Transition One",
+            code="AUTH_EXEC_TRANSITION_ONE",
+            from_step=self.step_one,
+            to_step=self.step_two,
+            is_active=True,
+        )
 
-    Workflow.objects.filter(
-        code="AUTH_EXEC_TEST"
-    ).delete()
+        self.transition_two = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="Test Transition Two",
+            code="AUTH_EXEC_TRANSITION_TWO",
+            from_step=self.step_two,
+            to_step=self.step_three,
+            is_active=True,
+        )
 
-    User.objects.filter(
-        username="auth_exec_user"
-    ).delete()
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
 
+    def grant_execute_permission(self):
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
 
-def create_test_environment():
-    user = User.objects.create_user(
-        username="auth_exec_user",
-        password="test-password",
-    )
+    def grant_transition_permission(self, transition):
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            transition=transition,
+            user=self.user,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
 
-    workflow = Workflow.objects.create(
-        name="Authorization Execution Test",
-        code="AUTH_EXEC_TEST",
-        is_active=True,
-    )
+    def start_instance(self):
+        return WorkflowExecutionService.start_workflow(
+            workflow=self.workflow,
+            user=self.user,
+        )
 
-    step_one = WorkflowStep.objects.create(
-        workflow=workflow,
-        name="Test Step One",
-        code="AUTH_EXEC_STEP_ONE",
-        order=1,
-        is_active=True,
-    )
+    def test_allow(self):
+        self.grant_execute_permission()
+        self.grant_transition_permission(self.transition_one)
 
-    step_two = WorkflowStep.objects.create(
-        workflow=workflow,
-        name="Test Step Two",
-        code="AUTH_EXEC_STEP_TWO",
-        order=2,
-        is_active=True,
-    )
+        instance = self.start_instance()
 
-    transition = WorkflowTransition.objects.create(
-        workflow=workflow,
-        name="Test Transition",
-        code="AUTH_EXEC_TRANSITION",
-        from_step=step_one,
-        to_step=step_two,
-        is_active=True,
-    )
-
-    WorkflowMembership.objects.create(
-        workflow=workflow,
-        user=user,
-        role=WorkflowMembership.Role.EXECUTOR,
-        is_active=True,
-    )
-
-    return user, workflow, step_one, step_two, transition
-
-
-def test_allow():
-    user, workflow, step_one, step_two, transition = (
-        create_test_environment()
-    )
-
-    # Permission required to start the workflow
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        user=user,
-        action=WorkflowPermission.Action.EXECUTE,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    # Permission required to execute the transition
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        transition=transition,
-        user=user,
-        action=WorkflowPermission.Action.TRANSITION,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    instance = WorkflowExecutionService.start_workflow(
-        workflow=workflow,
-        user=user,
-    )
-
-    WorkflowExecutionService.execute_transition(
-        instance=instance,
-        transition=transition,
-        user=user,
-    )
-
-    instance.refresh_from_db()
-
-    assert instance.current_step_id == step_two.pk
-    assert (
-        instance.status
-        == WorkflowInstance.Status.COMPLETED
-    )
-
-
-def test_deny():
-    user, workflow, step_one, step_two, transition = (
-        create_test_environment()
-    )
-
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        user=user,
-        action=WorkflowPermission.Action.EXECUTE,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    WorkflowPermission.objects.create(
-    workflow=workflow,
-    transition=transition,
-    user=user,
-    action=WorkflowPermission.Action.TRANSITION,
-    effect=WorkflowPermission.Effect.DENY,
-    )
-
-
-    instance = WorkflowExecutionService.start_workflow(
-        workflow=workflow,
-        user=user,
-    )
-
-    try:
         WorkflowExecutionService.execute_transition(
             instance=instance,
-            transition=transition,
-            user=user,
+            transition=self.transition_one,
+            user=self.user,
         )
 
-    except PermissionDenied:
         instance.refresh_from_db()
 
-        assert instance.current_step_id == step_one.pk
-
-    else:
-        raise AssertionError(
-            "Transition باید توسط Authorization مسدود می‌شد."
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_two.pk,
         )
 
+    def test_deny(self):
+        self.grant_execute_permission()
 
-def test_no_permission():
-    user, workflow, step_one, step_two, transition = (
-        create_test_environment()
-    )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            transition=self.transition_one,
+            user=self.user,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=WorkflowPermission.Effect.DENY,
+        )
 
-    WorkflowPermission.objects.create(
-    workflow=workflow,
-    user=user,
-    action=WorkflowPermission.Action.EXECUTE,
-    effect=WorkflowPermission.Effect.ALLOW,
-    )
-    instance = WorkflowExecutionService.start_workflow(
-        workflow=workflow,
-        user=user,
-    )
+        instance = self.start_instance()
 
-    try:
+        with self.assertRaises(PermissionDenied):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            )
+
+        instance.refresh_from_db()
+
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_one.pk,
+        )
+
+    def test_no_permission(self):
+        self.grant_execute_permission()
+
+        instance = self.start_instance()
+
+        with self.assertRaises(PermissionDenied):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            )
+
+        instance.refresh_from_db()
+
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_one.pk,
+        )
+
+    def test_transition_creates_notification_for_destination_executors(self):
+        self.grant_execute_permission()
+        self.grant_transition_permission(self.transition_one)
+
+        instance = self.start_instance()
+
         WorkflowExecutionService.execute_transition(
             instance=instance,
-            transition=transition,
-            user=user,
+            transition=self.transition_one,
+            user=self.user,
         )
 
-    except PermissionDenied:
-        instance.refresh_from_db()
-
-        assert instance.current_step_id == step_one.pk
-
-    else:
-        raise AssertionError(
-            "کاربر بدون Permission نباید بتواند Transition را اجرا کند."
+        notification = Notification.objects.get(
+            recipient=self.user,
+            workflow_instance=instance,
+            workflow_step=self.step_two,
         )
 
+        self.assertEqual(
+            notification.notification_type,
+            Notification.NotificationType.STEP_ENTERED,
+        )
 
-def main():
-    print()
-    print("=" * 60)
-    print("WORKFLOW EXECUTION AUTHORIZATION TEST")
-    print("=" * 60)
+        self.assertIsNotNone(
+            notification.transition_execution,
+        )
 
-    reset_test_data()
-
-    try:
-        print("[TEST] 1. Explicit ALLOW")
-
-        reset_test_data()
-        test_allow()
-
-        print("[PASS] Explicit ALLOW -> transition executed")
-
-        print("[TEST] 2. Explicit DENY")
-
-        reset_test_data()
-        test_deny()
-
-        print("[PASS] Explicit DENY -> transition blocked")
-
-        print("[TEST] 3. No permission")
-
-        reset_test_data()
-        test_no_permission()
-
-        print("[PASS] No permission -> transition blocked")
-
-    finally:
-        reset_test_data()
-
-    print("=" * 60)
-    print("EXECUTION AUTHORIZATION TEST PASSED")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    main()
+        self.assertFalse(
+            notification.is_read,
+        )
