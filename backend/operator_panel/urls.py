@@ -3,9 +3,9 @@ from django.urls import path
 from .views import (
     dashboard,
     execute_transition,
-    save_form_data,
     start_workflow,
     workflow_instance,
+    clear_form_data,
 )
 
 
@@ -13,13 +13,13 @@ app_name = "operator_panel"
 
 
 urlpatterns = [
-    
+
     path(
-    "workflow-instance/<int:instance_id>/save/",
-    save_form_data,
-    name="save_form_data",
-    
+    "workflow-instance/<int:instance_id>/clear/",
+    clear_form_data,
+    name="clear_form_data",
     ),
+    
     path(
         "",
         dashboard,

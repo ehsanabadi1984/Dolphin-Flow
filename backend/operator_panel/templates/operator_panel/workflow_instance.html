@@ -2,6 +2,16 @@
 
 {% block content %}
 
+{% if messages %}
+    <div class="df-messages">
+        {% for message in messages %}
+            <div class="df-message df-message-{{ message.tags }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
 <div class="workflow-instance">
 
     <h1>{{ instance.workflow.name }}</h1>
@@ -26,15 +36,119 @@
 
 {% if dynamic_form %}
 
-<form
-    method="post"
-    action="{% url 'operator_panel:save_form_data' instance.pk %}"
+{% if dynamic_form.has_saved_data and not edit_mode %}
 
+    <section class="df-saved-data">
+
+        <div class="df-saved-data-header">
+
+            <div>
+                <h2>اطلاعات ثبت‌شده</h2>
+
+                <p>
+                    اطلاعاتی که تاکنون برای این فرم ذخیره شده است.
+                </p>
+            </div>
+
+        </div>
+
+        {% for section in dynamic_form.sections %}
+
+            <div class="df-saved-section">
+
+                <h3>
+                    {{ section.section.name }}
+                </h3>
+
+                <div class="df-saved-table-wrapper">
+
+                    <table class="df-saved-table">
+
+                        <thead>
+                            <tr>
+                                <th>فیلد</th>
+                                <th>مقدار</th>
+                                <th>وضعیت</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            {% for item in section.fields %}
+
+                                <tr>
+
+                                    <td>
+                                        {{ item.field.label }}
+                                    </td>
+
+                                    <td>
+                                        {{ item.value|default:"—" }}
+                                    </td>
+
+                                    <td>
+
+                                        {% if item.can_edit %}
+                                            قابل ویرایش
+                                        {% else %}
+                                            فقط مشاهده
+                                        {% endif %}
+
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        {% endfor %}
+
+    </section>
+    {% if not edit_mode %}
+
+    <div class="df-form-actions">
+
+        <a
+            href="?edit=1"
+            class="df-button"
+        >
+            ویرایش اطلاعات
+        </a>
+
+        <form
+            method="post"
+            action="{% url 'operator_panel:clear_form_data' instance.pk %}"
+            style="display: inline;"
+            onsubmit="return confirm('آیا مطمئن هستید که می‌خواهید اطلاعات قابل ویرایش این فرم را پاک کنید؟');"
+        >
+            {% csrf_token %}
+
+            <button
+                type="submit"
+                class="df-button df-button-danger"
+            >
+                پاک کردن اطلاعات
+            </button>
+        </form>
+
+    </div>
+
+{% endif %}
+
+{% endif %}
+    {% if edit_mode or not dynamic_form.has_saved_data %}
     <form
     method="post"
     action="{% url 'operator_panel:workflow_instance' instance.pk %}"
 >
->
+
     {% csrf_token %}
 
     <section class="df-form">
@@ -177,8 +291,8 @@
 
                             {% else %}
 
-                                <div class="df-form-readonly">
-                                    فقط مشاهده
+                                 <div class="df-form-value">
+                                    {{ item.value|default:"—" }}
                                 </div>
 
                             {% endif %}
@@ -196,18 +310,25 @@
 
         <div class="df-form-actions">
 
-            <button
-                type="submit"
-                class="df-button"
-            >
-                ذخیره اطلاعات
-            </button>
+    <button
+        type="submit"
+        class="df-button"
+    >
+        ذخیره تغییرات
+    </button>
 
-        </div>
+    <a
+        href="{% url 'operator_panel:workflow_instance' instance.pk %}"
+        class="df-button df-button-secondary"
+    >
+        انصراف
+    </a>
+
+</div>
 
     </section>
 </form>
-</form>
+{% endif %}
 
 {% endif %}
 
@@ -220,6 +341,16 @@
     {% if instance.status == "ACTIVE" %}
 
         <h2>Transitionهای قابل اجرا</h2>
+        <section class="df-workflow-actions">
+
+        <div class="df-workflow-actions-header">
+            <h2>عملیات فرآیند</h2>
+
+            <p>
+                با انتخاب یک گزینه، فرآیند به مرحله بعد منتقل می‌شود.
+            </p>
+        </div>
+
 
         {% if transitions %}
 
@@ -257,7 +388,7 @@
     {% else %}
 
         <p>
-            این Workflow Instance دیگر فعال نیست.
+            این فرآیند فعال نیست.
         </p>
 
     {% endif %}

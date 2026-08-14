@@ -12,6 +12,47 @@
     <link rel="stylesheet" href="{% static 'operator_panel/css/app.css' %}">
 </head>
 
+{% if messages %}
+    {% for message in messages %}
+
+        {% if message.tags == "success" %}
+
+            <div
+                class="df-success-modal"
+                id="df-success-modal"
+            >
+                <div class="df-success-modal-backdrop"></div>
+
+                <div class="df-success-modal-card">
+
+                    <div class="df-success-modal-icon">
+                        ✓
+                    </div>
+
+                    <h2>
+                        عملیات با موفقیت انجام شد
+                    </h2>
+
+                    <p>
+                        {{ message }}
+                    </p>
+
+                    <button
+                        type="button"
+                        class="df-button"
+                        id="df-success-modal-confirm"
+                    >
+                        تأیید
+                    </button>
+
+                </div>
+            </div>
+
+        {% endif %}
+
+    {% endfor %}
+{% endif %}
+
 <body>
 
 <div class="df-layout">
@@ -31,5 +72,23 @@
 {% load static %}
 
 <script src="{% static 'operator_panel/js/app.js' %}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const modal = document.getElementById("df-success-modal");
+    const confirmButton = document.getElementById(
+        "df-success-modal-confirm"
+    );
+
+    if (!modal || !confirmButton) {
+        return;
+    }
+
+    confirmButton.addEventListener("click", function () {
+        modal.remove();
+    });
+
+});
+</script>
 </body>
 </html>

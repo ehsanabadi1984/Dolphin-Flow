@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
+from django.contrib import messages
 
 from workflow.form_services import DynamicFormService
 from workflow.authorization import WorkflowAuthorizationService
@@ -17,7 +18,6 @@ from workflow.models import (
 )
 
 from workflow.services import WorkflowExecutionService
-from workflow.form_services import DynamicFormService
 
 @login_required
 def dashboard(request):
@@ -100,7 +100,6 @@ def workflow_instance(request, instance_id):
                     from_step=instance.current_step,
                 )
             )
-
             return render(
                 request,
                 "operator_panel/workflow_instance.html",
@@ -133,6 +132,7 @@ def workflow_instance(request, instance_id):
             user=request.user,
         )
     )
+    edit_mode = request.GET.get("edit") == "1"
 
     return render(
         request,
@@ -141,6 +141,7 @@ def workflow_instance(request, instance_id):
             "instance": instance,
             "transitions": transitions,
             "dynamic_form": dynamic_form,
+            "edit_mode": edit_mode,
         },
     )
 
@@ -190,24 +191,30 @@ def execute_transition(request, instance_id, transition_id):
             "operator_panel/workflow_instance.html",
             {
                 "instance": instance,
-                "transitions": WorkflowTransition.objects.filter(
-                    workflow=instance.workflow,
-                    from_step=instance.current_step,
-                    is_active=True,
-                ).select_related(
-                    "from_step",
-                    "to_step",
+                "transitions": (
+                    WorkflowTransition.objects.filter(
+                        workflow=instance.workflow,
+                        from_step=instance.current_step,
+                        is_active=True,
+                    )
+                    .select_related(
+                        "from_step",
+                        "to_step",
+                    )
                 ),
                 "error": str(exc),
             },
             status=400,
         )
 
-    return redirect(
-        "operator_panel:workflow_instance",
-        instance_id=instance.pk,
+    messages.success(
+        request,
+        f"فرآیند با موفقیت به «{transition.to_step.name}» منتقل شد.",
     )
 
+    return redirect(
+        "operator_panel:dashboard",
+    )
 
 @login_required
 def start_workflow(request, workflow_id):
@@ -251,8 +258,9 @@ def start_workflow(request, workflow_id):
         instance_id=instance.pk,
     )
 
+
 @login_required
-def save_form_data(request, instance_id):
+def clear_form_data(request, instance_id):
     if request.method != "POST":
         return redirect(
             "operator_panel:workflow_instance",
@@ -272,44 +280,90 @@ def save_form_data(request, instance_id):
             "این Workflow Instance فعال نیست."
         )
 
-    form_context = DynamicFormService.get_form_for_step(
-        instance=instance,
+    WorkflowAuthorizationService.require_permission(
         user=request.user,
-        )
-
-    if form_context is None:
-        raise ValidationError(
-            "برای این Workflow فرم فعالی تعریف نشده است."
-        )
-
-    form_data, _ = FormData.objects.get_or_create(
-        instance=instance,
+        workflow=instance.workflow,
+        action=WorkflowPermission.Action.VIEW,
+        step=instance.current_step,
     )
 
-    data = dict(form_data.data or {})
+    DynamicFormService.clear_form_for_step(
+        instance=instance,
+        user=request.user,
+    )
 
-    for section in form_context["sections"]:
-        for item in section["fields"]:
+    from django.contrib import messages
 
-            field = item["field"]
-
-            if not item["can_edit"]:
-                continue
-
-            if field.field_type == field.FieldType.BOOLEAN:
-                value = field.code in request.POST
-            else:
-                value = request.POST.get(
-                    field.code,
-                    "",
-                )
-
-            data[field.code] = value
-
-    form_data.data = data
-    form_data.save()
+    messages.success(
+        request,
+        "اطلاعات قابل ویرایش این مرحله پاک شد.",
+    )
 
     return redirect(
         "operator_panel:workflow_instance",
         instance_id=instance.pk,
     )
+
+
+# @login_required
+# def save_form_data(request, instance_id):
+#     if request.method != "POST":
+#         return redirect(
+#             "operator_panel:workflow_instance",
+#             instance_id=instance_id,
+#         )
+
+#     instance = get_object_or_404(
+#         WorkflowInstance.objects.select_related(
+#             "workflow",
+#             "current_step",
+#         ),
+#         pk=instance_id,
+#     )
+
+#     if instance.status != WorkflowInstance.Status.ACTIVE:
+#         raise ValidationError(
+#             "این Workflow Instance فعال نیست."
+#         )
+
+#     form_context = DynamicFormService.get_form_for_step(
+#         instance=instance,
+#         user=request.user,
+#         )
+
+#     if form_context is None:
+#         raise ValidationError(
+#             "برای این Workflow فرم فعالی تعریف نشده است."
+#         )
+
+#     form_data, _ = FormData.objects.get_or_create(
+#         instance=instance,
+#     )
+
+#     data = dict(form_data.data or {})
+
+#     for section in form_context["sections"]:
+#         for item in section["fields"]:
+
+#             field = item["field"]
+
+#             if not item["can_edit"]:
+#                 continue
+
+#             if field.field_type == field.FieldType.BOOLEAN:
+#                 value = field.code in request.POST
+#             else:
+#                 value = request.POST.get(
+#                     field.code,
+#                     "",
+#                 )
+
+#             data[field.code] = value
+
+#     form_data.data = data
+#     form_data.save()
+
+#     return redirect(
+#         "operator_panel:workflow_instance",
+#         instance_id=instance.pk,
+#     )
