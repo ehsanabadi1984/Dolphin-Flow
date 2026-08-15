@@ -4,6 +4,7 @@ from django.utils import timezone
 from .notification_services import NotificationService
 
 from .authorization import WorkflowAuthorizationService
+from .sla_services import SLAService
 from .models import (
     WorkflowInstance,
     WorkflowPermission,
@@ -81,11 +82,15 @@ class WorkflowExecutionService:
         # 5. Record the first step execution
         # ---------------------------------------------------------
 
-        WorkflowStepExecution.objects.create(
+        step_execution = WorkflowStepExecution.objects.create(
             instance=instance,
             workflow_step=first_step,
             performed_by=user,
             data=data or {},
+        )
+
+        SLAService.start_sla_if_configured(
+            step_execution=step_execution,
         )
 
         return instance
@@ -181,6 +186,22 @@ class WorkflowExecutionService:
         # 6. Create transition execution record
         # ---------------------------------------------------------
 
+        current_step_execution = (
+            instance.step_executions
+            .filter(
+                workflow_step=instance.current_step,
+                sla_started_at__isnull=False,
+                sla_completed_at__isnull=True,
+            )
+            .order_by("-performed_at")
+            .first()
+        )
+
+        if current_step_execution is not None:
+            SLAService.complete_sla(
+                step_execution=current_step_execution,
+            )
+
         transition_execution = WorkflowTransitionExecution.objects.create(
             instance=instance,
             transition=transition,
@@ -193,12 +214,16 @@ class WorkflowExecutionService:
         # 7. Record arrival at the new step
         # ---------------------------------------------------------
 
-        WorkflowStepExecution.objects.create(
+        step_execution = WorkflowStepExecution.objects.create(
             instance=instance,
             workflow_step=transition.to_step,
             performed_by=user,
             notes=notes,
             data=data or {},
+        )
+
+        SLAService.start_sla_if_configured(
+            step_execution=step_execution,
         )
 
         # ---------------------------------------------------------

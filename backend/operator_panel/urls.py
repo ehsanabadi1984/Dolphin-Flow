@@ -6,6 +6,8 @@ from .views import (
     start_workflow,
     workflow_instance,
     clear_form_data,
+    notifications,
+    mark_notification_as_read,
 )
 
 
@@ -42,5 +44,17 @@ urlpatterns = [
         "workflow-instance/<int:instance_id>/transition/<int:transition_id>/execute/",
         execute_transition,
         name="execute_transition",
+    ),
+
+    path(
+    "notifications/",
+    notifications,
+    name="notifications",
+    ),
+
+    path(
+        "notifications/<int:notification_id>/read/",
+        mark_notification_as_read,
+        name="mark_notification_as_read",
     ),
 ]

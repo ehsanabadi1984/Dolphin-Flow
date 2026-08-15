@@ -69,3 +69,20 @@ class NotificationService:
             )
             .order_by("-created_at")
         )
+
+    @staticmethod
+    def get_all(
+        *,
+        user,
+    ):
+        return (
+            Notification.objects
+            .filter(
+                recipient=user,
+            )
+            .select_related(
+                "workflow_instance",
+                "workflow_step",
+            )
+            .order_by("-created_at")
+        )

@@ -144,3 +144,14 @@ AUTH_USER_MODEL = "accounts.User"
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/operator/dashboard/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
+
+CELERY_BROKER_URL = (
+    f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
+)
+
+CELERY_BEAT_SCHEDULE = {
+    "process-sla-monitor-every-minute": {
+        "task": "workflow.tasks.process_sla_monitor",
+        "schedule": 60.0,
+    },
+}

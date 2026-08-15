@@ -2,7 +2,9 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
+from django.http import JsonResponse
 
+from workflow.notification_services import NotificationService
 from workflow.form_services import DynamicFormService
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.models import (
@@ -15,6 +17,7 @@ from workflow.models import (
     WorkflowStepExecution,
     WorkflowTransition,
     WorkflowTransitionExecution,
+    Notification,
 )
 
 from workflow.services import WorkflowExecutionService
@@ -304,66 +307,60 @@ def clear_form_data(request, instance_id):
         instance_id=instance.pk,
     )
 
+@login_required
+def notifications(request):
+    unread = NotificationService.get_unread(
+        user=request.user,
+    )
 
-# @login_required
-# def save_form_data(request, instance_id):
-#     if request.method != "POST":
-#         return redirect(
-#             "operator_panel:workflow_instance",
-#             instance_id=instance_id,
-#         )
+    data = []
 
-#     instance = get_object_or_404(
-#         WorkflowInstance.objects.select_related(
-#             "workflow",
-#             "current_step",
-#         ),
-#         pk=instance_id,
-#     )
+    for notification in unread[:20]:
+        data.append(
+            {
+                "id": notification.id,
+                "title": notification.title,
+                "message": notification.message,
+                "type": notification.notification_type,
+                "created_at": notification.created_at.isoformat(),
+                "workflow_instance_id": (
+                    notification.workflow_instance_id
+                ),
+            }
+        )
 
-#     if instance.status != WorkflowInstance.Status.ACTIVE:
-#         raise ValidationError(
-#             "این Workflow Instance فعال نیست."
-#         )
+    return JsonResponse(
+        {
+            "count": unread.count(),
+            "notifications": data,
+        }
+    )
 
-#     form_context = DynamicFormService.get_form_for_step(
-#         instance=instance,
-#         user=request.user,
-#         )
 
-#     if form_context is None:
-#         raise ValidationError(
-#             "برای این Workflow فرم فعالی تعریف نشده است."
-#         )
+@login_required
+def mark_notification_as_read(
+    request,
+    notification_id,
+):
+    if request.method != "POST":
+        return JsonResponse(
+            {"success": False},
+            status=405,
+        )
 
-#     form_data, _ = FormData.objects.get_or_create(
-#         instance=instance,
-#     )
+    notification = get_object_or_404(
+        Notification,
+        pk=notification_id,
+        recipient=request.user,
+    )
 
-#     data = dict(form_data.data or {})
+    success = NotificationService.mark_as_read(
+        notification=notification,
+        user=request.user,
+    )
 
-#     for section in form_context["sections"]:
-#         for item in section["fields"]:
-
-#             field = item["field"]
-
-#             if not item["can_edit"]:
-#                 continue
-
-#             if field.field_type == field.FieldType.BOOLEAN:
-#                 value = field.code in request.POST
-#             else:
-#                 value = request.POST.get(
-#                     field.code,
-#                     "",
-#                 )
-
-#             data[field.code] = value
-
-#     form_data.data = data
-#     form_data.save()
-
-#     return redirect(
-#         "operator_panel:workflow_instance",
-#         instance_id=instance.pk,
-#     )
+    return JsonResponse(
+        {
+            "success": success,
+        }
+    )

@@ -439,6 +439,36 @@ class WorkflowStepExecution(models.Model):
         blank=True,
     )
 
+    sla_started_at = models.DateTimeField(
+    null=True,
+    blank=True,
+    )
+
+    sla_due_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    sla_warning_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    sla_warning_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    sla_completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    sla_breached_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
     class Meta:
         ordering = ["performed_at"]
 
@@ -1214,3 +1244,34 @@ class CalendarExceptionInterval(models.Model):
     def __str__(self):
         return f"{self.start_time} - {self.end_time}"
 
+class WorkflowStepSLA(models.Model):
+    step = models.OneToOneField(
+        WorkflowStep,
+        on_delete=models.PROTECT,
+        related_name="sla",
+    )
+
+    calendar = models.ForeignKey(
+        BusinessCalendar,
+        on_delete=models.PROTECT,
+        related_name="step_slas",
+    )
+
+    duration = models.DurationField()
+
+    warning_before = models.DurationField(
+        null=True,
+        blank=True,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
