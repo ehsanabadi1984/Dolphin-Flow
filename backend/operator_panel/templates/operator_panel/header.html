@@ -19,11 +19,77 @@
 
         <!-- Notifications -->
 
-        <button
-            type="button"
-            class="df-icon-button df-notification-button"
-            aria-label="اعلان‌ها"
+        <!-- Notifications -->
+
+<div class="df-notification-wrapper">
+
+    <button
+        type="button"
+        class="df-icon-button df-notification-button"
+        id="df-notification-toggle"
+        aria-label="اعلان‌ها"
+        aria-expanded="false"
+        data-notifications-url="{% url 'operator_panel:notifications' %}"
+    >
+
+        <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
         >
+            <path
+                d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"
+            />
+
+            <path d="M10 21h4" />
+        </svg>
+
+        <span
+            class="df-notification-badge"
+            id="df-notification-badge"
+            hidden
+        >
+            0
+        </span>
+
+    </button>
+
+
+    <div
+        class="df-notification-menu"
+        id="df-notification-menu"
+        aria-hidden="true"
+    >
+
+        <div class="df-notification-menu-header">
+
+            <div class="df-notification-menu-title">
+                اعلان‌ها
+            </div>
+
+            <div
+                class="df-notification-menu-count"
+                id="df-notification-menu-count"
+            >
+                0 اعلان جدید
+            </div>
+
+        </div>
+
+
+        <div
+            class="df-notification-list"
+            id="df-notification-list"
+        >
+
+            <div class="df-notification-empty">
+                در حال دریافت اعلان‌ها...
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
 
             <svg
                 viewBox="0 0 24 24"

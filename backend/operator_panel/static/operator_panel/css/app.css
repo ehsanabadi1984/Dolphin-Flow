@@ -497,6 +497,211 @@ a {
     font-weight: 700;
 }
 
+/* Notification Wrapper */
+
+.df-notification-wrapper {
+    position: relative;
+}
+
+
+/* Notification Menu */
+
+.df-notification-menu {
+    position: absolute;
+
+    top: calc(100% + 10px);
+    left: 0;
+
+    width: 360px;
+    max-height: 480px;
+
+    display: flex;
+    flex-direction: column;
+
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+
+    box-shadow: var(--df-shadow-md);
+
+    opacity: 0;
+    visibility: hidden;
+
+    transform: translateY(-5px);
+
+    transition:
+        opacity .18s ease,
+        transform .18s ease,
+        visibility .18s ease;
+
+    overflow: hidden;
+
+    z-index: 300;
+}
+
+.df-notification-menu.open {
+    opacity: 1;
+    visibility: visible;
+
+    transform: translateY(0);
+}
+
+
+/* Notification Header */
+
+.df-notification-menu-header {
+    padding: 15px 16px;
+
+    border-bottom: 1px solid var(--border);
+
+    background: rgba(255,255,255,.015);
+}
+
+.df-notification-menu-title {
+    color: var(--text);
+
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.df-notification-menu-count {
+    margin-top: 4px;
+
+    color: var(--muted);
+
+    font-size: 9px;
+}
+
+
+/* Notification List */
+
+.df-notification-list {
+    max-height: 400px;
+
+    overflow-y: auto;
+}
+
+
+/* Notification Item */
+
+.df-notification-item {
+    position: relative;
+
+    display: flex;
+    align-items: flex-start;
+
+    gap: 11px;
+
+    padding: 13px 15px;
+
+    border-bottom: 1px solid rgba(255,255,255,.045);
+
+    cursor: pointer;
+
+    transition:
+        background .18s ease;
+}
+
+.df-notification-item:hover {
+    background: rgba(255,255,255,.035);
+}
+
+.df-notification-item:last-child {
+    border-bottom: 0;
+}
+
+
+/* Notification Indicator */
+
+.df-notification-item-indicator {
+    width: 8px;
+    height: 8px;
+
+    margin-top: 5px;
+
+    flex: 0 0 auto;
+
+    border-radius: 50%;
+
+    background: var(--info);
+}
+
+.df-notification-item.sla-warning
+    .df-notification-item-indicator {
+    background: var(--warning);
+}
+
+.df-notification-item.sla-breached
+    .df-notification-item-indicator {
+    background: var(--danger);
+}
+
+
+/* Notification Content */
+
+.df-notification-item-content {
+    min-width: 0;
+    flex: 1;
+}
+
+.df-notification-item-title {
+    color: var(--text);
+
+    font-size: 11px;
+    font-weight: 600;
+
+    line-height: 1.7;
+}
+
+.df-notification-item-message {
+    margin-top: 3px;
+
+    color: var(--muted);
+
+    font-size: 10px;
+    line-height: 1.8;
+}
+
+.df-notification-item-time {
+    margin-top: 5px;
+
+    color: #626a76;
+
+    font-size: 8px;
+}
+
+
+/* Unread State */
+
+.df-notification-item.unread {
+    background: rgba(255,255,255,.018);
+}
+
+.df-notification-item.unread
+    .df-notification-item-title {
+    color: var(--text);
+}
+
+
+/* Empty State */
+
+.df-notification-empty {
+    padding: 35px 20px;
+
+    text-align: center;
+
+    color: var(--muted);
+
+    font-size: 10px;
+}
+
+
+/* Badge */
+
+.df-notification-badge[hidden] {
+    display: none;
+}
+
 
 /* User */
 
