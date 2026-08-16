@@ -358,9 +358,11 @@ def mark_notification_as_read(
         notification=notification,
         user=request.user,
     )
-
+ 
     return JsonResponse(
         {
             "success": success,
+            "notification_id": notification.id,
+            "is_read": notification.is_read,
         }
     )

@@ -35,6 +35,8 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
+
     "accounts",
     "customers",
     "repairs",
@@ -77,6 +79,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
+ASGI_APPLICATION = "config.asgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
@@ -144,6 +147,22 @@ AUTH_USER_MODEL = "accounts.User"
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/operator/dashboard/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [
+                (
+                    env("REDIS_HOST"),
+                    int(env("REDIS_PORT")),
+                )
+            ],
+            "capacity": 1500,
+            "expiry": 10,
+        },
+    },
+}
 
 CELERY_BROKER_URL = (
     f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"

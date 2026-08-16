@@ -42,6 +42,80 @@ document.addEventListener("DOMContentLoaded", () => {
         "df-notification-menu-count"
     );
 
+/*
+ * ---------------------------------------------------------
+ * Notification Alerts
+ * ---------------------------------------------------------
+ */
+
+let knownNotificationIds = new Set();
+
+let notificationAudioUnlocked = false;
+
+let notificationsInitialized = false;
+
+
+/*
+ * Unlock browser audio after user interaction.
+ */
+
+function unlockNotificationAudio() {
+
+    notificationAudioUnlocked = true;
+}
+document.addEventListener(
+    "click",
+    unlockNotificationAudio,
+    {
+        once: true,
+    }
+);
+
+
+
+/*
+ * Play notification sound.
+ */
+
+function playNotificationSound() {
+
+    if (!notificationAudioUnlocked) {
+        return;
+    }
+
+    const audio = new Audio(
+        "/static/operator_panel/audio/notification.mp3"
+    );
+
+    audio.volume = 0.7;
+
+    audio.play().catch((error) => {
+
+        console.warn(
+            "Notification sound could not be played:",
+            error
+        );
+
+    });
+
+}
+
+
+/*
+ * Speak notification message.
+ */
+
+
+
+/*
+ * Trigger alert for a new notification.
+ */
+
+function triggerNotificationAlert(notification) {
+
+    playNotificationSound();
+
+    }
 
     if (
         !notificationToggle ||
@@ -52,63 +126,83 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /*
-     * Open / close notification menu
-     */
+/*
+ * Notification menu
+ */
 
-    notificationToggle.addEventListener("click", async (event) => {
+function closeNotificationMenu() {
 
-        event.stopPropagation();
+    notificationMenu.classList.remove("open");
 
-        const isOpen = notificationMenu.classList.contains("open");
+    notificationToggle.setAttribute(
+        "aria-expanded",
+        "false"
+    );
 
-        if (isOpen) {
-            notificationMenu.classList.remove("open");
-
-            notificationToggle.setAttribute(
-                "aria-expanded",
-                "false"
-            );
-
-            return;
-        }
+    notificationMenu.setAttribute(
+        "aria-hidden",
+        "true"
+    );
+}
 
 
-        notificationMenu.classList.add("open");
+function openNotificationMenu() {
 
-        notificationToggle.setAttribute(
-            "aria-expanded",
-            "true"
-        );
+    notificationMenu.classList.add("open");
 
+    notificationToggle.setAttribute(
+        "aria-expanded",
+        "true"
+    );
 
-        await loadNotifications();
-
-    });
-
-
-    /*
-     * Close when clicking outside
-     */
-
-    document.addEventListener("click", (event) => {
-
-        if (
-            !notificationMenu.contains(event.target) &&
-            !notificationToggle.contains(event.target)
-        ) {
-
-            notificationMenu.classList.remove("open");
-
-            notificationToggle.setAttribute(
-                "aria-expanded",
-                "false"
-            );
-        }
-
-    });
+    notificationMenu.setAttribute(
+        "aria-hidden",
+        "false"
+    );
+}
 
 
+/*
+ * Open / close notification menu
+ */
+
+notificationToggle.addEventListener("click", async (event) => {
+
+    event.stopPropagation();
+
+    const isOpen =
+        notificationMenu.classList.contains("open");
+
+    if (isOpen) {
+
+        closeNotificationMenu();
+
+        return;
+    }
+
+    openNotificationMenu();
+
+    await loadNotifications();
+
+});
+
+
+/*
+ * Close when clicking outside
+ */
+
+document.addEventListener("click", (event) => {
+
+    if (
+        !notificationMenu.contains(event.target) &&
+        !notificationToggle.contains(event.target)
+    ) {
+
+        closeNotificationMenu();
+
+    }
+
+});
     /*
      * Load notifications
      */
@@ -145,22 +239,129 @@ document.addEventListener("DOMContentLoaded", () => {
 
         } catch (error) {
 
-            console.error(
-                "Notification loading error:",
+            console.warn(
+                "Unable to refresh notifications:",
                 error
             );
 
-            notificationList.innerHTML = `
-                <div class="df-notification-empty">
-                    دریافت اعلان‌ها با خطا مواجه شد.
-                </div>
-            `;
+
+        }
+    }
+    /*
+    * ---------------------------------------------------------
+    * Notification Polling
+    * ---------------------------------------------------------
+    */
+
+    const NOTIFICATION_POLL_INTERVAL = 10000;
+
+    let notificationPollingTimer = null;
+    let notificationPollingInProgress = false;
+
+
+    /*
+    * Poll notifications safely.
+    */
+
+    async function pollNotifications() {
+
+        /*
+        * Prevent overlapping requests.
+        */
+
+        if (notificationPollingInProgress) {
+            scheduleNotificationPolling();
+            return;
+        }
+
+
+        /*
+        * Do not poll while the page is hidden.
+        */
+
+        if (document.hidden) {
+            scheduleNotificationPolling();
+            return;
+        }
+
+
+        notificationPollingInProgress = true;
+
+
+        try {
+
+            await loadNotifications();
+
+        } catch (error) {
+
+            /*
+            * Network errors should not break
+            * the notification UI.
+            */
+
+            console.warn(
+                "Notification polling temporarily unavailable."
+            );
+
+        } finally {
+
+            notificationPollingInProgress = false;
+
+            scheduleNotificationPolling();
 
         }
 
     }
 
-    loadNotifications();
+
+    /*
+    * Schedule the next polling request.
+    */
+
+    function scheduleNotificationPolling() {
+
+        if (notificationPollingTimer) {
+
+            clearTimeout(
+                notificationPollingTimer
+            );
+
+        }
+
+
+        notificationPollingTimer = setTimeout(
+            pollNotifications,
+            NOTIFICATION_POLL_INTERVAL
+        );
+
+    }
+
+
+    /*
+    * Immediately refresh notifications
+    * when the user returns to the tab.
+    */
+
+    document.addEventListener(
+        "visibilitychange",
+        () => {
+
+            if (!document.hidden) {
+
+                pollNotifications();
+
+            }
+
+        }
+    );
+
+
+    /*
+    * Initial notification load.
+    */
+
+    pollNotifications();
+
     /*
      * Render notifications
      */
@@ -170,6 +371,55 @@ document.addEventListener("DOMContentLoaded", () => {
         const notifications = data.notifications || [];
 
         const count = data.count || 0;
+
+
+        /*
+        * Detect newly received notifications.
+        */
+
+        const newNotifications = [];
+
+        notifications.forEach((notification) => {
+
+            if (
+                !knownNotificationIds.has(
+                    notification.id
+                )
+            ) {
+
+                newNotifications.push(
+                    notification
+                );
+
+                knownNotificationIds.add(
+                    notification.id
+                );
+
+            }
+
+        });
+
+         /*
+         * First load only initializes known IDs.
+         */
+
+        if (!notificationsInitialized) {
+
+            notificationsInitialized = true;
+
+        } else {
+
+            newNotifications.forEach(
+                (notification) => {
+
+                    triggerNotificationAlert(
+                        notification
+                    );
+
+                }
+            );
+
+        }
 
 
         /*
@@ -224,6 +474,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div
                         class="df-notification-item"
                         data-notification-id="${notification.id}"
+                        role="button"
+                        tabindex="0"
                     >
 
                         <div class="df-notification-item-title">
@@ -248,6 +500,149 @@ document.addEventListener("DOMContentLoaded", () => {
 
     }
 
+    async function markNotificationAsRead(notificationItem) {
+
+        const notificationId =
+            notificationItem.dataset.notificationId;
+
+        if (!notificationId) {
+            return;
+        }
+
+        const notificationsUrl =
+            notificationToggle.dataset.notificationsUrl;
+
+        const readUrl =
+            `${notificationsUrl}${notificationId}/read/`;
+
+        try {
+
+            const response = await fetch(
+                readUrl,
+                {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": getCsrfToken(),
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    "Unable to mark notification as read."
+                );
+            }
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(
+                    "Notification was not marked as read."
+                );
+            }
+
+            /*
+            * Remove notification from current unread list.
+            */
+
+            notificationItem.remove();
+
+
+            /*
+            * Update badge and count.
+            */
+
+            const currentCount =
+                Number(
+                    notificationBadge.textContent
+                ) || 0;
+
+            const newCount =
+                Math.max(currentCount - 1, 0);
+
+
+            if (newCount > 0) {
+
+                notificationBadge.textContent =
+                    newCount;
+
+                notificationBadge.hidden = false;
+
+            } else {
+
+                notificationBadge.textContent = "0";
+                notificationBadge.hidden = true;
+
+            }
+
+
+            notificationCount.textContent =
+                `${newCount} اعلان`;
+
+
+        /*
+         * Empty state
+         */
+
+        if (
+            notificationList.children.length === 0
+        ) {
+
+            notificationList.innerHTML = `
+                <div class="df-notification-empty">
+                    اعلان جدیدی ندارید.
+                </div>
+            `;
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Mark notification as read error:",
+            error
+        );
+
+    }
+}
+
+    function getCsrfToken() {
+
+        const cookie = document.cookie
+            .split("; ")
+            .find(
+                row => row.startsWith("csrftoken=")
+            );
+
+        if (!cookie) {
+            return "";
+        }
+
+        return decodeURIComponent(
+            cookie.split("=")[1]
+        );
+    }
+
+    notificationList.addEventListener(
+        "click",
+        async (event) => {
+
+            const notificationItem =
+                event.target.closest(
+                    ".df-notification-item"
+                );
+
+            if (!notificationItem) {
+                return;
+            }
+
+            await markNotificationAsRead(
+                notificationItem
+            );
+
+        }
+    );
 
     /*
      * Escape HTML
