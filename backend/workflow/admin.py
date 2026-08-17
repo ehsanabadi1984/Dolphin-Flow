@@ -14,6 +14,7 @@ from .models import (
     WorkflowPermission,
     FormDefinition,
     FormSection,
+    FormRepeatableGroup,
     FormField,
     FieldAccess,
     FormData,
@@ -647,6 +648,44 @@ class FormDefinitionAdmin(admin.ModelAdmin):
         "workflow__name",
     )
 
+class FormFieldInline(admin.TabularInline):
+    model = FormField
+    extra = 0
+
+    fields = (
+        "name",
+        "code",
+        "field_type",
+        "label",
+        "is_required",
+        "order",
+        "is_active",
+    )
+
+    ordering = (
+        "order",
+    )
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .filter(
+                repeatable_group__isnull=True,
+            )
+        )
+
+class FormRepeatableGroupInline(admin.TabularInline):
+    model = FormRepeatableGroup
+    extra = 0
+    fields = (
+        "name",
+        "code",
+        "description",
+        "order",
+        "is_required",
+        "is_active",
+    )
 
 @admin.register(FormSection)
 class FormSectionAdmin(admin.ModelAdmin):
@@ -673,12 +712,119 @@ class FormSectionAdmin(admin.ModelAdmin):
         "order",
     )
 
+    inlines = (
+        FormFieldInline,
+        FormRepeatableGroupInline,
+    )
+
+class RepeatableFieldInlineFormSet(forms.BaseInlineFormSet):
+
+    def _construct_form(self, i, **kwargs):
+        form = super()._construct_form(i, **kwargs)
+
+        # FormField.section باید همیشه با Section گروه یکی باشد.
+        if self.instance and self.instance.section_id:
+            form.instance.section = self.instance.section
+
+        return form
+
+
+class RepeatableFieldInline(admin.TabularInline):
+    model = FormField
+    formset = RepeatableFieldInlineFormSet
+
+    extra = 0
+
+    fields = (
+        "name",
+        "code",
+        "field_type",
+        "label",
+        "help_text",
+        "is_required",
+        "order",
+        "is_active",
+        "choices",
+    )
+
+    ordering = (
+        "order",
+    )
+
+# ============================================================
+# Form Repeatable Group
+# ============================================================
+
+@admin.register(FormRepeatableGroup)
+class FormRepeatableGroupAdmin(admin.ModelAdmin):
+
+    list_display = (
+        "name",
+        "section",
+        "code",
+        "order",
+        "is_required",
+        "is_active",
+    )
+
+    list_filter = (
+        "is_active",
+        "is_required",
+        "section__form",
+    )
+
+    search_fields = (
+        "name",
+        "code",
+        "description",
+        "section__name",
+        "section__form__name",
+    )
+
+    ordering = (
+        "section",
+        "order",
+    )
+
+    autocomplete_fields = (
+        "section",
+    )
+
+    inlines = (
+        RepeatableFieldInline,
+    )
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(
+            request,
+            obj,
+            **kwargs,
+        )
+
+        if "section" in form.base_fields:
+            form.base_fields["section"].queryset = (
+                FormSection.objects
+                .filter(
+                    is_active=True,
+                    form__is_active=True,
+                )
+                .select_related("form")
+                .order_by(
+                    "form__name",
+                    "order",
+                )
+            )
+
+        return form
+
 
 @admin.register(FormField)
 class FormFieldAdmin(admin.ModelAdmin):
+
     list_display = (
         "label",
         "section",
+        "repeatable_group",
         "code",
         "field_type",
         "is_required",
@@ -690,19 +836,27 @@ class FormFieldAdmin(admin.ModelAdmin):
         "field_type",
         "is_required",
         "is_active",
+        "repeatable_group",
+        "section__form",
     )
 
     search_fields = (
         "label",
         "name",
         "code",
+        "section__name",
+        "repeatable_group__name",
+    )
+
+    autocomplete_fields = (
+        "section",
+        "repeatable_group",
     )
 
     ordering = (
         "section",
         "order",
     )
-
 
 @admin.register(FieldAccess)
 class FieldAccessAdmin(admin.ModelAdmin):

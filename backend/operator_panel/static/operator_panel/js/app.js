@@ -54,6 +54,31 @@ let notificationAudioUnlocked = false;
 
 let notificationsInitialized = false;
 
+async function requestNotificationPermission() {
+
+    if (!("Notification" in window)) {
+        console.warn(
+            "Browser Notification API is not supported."
+        );
+        return false;
+    }
+
+    if (Notification.permission === "granted") {
+        return true;
+    }
+
+    if (Notification.permission === "denied") {
+        console.warn(
+            "Browser notifications are blocked."
+        );
+        return false;
+    }
+
+    const permission =
+        await Notification.requestPermission();
+
+    return permission === "granted";
+}
 
 /*
  * Unlock browser audio after user interaction.
@@ -113,18 +138,209 @@ function playNotificationSound() {
 
 function triggerNotificationAlert(notification) {
 
+    if (!notification) {
+        return;
+    }
+
     playNotificationSound();
+
+    console.log(
+        "=== TRIGGER NOTIFICATION ALERT ===",
+        {
+            hidden: document.hidden,
+            permission:
+                "Notification" in window
+                    ? Notification.permission
+                    : "unsupported",
+            supported:
+                "Notification" in window,
+            notification: notification,
+        }
+    );
+
+    if (
+        document.hidden &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+    ) {
+
+        console.log(
+            "=== CREATING DESKTOP NOTIFICATION ===",
+            notification
+        );
+
+        const desktopNotification = new Notification(
+            notification.title || "Dolphin Flow",
+            {
+                body:
+                    notification.message ||
+                    "You have a new notification.",
+            }
+        );
+
+        desktopNotification.onshow = () => {
+            console.log("=== DESKTOP NOTIFICATION SHOWN ===");
+        };
+
+        desktopNotification.onerror = (event) => {
+            console.error(
+                "=== DESKTOP NOTIFICATION ERROR ===",
+                event
+            );
+        };
+
+        desktopNotification.onclose = () => {
+            console.log(
+                "=== DESKTOP NOTIFICATION CLOSED ==="
+            );
+        };
 
     }
 
+}
+
+/*
+ * ---------------------------------------------------------
+ * Notification WebSocket
+ * ---------------------------------------------------------
+ */
+
+let notificationSocket = null;
+let notificationSocketReconnectTimer = null;
+
+function connectNotificationWebSocket() {
+
     if (
-        !notificationToggle ||
-        !notificationMenu ||
-        !notificationList
+        notificationSocket &&
+        (
+            notificationSocket.readyState === WebSocket.OPEN ||
+            notificationSocket.readyState === WebSocket.CONNECTING
+        )
     ) {
         return;
     }
 
+    const protocol =
+        window.location.protocol === "https:"
+            ? "wss:"
+            : "ws:";
+
+    const socketUrl =
+        `${protocol}//${window.location.host}/ws/notifications/`;
+
+    notificationSocket = new WebSocket(
+        socketUrl
+    );
+
+    notificationSocket.addEventListener(
+        "open",
+        () => {
+
+            console.log(
+                "Notification WebSocket connected."
+            );
+
+        }
+    );
+
+    notificationSocket.addEventListener(
+        "message",
+        (event) => {
+
+            try {
+
+                const notification =
+                    JSON.parse(event.data);
+
+                console.log(
+                    "Notification received:",
+                    notification
+                );
+                
+                handleIncomingNotification(
+                    notification
+                );    
+
+            } catch (error) {
+
+                console.warn(
+                    "Invalid notification WebSocket payload:",
+                    error
+                );
+
+            }
+
+        }
+    );
+
+    notificationSocket.addEventListener(
+        "close",
+        (event) => {
+
+            console.error(
+                "!!! NOTIFICATION SOCKET CLOSED !!!",
+                {
+                    code: event.code,
+                    reason: event.reason,
+                    wasClean: event.wasClean,
+                    visibility: document.visibilityState,
+                }
+            );
+
+            console.warn(
+                "Notification WebSocket disconnected.",
+                {
+                    code: event.code,
+                    reason: event.reason,
+                    wasClean: event.wasClean,
+                }
+            );
+
+        }
+    );
+
+    notificationSocket.addEventListener(
+        "error",
+        (error) => {
+
+            console.warn(
+                "Notification WebSocket error:",
+                error
+            );
+
+        }
+    );
+}
+
+function handleIncomingNotification(notification) {
+
+    if (
+        !notification ||
+        !notification.id
+    ) {
+        return;
+    }
+
+    if (
+        knownNotificationIds.has(
+            notification.id
+        )
+    ) {
+        return;
+    }
+
+    knownNotificationIds.add(
+        notification.id
+    );
+
+    triggerNotificationAlert(
+        notification
+    );
+
+    loadNotifications();
+}
+
+connectNotificationWebSocket();
 
 /*
  * Notification menu
@@ -179,6 +395,8 @@ notificationToggle.addEventListener("click", async (event) => {
 
         return;
     }
+
+    await requestNotificationPermission();
 
     openNotificationMenu();
 
@@ -345,6 +563,21 @@ document.addEventListener("click", (event) => {
     document.addEventListener(
         "visibilitychange",
         () => {
+
+            console.log("=== VISIBILITY CHANGE ===");
+
+            console.log({
+                visibility: document.visibilityState,
+                hidden: document.hidden,
+                socketState: notificationSocket?.readyState,
+                socketStateName: {
+                    0: "CONNECTING",
+                    1: "OPEN",
+                    2: "CLOSING",
+                    3: "CLOSED",
+                }[notificationSocket?.readyState],
+            });
+
 
             if (!document.hidden) {
 

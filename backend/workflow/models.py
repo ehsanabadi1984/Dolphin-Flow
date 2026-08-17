@@ -960,6 +960,15 @@ class FormField(models.Model):
         blank=True,
     )
 
+    def clean(self):
+        super().clean()
+
+        if self.repeatable_group:
+            if self.repeatable_group.section_id != self.section_id:
+                raise ValidationError(
+                    "گروه تکرارشونده باید متعلق به همان Section فیلد باشد."
+                )
+
     class Meta:
         ordering = ["order"]
 
