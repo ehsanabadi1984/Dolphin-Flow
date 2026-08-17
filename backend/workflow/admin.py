@@ -1001,7 +1001,7 @@ class FormFieldAdmin(admin.ModelAdmin):
 class FieldAccessAdmin(admin.ModelAdmin):
 
     admin_category = "forms"
-    
+
     list_display = (
         "field",
         "step",
