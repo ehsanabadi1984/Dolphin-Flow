@@ -1,0 +1,111 @@
+{% extends "admin/base_site.html" %}
+
+{% load i18n static %}
+
+{% block title %}
+    Dolphin Flow
+{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+
+    <link
+        rel="stylesheet"
+        href="{% static 'workflow/css/admin.css' %}"
+    >
+{% endblock %}
+
+{% block content %}
+
+<div class="df-admin-dashboard">
+
+    <div class="df-admin-hero">
+
+        <div>
+            <div class="df-admin-eyebrow">
+                DOLPHIN FLOW
+            </div>
+
+            <h1>
+                مدیریت سیستم
+            </h1>
+
+            <p>
+                مدیریت فرآیندها، فرم‌ها، دستگاه‌ها،
+                اجرای فرآیند و تنظیمات سیستم
+            </p>
+        </div>
+
+    </div>
+
+
+    <div class="df-admin-categories">
+
+        {% for category_key, category in admin_categories.items %}
+
+            <section
+                class="df-admin-category"
+                data-category="{{ category_key }}"
+            >
+
+                <div class="df-admin-category-header">
+
+                    <div class="df-admin-category-icon">
+                        {{ category.icon }}
+                    </div>
+
+                    <div>
+                        <h2>
+                            {{ category.label }}
+                        </h2>
+
+                        <p>
+                            {{ category.description }}
+                        </p>
+                    </div>
+
+                </div>
+
+
+                <div class="df-admin-models">
+
+                    
+                    {% for app in app_list %}
+
+                        {% for model in app.models %}
+
+                            {% if model.admin_category == category_key %}
+
+                                <a
+                                    href="{{ model.admin_url }}"
+                                    class="df-admin-model-card"
+                                >
+
+                                    <div class="df-admin-model-title">
+                                        {{ model.name }}
+                                    </div>
+
+                                    <div class="df-admin-model-action">
+                                        مدیریت
+                                        <span>←</span>
+                                    </div>
+
+                                </a>
+
+                            {% endif %}
+
+                        {% endfor %}
+
+                    {% endfor %}
+
+                </div>
+
+            </section>
+
+        {% endfor %}
+
+    </div>
+
+</div>
+
+{% endblock %}

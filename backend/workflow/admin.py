@@ -2,6 +2,8 @@ from django import forms
 from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import path
+from django.contrib.admin.sites import site
+from django.contrib.admin import AdminSite
 
 from .models import (
     Workflow,
@@ -19,6 +21,109 @@ from .models import (
     FieldAccess,
     FormData,
 )
+
+
+
+
+class DolphinAdminSite(AdminSite):
+
+    def get_app_list(self, request, app_label=None):
+        app_list = super().get_app_list(
+            request,
+            app_label,
+        )
+
+        for app in app_list:
+            for model in app["models"]:
+                model_admin = self._registry.get(
+                    model["model"]
+                )
+
+                if model_admin:
+                    model["admin_category"] = getattr(
+                        model_admin,
+                        "admin_category",
+                        None,
+                    )
+
+        return app_list
+
+
+# ============================================================
+# Dolphin Flow Admin Architecture
+# ============================================================
+
+ADMIN_CATEGORIES = {
+    "workflows": {
+        "label": "فرآیندها",
+        "description": (
+            "تعریف Workflow، مراحل، Transitionها، "
+            "اعضا و دسترسی‌های فرآیند"
+        ),
+        "icon": "⚙",
+        "order": 10,
+    },
+
+    "forms": {
+        "label": "فرم‌ها",
+        "description": (
+            "تعریف ساختار فرم‌ها، Sectionها، "
+            "Fieldها و گروه‌های تکرارشونده"
+        ),
+        "icon": "🧩",
+        "order": 20,
+    },
+
+    "devices": {
+        "label": "دستگاه‌ها",
+        "description": (
+            "مدیریت انواع دستگاه، مدل‌ها، "
+            "دستگاه‌ها و شناسه‌های آن‌ها"
+        ),
+        "icon": "📱",
+        "order": 30,
+    },
+
+    "sla": {
+        "label": "SLA و زمان‌بندی",
+        "description": (
+            "مدیریت SLA، تقویم‌های کاری "
+            "و زمان‌بندی فرآیندها"
+        ),
+        "icon": "⏱",
+        "order": 40,
+    },
+
+    "executions": {
+        "label": "اجرای فرآیند",
+        "description": (
+            "مشاهده اجرای Workflowها، "
+            "Step Execution و Transition Execution"
+        ),
+        "icon": "▶",
+        "order": 50,
+    },
+
+    "communications": {
+        "label": "ارتباطات",
+        "description": (
+            "مدیریت Notificationها و "
+            "سایر کانال‌های ارتباطی"
+        ),
+        "icon": "🔔",
+        "order": 60,
+    },
+
+    "system": {
+        "label": "سیستم",
+        "description": (
+            "تنظیمات عمومی و اجزای زیرساختی "
+            "Dolphin Flow"
+        ),
+        "icon": "🛠",
+        "order": 100,
+    },
+}
 
 
 # ============================================================
@@ -91,6 +196,9 @@ def workflow_dynamic_transitions(request):
 
 @admin.register(Workflow)
 class WorkflowAdmin(admin.ModelAdmin):
+
+    admin_category = "workflows"
+
     list_display = (
         "name",
         "code",
@@ -126,6 +234,9 @@ class WorkflowAdmin(admin.ModelAdmin):
 
 @admin.register(WorkflowMembership)
 class WorkflowMembershipAdmin(admin.ModelAdmin):
+
+    admin_category = "workflows"
+
     list_display = (
         "workflow",
         "user",
@@ -170,6 +281,9 @@ class WorkflowMembershipAdmin(admin.ModelAdmin):
 
 @admin.register(WorkflowStep)
 class WorkflowStepAdmin(admin.ModelAdmin):
+
+    admin_category = "workflows"
+
     list_display = (
         "workflow",
         "order",
@@ -307,6 +421,9 @@ class WorkflowTransitionAdminForm(forms.ModelForm):
 
 @admin.register(WorkflowTransition)
 class WorkflowTransitionAdmin(admin.ModelAdmin):
+
+    admin_category = "workflows"
+
     form = WorkflowTransitionAdminForm
 
     class Media:
@@ -427,6 +544,9 @@ class WorkflowPermissionAdminForm(forms.ModelForm):
 
 @admin.register(WorkflowPermission)
 class WorkflowPermissionAdmin(admin.ModelAdmin):
+
+    admin_category = "workflows"
+
     form = WorkflowPermissionAdminForm
 
     class Media:
@@ -477,6 +597,9 @@ class WorkflowPermissionAdmin(admin.ModelAdmin):
 
 @admin.register(WorkflowInstance)
 class WorkflowInstanceAdmin(admin.ModelAdmin):
+
+    admin_category = "executions"
+
     list_display = (
         "id",
         "workflow",
@@ -530,6 +653,9 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
 
 @admin.register(WorkflowStepExecution)
 class WorkflowStepExecutionAdmin(admin.ModelAdmin):
+
+    admin_category = "executions"
+
     list_display = (
         "id",
         "instance",
@@ -583,6 +709,9 @@ class WorkflowStepExecutionAdmin(admin.ModelAdmin):
 
 @admin.register(WorkflowTransitionExecution)
 class WorkflowTransitionExecutionAdmin(admin.ModelAdmin):
+
+    admin_category = "executions"
+
     list_display = (
         "id",
         "instance",
@@ -632,6 +761,9 @@ class WorkflowTransitionExecutionAdmin(admin.ModelAdmin):
 
 @admin.register(FormDefinition)
 class FormDefinitionAdmin(admin.ModelAdmin):
+
+    admin_category = "forms"
+
     list_display = (
         "name",
         "workflow",
@@ -689,6 +821,9 @@ class FormRepeatableGroupInline(admin.TabularInline):
 
 @admin.register(FormSection)
 class FormSectionAdmin(admin.ModelAdmin):
+
+    admin_category = "forms"
+
     list_display = (
         "name",
         "form",
@@ -758,6 +893,8 @@ class RepeatableFieldInline(admin.TabularInline):
 @admin.register(FormRepeatableGroup)
 class FormRepeatableGroupAdmin(admin.ModelAdmin):
 
+    admin_category = "forms"
+
     list_display = (
         "name",
         "section",
@@ -821,6 +958,8 @@ class FormRepeatableGroupAdmin(admin.ModelAdmin):
 @admin.register(FormField)
 class FormFieldAdmin(admin.ModelAdmin):
 
+    admin_category = "forms"
+
     list_display = (
         "label",
         "section",
@@ -860,6 +999,9 @@ class FormFieldAdmin(admin.ModelAdmin):
 
 @admin.register(FieldAccess)
 class FieldAccessAdmin(admin.ModelAdmin):
+
+    admin_category = "forms"
+    
     list_display = (
         "field",
         "step",
@@ -892,3 +1034,32 @@ class FormDataAdmin(admin.ModelAdmin):
     search_fields = (
         "instance__workflow__name",
     )
+
+admin.site.index_template = "admin/index.html"
+
+_original_get_app_list = admin.site.get_app_list
+
+
+def dolphin_get_app_list(request, app_label=None):
+    app_list = _original_get_app_list(
+        request,
+        app_label,
+    )
+
+    for app in app_list:
+        for model in app["models"]:
+            model_admin = admin.site._registry.get(
+                model["model"]
+            )
+
+            if model_admin:
+                model["admin_category"] = getattr(
+                    model_admin,
+                    "admin_category",
+                    None,
+                )
+
+    return app_list
+
+
+admin.site.get_app_list = dolphin_get_app_list
