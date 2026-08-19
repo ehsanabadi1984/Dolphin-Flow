@@ -237,6 +237,9 @@ def start_workflow(request, workflow_id):
     )
 
     try:
+        print("START WORKFLOW REQUEST USER:", request.user, request.user.pk)
+        print("START WORKFLOW:", workflow, workflow.pk)
+
         instance = WorkflowExecutionService.start_workflow(
             workflow=workflow,
             user=request.user,

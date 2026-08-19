@@ -4,6 +4,8 @@ from django.http import JsonResponse
 from django.urls import path
 from django.contrib.admin.sites import site
 from django.contrib.admin import AdminSite
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 
 from .models import (
     Workflow,
@@ -14,6 +16,12 @@ from .models import (
     WorkflowTransition,
     WorkflowTransitionExecution,
     WorkflowPermission,
+
+    DeviceType,
+    DeviceModel,
+    Device,
+    DeviceIdentifier,
+
     FormDefinition,
     FormSection,
     FormRepeatableGroup,
@@ -26,6 +34,12 @@ from .models import (
 
 
 class DolphinAdminSite(AdminSite):
+
+    def index(self, request, extra_context=None):
+        return super().index(
+            request,
+            extra_context,
+        )
 
     def get_app_list(self, request, app_label=None):
         app_list = super().get_app_list(
@@ -46,8 +60,30 @@ class DolphinAdminSite(AdminSite):
                         None,
                     )
 
+                    model["admin_section"] = getattr(
+                        model_admin,
+                        "admin_section",
+                        None,
+                    )
+
         return app_list
 
+dolphin_admin_site = DolphinAdminSite(
+    name="dolphin_admin"
+)
+User = get_user_model()
+
+if User not in dolphin_admin_site._registry:
+    dolphin_admin_site.register(
+        User,
+        admin.site._registry[User].__class__,
+    )
+
+if Group not in dolphin_admin_site._registry:
+    dolphin_admin_site.register(
+        Group,
+        admin.site._registry[Group].__class__,
+    )
 
 # ============================================================
 # Dolphin Flow Admin Architecture
@@ -125,6 +161,151 @@ ADMIN_CATEGORIES = {
     },
 }
 
+from collections import OrderedDict
+
+
+def build_admin_structure(request):
+
+    structure = OrderedDict()
+
+    for key, category in ADMIN_CATEGORIES.items():
+
+        structure[key] = {
+            **category,
+            "sections": OrderedDict(),
+        }
+
+
+    app_list = dolphin_admin_site.get_app_list(request)
+
+
+    for app in app_list:
+
+        for model in app["models"]:
+
+            category = model.get(
+                "admin_category"
+            )
+
+            section = model.get(
+                "admin_section"
+            )
+
+            if not category:
+                continue
+
+
+            if not section:
+                section = "general"
+
+            if section not in structure[category]["sections"]:
+
+                section_info = ADMIN_SECTIONS.get(
+                    section,
+                    {
+                        "label": section,
+                        "order": 999,
+                    }
+                )
+
+                structure[category]["sections"][section] = {
+                    **section_info,
+                    "models": [],
+                }
+
+
+            structure[category]["sections"][section]["models"].append(
+                model
+            )
+
+    return structure
+
+ADMIN_SECTIONS = {
+    "general": {
+        "label": "عمومی",
+        "order": 100,
+    },
+
+    "definition": {
+        "label": "تعریف و طراحی",
+        "order": 10,
+    },
+
+    "security": {
+        "label": "امنیت و دسترسی",
+        "order": 20,
+    },
+
+    "execution": {
+        "label": "اجرا و مانیتورینگ",
+        "order": 30,
+    },
+
+
+    "forms": {
+        "designer": {
+            "label": "طراحی فرم",
+            "icon": "🧩",
+            "order": 10,
+        },
+        "access": {
+            "label": "دسترسی فیلدها",
+            "icon": "🔐",
+            "order": 20,
+        },
+        "data": {
+            "label": "داده‌ها",
+            "icon": "📄",
+            "order": 30,
+        },
+    },
+
+    "devices": {
+        "catalog": {
+            "label": "ساختار دستگاه",
+            "icon": "📚",
+            "order": 10,
+        },
+        "inventory": {
+            "label": "تجهیزات",
+            "icon": "📱",
+            "order": 20,
+        },
+    },
+
+    "sla": {
+        "configuration": {
+            "label": "تنظیمات SLA",
+            "icon": "⏱",
+            "order": 10,
+        },
+    },
+
+    "executions": {
+        "history": {
+            "label": "سوابق اجرا",
+            "icon": "▶",
+            "order": 10,
+        },
+    },
+
+    "communications": {
+        "notification": {
+            "label": "Notification",
+            "icon": "🔔",
+            "order": 10,
+        },
+    },
+
+    "system": {
+        "configuration": {
+            "label": "تنظیمات سیستم",
+            "icon": "🛠",
+            "order": 10,
+        },
+    },
+}
+
 
 # ============================================================
 # Workflow
@@ -194,10 +375,14 @@ def workflow_dynamic_transitions(request):
 
 
 
-@admin.register(Workflow)
+@admin.register(
+    Workflow,
+    site=dolphin_admin_site,
+)
 class WorkflowAdmin(admin.ModelAdmin):
 
     admin_category = "workflows"
+    admin_section = "definition"
 
     list_display = (
         "name",
@@ -232,10 +417,14 @@ class WorkflowAdmin(admin.ModelAdmin):
 # Workflow Membership
 # ============================================================
 
-@admin.register(WorkflowMembership)
+@admin.register(
+    WorkflowMembership,
+    site=dolphin_admin_site,
+)
 class WorkflowMembershipAdmin(admin.ModelAdmin):
 
     admin_category = "workflows"
+    admin_section = "security"
 
     list_display = (
         "workflow",
@@ -279,10 +468,14 @@ class WorkflowMembershipAdmin(admin.ModelAdmin):
 # Workflow Step
 # ============================================================
 
-@admin.register(WorkflowStep)
+@admin.register(
+    WorkflowStep,
+    site=dolphin_admin_site,
+)
 class WorkflowStepAdmin(admin.ModelAdmin):
 
     admin_category = "workflows"
+    admin_section = "definition"
 
     list_display = (
         "workflow",
@@ -419,10 +612,14 @@ class WorkflowTransitionAdminForm(forms.ModelForm):
 
         return cleaned_data
 
-@admin.register(WorkflowTransition)
+@admin.register(
+    WorkflowTransition,
+    site=dolphin_admin_site,
+)
 class WorkflowTransitionAdmin(admin.ModelAdmin):
 
     admin_category = "workflows"
+    admin_section = "definition"
 
     form = WorkflowTransitionAdminForm
 
@@ -542,10 +739,14 @@ class WorkflowPermissionAdminForm(forms.ModelForm):
 
         return cleaned_data
 
-@admin.register(WorkflowPermission)
+@admin.register(
+    WorkflowPermission,
+    site=dolphin_admin_site,
+)
 class WorkflowPermissionAdmin(admin.ModelAdmin):
 
     admin_category = "workflows"
+    admin_section = "security"
 
     form = WorkflowPermissionAdminForm
 
@@ -595,10 +796,14 @@ class WorkflowPermissionAdmin(admin.ModelAdmin):
 # Workflow Instance
 # ============================================================
 
-@admin.register(WorkflowInstance)
+@admin.register(
+    WorkflowInstance,
+    site=dolphin_admin_site,
+)
 class WorkflowInstanceAdmin(admin.ModelAdmin):
 
     admin_category = "executions"
+    admin_section = "execution"
 
     list_display = (
         "id",
@@ -651,7 +856,10 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
 # Workflow Step Execution
 # ============================================================
 
-@admin.register(WorkflowStepExecution)
+@admin.register(
+    WorkflowStepExecution,
+    site=dolphin_admin_site,
+)
 class WorkflowStepExecutionAdmin(admin.ModelAdmin):
 
     admin_category = "executions"
@@ -707,7 +915,10 @@ class WorkflowStepExecutionAdmin(admin.ModelAdmin):
 # Workflow Transition Execution
 # ============================================================
 
-@admin.register(WorkflowTransitionExecution)
+@admin.register(
+    WorkflowTransitionExecution,
+    site=dolphin_admin_site,
+)
 class WorkflowTransitionExecutionAdmin(admin.ModelAdmin):
 
     admin_category = "executions"
@@ -758,8 +969,149 @@ class WorkflowTransitionExecutionAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+# ============================================================
+# Devices
+# ============================================================
 
-@admin.register(FormDefinition)
+@admin.register(
+    DeviceType,
+    site=dolphin_admin_site,
+)
+class DeviceTypeAdmin(admin.ModelAdmin):
+
+    admin_category = "devices"
+
+    list_display = (
+        "name",
+        "code",
+        "is_active",
+    )
+
+    list_filter = (
+        "is_active",
+    )
+
+    search_fields = (
+        "name",
+        "code",
+    )
+
+    readonly_fields = (
+        "code",
+        "created_at",
+        "updated_at",
+    )
+
+@admin.register(
+    DeviceModel,
+    site=dolphin_admin_site,
+)
+class DeviceModelAdmin(admin.ModelAdmin):
+
+    admin_category = "devices"
+
+    list_display = (
+        "name",
+        "device_type",
+        "code",
+        "is_active",
+    )
+
+    list_filter = (
+        "device_type",
+        "is_active",
+    )
+
+    search_fields = (
+        "name",
+        "code",
+        "device_type__name",
+    )
+
+    autocomplete_fields = (
+        "device_type",
+    )
+
+    readonly_fields = (
+        "code",
+        "created_at",
+        "updated_at",
+    )
+
+@admin.register(
+    Device,
+    site=dolphin_admin_site,
+)
+class DeviceAdmin(admin.ModelAdmin):
+
+    admin_category = "devices"
+
+    list_display = (
+        "id",
+        "device_model",
+        "created_at",
+        "updated_at",
+    )
+
+    list_filter = (
+        "device_model__device_type",
+    )
+
+    search_fields = (
+        "device_model__brand",
+        "device_model__name",
+        "identifiers__value",
+        "description",
+    )
+
+    autocomplete_fields = (
+        "device_model",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+    )
+
+@admin.register(
+    DeviceIdentifier,
+    site=dolphin_admin_site,
+)
+class DeviceIdentifierAdmin(admin.ModelAdmin):
+
+    admin_category = "devices"
+
+    list_display = (
+        "device",
+        "identifier_type",
+        "value",
+        "created_at",
+    )
+
+    list_filter = (
+        "identifier_type",
+    )
+
+    search_fields = (
+        "value",
+        "device__device_model__brand",
+        "device__device_model__name",
+    )
+
+    autocomplete_fields = (
+        "device",
+    )
+
+    readonly_fields = (
+        "created_at",
+    )
+
+#---------------------
+#---------------------
+@admin.register(
+    FormDefinition,
+    site=dolphin_admin_site,
+)
 class FormDefinitionAdmin(admin.ModelAdmin):
 
     admin_category = "forms"
@@ -819,7 +1171,10 @@ class FormRepeatableGroupInline(admin.TabularInline):
         "is_active",
     )
 
-@admin.register(FormSection)
+@admin.register(
+    FormSection,
+    site=dolphin_admin_site,
+)
 class FormSectionAdmin(admin.ModelAdmin):
 
     admin_category = "forms"
@@ -890,7 +1245,10 @@ class RepeatableFieldInline(admin.TabularInline):
 # Form Repeatable Group
 # ============================================================
 
-@admin.register(FormRepeatableGroup)
+@admin.register(
+    FormRepeatableGroup,
+    site=dolphin_admin_site,
+)
 class FormRepeatableGroupAdmin(admin.ModelAdmin):
 
     admin_category = "forms"
@@ -955,7 +1313,10 @@ class FormRepeatableGroupAdmin(admin.ModelAdmin):
         return form
 
 
-@admin.register(FormField)
+@admin.register(
+    FormField,
+    site=dolphin_admin_site,
+)
 class FormFieldAdmin(admin.ModelAdmin):
 
     admin_category = "forms"
@@ -997,7 +1358,10 @@ class FormFieldAdmin(admin.ModelAdmin):
         "order",
     )
 
-@admin.register(FieldAccess)
+@admin.register(
+    FieldAccess,
+    site=dolphin_admin_site,
+)
 class FieldAccessAdmin(admin.ModelAdmin):
 
     admin_category = "forms"
@@ -1023,7 +1387,10 @@ class FieldAccessAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(FormData)
+@admin.register(
+    FormData,
+    site=dolphin_admin_site,
+)
 class FormDataAdmin(admin.ModelAdmin):
     list_display = (
         "instance",
@@ -1035,12 +1402,14 @@ class FormDataAdmin(admin.ModelAdmin):
         "instance__workflow__name",
     )
 
-admin.site.index_template = "admin/index.html"
+dolphin_admin_site.index_template = "admin/index.html"
 
-_original_get_app_list = admin.site.get_app_list
+
+_original_get_app_list = dolphin_admin_site.get_app_list
 
 
 def dolphin_get_app_list(request, app_label=None):
+
     app_list = _original_get_app_list(
         request,
         app_label,
@@ -1048,7 +1417,8 @@ def dolphin_get_app_list(request, app_label=None):
 
     for app in app_list:
         for model in app["models"]:
-            model_admin = admin.site._registry.get(
+
+            model_admin = dolphin_admin_site._registry.get(
                 model["model"]
             )
 
@@ -1059,7 +1429,13 @@ def dolphin_get_app_list(request, app_label=None):
                     None,
                 )
 
+                model["admin_section"] = getattr(
+                    model_admin,
+                    "admin_section",
+                    None,
+                )
+
     return app_list
 
 
-admin.site.get_app_list = dolphin_get_app_list
+dolphin_admin_site.get_app_list = dolphin_get_app_list
