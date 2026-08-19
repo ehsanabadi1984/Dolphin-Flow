@@ -135,7 +135,21 @@ def workflow_instance(request, instance_id):
             user=request.user,
         )
     )
-    edit_mode = request.GET.get("edit") == "1"
+    form_data = FormData.objects.filter(
+        instance=instance,
+    ).first()
+
+    if form_data is None:
+        # فرم برای اولین بار باز شده است
+        edit_mode = True
+
+    elif not form_data.is_submitted:
+        # فرم قبلاً ذخیره شده ولی هنوز Submit نشده
+        edit_mode = request.GET.get("edit") == "1"
+
+    else:
+        # فرم Submit شده و قفل است
+        edit_mode = False
 
     return render(
         request,

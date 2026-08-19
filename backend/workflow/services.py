@@ -173,11 +173,12 @@ class WorkflowExecutionService:
             )
 
         # ---------------------------------------------------------
-        # 5. Validate current step form submission
+        # 5. Validate current step execution
         # ---------------------------------------------------------
 
         current_step_execution = (
             instance.step_executions
+            .select_for_update()
             .filter(
                 workflow_step=instance.current_step,
             )
@@ -190,9 +191,9 @@ class WorkflowExecutionService:
                 "اجرای مرحله فعلی این Workflow پیدا نشد."
             )
 
-        if not current_step_execution.is_submitted:
+        if current_step_execution.is_submitted:
             raise ValidationError(
-                "ابتدا فرم این مرحله را ارسال کنید."
+                "فرم این مرحله قبلاً ارسال شده است."
             )
 
         # ---------------------------------------------------------
@@ -207,36 +208,33 @@ class WorkflowExecutionService:
         )
 
         # ---------------------------------------------------------
-        # 6. Create transition execution record
+        # 7. Validate saved form data
         # ---------------------------------------------------------
 
-        current_step_execution = (
-            instance.step_executions
-            .filter(
-                workflow_step=instance.current_step,
-                sla_started_at__isnull=False,
-                sla_completed_at__isnull=True,
-            )
-            .order_by("-performed_at")
+        form_data = (
+            FormData.objects
+            .filter(instance=instance)
             .first()
         )
 
-        if current_step_execution is None:
+        if form_data is None:
             raise ValidationError(
-                "اجرای مرحله فعلی پیدا نشد."
+                "اطلاعات فرم هنوز ذخیره نشده است."
             )
 
-        if current_step_execution.is_submitted:
+        if not form_data.data:
             raise ValidationError(
-                "فرم این مرحله قبلاً ارسال شده است."
+                "ابتدا اطلاعات فرم را ذخیره کنید."
             )
 
-        SLAService.complete_sla(
-            step_execution=current_step_execution,
-        )
+        # ---------------------------------------------------------
+        # 8. Submit current step
+        # ---------------------------------------------------------
+
+        now = timezone.now()
 
         current_step_execution.is_submitted = True
-        current_step_execution.submitted_at = timezone.now()
+        current_step_execution.submitted_at = now
 
         current_step_execution.save(
             update_fields=[
@@ -245,6 +243,14 @@ class WorkflowExecutionService:
             ]
         )
 
+        # ---------------------------------------------------------
+        # 9. Complete SLA
+        # ---------------------------------------------------------
+
+        SLAService.complete_sla(
+            step_execution=current_step_execution,
+        )
+        
         transition_execution = WorkflowTransitionExecution.objects.create(
             instance=instance,
             transition=transition,
@@ -254,15 +260,13 @@ class WorkflowExecutionService:
         )
 
         # ---------------------------------------------------------
-        # 7. Record arrival at the new step
+        # 10. Record arrival at the new step
         # ---------------------------------------------------------
 
         step_execution = WorkflowStepExecution.objects.create(
             instance=instance,
             workflow_step=transition.to_step,
-            performed_by=user,
-            notes=notes,
-            data=data or {},
+            performed_by=user, 
         )
 
         SLAService.start_sla_if_configured(
@@ -270,13 +274,13 @@ class WorkflowExecutionService:
         )
 
         # ---------------------------------------------------------
-        # 8. Move instance to the destination step
+        # 11. Move instance to the destination step
         # ---------------------------------------------------------
 
         instance.current_step = transition.to_step
 
         # ---------------------------------------------------------
-        # 9. Complete workflow if destination is the final step
+        # 12. Complete workflow if destination is the final step
         # ---------------------------------------------------------
 
         has_next_step = instance.workflow.steps.filter(
@@ -303,7 +307,7 @@ class WorkflowExecutionService:
                 ]
             )
             # ---------------------------------------------------------
-            # 10. Notify executors of the destination step
+            # 13. Notify executors of the destination step
             # ---------------------------------------------------------
 
             recipients = (

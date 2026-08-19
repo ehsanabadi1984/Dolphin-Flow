@@ -488,25 +488,6 @@
 </section>
 
 <div class="df-form-actions">
-
-  {% if not dynamic_form.is_submitted %}
-<form
-  method="post"
-  action="{% url 'operator_panel:submit_form' instance.pk %}"
-  style="display: inline"
-  onsubmit="return confirm('آیا از صحت اطلاعات اطمینان دارید؟ پس از ارسال، فرم دیگر قابل ویرایش نخواهد بود.');"
->
-  {% csrf_token %}
-
-  <button
-    type="submit"
-    class="df-button"
-  >
-    ارسال فرم
-  </button>
-</form>
-{% endif %}
-
   <a
     href="?edit=1"
     class="df-button"
