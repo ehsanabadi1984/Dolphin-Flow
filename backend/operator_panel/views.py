@@ -267,6 +267,14 @@ def start_workflow(request, workflow_id):
 
 @login_required
 def clear_form_data(request, instance_id):
+    print(
+        "CLEAR FORM REQUEST:",
+        request.method,
+        "INSTANCE:",
+        instance_id,
+        "USER:",
+        request.user,
+    )
     if request.method != "POST":
         return redirect(
             "operator_panel:workflow_instance",
@@ -309,6 +317,65 @@ def clear_form_data(request, instance_id):
         "operator_panel:workflow_instance",
         instance_id=instance.pk,
     )
+
+@login_required
+def submit_form(request, instance_id):
+    if request.method != "POST":
+        return redirect(
+            "operator_panel:workflow_instance",
+            instance_id=instance_id,
+        )
+
+    instance = get_object_or_404(
+        WorkflowInstance.objects.select_related(
+            "workflow",
+            "current_step",
+        ),
+        pk=instance_id,
+    )
+
+    if instance.status != WorkflowInstance.Status.ACTIVE:
+        raise ValidationError(
+            "این Workflow Instance فعال نیست."
+        )
+
+    WorkflowAuthorizationService.require_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=WorkflowPermission.Action.VIEW,
+        step=instance.current_step,
+    )
+
+    try:
+        DynamicFormService.submit_form_for_step(
+            instance=instance,
+            user=request.user,
+        )
+
+    except PermissionDenied:
+        raise
+
+    except ValidationError as exc:
+        messages.error(
+            request,
+            str(exc),
+        )
+
+        return redirect(
+            "operator_panel:workflow_instance",
+            instance_id=instance.pk,
+        )
+
+    messages.success(
+        request,
+        "فرم با موفقیت ارسال شد و دیگر قابل ویرایش نیست.",
+    )
+
+    return redirect(
+        "operator_panel:workflow_instance",
+        instance_id=instance.pk,
+    )
+
 
 @login_required
 def notifications(request):

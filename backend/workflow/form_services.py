@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 from .instance_device_services import InstanceDeviceService
 from .models import (
@@ -10,12 +11,159 @@ from .models import (
     DeviceIdentifier,
 )
 
-
 class DynamicFormService:
     """
     Build and persist the dynamic form structure
     for a specific workflow instance and step.
     """
+
+    @staticmethod
+    def _parse_repeatable_data(
+        *,
+        submitted_data,
+        group_code,
+    ):
+        """
+        Convert flat POST keys of a repeatable group into
+        a list of dictionaries.
+
+        Example:
+
+            devices_0_imei = 123
+            devices_0_device_model_id = 5
+            devices_1_imei = 456
+
+        becomes:
+
+            [
+                {
+                    "imei": "123",
+                    "device_model_id": "5",
+                },
+                {
+                    "imei": "456",
+                },
+            ]
+        """
+
+        prefix = f"{group_code}_"
+        items = {}
+
+        for key in submitted_data.keys():
+
+            if not key.startswith(prefix):
+                continue
+
+            remainder = key[len(prefix):]
+
+            parts = remainder.split("_", 1)
+
+            if len(parts) != 2:
+                continue
+
+            index, field_code = parts
+
+            if not index.isdigit():
+                continue
+
+            index = int(index)
+
+            items.setdefault(
+                index,
+                {},
+            )
+
+            values = submitted_data.getlist(key)
+
+            if len(values) > 1:
+                items[index][field_code] = values
+
+            else:
+                items[index][field_code] = (
+                    values[0]
+                    if values
+                    else ""
+                )
+
+        return [
+            items[index]
+            for index in sorted(items)
+        ]
+
+    @staticmethod
+    @transaction.atomic
+    def submit_form_for_step(
+        *,
+        instance,
+        user,
+    ):
+        workflow = instance.workflow
+        step = instance.current_step
+
+        if step is None:
+            raise ValidationError(
+                "این Workflow مرحله فعلی ندارد."
+            )
+
+        current_step_execution = (
+            instance.step_executions
+            .select_for_update()
+            .filter(
+                workflow_step=step,
+            )
+            .order_by("-performed_at")
+            .first()
+        )
+
+        if current_step_execution is None:
+            raise ValidationError(
+                "اجرای مرحله فعلی این Workflow پیدا نشد."
+            )
+
+        if current_step_execution.is_submitted:
+            raise ValidationError(
+                "فرم این مرحله قبلاً ارسال شده است."
+            )
+
+        form_data = (
+            FormData.objects
+            .filter(instance=instance)
+            .first()
+        )
+
+        if form_data is None:
+            raise ValidationError(
+                "اطلاعات فرم هنوز ذخیره نشده است."
+            )
+
+        if not form_data.data:
+            raise ValidationError(
+                "ابتدا اطلاعات فرم را ذخیره کنید."
+            )
+
+        now = timezone.now()
+
+        current_step_execution.is_submitted = True
+        current_step_execution.submitted_at = now
+        current_step_execution.save(
+            update_fields=[
+                "is_submitted",
+                "submitted_at",
+            ]
+        )
+
+        form_data.is_submitted = True
+        form_data.submitted_at = now
+        form_data.submitted_by = user
+        form_data.save(
+            update_fields=[
+                "is_submitted",
+                "submitted_at",
+                "submitted_by",
+            ]
+        )
+
+        return current_step_execution
 
     @staticmethod
     def get_form_for_step(
@@ -28,6 +176,20 @@ class DynamicFormService:
 
         if step is None:
             return None
+        
+        current_step_execution = (
+            instance.step_executions
+            .filter(
+                workflow_step=step,
+            )
+            .order_by("-performed_at")
+            .first()
+        )
+
+        step_is_submitted = (
+            current_step_execution is not None
+            and current_step_execution.is_submitted
+        )
 
         form = (
             FormDefinition.objects.filter(
@@ -49,6 +211,21 @@ class DynamicFormService:
         ).first()
 
         data = form_data.data if form_data else {}
+
+        current_step_execution = (
+            instance.step_executions
+            .filter(
+                workflow_step=step,
+            )
+            .order_by("-performed_at")
+            .first()
+        )
+
+        is_submitted = (
+            current_step_execution.is_submitted
+            if current_step_execution
+            else False
+        )
 
         has_saved_data = bool(data)
 
@@ -106,8 +283,8 @@ class DynamicFormService:
                         can_edit=True,
                     ).exists()
 
-                if not can_view:
-                    continue
+                if is_submitted:
+                    can_edit = False
 
                 fields.append(
                     {
@@ -163,6 +340,10 @@ class DynamicFormService:
                             can_edit=True,
                         ).exists()
 
+
+                    if step_is_submitted:
+                        can_edit = False
+
                     if not can_view:
                         continue
 
@@ -211,14 +392,49 @@ class DynamicFormService:
                     ]
 
                 else:
-                    items = data.get(
+                    raw_items = data.get(
                         group.code,
                         [],
                     )
 
-                    if not isinstance(items, list):
-                        items = []
+                    if not isinstance(raw_items, list):
+                        raw_items = []
 
+                    if not raw_items:
+                        raw_items = [
+                            {}
+                        ]
+
+                    items = []
+
+                    for raw_item in raw_items:
+
+                        if not isinstance(raw_item, dict):
+                            continue
+
+                        item_fields = []
+
+                        for field_info in group_fields:
+
+                            field = field_info["field"]
+
+                            item_fields.append(
+                                {
+                                    "field": field,
+                                    "can_edit": field_info["can_edit"],
+                                    "value": raw_item.get(
+                                        field.code,
+                                        "",
+                                    ),
+                                }
+                            )
+
+                        items.append(
+                            {
+                                "fields": item_fields,
+                            }
+                        )
+                
                 repeatable_groups.append(
                     {
                         "group": group,
@@ -244,6 +460,7 @@ class DynamicFormService:
             "form": form,
             "sections": sections,
             "has_saved_data": has_saved_data,
+            "is_submitted": step_is_submitted,
         }
 
     @staticmethod
@@ -267,6 +484,25 @@ class DynamicFormService:
 
         if step is None:
             raise ValidationError("این Workflow مرحله فعلی ندارد.")
+        
+        current_step_execution = (
+            instance.step_executions
+            .filter(
+                workflow_step=step,
+            )
+            .order_by("-performed_at")
+            .first()
+        )
+
+        if current_step_execution is None:
+            raise ValidationError(
+                "اجرای مرحله فعلی این Workflow پیدا نشد."
+            )
+
+        if current_step_execution.is_submitted:
+            raise ValidationError(
+                "فرم این مرحله قبلاً ارسال شده و دیگر قابل ویرایش نیست."
+            )
 
         form = (
             FormDefinition.objects.filter(
@@ -435,15 +671,10 @@ class DynamicFormService:
                 # Process repeatable group
                 # -------------------------------------------------
 
-                items = submitted_data.get(
-                    group.code,
-                    [],
-                )
-
-                if not isinstance(items, list):
-                    raise ValidationError(
-                        f"اطلاعات گروه «{group.name}» باید به صورت لیست ارسال شود."
-                    )
+                items = DynamicFormService._parse_repeatable_data(
+                    submitted_data=submitted_data,
+                    group_code=group.code,
+                )      
 
                 # -----------------------------------------
                 # Device repeatable group
@@ -725,6 +956,11 @@ class DynamicFormService:
                     # Device group is persisted in relational models.
                     # It must not be copied into FormData.
                     continue
+                # -------------------------------------------------
+                # Persist non-device repeatable groups
+                # -------------------------------------------------
+
+                current_data[group.code] = items
         # -------------------------------------------------
         # 5. Persist FormData
         # -------------------------------------------------
@@ -739,6 +975,8 @@ class DynamicFormService:
         )
 
         return form_data
+
+
 
     @staticmethod
     @transaction.atomic

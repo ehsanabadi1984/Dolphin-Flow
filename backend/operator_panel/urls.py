@@ -1,5 +1,5 @@
 from django.urls import path
-
+from . import views
 from .views import (
     dashboard,
     execute_transition,
@@ -20,6 +20,12 @@ urlpatterns = [
     "workflow-instance/<int:instance_id>/clear/",
     clear_form_data,
     name="clear_form_data",
+    ),
+
+    path(
+        "workflow/<int:instance_id>/submit-form/",
+        views.submit_form,
+        name="submit_form",
     ),
     
     path(

@@ -6,6 +6,7 @@ from .notification_services import NotificationService
 from .authorization import WorkflowAuthorizationService
 from .sla_services import SLAService
 from .models import (
+    FormData,
     WorkflowInstance,
     WorkflowPermission,
     WorkflowStepExecution,
@@ -172,7 +173,30 @@ class WorkflowExecutionService:
             )
 
         # ---------------------------------------------------------
-        # 5. Authorization
+        # 5. Validate current step form submission
+        # ---------------------------------------------------------
+
+        current_step_execution = (
+            instance.step_executions
+            .filter(
+                workflow_step=instance.current_step,
+            )
+            .order_by("-performed_at")
+            .first()
+        )
+
+        if current_step_execution is None:
+            raise ValidationError(
+                "اجرای مرحله فعلی این Workflow پیدا نشد."
+            )
+
+        if not current_step_execution.is_submitted:
+            raise ValidationError(
+                "ابتدا فرم این مرحله را ارسال کنید."
+            )
+
+        # ---------------------------------------------------------
+        # 6. Authorization
         # ---------------------------------------------------------
 
         WorkflowAuthorizationService.require_permission(
@@ -197,10 +221,29 @@ class WorkflowExecutionService:
             .first()
         )
 
-        if current_step_execution is not None:
-            SLAService.complete_sla(
-                step_execution=current_step_execution,
+        if current_step_execution is None:
+            raise ValidationError(
+                "اجرای مرحله فعلی پیدا نشد."
             )
+
+        if current_step_execution.is_submitted:
+            raise ValidationError(
+                "فرم این مرحله قبلاً ارسال شده است."
+            )
+
+        SLAService.complete_sla(
+            step_execution=current_step_execution,
+        )
+
+        current_step_execution.is_submitted = True
+        current_step_execution.submitted_at = timezone.now()
+
+        current_step_execution.save(
+            update_fields=[
+                "is_submitted",
+                "submitted_at",
+            ]
+        )
 
         transition_execution = WorkflowTransitionExecution.objects.create(
             instance=instance,

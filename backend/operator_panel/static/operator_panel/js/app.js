@@ -925,4 +925,243 @@ document.addEventListener("click", (event) => {
 
     }
 
+
+    /*
+     * ---------------------------------------------------------
+     * Repeatable Groups
+     * ---------------------------------------------------------
+     */
+
+    document.addEventListener("click", (event) => {
+
+        const addButton = event.target.closest(
+            ".df-repeatable-add"
+        );
+
+        if (!addButton) {
+            return;
+        }
+
+        const groupCode =
+            addButton.dataset.groupCode;
+
+        if (!groupCode) {
+            console.error(
+                "Repeatable group code not found."
+            );
+
+            return;
+        }
+
+        const group =
+            document.querySelector(
+                `.df-repeatable-group[data-repeatable-group="${groupCode}"]`
+            );
+
+        if (!group) {
+            console.error(
+                "Repeatable group not found:",
+                groupCode
+            );
+
+            return;
+        }
+
+        const itemsContainer =
+            group.querySelector(
+                ".df-repeatable-items"
+            );
+
+        if (!itemsContainer) {
+            console.error(
+                "Repeatable items container not found:",
+                groupCode
+            );
+
+            return;
+        }
+
+        const items =
+            itemsContainer.querySelectorAll(
+                "[data-repeatable-item]"
+            );
+
+        if (items.length === 0) {
+            console.error(
+                "No repeatable item available to clone:",
+                groupCode
+            );
+
+            return;
+        }
+
+        /*
+         * Clone the last item.
+         */
+
+        const sourceItem =
+            items[items.length - 1];
+
+        const newItem =
+            sourceItem.cloneNode(true);
+
+        /*
+         * New index.
+         *
+         * Example:
+         * contacts-Test-Form-Display_0_name
+         * contacts-Test-Form-Display_1_name
+         */
+
+        const newIndex =
+            items.length;
+        
+        console.log(
+            "Repeatable index calculation:",
+            {
+                groupCode,
+                existingItems: items.length,
+                newIndex,
+                names: Array.from(items).flatMap(
+                    item =>
+                        Array.from(
+                            item.querySelectorAll(
+                                "input, textarea, select"
+                            )
+                        ).map(
+                            field =>
+                                field.getAttribute("name")
+                        )
+                ),
+            }
+        );
+
+        /*
+         * Clear values and update field names.
+         */
+
+        const fields =
+            newItem.querySelectorAll(
+                "input, textarea, select"
+            );
+
+        fields.forEach((field) => {
+
+            const oldName =
+                field.getAttribute("name");
+
+            if (oldName) {
+
+                const parts =
+                    oldName.split("_");
+
+                /*
+                 * Expected structure:
+                 *
+                 * groupCode_index_fieldCode
+                 *
+                 * Replace only the index.
+                 */
+
+                if (parts.length >= 3) {
+
+                    parts[1] =
+                        String(newIndex);
+
+                    field.name =
+                        parts.join("_");
+
+                }
+            }
+
+            /*
+             * Update ID if present.
+             */
+
+            const oldId =
+                field.getAttribute("id");
+
+            if (oldId) {
+
+                const newId =
+                    oldId.replace(
+                        /-\d+-/,
+                        `-${newIndex}-`
+                    );
+
+                field.id = newId;
+            }
+
+            /*
+             * Clear the value.
+             */
+
+            if (
+                field.type === "checkbox" ||
+                field.type === "radio"
+            ) {
+
+                field.checked = false;
+
+            } else if (
+                field.tagName === "SELECT"
+            ) {
+
+                field.selectedIndex = 0;
+
+            } else {
+
+                field.value = "";
+
+            }
+        });
+
+        /*
+         * Make sure labels point to the
+         * newly-created input.
+         */
+
+        const labels =
+            newItem.querySelectorAll(
+                "label[for]"
+            );
+
+        labels.forEach((label) => {
+
+            const oldFor =
+                label.getAttribute("for");
+
+            if (!oldFor) {
+                return;
+            }
+
+            const newFor =
+                oldFor.replace(
+                    /-\d+-/,
+                    `-${newIndex}-`
+                );
+
+            label.setAttribute(
+                "for",
+                newFor
+            );
+        });
+
+        /*
+         * Append the new item.
+         */
+
+        itemsContainer.appendChild(
+            newItem
+        );
+
+        console.log(
+            "Repeatable item added:",
+            {
+                groupCode,
+                index: newIndex,
+            }
+        );
+    });
+
 });

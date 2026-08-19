@@ -439,6 +439,15 @@ class WorkflowStepExecution(models.Model):
         blank=True,
     )
 
+    is_submitted = models.BooleanField(
+        default=False,
+    )
+
+    submitted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
     sla_started_at = models.DateTimeField(
     null=True,
     blank=True,
@@ -1053,6 +1062,23 @@ class FormData(models.Model):
     data = models.JSONField(
         default=dict,
         blank=True,
+    )
+
+    is_submitted = models.BooleanField(
+        default=False,
+    )
+
+    submitted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="submitted_form_data",
     )
 
     created_at = models.DateTimeField(
