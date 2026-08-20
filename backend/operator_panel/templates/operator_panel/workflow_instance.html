@@ -487,34 +487,46 @@
 
 </section>
 
-<div class="df-form-actions">
-  <a
-    href="?edit=1"
-    class="df-button"
-  >
-    ویرایش اطلاعات
-  </a>
+  {% if current_step_execution and not current_step_execution.is_submitted %}
 
-  <form
-    method="post"
-    action="{% url 'operator_panel:clear_form_data' instance.pk %}"
-    style="display: inline"
-    onsubmit="return confirm('آیا مطمئن هستید که می‌خواهید اطلاعات قابل ویرایش این فرم را پاک کنید؟');"
-  >
+    <div class="df-form-actions">
 
-    {% csrf_token %}
+{% if instance.status == "ACTIVE" and current_step_execution and not current_step_execution.is_submitted %}
 
-    <button
-      type="submit"
-      class="df-button df-button-danger"
-    >
-      پاک کردن اطلاعات
-    </button>
+  <div class="df-form-actions">
 
-  </form>
+    {% if dynamic_form.has_saved_data and not edit_mode and not dynamic_form.is_submitted %}
+      <a
+        href="?edit=1"
+        class="df-button"
+      >
+        ویرایش اطلاعات
+      </a>
+    {% endif %}
 
-</div>
+    {% if dynamic_form.has_saved_data and not dynamic_form.is_submitted %}
+      <form
+        method="post"
+        action="{% url 'operator_panel:clear_form_data' instance.pk %}"
+        style="display: inline"
+        onsubmit="return confirm('آیا مطمئن هستید که می‌خواهید اطلاعات قابل ویرایش این فرم را پاک کنید؟');"
+      >
+        {% csrf_token %}
 
+        <button
+          type="submit"
+          class="df-button df-button-danger"
+        >
+          پاک کردن اطلاعات
+        </button>
+      </form>
+    {% endif %}
+
+  </div>
+
+{% endif %}    </div>
+
+  {% endif %}
 {% endif %}
   
 {% if error %}

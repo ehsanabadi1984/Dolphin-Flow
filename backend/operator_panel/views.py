@@ -40,6 +40,9 @@ def dashboard(request):
         .filter(
             started_by=request.user,
         )
+        .exclude(
+            status=WorkflowInstance.Status.DRAFT,
+        )
         .select_related(
             "workflow",
             "current_step",
@@ -135,21 +138,52 @@ def workflow_instance(request, instance_id):
             user=request.user,
         )
     )
-    form_data = FormData.objects.filter(
-        instance=instance,
-    ).first()
+    current_step_execution = (
+        instance.step_executions
+        .filter(
+            workflow_step=instance.current_step,
+        )
+        .order_by("-performed_at")
+        .first()
+    )
 
-    if form_data is None:
-        # فرم برای اولین بار باز شده است
-        edit_mode = True
+    form_data = (
+        FormData.objects
+        .filter(
+            instance=instance,
+        )
+        .first()
+    )
 
-    elif not form_data.is_submitted:
-        # فرم قبلاً ذخیره شده ولی هنوز Submit نشده
+    has_saved_data = (
+        form_data is not None
+        and bool(form_data.data)
+    )
+
+    if current_step_execution and current_step_execution.is_submitted:
+        # مرحله فعلی Submit شده → کاملاً قفل
+        edit_mode = False
+
+    elif has_saved_data:
+        # Save شده ولی Submit نشده → فقط با Edit قابل ویرایش
         edit_mode = request.GET.get("edit") == "1"
 
     else:
-        # فرم Submit شده و قفل است
-        edit_mode = False
+        # هنوز چیزی Save نشده → فرم از ابتدا قابل ویرایش است
+        edit_mode = True
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    print("DEBUG FORM STATE:")
+    print("INSTANCE:", instance.pk)
+    print("INSTANCE STATUS:", instance.status)
+    print("CURRENT STEP:", instance.current_step)
+    print("CURRENT EXECUTION:", current_step_execution)
+    print("EXECUTION SUBMITTED:", getattr(current_step_execution, "is_submitted", None))
+    print("DYNAMIC FORM:", dynamic_form)
+    print("DYNAMIC FORM SUBMITTED:", dynamic_form.get("is_submitted"))
+    print("DYNAMIC FORM SAVED:", dynamic_form.get("has_saved_data"))
+    print("EDIT MODE:", edit_mode)
 
     return render(
         request,
@@ -159,6 +193,7 @@ def workflow_instance(request, instance_id):
             "transitions": transitions,
             "dynamic_form": dynamic_form,
             "edit_mode": edit_mode,
+            "current_step_execution": current_step_execution,
         },
     )
 

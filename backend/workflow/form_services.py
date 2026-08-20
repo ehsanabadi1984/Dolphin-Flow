@@ -1,14 +1,17 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from .sla_services import SLAService
 
 from .instance_device_services import InstanceDeviceService
 from .models import (
     DeviceModel,
     FormData,
+    WorkflowInstance,
     FormDefinition,
     InstanceDevice,
     DeviceIdentifier,
+    WorkflowStepExecution,
 )
 
 class DynamicFormService:
@@ -114,7 +117,7 @@ class DynamicFormService:
             .order_by("-performed_at")
             .first()
         )
-
+        
         if current_step_execution is None:
             raise ValidationError(
                 "اجرای مرحله فعلی این Workflow پیدا نشد."
@@ -162,6 +165,26 @@ class DynamicFormService:
                 "submitted_by",
             ]
         )
+
+        # -------------------------------------------------
+        # Complete workflow if this is the final step
+        # -------------------------------------------------
+
+        has_next_step = workflow.steps.filter(
+            is_active=True,
+            order__gt=step.order,
+        ).exists()
+
+        if not has_next_step:
+            instance.status = WorkflowInstance.Status.COMPLETED
+            instance.completed_at = now
+
+            instance.save(
+                update_fields=[
+                    "status",
+                    "completed_at",
+                ]
+            )
 
         return current_step_execution
 
@@ -483,8 +506,10 @@ class DynamicFormService:
         step = instance.current_step
 
         if step is None:
-            raise ValidationError("این Workflow مرحله فعلی ندارد.")
-        
+            raise ValidationError(
+                "این Workflow مرحله فعلی ندارد."
+            )
+
         current_step_execution = (
             instance.step_executions
             .filter(
@@ -494,16 +519,55 @@ class DynamicFormService:
             .first()
         )
 
-        if current_step_execution is None:
+        # ---------------------------------------------------------
+        # Activate DRAFT on first real form save
+        # ---------------------------------------------------------
+
+        if instance.status == WorkflowInstance.Status.DRAFT:
+
+            if current_step_execution is not None:
+                raise ValidationError(
+                    "وضعیت Draft این Workflow نامعتبر است."
+                )
+
+            instance.status = WorkflowInstance.Status.ACTIVE
+            instance.save(
+                update_fields=[
+                    "status",
+                ]
+            )
+
+            current_step_execution = (
+                WorkflowStepExecution.objects.create(
+                    instance=instance,
+                    workflow_step=step,
+                    performed_by=user,
+                    data={},
+                )
+            )
+
+            SLAService.start_sla_if_configured(
+                step_execution=current_step_execution,
+            )
+
+        # ---------------------------------------------------------
+        # Active workflow must have current step execution
+        # ---------------------------------------------------------
+
+        elif current_step_execution is None:
+
             raise ValidationError(
                 "اجرای مرحله فعلی این Workflow پیدا نشد."
             )
+
+        # ---------------------------------------------------------
+        # Submitted step is locked
+        # ---------------------------------------------------------
 
         if current_step_execution.is_submitted:
             raise ValidationError(
                 "فرم این مرحله قبلاً ارسال شده و دیگر قابل ویرایش نیست."
             )
-
         form = (
             FormDefinition.objects.filter(
                 workflow=workflow,

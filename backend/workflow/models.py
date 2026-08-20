@@ -95,6 +95,14 @@ class WorkflowStep(models.Model):
         related_name="steps",
     )
 
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="assigned_workflow_steps",
+    )
+
     name = models.CharField(
         max_length=150,
     )
@@ -152,6 +160,7 @@ class WorkflowStep(models.Model):
 class WorkflowInstance(models.Model):
 
     class Status(models.TextChoices):
+        DRAFT = "DRAFT", "پیش‌نویس"
         ACTIVE = "ACTIVE", "فعال"
         COMPLETED = "COMPLETED", "تکمیل شده"
         CANCELLED = "CANCELLED", "لغو شده"

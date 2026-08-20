@@ -69,29 +69,14 @@ class WorkflowExecutionService:
             )
 
         # ---------------------------------------------------------
-        # 4. Create workflow instance
+        # 4. Create workflow instance Draft
         # ---------------------------------------------------------
 
         instance = WorkflowInstance.objects.create(
             workflow=workflow,
             current_step=first_step,
             started_by=user,
-            status=WorkflowInstance.Status.ACTIVE,
-        )
-
-        # ---------------------------------------------------------
-        # 5. Record the first step execution
-        # ---------------------------------------------------------
-
-        step_execution = WorkflowStepExecution.objects.create(
-            instance=instance,
-            workflow_step=first_step,
-            performed_by=user,
-            data=data or {},
-        )
-
-        SLAService.start_sla_if_configured(
-            step_execution=step_execution,
+            status=WorkflowInstance.Status.DRAFT,
         )
 
         return instance
@@ -280,64 +265,43 @@ class WorkflowExecutionService:
         instance.current_step = transition.to_step
 
         # ---------------------------------------------------------
-        # 12. Complete workflow if destination is the final step
+        # 12. Move instance to the destination step
         # ---------------------------------------------------------
 
-        has_next_step = instance.workflow.steps.filter(
-            is_active=True,
-            order__gt=transition.to_step.order,
-        ).exists()
+        instance.save(
+            update_fields=[
+                "current_step",
+            ]
+        )
 
-        if not has_next_step:
-            instance.status = WorkflowInstance.Status.COMPLETED
-            instance.completed_at = timezone.now()
+        # ---------------------------------------------------------
+        # 13. Notify executors of the destination step
+        # ---------------------------------------------------------
 
-            instance.save(
-                update_fields=[
-                    "current_step",
-                    "status",
-                    "completed_at",
-                ]
+        recipient = transition.to_step.assigned_to
+
+        if (
+            recipient
+            and recipient.is_active
+            and recipient != user
+        ):
+            NotificationService.create(
+                recipient=recipient,
+                notification_type=(
+                    Notification.NotificationType.ACTION_REQUIRED
+                ),
+                title=(
+                    f" فرآیند جدید  "
+                    f"«{instance.workflow.name}»"
+                ),
+                message=(
+                    f"فرآیند «{instance.workflow.name}» "
+                    f"وارد مرحله «{transition.to_step.name}» شده "
+                    "و نیازمند اقدام شماست."
+                ),
+                workflow_instance=instance,
+                workflow_step=transition.to_step,
+                transition_execution=transition_execution,
             )
-
-        else:
-            instance.save(
-                update_fields=[
-                    "current_step",
-                ]
-            )
-            # ---------------------------------------------------------
-            # 13. Notify executors of the destination step
-            # ---------------------------------------------------------
-
-            recipients = (
-                instance.workflow.memberships
-                .filter(
-                    is_active=True,
-                    role=WorkflowMembership.Role.EXECUTOR,
-                    user__is_active=True,
-                )
-                .select_related("user")
-            )
-
-            for membership in recipients:
-                NotificationService.create(
-                    recipient=membership.user,
-                    notification_type=(
-                        Notification.NotificationType.STEP_ENTERED
-                    ),
-                    title=(
-                        f"ورود فرآیند به مرحله "
-                        f"«{transition.to_step.name}»"
-                    ),
-                    message=(
-                        f"فرآیند «{instance.workflow.name}» "
-                        f"به مرحله «{transition.to_step.name}» "
-                        "وارد شد و نیاز به بررسی دارد."
-                    ),
-                    workflow_instance=instance,
-                    workflow_step=transition.to_step,
-                    transition_execution=transition_execution,
-                )
 
         return transition_execution

@@ -20,6 +20,7 @@ from workflow.models import (
     WorkflowStep,
     FormRepeatableGroup,
     DeviceIdentifier,
+    WorkflowStepExecution,
 )
 
 
@@ -199,11 +200,19 @@ class DynamicFormServiceTests(TestCase):
         )
 
     def create_instance(self):
-        return WorkflowInstance.objects.create(
+        instance = WorkflowInstance.objects.create(
             workflow=self.workflow,
             current_step=self.step_one,
             status=WorkflowInstance.Status.ACTIVE,
         )
+
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_one,
+            performed_by=self.user,
+        )
+
+        return instance
 
     def test_get_form_for_step_returns_repeatable_device_group(self):
         instance = self.create_instance()
