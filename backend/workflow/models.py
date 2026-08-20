@@ -864,6 +864,11 @@ class FormSection(models.Model):
         return f"{self.form.name} - {self.name}"
 
 class FormRepeatableGroup(models.Model):
+
+    class GroupType(models.TextChoices):
+        NORMAL = "NORMAL", "گروه معمولی"
+        DEVICE = "DEVICE", "گروه دستگاه‌ها"
+
     section = models.ForeignKey(
         FormSection,
         on_delete=models.PROTECT,
@@ -876,6 +881,12 @@ class FormRepeatableGroup(models.Model):
 
     code = models.CharField(
         max_length=50,
+    )
+
+    group_type = models.CharField(
+        max_length=20,
+        choices=GroupType.choices,
+        default=GroupType.NORMAL,
     )
 
     description = models.TextField(

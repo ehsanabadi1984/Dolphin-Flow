@@ -1165,6 +1165,7 @@ class FormRepeatableGroupInline(admin.TabularInline):
     fields = (
         "name",
         "code",
+        "group_type",
         "description",
         "order",
         "is_required",
@@ -1257,6 +1258,7 @@ class FormRepeatableGroupAdmin(admin.ModelAdmin):
         "name",
         "section",
         "code",
+        "group_type",
         "order",
         "is_required",
         "is_active",
@@ -1265,6 +1267,7 @@ class FormRepeatableGroupAdmin(admin.ModelAdmin):
     list_filter = (
         "is_active",
         "is_required",
+        "group_type",
         "section__form",
     )
 
@@ -1312,6 +1315,22 @@ class FormRepeatableGroupAdmin(admin.ModelAdmin):
 
         return form
 
+class FieldAccessInline(admin.TabularInline):
+    model = FieldAccess
+    extra = 0
+
+    fields = (
+        "step",
+        "role",
+        "user",
+        "can_view",
+        "can_edit",
+    )
+
+    autocomplete_fields = (
+        "step",
+        "user",
+    )
 
 @admin.register(
     FormField,
@@ -1356,6 +1375,10 @@ class FormFieldAdmin(admin.ModelAdmin):
     ordering = (
         "section",
         "order",
+    )
+
+    inlines = (
+        FieldAccessInline,
     )
 
 @admin.register(

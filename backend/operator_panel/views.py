@@ -172,19 +172,6 @@ def workflow_instance(request, instance_id):
         # هنوز چیزی Save نشده → فرم از ابتدا قابل ویرایش است
         edit_mode = True
 
-#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    print("DEBUG FORM STATE:")
-    print("INSTANCE:", instance.pk)
-    print("INSTANCE STATUS:", instance.status)
-    print("CURRENT STEP:", instance.current_step)
-    print("CURRENT EXECUTION:", current_step_execution)
-    print("EXECUTION SUBMITTED:", getattr(current_step_execution, "is_submitted", None))
-    print("DYNAMIC FORM:", dynamic_form)
-    print("DYNAMIC FORM SUBMITTED:", dynamic_form.get("is_submitted"))
-    print("DYNAMIC FORM SAVED:", dynamic_form.get("has_saved_data"))
-    print("EDIT MODE:", edit_mode)
-
     return render(
         request,
         "operator_panel/workflow_instance.html",

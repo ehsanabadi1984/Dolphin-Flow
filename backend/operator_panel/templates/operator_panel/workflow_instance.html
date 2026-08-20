@@ -177,6 +177,148 @@
 
           {% for group in section.repeatable_groups %}
 
+            {% if group.group.code == "devices" %}
+
+    <section
+        class="df-repeatable-group df-device-group"
+        data-repeatable-group="devices"
+    >
+
+        <div class="df-form-section-header">
+            <div>
+                <h3>دستگاه‌ها</h3>
+            </div>
+
+            {% if edit_mode %}
+                <button
+                    type="button"
+                    class="df-button df-button-secondary df-repeatable-add"
+                    data-group-code="devices"
+                >
+                    + افزودن دستگاه
+                </button>
+            {% endif %}
+        </div>
+
+        <div
+            class="df-repeatable-items"
+            data-group-code="devices"
+        >
+
+            {% for item in group.items %}
+
+                <div
+                    class="df-repeatable-item df-device-item"
+                    data-repeatable-item
+                >
+
+                    {% for item_field in item.fields %}
+
+                        <div class="df-form-field">
+
+                            <label>
+                                {{ item_field.field.label }}
+
+                                {% if item_field.field.is_required %}
+                                    <span>*</span>
+                                {% endif %}
+                            </label>
+
+                            {% if edit_mode and item_field.can_edit %}
+
+                                {% if item_field.field.code == "device_type" %}
+
+                                <select
+                                    name="devices_{{ forloop.parentloop.counter0 }}_device_type"
+                                >
+                                    <option value="">
+                                        انتخاب نوع دستگاه
+                                    </option>
+
+                {% for device_type in item_field.device_types %}
+                    <option
+                        value="{{ device_type.id }}"
+                        {% if item_field.value|stringformat:"s" == device_type.id|stringformat:"s" %}
+                            selected
+                        {% endif %}
+                    >
+                        {{ device_type.name }}
+                    </option>
+                {% endfor %}
+            </select>
+
+        {% elif item_field.field.code == "device_model_id" %}
+                                    <select
+                                        name="devices_{{ forloop.parentloop.counter0 }}_device_model_id"
+                                    >
+                                        <option value="">
+                                            انتخاب مدل دستگاه
+                                        </option>
+
+                                        {% for device_model in item_field.device_models %}
+                                            <option
+                                                value="{{ device_model.id }}"
+                                                {% if item_field.value|stringformat:"s" == device_model.id|stringformat:"s" %}
+                                                    selected
+                                                {% endif %}
+                                            >
+                                                {{ device_model.name }}
+                                            </option>
+                                        {% endfor %}
+
+                                    </select>
+
+                                {% elif item_field.field.code == "imei" %}
+
+                                    <input
+                                        type="text"
+                                        name="devices_{{ forloop.parentloop.counter0 }}_imei"
+                                        value="{{ item_field.value|default:'' }}"
+                                    />
+
+                                {% elif item_field.field.code == "problem" %}
+
+                                    <textarea
+                                        name="devices_{{ forloop.parentloop.counter0 }}_problem"
+                                    >{{ item_field.value|default:'' }}</textarea>
+
+                                {% elif item_field.field.code == "description" %}
+
+                                    <textarea
+                                        name="devices_{{ forloop.parentloop.counter0 }}_description"
+                                    >{{ item_field.value|default:'' }}</textarea>
+
+                                {% endif %}
+
+                            {% else %}
+
+                                <div class="df-form-value">
+                                    {{ item_field.value|default:"—" }}
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+                    {% endfor %}
+
+                </div>
+
+            {% empty %}
+
+                <div class="df-empty-state">
+                    هنوز دستگاهی به این فرم اضافه نشده است.
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    </section>
+
+{% else %}
+
+
             <section
               class="df-repeatable-group"
               data-repeatable-group="{{ group.group.code }}"
@@ -205,6 +347,9 @@
                 class="df-repeatable-items"
                 data-group-code="{{ group.group.code }}"
               >
+
+
+
                 {% if group.items %}
 
                   {% for item in group.items %}
@@ -283,13 +428,15 @@
                               name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
                             >
 
-                              {% for choice in item_field.field.choices %}
+                              {% for choice in item_field.choices %}
 
                                 <option
-                                  value="{{ choice }}"
-                                  {% if item_field.value == choice %}selected{% endif %}
+                                    value="{{ choice.0 }}"
+                                    {% if item_field.value|stringformat:"s" == choice.0|stringformat:"s" %}
+                                        selected
+                                    {% endif %}
                                 >
-                                  {{ choice }}
+                                    {{ choice.1 }}
                                 </option>
 
                               {% endfor %}
@@ -323,6 +470,8 @@
               {% endif %}
             </div>
             </section>
+
+            {% endif %}
 
           {% endfor %}
 
@@ -495,8 +644,7 @@
 
   <div class="df-form-actions">
 
-    {% if dynamic_form.has_saved_data and not edit_mode and not dynamic_form.is_submitted %}
-      <a
+{% if dynamic_form.has_saved_data and dynamic_form.has_editable_fields and not edit_mode and not dynamic_form.is_submitted %}      <a
         href="?edit=1"
         class="df-button"
       >
@@ -504,8 +652,7 @@
       </a>
     {% endif %}
 
-    {% if dynamic_form.has_saved_data and not dynamic_form.is_submitted %}
-      <form
+{% if dynamic_form.has_saved_data and dynamic_form.has_editable_fields and not dynamic_form.is_submitted %}      <form
         method="post"
         action="{% url 'operator_panel:clear_form_data' instance.pk %}"
         style="display: inline"
