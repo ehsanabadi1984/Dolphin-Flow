@@ -189,7 +189,7 @@
                 <h3>دستگاه‌ها</h3>
             </div>
 
-            {% if edit_mode %}
+            {% if edit_mode and group.has_editable_fields %}
                 <button
                     type="button"
                     class="df-button df-button-secondary df-repeatable-add"
@@ -293,7 +293,7 @@
                             {% else %}
 
                                 <div class="df-form-value">
-                                    {{ item_field.value|default:"—" }}
+                                     {{ item_field.display_value|default:item_field.value|default:"—" }}
                                 </div>
 
                             {% endif %}
@@ -332,7 +332,7 @@
                   {% endif %}
                 </div>
 
-                {% if edit_mode %}
+                {% if edit_mode and group.has_editable_fields %}
                   <button
                     type="button"
                     class="df-button df-button-secondary df-repeatable-add"
@@ -652,6 +652,7 @@
       </a>
     {% endif %}
 
+    
 {% if dynamic_form.has_saved_data and dynamic_form.has_editable_fields and not dynamic_form.is_submitted %}      <form
         method="post"
         action="{% url 'operator_panel:clear_form_data' instance.pk %}"

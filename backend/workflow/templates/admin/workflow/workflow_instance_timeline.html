@@ -1,0 +1,272 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% block extrastyle %}
+    {{ block.super }}
+
+    <link
+        rel="stylesheet"
+        href="{% static 'workflow/css/workflow-timeline.css' %}"
+    >
+{% endblock %}
+{% block content %}
+
+<div class="timeline-page">
+
+    <div class="timeline-header">
+        <h1>
+            تاریخچه اجرای
+            {{ instance.workflow.name }}
+            #{{ instance.pk }}
+        </h1>
+
+        <div class="timeline-meta">
+            <div>
+                <strong>وضعیت:</strong>
+                {{ instance.get_status_display }}
+            </div>
+
+            <div>
+                <strong>مرحله فعلی:</strong>
+                {{ instance.current_step|default:"—" }}
+            </div>
+
+            <div>
+                <strong>شروع:</strong>
+                {{ instance.started_at|date:"Y/m/d H:i:s" }}
+            </div>
+
+            <div>
+                <strong>شروع‌کننده:</strong>
+                {{ instance.started_by|default:"—" }}
+            </div>
+
+            {% if instance.completed_at %}
+                <div>
+                    <strong>تکمیل:</strong>
+                    {{ instance.completed_at|date:"Y/m/d H:i:s" }}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+
+    <div class="timeline">
+
+        {% for event in events %}
+
+            <div class="timeline-event">
+
+                <div class="timeline-marker timeline-marker-{{ event.type }}">
+                    {% if event.type == "start" %}
+                        ▶
+                    {% elif event.type == "transition" %}
+                        →
+                    {% else %}
+                        ●
+                    {% endif %}
+                </div>
+
+                <div class="timeline-card">
+
+                    <div class="timeline-event-header">
+
+                        <div class="timeline-event-main">
+
+                            <div class="timeline-event-type">
+                                {% if event.type == "start" %}
+                                    شروع فرآیند
+                                {% elif event.type == "transition" %}
+                                    تغییر مرحله
+                                {% else %}
+                                    اجرای مرحله
+                                {% endif %}
+                            </div>
+
+                            <div class="timeline-event-title">
+                                {{ event.title }}
+                            </div>
+
+                        </div>
+
+                        <div class="timeline-event-time">
+                            {{ event.performed_at|date:"Y/m/d H:i:s" }}
+                        </div>
+
+                    </div>
+
+                    <div class="timeline-event-user">
+                        <strong>کاربر:</strong>
+                        {{ event.user|default:"—" }}
+                    </div>
+
+                    {% if event.type == "step" and event.sla_started_at %}
+
+                        <div class="timeline-sla">
+
+                            <div class="timeline-sla-header">
+                                <span>SLA</span>
+
+                                {% if event.sla_breached_at %}
+                                    <span class="timeline-sla-state danger">
+                                        نقض شده
+                                    </span>
+                                {% elif event.sla_completed_at %}
+                                    <span class="timeline-sla-state success">
+                                        تکمیل شده
+                                    </span>
+                                {% else %}
+                                    <span class="timeline-sla-state active">
+                                        در حال اجرا
+                                    </span>
+                                {% endif %}
+                            </div>
+
+
+                            <div class="timeline-sla-grid">
+
+                                <div class="timeline-sla-item">
+                                    <span class="timeline-sla-label">
+                                        شروع
+                                    </span>
+
+                                    <strong>
+                                        {{ event.sla_started_at|date:"Y/m/d H:i:s" }}
+                                    </strong>
+                                </div>
+
+
+                                {% if event.sla_due_at %}
+
+                                    <div class="timeline-sla-item">
+                                        <span class="timeline-sla-label">
+                                            مهلت
+                                        </span>
+
+                                        <strong>
+                                            {{ event.sla_due_at|date:"Y/m/d H:i:s" }}
+                                        </strong>
+                                    </div>
+
+                                {% endif %}
+
+
+                                {% if event.sla_warning_at %}
+
+                                    <div class="timeline-sla-item">
+                                        <span class="timeline-sla-label">
+                                            هشدار
+                                        </span>
+
+                                        <strong>
+                                            {{ event.sla_warning_at|date:"Y/m/d H:i:s" }}
+                                        </strong>
+                                    </div>
+
+                                {% endif %}
+
+
+                                {% if event.sla_completed_at %}
+
+                                    <div class="timeline-sla-item">
+                                        <span class="timeline-sla-label">
+                                            تکمیل
+                                        </span>
+
+                                        <strong>
+                                            {{ event.sla_completed_at|date:"Y/m/d H:i:s" }}
+                                        </strong>
+                                    </div>
+
+                                {% endif %}
+
+
+                                {% if event.sla_breached_at %}
+
+                                    <div class="timeline-sla-item">
+                                        <span class="timeline-sla-label">
+                                            نقض
+                                        </span>
+
+                                        <strong>
+                                            {{ event.sla_breached_at|date:"Y/m/d H:i:s" }}
+                                        </strong>
+                                    </div>
+
+                                {% endif %}
+
+                            </div>
+
+
+                            {% if event.sla_warning_sent_at %}
+
+                                <div class="timeline-sla-warning">
+                                    هشدار SLA ارسال شده است.
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+                    {% endif %}
+
+                    {% if event.type == "transition" %}
+
+                        <div class="timeline-transition">
+                            {{ event.description }}
+                        </div>
+
+                    {% endif %}
+
+
+                    {% if event.description %}
+
+                        <div class="timeline-notes">
+                            {{ event.description }}
+                        </div>
+
+                    {% endif %}
+
+
+                    {% if event.type == "step" %}
+
+                        <div class="timeline-status">
+
+                            {% if event.is_submitted %}
+                                <span class="timeline-badge submitted">
+                                    ثبت نهایی شده
+                                </span>
+                            {% endif %}
+
+                            {% if event.sla_completed %}
+                                <span class="timeline-badge success">
+                                    SLA تکمیل شد
+                                </span>
+                            {% endif %}
+
+                            {% if event.sla_breached %}
+                                <span class="timeline-badge danger">
+                                    SLA نقض شد
+                                </span>
+                            {% endif %}
+
+                        </div>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+        {% empty %}
+
+            <div class="timeline-empty">
+                هنوز رویدادی برای این فرآیند ثبت نشده است.
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+</div>
+
+{% endblock %}

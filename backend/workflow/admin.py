@@ -1,11 +1,14 @@
 from django import forms
 from django.contrib import admin
 from django.http import JsonResponse
-from django.urls import path
-from django.contrib.admin.sites import site
+from django.urls import path, reverse
+from django.utils.html import format_html
 from django.contrib.admin import AdminSite
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.utils import timezone
+from django.shortcuts import get_object_or_404
+from django.template.response import TemplateResponse
 
 from .models import (
     Workflow,
@@ -16,6 +19,7 @@ from .models import (
     WorkflowTransition,
     WorkflowTransitionExecution,
     WorkflowPermission,
+    WorkflowStepSLA,
 
     DeviceType,
     DeviceModel,
@@ -25,9 +29,16 @@ from .models import (
     FormDefinition,
     FormSection,
     FormRepeatableGroup,
+    RepeatableGroupAccess,
     FormField,
     FieldAccess,
     FormData,
+
+    BusinessCalendar,
+    WeeklySchedule,
+    WorkingInterval,
+    CalendarException,
+    CalendarExceptionInterval,
 )
 
 
@@ -373,6 +384,198 @@ def workflow_dynamic_transitions(request):
     })
 
 
+class WorkflowMembershipInline(admin.TabularInline):
+    model = WorkflowMembership
+    extra = 0
+
+    fields = (
+        "user",
+        "role",
+        "is_active",
+        "joined_at",
+    )
+
+    autocomplete_fields = (
+        "user",
+    )
+
+    readonly_fields = (
+        "joined_at",
+    )
+
+
+class WorkflowStepInline(admin.TabularInline):
+    model = WorkflowStep
+    extra = 0
+
+    fields = (
+        "order",
+        "name",
+        "description",
+        "is_active",
+        "code",
+    )
+
+    readonly_fields = (
+        "code",
+    )
+
+    ordering = (
+        "order",
+    )
+
+class WorkflowTransitionInline(admin.TabularInline):
+    model = WorkflowTransition
+    extra = 0
+
+    fields = (
+        "from_step",
+        "to_step",
+        "name",
+        "is_active",
+        "code",
+    )
+
+    autocomplete_fields = (
+        "from_step",
+        "to_step",
+    )
+
+    readonly_fields = (
+        "code",
+    )
+
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(
+            request,
+            obj,
+            **kwargs,
+        )
+
+        if obj:
+            form = formset.form
+
+            form.base_fields["from_step"].queryset = (
+                WorkflowStep.objects
+                .filter(
+                    workflow=obj,
+                    is_active=True,
+                )
+                .order_by("order")
+            )
+
+            form.base_fields["to_step"].queryset = (
+                WorkflowStep.objects
+                .filter(
+                    workflow=obj,
+                    is_active=True,
+                )
+                .order_by("order")
+            )
+
+        return formset
+
+    ordering = (
+        "from_step__order",
+        "to_step__order",
+    )
+
+
+class WorkflowPermissionInline(admin.TabularInline):
+    model = WorkflowPermission
+    fk_name = "workflow"
+    extra = 0
+
+    fields = (
+        "user",
+        "role",
+        "action",
+        "effect",
+    )
+
+    autocomplete_fields = (
+        "user",
+    )
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .filter(
+                step__isnull=True,
+                transition__isnull=True,
+            )
+            .select_related(
+                "user",
+                "workflow",
+            )
+        )
+
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(
+            request,
+            obj,
+            **kwargs,
+        )
+
+        if obj:
+            form = formset.form
+
+            form.base_fields["user"].queryset = (
+                get_user_model().objects
+                .filter(is_active=True)
+                .order_by("username")
+            )
+
+        return formset
+
+
+class WorkflowStepPermissionInline(admin.TabularInline):
+    model = WorkflowPermission
+    fk_name = "step"
+    extra = 0
+
+    fields = (
+        "user",
+        "role",
+        "action",
+        "effect",
+    )
+
+    autocomplete_fields = (
+        "user",
+    )
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .filter(
+                transition__isnull=True,
+                step__isnull=False,
+            )
+            .select_related(
+                "user",
+                "step",
+            )
+        )
+
+
+class WorkflowTransitionPermissionInline(admin.TabularInline):
+    model = WorkflowPermission
+    fk_name = "transition"
+    extra = 0
+
+    fields = (
+        "user",
+        "role",
+        "action",
+        "effect",
+    )
+
+    autocomplete_fields = (
+        "user",
+    )
 
 
 @admin.register(
@@ -412,6 +615,12 @@ class WorkflowAdmin(admin.ModelAdmin):
         "name",
     )
 
+    inlines = (
+        WorkflowMembershipInline,
+        WorkflowStepInline,
+        WorkflowTransitionInline,
+        WorkflowPermissionInline,
+    )
 
 # ============================================================
 # Workflow Membership
@@ -468,6 +677,47 @@ class WorkflowMembershipAdmin(admin.ModelAdmin):
 # Workflow Step
 # ============================================================
 
+class WorkflowStepSLAInline(admin.StackedInline):
+    model = WorkflowStepSLA
+
+    extra = 0
+    max_num = 1
+
+    autocomplete_fields = (
+        "calendar",
+    )
+
+    fieldsets = (
+        (
+            "تنظیمات SLA",
+            {
+                "fields": (
+                    "calendar",
+                    "duration",
+                    "warning_before",
+                    "is_active",
+                ),
+            },
+        ),
+        (
+            "اطلاعات سیستمی",
+            {
+                "classes": (
+                    "collapse",
+                ),
+                "fields": (
+                    "created_at",
+                    "updated_at",
+                ),
+            },
+        ),
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+    )
+
 @admin.register(
     WorkflowStep,
     site=dolphin_admin_site,
@@ -477,11 +727,37 @@ class WorkflowStepAdmin(admin.ModelAdmin):
     admin_category = "workflows"
     admin_section = "definition"
 
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "workflow",
+                "sla",
+                "sla__calendar",
+            )
+        )
+
+
+    @admin.display(
+        description="تقویم SLA",
+        ordering="sla__calendar__name",
+    )
+    def sla_calendar(self, obj):
+        if not hasattr(obj, "sla"):
+            return "—"
+
+        if not obj.sla.is_active:
+            return f"{obj.sla.calendar.name} (غیرفعال)"
+
+        return obj.sla.calendar.name
+
     list_display = (
         "workflow",
         "order",
         "name",
         "code",
+        "sla_calendar",
         "is_active",
     )
 
@@ -507,6 +783,11 @@ class WorkflowStepAdmin(admin.ModelAdmin):
     ordering = (
         "workflow",
         "order",
+    )
+
+    inlines = (
+        WorkflowStepSLAInline,
+        WorkflowStepPermissionInline,
     )
 
 #++++++++++++++++++++++
@@ -664,6 +945,10 @@ class WorkflowTransitionAdmin(admin.ModelAdmin):
         "to_step__order",
     )
 
+    inlines = (
+        WorkflowTransitionPermissionInline,
+    )
+
 # ============================================================
 # Workflow Permission
 # ============================================================
@@ -757,12 +1042,12 @@ class WorkflowPermissionAdmin(admin.ModelAdmin):
 
     list_display = (
         "workflow",
+        "step",
+        "transition",
         "user",
         "role",
         "action",
         "effect",
-        "step",
-        "transition",
     )
 
     list_filter = (
@@ -783,6 +1068,7 @@ class WorkflowPermissionAdmin(admin.ModelAdmin):
     )
 
     autocomplete_fields = (
+        "workflow",
         "user",
     )
     ordering = (
@@ -805,7 +1091,43 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
     admin_category = "executions"
     admin_section = "execution"
 
+    class Media:
+        css = {
+            "all": (
+                "workflow/css/workflow-admin.css",
+            ),
+        }
+
+    @admin.display(
+        description="مدت اجرا",
+    )
+    def execution_duration(self, obj):
+        if not obj.started_at:
+            return "—"
+
+        end_time = obj.completed_at or timezone.now()
+
+        return end_time - obj.started_at
+
+    @admin.display(
+        description="Timeline",
+        )
+    def timeline_link(self, obj):
+        url = reverse(
+        "admin:workflow_workflowinstance_timeline",
+        args=[obj.pk],
+        )
+
+        return format_html(
+            '<a class="timeline-admin-button" href="{}">'
+            '<span class="timeline-admin-icon">↗</span>'
+            '<span>Timeline</span>'
+            '</a>',
+            url,
+        )
+
     list_display = (
+        "timeline_link",
         "id",
         "workflow",
         "current_step",
@@ -813,6 +1135,7 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
         "status",
         "started_at",
         "completed_at",
+        "execution_duration",
     )
 
     list_filter = (
@@ -851,6 +1174,179 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    def timeline_view(self, request, object_id):
+        instance = get_object_or_404(
+            WorkflowInstance.objects.select_related(
+                "workflow",
+                "current_step",
+                "started_by",
+            ),
+            pk=object_id,
+        )
+
+        step_events = list(
+            WorkflowStepExecution.objects
+            .filter(instance=instance)
+            .select_related(
+                "workflow_step",
+                "performed_by",
+            )
+            .values(
+                "id",
+                "performed_at",
+                "workflow_step__name",
+                "performed_by__username",
+                "performed_by__first_name",
+                "performed_by__last_name",
+                "notes",
+                "is_submitted",
+
+                "sla_started_at",
+                "sla_due_at",
+                "sla_warning_at",
+                "sla_warning_sent_at",
+                "sla_completed_at",
+                "sla_breached_at",
+            )
+        )
+
+        transition_events = list(
+            WorkflowTransitionExecution.objects
+            .filter(instance=instance)
+            .select_related(
+                "transition",
+                "transition__from_step",
+                "transition__to_step",
+                "performed_by",
+            )
+            .values(
+                "id",
+                "performed_at",
+                "transition__name",
+                "transition__from_step__name",
+                "transition__to_step__name",
+                "performed_by__username",
+                "performed_by__first_name",
+                "performed_by__last_name",
+                "notes",
+            )
+        )
+
+        events = [
+            {
+                "type": "start",
+                "id": f"instance-{instance.pk}",
+                "performed_at": instance.started_at,
+                "user": str(instance.started_by or "—"),
+                "title": "شروع فرآیند",
+                "description": (
+                    f"Workflow «{instance.workflow.name}» "
+                    "شروع شد."
+                ),
+                "is_submitted": False,
+                "sla_completed": False,
+                "sla_breached": False,
+            }
+        ]
+
+        for event in step_events:
+            events.append(
+                {
+                    "type": "step",
+                    "id": event["id"],
+                    "performed_at": event["performed_at"],
+                    "user": (
+                        event["performed_by__first_name"]
+                        or event["performed_by__last_name"]
+                        or event["performed_by__username"]
+                    ),
+                    "title": (
+                        f"ورود به مرحله "
+                        f"«{event['workflow_step__name']}»"
+                    ),
+                    "description": event["notes"],
+
+                    "is_submitted": event["is_submitted"],
+
+                    "sla_started_at": event["sla_started_at"],
+                    "sla_due_at": event["sla_due_at"],
+                    "sla_warning_at": event["sla_warning_at"],
+                    "sla_warning_sent_at": (
+                        event["sla_warning_sent_at"]
+                    ),
+                    "sla_completed_at": event["sla_completed_at"],
+                    "sla_breached_at": event["sla_breached_at"],
+
+                    "sla_completed": bool(
+                        event["sla_completed_at"]
+                    ),
+                    "sla_breached": bool(
+                        event["sla_breached_at"]
+                    ),
+                }
+            )
+
+        for event in transition_events:
+            events.append(
+                {
+                    "type": "transition",
+                    "id": event["id"],
+                    "performed_at": event["performed_at"],
+                    "user": (
+                        event["performed_by__first_name"]
+                        or event["performed_by__last_name"]
+                        or event["performed_by__username"]
+                    ),
+                    "title": event["transition__name"],
+                    "description": (
+                        f"{event['transition__from_step__name']}"
+                        f" → "
+                        f"{event['transition__to_step__name']}"
+                    ),
+                    "is_submitted": False,
+                    "sla_completed": False,
+                    "sla_breached": False,
+                }
+            )
+
+        events.sort(
+            key=lambda event: event["performed_at"]
+        )
+
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "instance": instance,
+            "events": events,
+            "title": (
+                f"تاریخچه اجرای "
+                f"{instance.workflow.name} "
+                f"#{instance.pk}"
+            ),
+        }
+
+        return TemplateResponse(
+            request,
+            "admin/workflow/workflow_instance_timeline.html",
+            context,
+        )
+
+    def get_urls(self):
+        urls = super().get_urls()
+
+        custom_urls = [
+            path(
+                "<path:object_id>/timeline/",
+                self.admin_site.admin_view(
+                    self.timeline_view
+                ),
+                name=(
+                    "workflow_workflowinstance_timeline"
+                ),
+            ),
+        ]
+
+        return custom_urls + urls
 
 # ============================================================
 # Workflow Step Execution
@@ -863,6 +1359,7 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
 class WorkflowStepExecutionAdmin(admin.ModelAdmin):
 
     admin_category = "executions"
+    admin_section = "execution"
 
     list_display = (
         "id",
@@ -870,13 +1367,17 @@ class WorkflowStepExecutionAdmin(admin.ModelAdmin):
         "workflow_step",
         "performed_by",
         "performed_at",
+        "is_submitted",
+        "sla_status",
     )
 
     list_filter = (
         "workflow_step__workflow",
         "workflow_step",
+        "is_submitted",
         "performed_by",
         "performed_at",
+        "sla_breached_at",
     )
 
     search_fields = (
@@ -886,6 +1387,7 @@ class WorkflowStepExecutionAdmin(admin.ModelAdmin):
         "performed_by__username",
         "performed_by__first_name",
         "performed_by__last_name",
+        "notes",
     )
 
     readonly_fields = (
@@ -895,11 +1397,53 @@ class WorkflowStepExecutionAdmin(admin.ModelAdmin):
         "performed_at",
         "notes",
         "data",
+        "is_submitted",
+        "submitted_at",
+        "sla_started_at",
+        "sla_due_at",
+        "sla_warning_at",
+        "sla_warning_sent_at",
+        "sla_completed_at",
+        "sla_breached_at",
+    )
+
+    autocomplete_fields = (
+        "instance",
+        "workflow_step",
+        "performed_by",
     )
 
     ordering = (
         "-performed_at",
     )
+
+    @admin.display(
+        description="وضعیت SLA",
+    )
+    def sla_status(self, obj):
+        if obj.sla_breached_at:
+            return "نقض SLA"
+
+        if obj.sla_completed_at:
+            return "تکمیل SLA"
+
+        if obj.sla_due_at:
+            return "در انتظار تکمیل"
+
+        return "—"
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "instance",
+                "instance__workflow",
+                "workflow_step",
+                "workflow_step__workflow",
+                "performed_by",
+            )
+        )
 
     def has_add_permission(self, request):
         return False
@@ -909,7 +1453,6 @@ class WorkflowStepExecutionAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-
 
 # ============================================================
 # Workflow Transition Execution
@@ -922,18 +1465,35 @@ class WorkflowStepExecutionAdmin(admin.ModelAdmin):
 class WorkflowTransitionExecutionAdmin(admin.ModelAdmin):
 
     admin_category = "executions"
+    admin_section = "execution"
+
+    @admin.display(
+        description="از مرحله",
+        ordering="transition__from_step__order",
+    )
+    def from_step(self, obj):
+        return obj.transition.from_step
+
+    @admin.display(
+        description="به مرحله",
+        ordering="transition__to_step__order",
+    )
+    def to_step(self, obj):
+        return obj.transition.to_step
 
     list_display = (
         "id",
         "instance",
-        "transition",
+        "from_step",
+        "to_step",
         "performed_by",
         "performed_at",
     )
 
     list_filter = (
         "transition__workflow",
-        "transition",
+        "transition__from_step",
+        "transition__to_step",
         "performed_by",
         "performed_at",
     )
@@ -942,9 +1502,13 @@ class WorkflowTransitionExecutionAdmin(admin.ModelAdmin):
         "instance__workflow__name",
         "instance__pk",
         "transition__name",
+        "transition__code",
+        "transition__from_step__name",
+        "transition__to_step__name",
         "performed_by__username",
         "performed_by__first_name",
         "performed_by__last_name",
+        "notes",
     )
 
     readonly_fields = (
@@ -956,9 +1520,30 @@ class WorkflowTransitionExecutionAdmin(admin.ModelAdmin):
         "data",
     )
 
+    autocomplete_fields = (
+        "instance",
+        "transition",
+        "performed_by",
+    )
+
     ordering = (
         "-performed_at",
     )
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "instance",
+                "instance__workflow",
+                "transition",
+                "transition__workflow",
+                "transition__from_step",
+                "transition__to_step",
+                "performed_by",
+            )
+        )
 
     def has_add_permission(self, request):
         return False
@@ -966,9 +1551,8 @@ class WorkflowTransitionExecutionAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
-    def has_delete_permission(self, request, obj=None):
+    def has_delete_permission(self, request):
         return False
-
 # ============================================================
 # Devices
 # ============================================================
@@ -1246,6 +1830,24 @@ class RepeatableFieldInline(admin.TabularInline):
 # Form Repeatable Group
 # ============================================================
 
+class RepeatableGroupAccessInline(admin.TabularInline):
+    model = RepeatableGroupAccess
+    extra = 0
+
+    fields = (
+        "step",
+        "role",
+        "user",
+        "can_view",
+        "can_edit",
+        "can_add",
+    )
+
+    autocomplete_fields = (
+        "step",
+        "user",
+    )
+
 @admin.register(
     FormRepeatableGroup,
     site=dolphin_admin_site,
@@ -1290,6 +1892,7 @@ class FormRepeatableGroupAdmin(admin.ModelAdmin):
 
     inlines = (
         RepeatableFieldInline,
+        RepeatableGroupAccessInline,
     )
 
     def get_form(self, request, obj=None, **kwargs):
@@ -1343,9 +1946,11 @@ class FormFieldAdmin(admin.ModelAdmin):
     list_display = (
         "label",
         "section",
+        "repeatable_group_type",
         "repeatable_group",
         "code",
         "field_type",
+        "access_count",
         "is_required",
         "order",
         "is_active",
@@ -1377,6 +1982,22 @@ class FormFieldAdmin(admin.ModelAdmin):
         "order",
     )
 
+    @admin.display(
+        description="نوع گروه",
+        ordering="repeatable_group__group_type",
+    )
+    def repeatable_group_type(self, obj):
+        if not obj.repeatable_group_id:
+            return "—"
+
+        return obj.repeatable_group.get_group_type_display()
+
+    @admin.display(
+        description="دسترسی‌ها",
+    )
+    def access_count(self, obj):
+        return obj.access_rules.count()
+
     inlines = (
         FieldAccessInline,
     )
@@ -1385,12 +2006,15 @@ class FormFieldAdmin(admin.ModelAdmin):
     FieldAccess,
     site=dolphin_admin_site,
 )
+
 class FieldAccessAdmin(admin.ModelAdmin):
 
     admin_category = "forms"
 
     list_display = (
-        "field",
+        "field_name",
+        "field_group",
+        "field_form",
         "step",
         "role",
         "user",
@@ -1402,13 +2026,114 @@ class FieldAccessAdmin(admin.ModelAdmin):
         "can_view",
         "can_edit",
         "role",
+        "field__repeatable_group__group_type",
+        "field__section__form",
+        "step__workflow",
     )
 
     search_fields = (
         "field__label",
+        "field__name",
         "field__code",
+        "field__repeatable_group__name",
+        "field__section__name",
+        "field__section__form__name",
+        "step__name",
+        "step__workflow__name",
+        "user__username",
+        "user__first_name",
+        "user__last_name",
     )
 
+    autocomplete_fields = (
+        "field",
+        "step",
+        "user",
+    )
+
+    ordering = (
+        "field__section__form",
+        "field__section",
+        "field__repeatable_group",
+        "field__order",
+        "step__order",
+    )
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "field",
+                "field__section",
+                "field__section__form",
+                "field__section__form__workflow",
+                "field__repeatable_group",
+                "step",
+                "step__workflow",
+                "user",
+            )
+        )
+
+    @admin.display(
+        description="فیلد",
+        ordering="field__label",
+    )
+    def field_name(self, obj):
+        return obj.field.label
+
+    @admin.display(
+        description="گروه",
+        ordering="field__repeatable_group__name",
+    )
+    def field_group(self, obj):
+        if obj.field.repeatable_group_id:
+            return obj.field.repeatable_group.name
+
+        return "—"
+
+    @admin.display(
+        description="فرم",
+        ordering="field__section__form__name",
+    )
+    def field_form(self, obj):
+        return obj.field.section.form.name
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(
+            request,
+            obj,
+            **kwargs,
+        )
+
+        if obj and obj.field_id:
+            workflow_id = (
+                obj.field.section.form.workflow_id
+            )
+
+            form.base_fields["step"].queryset = (
+                WorkflowStep.objects
+                .filter(
+                    workflow_id=workflow_id,
+                    is_active=True,
+                )
+                .order_by("order")
+            )
+
+        else:
+            form.base_fields["step"].queryset = (
+                WorkflowStep.objects
+                .filter(
+                    is_active=True,
+                )
+                .select_related("workflow")
+                .order_by(
+                    "workflow__name",
+                    "order",
+                )
+            )
+
+        return form
 
 @admin.register(
     FormData,
@@ -1460,5 +2185,288 @@ def dolphin_get_app_list(request, app_label=None):
 
     return app_list
 
+# ============================================================
+# Business Calendar
+# ============================================================
+
+class WorkingIntervalInline(admin.TabularInline):
+    model = WorkingInterval
+    extra = 0
+
+    fields = (
+        "start_time",
+        "end_time",
+    )
+
+    ordering = (
+        "start_time",
+    )
+
+
+class WeeklyScheduleInline(admin.TabularInline):
+    model = WeeklySchedule
+    extra = 0
+
+    fields = (
+        "weekday",
+        "is_working",
+    )
+
+    ordering = (
+        "weekday",
+    )
+
+
+class CalendarExceptionIntervalInline(admin.TabularInline):
+    model = CalendarExceptionInterval
+    extra = 0
+
+    fields = (
+        "start_time",
+        "end_time",
+    )
+
+    ordering = (
+        "start_time",
+    )
+
+
+class CalendarExceptionInline(admin.TabularInline):
+    model = CalendarException
+    extra = 0
+
+    fields = (
+        "date",
+        "status",
+        "title",
+        "description",
+    )
+
+    ordering = (
+        "date",
+    )
+
+@admin.register(
+    WorkingInterval,
+    site=dolphin_admin_site,
+)
+class WorkingIntervalAdmin(admin.ModelAdmin):
+
+    admin_category = "workflows"
+    admin_section = "sla"
+
+    list_display = (
+        "weekly_schedule",
+        "start_time",
+        "end_time",
+    )
+
+    list_filter = (
+        "weekly_schedule__calendar",
+        "weekly_schedule__weekday",
+    )
+
+    search_fields = (
+        "weekly_schedule__calendar__name",
+    )
+
+    autocomplete_fields = (
+        "weekly_schedule",
+    )
+
+    ordering = (
+        "weekly_schedule__calendar",
+        "weekly_schedule__weekday",
+        "start_time",
+    )
+
+
+@admin.register(
+    CalendarExceptionInterval,
+    site=dolphin_admin_site,
+)
+class CalendarExceptionIntervalAdmin(admin.ModelAdmin):
+
+    admin_category = "workflows"
+    admin_section = "sla"
+
+    list_display = (
+        "exception",
+        "start_time",
+        "end_time",
+    )
+
+    list_filter = (
+        "exception__calendar",
+        "exception__status",
+        "exception__date",
+    )
+
+    search_fields = (
+        "exception__calendar__name",
+        "exception__title",
+        "exception__description",
+    )
+
+    autocomplete_fields = (
+        "exception",
+    )
+
+    ordering = (
+        "exception__calendar",
+        "exception__date",
+        "start_time",
+    )
+
+
+@admin.register(
+    BusinessCalendar,
+    site=dolphin_admin_site,
+)
+class BusinessCalendarAdmin(admin.ModelAdmin):
+
+    admin_category = "workflows"
+    admin_section = "sla"
+
+    list_display = (
+        "name",
+        "timezone",
+        "is_active",
+        "created_at",
+        "updated_at",
+    )
+
+    list_filter = (
+        "is_active",
+        "timezone",
+    )
+
+    search_fields = (
+        "name",
+        "timezone",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+    )
+
+    ordering = (
+        "name",
+    )
+
+    inlines = (
+        WeeklyScheduleInline,
+        CalendarExceptionInline,
+    )
+
+@admin.register(
+    WeeklySchedule,
+    site=dolphin_admin_site,
+)
+class WeeklyScheduleAdmin(admin.ModelAdmin):
+
+    admin_category = "workflows"
+    admin_section = "sla"
+
+    list_display = (
+        "calendar",
+        "weekday",
+        "is_working",
+    )
+
+    list_filter = (
+        "calendar",
+        "weekday",
+        "is_working",
+    )
+
+    search_fields = (
+        "calendar__name",
+    )
+
+    autocomplete_fields = (
+        "calendar",
+    )
+
+    ordering = (
+        "calendar",
+        "weekday",
+    )
+
+    fieldsets = (
+            (
+                "تقویم کاری",
+                {
+                    "fields": (
+                        "calendar",
+                        "weekday",
+                        "is_working",
+                    ),
+                },
+            ),
+        )
+
+    inlines = (
+        WorkingIntervalInline,
+    )
+
+
+@admin.register(
+    CalendarException,
+    site=dolphin_admin_site,
+)
+class CalendarExceptionAdmin(admin.ModelAdmin):
+
+    admin_category = "workflows"
+    admin_section = "sla"
+
+    list_display = (
+        "calendar",
+        "date",
+        "status",
+        "title",
+    )
+
+    list_filter = (
+        "calendar",
+        "status",
+        "date",
+    )
+
+    search_fields = (
+        "calendar__name",
+        "title",
+        "description",
+    )
+
+    autocomplete_fields = (
+        "calendar",
+    )
+
+    ordering = (
+        "calendar",
+        "date",
+    )
+
+
+    fieldsets = (
+            (
+                "استثنا",
+                {
+                    "fields": (
+                        "calendar",
+                        "date",
+                        "status",
+                        "title",
+                        "description",
+                    ),
+                },
+            ),
+        )
+
+    inlines = (
+        CalendarExceptionIntervalInline,
+    )
 
 dolphin_admin_site.get_app_list = dolphin_get_app_list

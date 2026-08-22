@@ -380,6 +380,10 @@ class InstanceDevice(models.Model):
         blank=True,
     )
 
+    description = models.TextField(
+        blank=True,
+    )
+
     warranty_status = models.CharField(
         max_length=30,
         blank=True,
@@ -1064,6 +1068,21 @@ class FieldAccess(models.Model):
         default=False,
     )
 
+    def clean(self):
+        super().clean()
+
+        if not self.field_id or not self.step_id:
+            return
+
+        field_workflow_id = (
+            self.field.section.form.workflow_id
+        )
+
+        if self.step.workflow_id != field_workflow_id:
+            raise ValidationError(
+                "مرحله انتخاب‌ شده باید متعلق به فرآیند همین فرم باشد."
+            )
+
     class Meta:
         ordering = ["field"]
 
@@ -1071,6 +1090,70 @@ class FieldAccess(models.Model):
         subject = self.user or self.role or "GLOBAL"
         return f"{self.field} - {subject}"
 
+
+class RepeatableGroupAccess(models.Model):
+    group = models.ForeignKey(
+        FormRepeatableGroup,
+        on_delete=models.PROTECT,
+        related_name="access_rules",
+    )
+
+    step = models.ForeignKey(
+        WorkflowStep,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="repeatable_group_access_rules",
+    )
+
+    role = models.CharField(
+        max_length=20,
+        choices=WorkflowMembership.Role.choices,
+        null=True,
+        blank=True,
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="repeatable_group_access_rules",
+    )
+
+    can_view = models.BooleanField(
+        default=True,
+    )
+
+    can_edit = models.BooleanField(
+        default=False,
+    )
+
+    can_add = models.BooleanField(
+        default=False,
+    )
+
+    def clean(self):
+        super().clean()
+
+        if not self.group_id or not self.step_id:
+            return
+
+        group_workflow_id = (
+            self.group.section.form.workflow_id
+        )
+
+        if self.step.workflow_id != group_workflow_id:
+            raise ValidationError(
+                "مرحله انتخاب‌شده باید متعلق به فرآیند همین فرم باشد."
+            )
+
+    class Meta:
+        ordering = ["group"]
+
+    def __str__(self):
+        subject = self.user or self.role or "GLOBAL"
+        return f"{self.group} - {subject}"
 
 class FormData(models.Model):
     instance = models.OneToOneField(

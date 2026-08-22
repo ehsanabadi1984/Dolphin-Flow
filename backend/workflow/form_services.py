@@ -14,6 +14,8 @@ from .models import (
     WorkflowStepExecution,
     FormRepeatableGroup,
     DeviceType,
+    RepeatableGroupAccess,
+
     
 )
 
@@ -253,8 +255,19 @@ class DynamicFormService:
             else False
         )
 
-        has_saved_data = bool(data)
+        has_saved_device_data = (
+            InstanceDevice.objects
+            .filter(
+                instance=instance,
+                is_active=True,
+            )
+            .exists()
+        )
 
+        has_saved_data = (
+            bool(data)
+            or has_saved_device_data
+        )
         roles = set(
             workflow.memberships.filter(
                 user=user,
@@ -332,26 +345,51 @@ class DynamicFormService:
             for group in section.repeatable_groups.filter(
                 is_active=True,
             ):
+            #--------------TEST--------------------------------
+                # print(
+                #     "REPEATABLE GROUP DEBUG:",
+                #     "section=",
+                #     section.code,
+                #     "group=",
+                #     group.code,
+                #     "name=",
+                #     group.name,
+                #     "type=",
+                #     group.group_type,
+                #     "fields=",
+                #     list(
+                #         group.fields.filter(
+                #             is_active=True,
+                #         ).values(
+                #             "id",
+                #             "code",
+                #             "label",
+                #         )
+                #     ),
+                # )
+            #--------------End-TEST--------------------------------
+
                 group_fields = []
+                group_has_editable_fields = False
 #--------------------------TEST------------------------------
 
-                print(
-                    "DEVICE GROUP FIELDS DEBUG:",
-                    group.code,
-                    group.group_type,
-                    list(
-                        group.fields
-                        .filter(is_active=True)
-                        .values(
-                            "id",
-                            "code",
-                            "name",
-                            "label",
-                            "repeatable_group_id",
-                            "section_id",
-                        )
-                    ),
-                )
+                # print(
+                #     "DEVICE GROUP FIELDS DEBUG:",
+                #     group.code,
+                #     group.group_type,
+                #     list(
+                #         group.fields
+                #         .filter(is_active=True)
+                #         .values(
+                #             "id",
+                #             "code",
+                #             "name",
+                #             "label",
+                #             "repeatable_group_id",
+                #             "section_id",
+                #         )
+                #     ),
+                # )
 #------------------------End-TEST----------------------------
                 for field in group.fields.filter(
                     is_active=True,
@@ -387,55 +425,58 @@ class DynamicFormService:
 
         #--------------------TEST---------------------                
 
-                    if group.code == "devices":
-                        print(
-                            "DEVICE FIELD ACCESS DEBUG:",
-                            field.code,
-                            "can_view=",
-                            can_view,
-                            "can_edit=",
-                            can_edit,
-                            "access_rules=",
-                            list(
-                                access_rules.values(
-                                    "id",
-                                    "step_id",
-                                    "role",
-                                    "user_id",
-                                    "can_view",
-                                    "can_edit",
-                                )
-                            ),
-                        )
+                    # if group.code == "devices":
+                    #     print(
+                    #         "DEVICE FIELD ACCESS DEBUG:",
+                    #         field.code,
+                    #         "can_view=",
+                    #         can_view,
+                    #         "can_edit=",
+                    #         can_edit,
+                    #         "access_rules=",
+                    #         list(
+                    #             access_rules.values(
+                    #                 "id",
+                    #                 "step_id",
+                    #                 "role",
+                    #                 "user_id",
+                    #                 "can_view",
+                    #                 "can_edit",
+                    #             )
+                    #         ),
+                    #     )
 
-                    if step_is_submitted:
-                        can_edit = False
-                    if field.code in (
-                        "device_type",
-                        "device_model_id",
-                    ):
-                        print(
-                            "DEVICE FIELD ACCESS DEBUG:",
-                            field.code,
-                            "can_view=",
-                            can_view,
-                            "can_edit=",
-                            can_edit,
-                            "access_rules=",
-                            list(
-                                access_rules.values(
-                                    "id",
-                                    "step_id",
-                                    "role",
-                                    "user_id",
-                                    "can_view",
-                                    "can_edit",
-                                )
-                            ),
-                        )
+                    # if step_is_submitted:
+                    #     can_edit = False
+                    # if field.code in (
+                    #     "device_type",
+                    #     "device_model_id",
+                    # ):
+                        # print(
+                        #     "DEVICE FIELD ACCESS DEBUG:",
+                        #     field.code,
+                        #     "can_view=",
+                        #     can_view,
+                        #     "can_edit=",
+                        #     can_edit,
+                        #     "access_rules=",
+                        #     list(
+                        #         access_rules.values(
+                        #             "id",
+                        #             "step_id",
+                        #             "role",
+                        #             "user_id",
+                        #             "can_view",
+                        #             "can_edit",
+                        #         )
+                        #     ),
+                        # )
         #--------------------END-TEST---------------------                
                     if not can_view:
                         continue
+
+                    if can_edit:
+                        group_has_editable_fields = True
 
                     field_data = {
                         "field": field,
@@ -499,6 +540,23 @@ class DynamicFormService:
                         )
 #------------------------END-TEST-----------------------------
                 if not group_fields:
+                #--------TEST---------------------------------
+                    print(
+                        "REPEATABLE GROUP HIDDEN:",
+                        group.code,
+                        group.name,
+                        "fields=",
+                        list(
+                            group.fields.filter(
+                                is_active=True,
+                            ).values(
+                                "id",
+                                "code",
+                                "label",
+                            )
+                        ),
+                    )    
+                #---------End-TEST---------------------------
                     continue
 
                 # Saved repeatable items.
@@ -531,22 +589,43 @@ class DynamicFormService:
                                 imei = identifier.value
                                 break
 
+                        device_type = (
+                            instance_device
+                            .device
+                            .device_model
+                            .device_type
+                        )
+
+                        device_model = (
+                            instance_device
+                            .device
+                            .device_model
+                        )
+
+                        device_type = (
+                            instance_device
+                            .device
+                            .device_model
+                            .device_type
+                        )
+
+                        device_model = (
+                            instance_device
+                            .device
+                            .device_model
+                        )
+
                         values = {
-                            "device_type": (
-                                instance_device
-                                .device
-                                .device_model
-                                .device_type_id
-                                
-                            ),
-                            "device_model_id": (
-                                instance_device
-                                .device
-                                .device_model_id
-                            ),
+                            "device_type": device_type.id,
+                            "device_type_display": device_type.name,
+
+                            "device_model_id": device_model.id,
+                            "device_model_id_display": device_model.name,
+
                             "imei": imei,
+
                             "problem": instance_device.reported_problem,
-                            "description": "",
+                            "description": instance_device.description,
                         }
                         
                         item_fields = []
@@ -562,6 +641,12 @@ class DynamicFormService:
                                         field.code,
                                         "",
                                     ),
+
+                                    "display_value": values.get(
+                                        f"{field.code}_display",
+                                        values.get(field.code, ""),
+                                    ),
+
                                     "choices": (
                                         device_model_choices
                                         if field.code == "device_model_id"
@@ -578,14 +663,14 @@ class DynamicFormService:
                                 }
                             )
                             #-------------------Test
-                            if field.code == "device_type":
-                                print(
-                                    "ITEM FIELD DEVICE TYPE DEBUG:",
-                                    item_fields[-1].get(
-                                        "device_types",
-                                        [],
-                                    ),
-                                )
+                            # if field.code == "device_type":
+                            #     print(
+                            #         "ITEM FIELD DEVICE TYPE DEBUG:",
+                            #         item_fields[-1].get(
+                            #             "device_types",
+                            #             [],
+                            #         ),
+                            #     )
                             #--------------------End-test
                         items.append(
                             {
@@ -709,6 +794,7 @@ class DynamicFormService:
                         "group": group,
                         "fields": group_fields,
                         "items": items,
+                        "has_editable_fields": group_has_editable_fields,
                     }
                 )
 
@@ -949,55 +1035,80 @@ class DynamicFormService:
             for group in section.repeatable_groups.filter(
                 is_active=True,
             ):
+                
                 # -------------------------------------------------
-                # Verify repeatable-group edit access
+                # Verify repeatable-group access
                 # -------------------------------------------------
+
+                group_access_rules = RepeatableGroupAccess.objects.filter(
+                    group=group,
+                    step=step,
+                )
 
                 group_can_edit = False
+                group_can_add = False
 
-                for field in group.fields.filter(
-                    is_active=True,
-                ):
-                    access_rules = field.access_rules.filter(
-                        step=step,
+                user_rule = group_access_rules.filter(
+                    user=user,
+                ).first()
+
+                if user_rule:
+                    group_can_edit = user_rule.can_edit
+                    group_can_add = user_rule.can_add
+
+                else:
+                    role_rules = group_access_rules.filter(
+                        role__in=roles,
+                        user__isnull=True,
                     )
 
-                    user_rule = access_rules.filter(
-                        user=user,
-                    ).first()
+                    group_can_edit = role_rules.filter(
+                        can_edit=True,
+                    ).exists()
 
-                    if user_rule:
-                        if user_rule.can_edit:
-                            group_can_edit = True
-                            break
-
-                    else:
-                        role_rules = access_rules.filter(
-                            role__in=roles,
-                            user__isnull=True,
-                            can_edit=True,
-                        )
-
-                        if role_rules.exists():
-                            group_can_edit = True
-                            break
-
-                if not group_can_edit:
-                    if group.code in submitted_data:
-                        raise ValidationError(
-                            f"شما اجازه ویرایش گروه «{group.name}» را ندارید."
-                        )
-
-                    continue
+                    group_can_add = role_rules.filter(
+                        can_add=True,
+                    ).exists()
 
                 # -------------------------------------------------
-                # Process repeatable group
+                # Verify submitted repeatable group
                 # -------------------------------------------------
 
                 items = DynamicFormService._parse_repeatable_data(
                     submitted_data=submitted_data,
                     group_code=group.code,
-                )      
+                )
+
+                if not items:
+                    continue
+
+                # -------------------------------------------------
+                # Existing items require can_edit
+                # New items require can_add
+                # -------------------------------------------------
+
+                has_new_item = any(
+                    not item.get("instance_device_id")
+                    for item in items
+                )
+
+                has_existing_item = any(
+                    item.get("instance_device_id")
+                    for item in items
+                )
+
+                if has_existing_item and not group_can_edit:
+                    raise ValidationError(
+                        f"شما اجازه ویرایش گروه «{group.name}» را ندارید."
+                    )
+
+                if has_new_item and not group_can_add:
+                    raise ValidationError(
+                        f"شما اجازه افزودن به گروه «{group.name}» را ندارید."
+                    )
+                # -------------------------------------------------
+                # Process repeatable group
+                # -------------------------------------------------   
 
                 # -----------------------------------------
                 # Device repeatable group
@@ -1036,12 +1147,30 @@ class DynamicFormService:
                     # -------------------------------------------------
                     # Process submitted devices
                     # -------------------------------------------------
+                    group_access_rules = group.access_rules.filter(
+                        step=step,
+                    )
 
+                    user_group_rule = group_access_rules.filter(
+                        user=user,
+                    ).first()
+
+                    if user_group_rule:
+                        can_add = user_group_rule.can_add
+                    else:
+                        can_add = group_access_rules.filter(
+                            role__in=roles,
+                            user__isnull=True,
+                            can_add=True,
+                        ).exists()
                     for item in items:
                         if not isinstance(item, dict):
                             raise ValidationError(
                                 "اطلاعات هر دستگاه باید به صورت یک شیء باشد."
                             )
+                        # تبدیل نام فیلد فرم به نام فیلد مدل
+                        if "problem" in item and "reported_problem" not in item:
+                            item["reported_problem"] = item["problem"]
 
                         instance_device_id = item.get("instance_device_id")
 
@@ -1120,6 +1249,15 @@ class DynamicFormService:
                             ):
                                 raise ValidationError(
                                     "شما اجازه ویرایش شرح مشکل این دستگاه را ندارید."
+                                )
+
+                            if (
+                                "description" in item
+                                and "description" not in editable_fields
+                                and item["description"] != instance_device.description
+                            ):
+                                raise ValidationError(
+                                    "شما اجازه ویرایش توضیحات تکمیلی این دستگاه را ندارید."
                                 )
 
                             # ---------------------------------------------
@@ -1208,6 +1346,15 @@ class DynamicFormService:
                                 update_fields.append("reported_problem")
 
                             if (
+                                "description" in editable_fields
+                                and "description" in item
+                            ):
+                                instance_device.description = item[
+                                    "description"
+                                ]
+                                update_fields.append("description")
+
+                            if (
                                 "warranty_status" in editable_fields
                                 and "warranty_status" in item
                             ):
@@ -1231,7 +1378,10 @@ class DynamicFormService:
                         # -------------------------------------------------
                         # New device
                         # -------------------------------------------------
-
+                        if not can_add:
+                            raise ValidationError(
+                                "شما اجازه افزودن مورد جدید به این گروه را ندارید."
+                            )
                         if "imei" not in editable_fields:
                             raise ValidationError(
                                 "شما اجازه ثبت IMEI دستگاه را ندارید."
