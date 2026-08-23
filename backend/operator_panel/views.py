@@ -3,6 +3,8 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.http import JsonResponse
+from django.contrib.contenttypes.models import ContentType
+
 
 from workflow.notification_services import NotificationService
 from workflow.form_services import DynamicFormService
@@ -21,6 +23,39 @@ from workflow.models import (
 )
 
 from workflow.services import WorkflowExecutionService
+
+
+def formfield_model_fields(request):
+    content_type_id = request.GET.get("content_type")
+
+    if not content_type_id:
+        return JsonResponse({"fields": []})
+
+    try:
+        content_type = ContentType.objects.get(pk=content_type_id)
+    except ContentType.DoesNotExist:
+        return JsonResponse({"fields": []})
+
+    model = content_type.model_class()
+
+    fields = []
+
+    for field in model._meta.get_fields():
+        if not getattr(field, "concrete", False):
+            continue
+
+        if getattr(field, "auto_created", False):
+            continue
+
+        if not getattr(field, "editable", True):
+            continue
+
+        fields.append({
+            "name": field.name,
+            "label": str(field.verbose_name),
+        })
+
+    return JsonResponse({"fields": fields})
 
 @login_required
 def dashboard(request):

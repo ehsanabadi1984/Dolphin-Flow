@@ -9,6 +9,7 @@ from django.contrib.auth.models import Group
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
+from django.contrib.contenttypes.models import ContentType
 
 from .models import (
     Workflow,
@@ -1935,12 +1936,281 @@ class FieldAccessInline(admin.TabularInline):
         "user",
     )
 
+def formfield_model_fields(request):
+    content_type_id = request.GET.get("content_type")
+
+    if not content_type_id:
+        return JsonResponse(
+            {"fields": []},
+            status=400,
+        )
+
+    try:
+        content_type = ContentType.objects.get(
+            pk=content_type_id,
+        )
+    except (
+        ContentType.DoesNotExist,
+        ValueError,
+        TypeError,
+    ):
+        return JsonResponse(
+            {"fields": []},
+            status=404,
+        )
+
+    model_class = content_type.model_class()
+
+    if not model_class:
+        return JsonResponse(
+            {"fields": []},
+            status=404,
+        )
+
+    fields = []
+
+    for field in model_class._meta.get_fields():
+
+        if not getattr(field, "concrete", False):
+            continue
+
+        if getattr(field, "auto_created", False):
+            continue
+
+        if not getattr(field, "editable", True):
+            continue
+
+        fields.append(
+            {
+                "name": field.name,
+                "label": str(field.verbose_name),
+            }
+        )
+
+    return JsonResponse(
+        {
+            "fields": fields,
+        }
+    )    
+
+class FormFieldAdminForm(forms.ModelForm):
+
+    class Meta:
+        model = FormField
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        from django.contrib.contenttypes.models import ContentType
+
+        # --------------------------------------------------
+        # Choice Model
+        # --------------------------------------------------
+
+        choice_model_field = self.fields.get("choice_model")
+
+        if choice_model_field:
+            choice_model_field.label_from_instance = (
+                lambda obj: f"{obj.app_label} → {obj.model}"
+            )
+
+        # --------------------------------------------------
+        # Dynamic model fields
+        # --------------------------------------------------
+
+        label_field = self.fields.get("choice_label_field")
+        value_field = self.fields.get("choice_value_field")
+        parent_model_field = self.fields.get(
+            "choice_parent_model_field"
+        )
+
+        if label_field:
+            label_field.widget = forms.Select()
+
+        if value_field:
+            value_field.widget = forms.Select()
+
+        if parent_model_field:
+            parent_model_field.widget = forms.Select()
+
+        # --------------------------------------------------
+        # Resolve Choice Model
+        # --------------------------------------------------
+
+        choice_model = None
+
+        if self.instance and self.instance.pk:
+            choice_model = self.instance.choice_model
+
+        if self.is_bound:
+            choice_model_id = self.data.get(
+                self.add_prefix("choice_model")
+            )
+
+            if choice_model_id:
+                try:
+                    choice_model = ContentType.objects.get(
+                        pk=choice_model_id
+                    )
+                except (
+                    ContentType.DoesNotExist,
+                    ValueError,
+                    TypeError,
+                ):
+                    choice_model = None
+
+        model_class = (
+            choice_model.model_class()
+            if choice_model
+            else None
+        )
+
+        # --------------------------------------------------
+        # Build model field choices
+        # --------------------------------------------------
+
+        field_choices = []
+
+        if model_class:
+
+            for field in model_class._meta.get_fields():
+
+                if not getattr(field, "concrete", False):
+                    continue
+
+                if getattr(field, "auto_created", False):
+                    continue
+
+                if not getattr(field, "editable", True):
+                    continue
+
+                field_choices.append(
+                    (
+                        field.name,
+                        f"{field.name} ({field.verbose_name})",
+                    )
+                )
+
+        # --------------------------------------------------
+        # Label Field
+        # --------------------------------------------------
+
+        if label_field:
+
+            label_field.choices = [
+                ("", "---------"),
+                *field_choices,
+            ]
+
+        # --------------------------------------------------
+        # Value Field
+        # --------------------------------------------------
+
+        if value_field:
+
+            value_field.choices = [
+                ("", "---------"),
+                ("id", "id (شناسه)"),
+                *field_choices,
+            ]
+
+        # --------------------------------------------------
+        # Parent Field
+        # --------------------------------------------------
+
+        parent_field = self.fields.get(
+            "choice_parent_field"
+        )
+
+        if parent_field:
+
+            queryset = FormField.objects.filter(
+                field_type=FormField.FieldType.SELECT,
+                is_active=True,
+                section__form_id=(
+                    self.instance.section.form_id
+                    if self.instance
+                    and self.instance.pk
+                    and self.instance.section_id
+                    else None
+                ),
+            )
+
+            # هنگام Add هنوز instance.section وجود ندارد.
+            if self.is_bound:
+
+                section_id = self.data.get(
+                    self.add_prefix("section")
+                )
+
+                if section_id:
+                    queryset = FormField.objects.filter(
+                        field_type=FormField.FieldType.SELECT,
+                        is_active=True,
+                        section__form__sections__id=section_id,
+                    )
+
+            parent_field.queryset = queryset.exclude(
+                pk=self.instance.pk
+                if self.instance and self.instance.pk
+                else None
+            )
+
+        # --------------------------------------------------
+        # Parent Model Field
+        # --------------------------------------------------
+
+        if parent_model_field:
+
+            relation_choices = [
+                ("", "---------"),
+            ]
+
+            if model_class:
+
+                for field in model_class._meta.get_fields():
+
+                    if not getattr(field, "concrete", False):
+                        continue
+
+                    if getattr(field, "auto_created", False):
+                        continue
+
+                    # فقط ForeignKey
+                    if not isinstance(
+                        field,
+                        models.ForeignKey,
+                    ):
+                        continue
+
+                    related_model = field.remote_field.model
+
+                    relation_choices.append(
+                        (
+                            field.name,
+                            (
+                                f"{field.name} "
+                                f"→ "
+                                f"{related_model._meta.verbose_name}"
+                            ),
+                        )
+                    )
+
+            parent_model_field.choices = relation_choices
+
 @admin.register(
     FormField,
     site=dolphin_admin_site,
 )
 class FormFieldAdmin(admin.ModelAdmin):
 
+    class Media:
+        js = (
+            "workflow/js/formfield_admin.js",
+        )
+
+    form = FormFieldAdminForm
     admin_category = "forms"
 
     list_display = (
@@ -1975,12 +2245,75 @@ class FormFieldAdmin(admin.ModelAdmin):
     autocomplete_fields = (
         "section",
         "repeatable_group",
+        "choice_parent_field",
     )
 
     ordering = (
         "section",
         "order",
     )
+
+    fieldsets = (
+        (
+            "اطلاعات اصلی",
+            {
+                "fields": (
+                    "section",
+                    "repeatable_group",
+                    "name",
+                    "code",
+                    "label",
+                    "field_type",
+                    "help_text",
+                    "is_required",
+                    "order",
+                    "is_active",
+                ),
+            },
+        ),
+        (
+            "تنظیمات گزینه‌ها",
+            {
+                "fields": (
+                    "choice_source",
+                    "choice_model",
+                    "choice_label_field",
+                    "choice_value_field",
+                    "choice_parent_field",
+                    "choice_parent_model_field",
+                ),
+            },
+        ),
+    )
+
+    def formfield_for_foreignkey(
+        self,
+        db_field,
+        request,
+        **kwargs,
+    ):
+        if db_field.name == "choice_parent_field":
+            kwargs["queryset"] = FormField.objects.filter(
+                field_type=FormField.FieldType.SELECT,
+                is_active=True,
+            ).select_related(
+                "section",
+                "section__form",
+            )
+
+        elif db_field.name == "choice_model":
+            kwargs["queryset"] = ContentType.objects.filter(
+                model__isnull=False,
+            ).order_by(
+                "app_label",
+                "model",
+            )
+
+        return super().formfield_for_foreignkey(
+            db_field,
+            request,
+            **kwargs,
+        )
 
     @admin.display(
         description="نوع گروه",

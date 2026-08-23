@@ -242,8 +242,14 @@ class DeviceType(models.Model):
         auto_now=True,
     )
 
+    
     class Meta:
         ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = f"TYPE_{uuid.uuid4().hex[:8].upper()}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -292,6 +298,12 @@ class DeviceModel(models.Model):
                 name="unique_device_model_code",
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = f"MODEL_{uuid.uuid4().hex[:8].upper()}"
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.brand} {self.name}"
@@ -940,6 +952,11 @@ class FormField(models.Model):
         BOOLEAN = "BOOLEAN", "بله/خیر"
         SELECT = "SELECT", "انتخابی"
 
+    class ChoiceSource(models.TextChoices):
+        NONE = "NONE", "بدون منبع"
+        STATIC = "STATIC", "گزینه‌های ثابت"
+        MODEL = "MODEL", "مدل سیستم"
+
     section = models.ForeignKey(
         FormSection,
         on_delete=models.PROTECT,
@@ -968,6 +985,43 @@ class FormField(models.Model):
         default=FieldType.TEXT,
     )
 
+    choice_source = models.CharField(
+        max_length=20,
+        choices=ChoiceSource.choices,
+        default=ChoiceSource.NONE,
+    )
+
+    choice_model = models.ForeignKey(
+        "contenttypes.ContentType",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="form_fields",
+    )
+
+    choice_label_field = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    choice_value_field = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    choice_parent_field = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="dependent_choice_fields",
+    )
+
+    choice_parent_model_field = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
     label = models.CharField(
         max_length=200,
     )
@@ -993,13 +1047,199 @@ class FormField(models.Model):
         blank=True,
     )
 
+
+
     def clean(self):
         super().clean()
+
+        if self.choice_parent_field_id:
+            if not self.choice_parent_model_field:
+                raise ValidationError(
+                    {
+                        "choice_parent_model_field": (
+                            "برای یک فیلد وابسته، "
+                            "فیلد ارتباط با والد باید مشخص شود."
+                        )
+                    }
+                )
+
+            if self.choice_source != self.ChoiceSource.MODEL:
+                raise ValidationError(
+                    {
+                        "choice_parent_field": (
+                            "وابستگی فقط برای گزینه‌های "
+                            "مبتنی بر مدل سیستم قابل استفاده است."
+                        )
+                    }
+                )
+
+            model_class = self.choice_model.model_class()
+
+            if not model_class:
+                raise ValidationError(
+                    {
+                        "choice_model": (
+                            "مدل گزینه‌های انتخابی معتبر نیست."
+                        )
+                    }
+                )
+
+            available_fields = {
+                field.name
+                for field in model_class._meta.get_fields()
+                if getattr(field, "concrete", False)
+                and not getattr(field, "auto_created", False)
+            }
+
+            if self.choice_parent_model_field not in available_fields:
+                raise ValidationError(
+                    {
+                        "choice_parent_model_field": (
+                            "فیلد ارتباط با والد در مدل گزینه‌ها وجود ندارد."
+                        )
+                    }
+                )        
 
         if self.repeatable_group:
             if self.repeatable_group.section_id != self.section_id:
                 raise ValidationError(
                     "گروه تکرارشونده باید متعلق به همان Section فیلد باشد."
+                )
+
+        if self.choice_source != self.ChoiceSource.MODEL:
+            if self.choice_model_id:
+                raise ValidationError(
+                    {
+                        "choice_model": (
+                            "انتخاب مدل سیستم فقط زمانی مجاز است "
+                            "که منبع گزینه‌ها از نوع «مدل سیستم» باشد."
+                        )
+                    }
+                )
+
+            if self.choice_label_field:
+                raise ValidationError(
+                    {
+                        "choice_label_field": (
+                            "فیلد نمایش فقط برای گزینه‌های مبتنی بر مدل سیستم "
+                            "قابل استفاده است."
+                        )
+                    }
+                )
+
+            if self.choice_value_field:
+                raise ValidationError(
+                    {
+                        "choice_value_field": (
+                            "فیلد مقدار فقط برای گزینه‌های مبتنی بر مدل سیستم "
+                            "قابل استفاده است."
+                        )
+                    }
+                )
+
+        if self.choice_source == self.ChoiceSource.MODEL:
+            if not self.choice_model_id:
+                raise ValidationError(
+                    {
+                        "choice_model": (
+                            "برای منبع «مدل سیستم» باید یک مدل انتخاب شود."
+                        )
+                    }
+                )
+
+            if not self.choice_label_field:
+                raise ValidationError(
+                    {
+                        "choice_label_field": (
+                            "فیلد نمایش برای منبع «مدل سیستم» الزامی است."
+                        )
+                    }
+                )
+
+            if not self.choice_value_field:
+                raise ValidationError(
+                    {
+                        "choice_value_field": (
+                            "فیلد مقدار برای منبع «مدل سیستم» الزامی است."
+                        )
+                    }
+                )
+
+            model_class = self.choice_model.model_class()
+
+            if not model_class:
+                raise ValidationError(
+                    {
+                        "choice_model": (
+                            "مدل انتخاب‌شده معتبر نیست."
+                        )
+                    }
+                )
+
+            available_fields = {
+                field.name
+                for field in model_class._meta.get_fields()
+                if getattr(field, "concrete", False)
+                and not getattr(field, "auto_created", False)
+            }
+
+            available_value_fields = available_fields | {"id"}
+
+            if self.choice_label_field not in available_fields:
+                raise ValidationError(
+                    {
+                        "choice_label_field": (
+                            "فیلد نمایش انتخاب‌شده "
+                            "در مدل وجود ندارد."
+                        )
+                    }
+                )
+
+            if self.choice_value_field not in available_value_fields:
+                raise ValidationError(
+                    {
+                        "choice_value_field": (
+                            "فیلد مقدار انتخاب‌شده "
+                            "در مدل وجود ندارد."
+                        )
+                    }
+                )
+
+        if self.choice_parent_field:
+            if self.choice_parent_field_id == self.pk:
+                raise ValidationError(
+                    {
+                        "choice_parent_field": (
+                            "یک فیلد نمی‌تواند والد خودش باشد."
+                        )
+                    }
+                )
+
+            if self.choice_parent_field.section.form_id != self.section.form_id:
+                raise ValidationError(
+                    {
+                        "choice_parent_field": (
+                            "فیلد والد باید متعلق به همان Form باشد."
+                        )
+                    }
+                )
+
+            if self.choice_parent_field.field_type != self.FieldType.SELECT:
+                raise ValidationError(
+                    {
+                        "choice_parent_field": (
+                            "فیلد والد باید از نوع «انتخابی» باشد."
+                        )
+                    }
+                )
+
+            if self.choice_parent_field.choice_source == self.ChoiceSource.NONE:
+                raise ValidationError(
+                    {
+                        "choice_parent_field": (
+                            "فیلد والد باید دارای منبع گزینه باشد."
+                        )
+                    }
                 )
 
     class Meta:
