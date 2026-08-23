@@ -1017,7 +1017,7 @@ class FormField(models.Model):
         related_name="dependent_choice_fields",
     )
 
-    choice_parent_model_field = models.CharField(
+    choice_filter_field = models.CharField(
         max_length=100,
         blank=True,
     )
@@ -1053,10 +1053,10 @@ class FormField(models.Model):
         super().clean()
 
         if self.choice_parent_field_id:
-            if not self.choice_parent_model_field:
+            if not self.choice_filter_field:
                 raise ValidationError(
                     {
-                        "choice_parent_model_field": (
+                        "choice_filter_field": (
                             "برای یک فیلد وابسته، "
                             "فیلد ارتباط با والد باید مشخص شود."
                         )
@@ -1091,10 +1091,10 @@ class FormField(models.Model):
                 and not getattr(field, "auto_created", False)
             }
 
-            if self.choice_parent_model_field not in available_fields:
+            if self.choice_filter_field not in available_fields:
                 raise ValidationError(
                     {
-                        "choice_parent_model_field": (
+                        "choice_filter_field": (
                             "فیلد ارتباط با والد در مدل گزینه‌ها وجود ندارد."
                         )
                     }

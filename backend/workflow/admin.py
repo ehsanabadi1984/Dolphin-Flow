@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.contrib.contenttypes.models import ContentType
+from django.db import models
 
 from .models import (
     Workflow,
@@ -1984,6 +1985,10 @@ def formfield_model_fields(request):
             {
                 "name": field.name,
                 "label": str(field.verbose_name),
+                "is_foreign_key": isinstance(
+                    field,
+                    models.ForeignKey,
+                ),
             }
         )
 
@@ -2021,18 +2026,31 @@ class FormFieldAdminForm(forms.ModelForm):
 
         label_field = self.fields.get("choice_label_field")
         value_field = self.fields.get("choice_value_field")
-        parent_model_field = self.fields.get(
-            "choice_parent_model_field"
-        )
-
+        filter_field = self.fields.get("choice_filter_field")
+        
         if label_field:
             label_field.widget = forms.Select()
 
         if value_field:
             value_field.widget = forms.Select()
 
-        if parent_model_field:
-            parent_model_field.widget = forms.Select()
+        if filter_field:
+            filter_field.widget = forms.Select()
+
+        if label_field and self.instance and self.instance.pk:
+            label_field.widget.attrs["data-initial-value"] = (
+                self.instance.choice_label_field or ""
+            )
+
+        if value_field and self.instance and self.instance.pk:
+            value_field.widget.attrs["data-initial-value"] = (
+                self.instance.choice_value_field or ""
+            )
+
+        if filter_field and self.instance and self.instance.pk:
+            filter_field.widget.attrs["data-initial-value"] = (
+                self.instance.choice_filter_field or ""
+            )
 
         # --------------------------------------------------
         # Resolve Choice Model
@@ -2102,6 +2120,9 @@ class FormFieldAdminForm(forms.ModelForm):
                 ("", "---------"),
                 *field_choices,
             ]
+        
+        if label_field and self.instance and self.instance.pk:
+                label_field.initial = self.instance.choice_label_field
 
         # --------------------------------------------------
         # Value Field
@@ -2114,7 +2135,46 @@ class FormFieldAdminForm(forms.ModelForm):
                 ("id", "id (شناسه)"),
                 *field_choices,
             ]
+        if value_field and self.instance and self.instance.pk:
+            value_field.initial = self.instance.choice_value_field
 
+        if filter_field:
+
+            filter_choices = [
+                ("", "---------"),
+            ]
+
+            if model_class:
+                for field in model_class._meta.get_fields():
+
+                    if not getattr(field, "concrete", False):
+                        continue
+
+                    if getattr(field, "auto_created", False):
+                        continue
+
+                    if not isinstance(
+                        field,
+                        models.ForeignKey,
+                    ):
+                        continue
+
+                    related_model = field.remote_field.model
+
+                    filter_choices.append(
+                        (
+                            field.name,
+                            (
+                                f"{field.name} "
+                                f"→ "
+                                f"{related_model._meta.verbose_name}"
+                            ),
+                        )
+                    )
+
+            filter_field.choices = filter_choices
+            if self.instance and self.instance.pk:
+                filter_field.initial = self.instance.choice_filter_field
         # --------------------------------------------------
         # Parent Field
         # --------------------------------------------------
@@ -2157,47 +2217,8 @@ class FormFieldAdminForm(forms.ModelForm):
                 else None
             )
 
-        # --------------------------------------------------
-        # Parent Model Field
-        # --------------------------------------------------
-
-        if parent_model_field:
-
-            relation_choices = [
-                ("", "---------"),
-            ]
-
-            if model_class:
-
-                for field in model_class._meta.get_fields():
-
-                    if not getattr(field, "concrete", False):
-                        continue
-
-                    if getattr(field, "auto_created", False):
-                        continue
-
-                    # فقط ForeignKey
-                    if not isinstance(
-                        field,
-                        models.ForeignKey,
-                    ):
-                        continue
-
-                    related_model = field.remote_field.model
-
-                    relation_choices.append(
-                        (
-                            field.name,
-                            (
-                                f"{field.name} "
-                                f"→ "
-                                f"{related_model._meta.verbose_name}"
-                            ),
-                        )
-                    )
-
-            parent_model_field.choices = relation_choices
+            if self.instance and self.instance.pk:
+                parent_field.initial = self.instance.choice_parent_field_id
 
 @admin.register(
     FormField,
@@ -2245,7 +2266,6 @@ class FormFieldAdmin(admin.ModelAdmin):
     autocomplete_fields = (
         "section",
         "repeatable_group",
-        "choice_parent_field",
     )
 
     ordering = (
@@ -2280,7 +2300,7 @@ class FormFieldAdmin(admin.ModelAdmin):
                     "choice_label_field",
                     "choice_value_field",
                     "choice_parent_field",
-                    "choice_parent_model_field",
+                    "choice_filter_field",
                 ),
             },
         ),
