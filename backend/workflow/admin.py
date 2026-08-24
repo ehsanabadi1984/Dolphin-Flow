@@ -41,6 +41,11 @@ from .models import (
     WorkingInterval,
     CalendarException,
     CalendarExceptionInterval,
+
+    LookupList,
+    LookupItem,
+    StaticChoiceSet,
+    StaticChoiceItem,
 )
 
 
@@ -1691,6 +1696,222 @@ class DeviceIdentifierAdmin(admin.ModelAdmin):
     readonly_fields = (
         "created_at",
     )
+#---------------------------------------------
+#LookUpList,LookUpItems-StaticChoice,StaticItem
+#---------------------------------------------
+
+class LookupItemInline(admin.TabularInline):
+    model = LookupItem
+    extra = 1
+
+    fields = (
+        "label",
+        "value",
+        "parent",
+        "order",
+        "is_active",
+    )
+
+    autocomplete_fields = (
+        "parent",
+    )
+
+    ordering = (
+        "order",
+        "id",
+    )
+
+
+@admin.register(
+    LookupList,
+    site=dolphin_admin_site,
+)
+class LookupListAdmin(admin.ModelAdmin):
+
+    admin_category = "forms"
+
+    list_display = (
+        "name",
+        "code",
+        "is_active",
+        "item_count",
+    )
+
+    list_filter = (
+        "is_active",
+    )
+
+    search_fields = (
+        "name",
+        "code",
+    )
+
+    ordering = (
+        "name",
+    )
+
+    inlines = (
+        LookupItemInline,
+    )
+
+    @admin.display(
+        description="تعداد آیتم‌ها",
+    )
+    def item_count(self, obj):
+        return obj.items.count()
+
+
+@admin.register(
+    LookupItem,
+    site=dolphin_admin_site,
+)
+class LookupItemAdmin(admin.ModelAdmin):
+
+    admin_category = "forms"
+
+    list_display = (
+        "label",
+        "value",
+        "lookup_list",
+        "parent",
+        "order",
+        "is_active",
+    )
+
+    list_filter = (
+        "is_active",
+        "lookup_list",
+    )
+
+    search_fields = (
+        "label",
+        "value",
+        "lookup_list__name",
+    )
+
+    ordering = (
+        "lookup_list",
+        "order",
+        "id",
+    )
+
+    autocomplete_fields = (
+        "lookup_list",
+        "parent",
+    )
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "lookup_list",
+                "parent",
+            )
+        )
+
+class StaticChoiceItemInline(admin.TabularInline):
+    model = StaticChoiceItem
+    extra = 1
+
+    fields = (
+        "label",
+        "value",
+        "order",
+        "is_active",
+    )
+
+    ordering = (
+        "order",
+        "id",
+    )
+
+
+@admin.register(
+    StaticChoiceSet,
+    site=dolphin_admin_site,
+)
+class StaticChoiceSetAdmin(admin.ModelAdmin):
+
+    admin_category = "forms"
+
+    list_display = (
+        "name",
+        "code",
+        "is_active",
+        "item_count",
+    )
+
+    list_filter = (
+        "is_active",
+    )
+
+    search_fields = (
+        "name",
+        "code",
+    )
+
+    ordering = (
+        "name",
+    )
+
+    inlines = (
+        StaticChoiceItemInline,
+    )
+
+    @admin.display(
+        description="تعداد گزینه‌ها",
+    )
+    def item_count(self, obj):
+        return obj.items.count()
+
+
+@admin.register(
+    StaticChoiceItem,
+    site=dolphin_admin_site,
+)
+class StaticChoiceItemAdmin(admin.ModelAdmin):
+
+    admin_category = "forms"
+
+    list_display = (
+        "label",
+        "value",
+        "choice_set",
+        "order",
+        "is_active",
+    )
+
+    list_filter = (
+        "is_active",
+        "choice_set",
+    )
+
+    search_fields = (
+        "label",
+        "value",
+        "choice_set__name",
+    )
+
+    ordering = (
+        "choice_set",
+        "order",
+        "id",
+    )
+
+    autocomplete_fields = (
+        "choice_set",
+    )
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "choice_set",
+            )
+        )
+
 
 #---------------------
 #---------------------
@@ -2014,10 +2235,30 @@ class FormFieldAdminForm(forms.ModelForm):
         # --------------------------------------------------
 
         choice_model_field = self.fields.get("choice_model")
+        lookup_list_field = self.fields.get("choice_lookup_list")
+        static_set_field = self.fields.get("choice_static_set")
 
         if choice_model_field:
             choice_model_field.label_from_instance = (
                 lambda obj: f"{obj.app_label} → {obj.model}"
+            )
+
+        # --------------------------------------------------
+        # Choice Source dependencies
+        # --------------------------------------------------
+
+        if lookup_list_field:
+            lookup_list_field.queryset = (
+                LookupList.objects
+                .filter(is_active=True)
+                .order_by("name")
+            )
+
+        if static_set_field:
+            static_set_field.queryset = (
+                StaticChoiceSet.objects
+                .filter(is_active=True)
+                .order_by("name")
             )
 
         # --------------------------------------------------
@@ -2297,6 +2538,8 @@ class FormFieldAdmin(admin.ModelAdmin):
                 "fields": (
                     "choice_source",
                     "choice_model",
+                    "choice_static_set",
+                    "choice_lookup_list",
                     "choice_label_field",
                     "choice_value_field",
                     "choice_parent_field",

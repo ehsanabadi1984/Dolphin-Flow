@@ -941,6 +941,141 @@ class FormRepeatableGroup(models.Model):
             f"{self.name}"
         )
 
+class StaticChoiceSet(models.Model):
+
+    name = models.CharField(
+        max_length=150,
+    )
+
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class StaticChoiceItem(models.Model):
+
+    choice_set = models.ForeignKey(
+        StaticChoiceSet,
+        on_delete=models.PROTECT,
+        related_name="items",
+    )
+
+    value = models.CharField(
+        max_length=100,
+    )
+
+    label = models.CharField(
+        max_length=200,
+    )
+
+    order = models.PositiveIntegerField(
+        default=0,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    class Meta:
+        ordering = ["order", "id"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["choice_set", "value"],
+                name="unique_static_choice_value",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.choice_set.name} - {self.label}"
+
+
+class LookupList(models.Model):
+
+    name = models.CharField(
+        max_length=150,
+    )
+
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class LookupItem(models.Model):
+
+    lookup_list = models.ForeignKey(
+        LookupList,
+        on_delete=models.PROTECT,
+        related_name="items",
+    )
+
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="children",
+    )
+
+    value = models.CharField(
+        max_length=100,
+    )
+
+    label = models.CharField(
+        max_length=200,
+    )
+
+    order = models.PositiveIntegerField(
+        default=0,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    class Meta:
+        ordering = ["order", "id"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["lookup_list", "value"],
+                name="unique_lookup_item_value",
+            ),
+        ]
+
+    def __str__(self):
+        return self.label
+
 class FormField(models.Model):
 
     class FieldType(models.TextChoices):
@@ -955,6 +1090,7 @@ class FormField(models.Model):
     class ChoiceSource(models.TextChoices):
         NONE = "NONE", "بدون منبع"
         STATIC = "STATIC", "گزینه‌های ثابت"
+        LOOKUP = "LOOKUP", "لیست داده‌ای"
         MODEL = "MODEL", "مدل سیستم"
 
     section = models.ForeignKey(
@@ -993,6 +1129,22 @@ class FormField(models.Model):
 
     choice_model = models.ForeignKey(
         "contenttypes.ContentType",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="form_fields",
+    )
+
+    choice_static_set = models.ForeignKey(
+        "StaticChoiceSet",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="form_fields",
+    )
+
+    choice_lookup_list = models.ForeignKey(
+        "LookupList",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
@@ -1048,57 +1200,12 @@ class FormField(models.Model):
     )
 
 
-
     def clean(self):
         super().clean()
 
-        if self.choice_parent_field_id:
-            if not self.choice_filter_field:
-                raise ValidationError(
-                    {
-                        "choice_filter_field": (
-                            "برای یک فیلد وابسته، "
-                            "فیلد ارتباط با والد باید مشخص شود."
-                        )
-                    }
-                )
-
-            if self.choice_source != self.ChoiceSource.MODEL:
-                raise ValidationError(
-                    {
-                        "choice_parent_field": (
-                            "وابستگی فقط برای گزینه‌های "
-                            "مبتنی بر مدل سیستم قابل استفاده است."
-                        )
-                    }
-                )
-
-            model_class = self.choice_model.model_class()
-
-            if not model_class:
-                raise ValidationError(
-                    {
-                        "choice_model": (
-                            "مدل گزینه‌های انتخابی معتبر نیست."
-                        )
-                    }
-                )
-
-            available_fields = {
-                field.name
-                for field in model_class._meta.get_fields()
-                if getattr(field, "concrete", False)
-                and not getattr(field, "auto_created", False)
-            }
-
-            if self.choice_filter_field not in available_fields:
-                raise ValidationError(
-                    {
-                        "choice_filter_field": (
-                            "فیلد ارتباط با والد در مدل گزینه‌ها وجود ندارد."
-                        )
-                    }
-                )        
+        # --------------------------------------------------
+        # General Validation
+        # --------------------------------------------------
 
         if self.repeatable_group:
             if self.repeatable_group.section_id != self.section_id:
@@ -1106,13 +1213,39 @@ class FormField(models.Model):
                     "گروه تکرارشونده باید متعلق به همان Section فیلد باشد."
                 )
 
-        if self.choice_source != self.ChoiceSource.MODEL:
+        # --------------------------------------------------
+        # Choice Source Validation
+        # --------------------------------------------------
+
+        # NONE
+        if self.choice_source == self.ChoiceSource.NONE:
+
             if self.choice_model_id:
                 raise ValidationError(
                     {
                         "choice_model": (
-                            "انتخاب مدل سیستم فقط زمانی مجاز است "
-                            "که منبع گزینه‌ها از نوع «مدل سیستم» باشد."
+                            "وقتی منبع گزینه‌ها «بدون منبع» است، "
+                            "مدل سیستم نباید مشخص شود."
+                        )
+                    }
+                )
+
+            if self.choice_static_set_id:
+                raise ValidationError(
+                    {
+                        "choice_static_set": (
+                            "وقتی منبع گزینه‌ها «بدون منبع» است، "
+                            "مجموعه گزینه‌های ثابت نباید مشخص شود."
+                        )
+                    }
+                )
+
+            if self.choice_lookup_list_id:
+                raise ValidationError(
+                    {
+                        "choice_lookup_list": (
+                            "وقتی منبع گزینه‌ها «بدون منبع» است، "
+                            "لیست داده‌ای نباید مشخص شود."
                         )
                     }
                 )
@@ -1121,7 +1254,7 @@ class FormField(models.Model):
                 raise ValidationError(
                     {
                         "choice_label_field": (
-                            "فیلد نمایش فقط برای گزینه‌های مبتنی بر مدل سیستم "
+                            "فیلد نمایش فقط برای منبع «مدل سیستم» "
                             "قابل استفاده است."
                         )
                     }
@@ -1131,18 +1264,146 @@ class FormField(models.Model):
                 raise ValidationError(
                     {
                         "choice_value_field": (
-                            "فیلد مقدار فقط برای گزینه‌های مبتنی بر مدل سیستم "
+                            "فیلد مقدار فقط برای منبع «مدل سیستم» "
                             "قابل استفاده است."
                         )
                     }
                 )
 
-        if self.choice_source == self.ChoiceSource.MODEL:
+        # --------------------------------------------------
+        # STATIC
+        # --------------------------------------------------
+
+        elif self.choice_source == self.ChoiceSource.STATIC:
+
+            if not self.choice_static_set_id:
+                raise ValidationError(
+                    {
+                        "choice_static_set": (
+                            "برای منبع «گزینه‌های ثابت» "
+                            "باید یک مجموعه گزینه انتخاب شود."
+                        )
+                    }
+                )
+
+            if self.choice_model_id:
+                raise ValidationError(
+                    {
+                        "choice_model": (
+                            "مدل سیستم فقط برای منبع "
+                            "«مدل سیستم» قابل استفاده است."
+                        )
+                    }
+                )
+
+            if self.choice_lookup_list_id:
+                raise ValidationError(
+                    {
+                        "choice_lookup_list": (
+                            "لیست داده‌ای فقط برای منبع "
+                            "«لیست داده‌ای» قابل استفاده است."
+                        )
+                    }
+                )
+
+            if self.choice_label_field:
+                raise ValidationError(
+                    {
+                        "choice_label_field": (
+                            "فیلد نمایش فقط برای منبع "
+                            "«مدل سیستم» قابل استفاده است."
+                        )
+                    }
+                )
+
+            if self.choice_value_field:
+                raise ValidationError(
+                    {
+                        "choice_value_field": (
+                            "فیلد مقدار فقط برای منبع "
+                            "«مدل سیستم» قابل استفاده است."
+                        )
+                    }
+                )
+
+            if self.choice_parent_field_id:
+                raise ValidationError(
+                    {
+                        "choice_parent_field": (
+                            "وابستگی والد/فرزند فعلاً برای "
+                            "گزینه‌های ثابت پشتیبانی نمی‌شود."
+                        )
+                    }
+                )
+
+        # --------------------------------------------------
+        # LOOKUP
+        # --------------------------------------------------
+
+        elif self.choice_source == self.ChoiceSource.LOOKUP:
+
+            if not self.choice_lookup_list_id:
+                raise ValidationError(
+                    {
+                        "choice_lookup_list": (
+                            "برای منبع «لیست داده‌ای» "
+                            "باید یک لیست داده‌ای انتخاب شود."
+                        )
+                    }
+                )
+
+            if self.choice_model_id:
+                raise ValidationError(
+                    {
+                        "choice_model": (
+                            "مدل سیستم فقط برای منبع "
+                            "«مدل سیستم» قابل استفاده است."
+                        )
+                    }
+                )
+
+            if self.choice_static_set_id:
+                raise ValidationError(
+                    {
+                        "choice_static_set": (
+                            "مجموعه گزینه‌های ثابت فقط برای منبع "
+                            "«گزینه‌های ثابت» قابل استفاده است."
+                        )
+                    }
+                )
+
+            if self.choice_label_field:
+                raise ValidationError(
+                    {
+                        "choice_label_field": (
+                            "فیلد نمایش فقط برای منبع "
+                            "«مدل سیستم» قابل استفاده است."
+                        )
+                    }
+                )
+
+            if self.choice_value_field:
+                raise ValidationError(
+                    {
+                        "choice_value_field": (
+                            "فیلد مقدار فقط برای منبع "
+                            "«مدل سیستم» قابل استفاده است."
+                        )
+                    }
+                )
+
+        # --------------------------------------------------
+        # MODEL
+        # --------------------------------------------------
+
+        elif self.choice_source == self.ChoiceSource.MODEL:
+
             if not self.choice_model_id:
                 raise ValidationError(
                     {
                         "choice_model": (
-                            "برای منبع «مدل سیستم» باید یک مدل انتخاب شود."
+                            "برای منبع «مدل سیستم» "
+                            "باید یک مدل انتخاب شود."
                         )
                     }
                 )
@@ -1151,7 +1412,8 @@ class FormField(models.Model):
                 raise ValidationError(
                     {
                         "choice_label_field": (
-                            "فیلد نمایش برای منبع «مدل سیستم» الزامی است."
+                            "فیلد نمایش برای منبع «مدل سیستم» "
+                            "الزامی است."
                         )
                     }
                 )
@@ -1160,7 +1422,28 @@ class FormField(models.Model):
                 raise ValidationError(
                     {
                         "choice_value_field": (
-                            "فیلد مقدار برای منبع «مدل سیستم» الزامی است."
+                            "فیلد مقدار برای منبع «مدل سیستم» "
+                            "الزامی است."
+                        )
+                    }
+                )
+
+            if self.choice_static_set_id:
+                raise ValidationError(
+                    {
+                        "choice_static_set": (
+                            "مجموعه گزینه‌های ثابت فقط برای منبع "
+                            "«گزینه‌های ثابت» قابل استفاده است."
+                        )
+                    }
+                )
+
+            if self.choice_lookup_list_id:
+                raise ValidationError(
+                    {
+                        "choice_lookup_list": (
+                            "لیست داده‌ای فقط برای منبع "
+                            "«لیست داده‌ای» قابل استفاده است."
                         )
                     }
                 )
@@ -1205,7 +1488,13 @@ class FormField(models.Model):
                     }
                 )
 
-        if self.choice_parent_field:
+        # --------------------------------------------------
+        # Parent / Dependency Validation
+        # --------------------------------------------------
+
+        if self.choice_parent_field_id:
+
+            # یک فیلد نمی‌تواند والد خودش باشد.
             if self.choice_parent_field_id == self.pk:
                 raise ValidationError(
                     {
@@ -1215,7 +1504,10 @@ class FormField(models.Model):
                     }
                 )
 
-            if self.choice_parent_field.section.form_id != self.section.form_id:
+            parent = self.choice_parent_field
+
+            # Parent باید متعلق به همان Form باشد.
+            if parent.section.form_id != self.section.form_id:
                 raise ValidationError(
                     {
                         "choice_parent_field": (
@@ -1224,7 +1516,8 @@ class FormField(models.Model):
                     }
                 )
 
-            if self.choice_parent_field.field_type != self.FieldType.SELECT:
+            # Parent باید SELECT باشد.
+            if parent.field_type != self.FieldType.SELECT:
                 raise ValidationError(
                     {
                         "choice_parent_field": (
@@ -1233,14 +1526,143 @@ class FormField(models.Model):
                     }
                 )
 
-            if self.choice_parent_field.choice_source == self.ChoiceSource.NONE:
+            # --------------------------------------------------
+            # MODEL → MODEL
+            # --------------------------------------------------
+
+            if self.choice_source == self.ChoiceSource.MODEL:
+
+                if parent.choice_source != self.ChoiceSource.MODEL:
+                    raise ValidationError(
+                        {
+                            "choice_parent_field": (
+                                "فیلد والد برای وابستگی مدل باید "
+                                "نیز از منبع «مدل سیستم» باشد."
+                            )
+                        }
+                    )
+
+                if not self.choice_filter_field:
+                    raise ValidationError(
+                        {
+                            "choice_filter_field": (
+                                "برای یک فیلد وابسته، "
+                                "فیلد ارتباط با والد باید مشخص شود."
+                            )
+                        }
+                    )
+
+                if not self.choice_model_id:
+                    raise ValidationError(
+                        {
+                            "choice_model": (
+                                "برای بررسی وابستگی، "
+                                "مدل گزینه‌ها باید مشخص باشد."
+                            )
+                        }
+                    )
+
+                model_class = self.choice_model.model_class()
+
+                if not model_class:
+                    raise ValidationError(
+                        {
+                            "choice_model": (
+                                "مدل گزینه‌های انتخابی معتبر نیست."
+                            )
+                        }
+                    )
+
+                available_fields = {
+                    field.name
+                    for field in model_class._meta.get_fields()
+                    if getattr(field, "concrete", False)
+                    and not getattr(field, "auto_created", False)
+                }
+
+                if self.choice_filter_field not in available_fields:
+                    raise ValidationError(
+                        {
+                            "choice_filter_field": (
+                                "فیلد ارتباط با والد "
+                                "در مدل گزینه‌ها وجود ندارد."
+                            )
+                        }
+                    )
+
+            # --------------------------------------------------
+            # LOOKUP → LOOKUP
+            # --------------------------------------------------
+
+            elif self.choice_source == self.ChoiceSource.LOOKUP:
+
+                if parent.choice_source != self.ChoiceSource.LOOKUP:
+                    raise ValidationError(
+                        {
+                            "choice_parent_field": (
+                                "فیلد والد برای وابستگی لیست داده‌ای "
+                                "باید نیز از منبع «لیست داده‌ای» باشد."
+                            )
+                        }
+                    )
+
+                if (
+                    parent.choice_lookup_list_id
+                    != self.choice_lookup_list_id
+                ):
+                    raise ValidationError(
+                        {
+                            "choice_parent_field": (
+                                "فیلد والد و فیلد فرزند باید "
+                                "از یک لیست داده‌ای استفاده کنند."
+                            )
+                        }
+                    )
+
+            # STATIC و NONE نباید Parent داشته باشند.
+            else:
+
                 raise ValidationError(
                     {
                         "choice_parent_field": (
-                            "فیلد والد باید دارای منبع گزینه باشد."
+                            "وابستگی والد/فرزند فقط برای "
+                            "منابع «مدل سیستم» و «لیست داده‌ای» "
+                            "قابل استفاده است."
                         )
                     }
                 )
+
+            # --------------------------------------------------
+            # Cycle Detection
+            # --------------------------------------------------
+
+            current = parent
+            visited = set()
+
+            while current:
+
+                if current.pk in visited:
+                    raise ValidationError(
+                        {
+                            "choice_parent_field": (
+                                "زنجیره فیلدهای وابسته دارای چرخه است."
+                            )
+                        }
+                    )
+
+                visited.add(current.pk)
+
+                if current.pk == self.pk:
+                    raise ValidationError(
+                        {
+                            "choice_parent_field": (
+                                "انتخاب این فیلد باعث ایجاد "
+                                "چرخه در وابستگی می‌شود."
+                            )
+                        }
+                    )
+
+                current = current.choice_parent_field
 
     class Meta:
         ordering = ["order"]

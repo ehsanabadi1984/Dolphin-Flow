@@ -139,19 +139,20 @@
                     <select
                       id="field-{{ item.field.code }}"
                       name="{{ item.field.code }}"
-                    >
+                  >
+                      <option value="">---------</option>
 
-                      {% for choice in item.field.choices %}
-
-                        <option
-                          value="{{ choice }}"
-                          {% if item.value == choice %}selected{% endif %}
-                        >
-                          {{ choice }}
-                        </option>
-
+                      {% for choice in item.choices %}
+                          <option
+                              value="{{ choice.value }}"
+                              {% if item.value|stringformat:"s" == choice.value|stringformat:"s" %}
+                                  selected
+                              {% endif %}
+                          >
+                              {{ choice.label }}
+                          </option>
                       {% endfor %}
-
+                  </select>
                     </select>
 
                   {% endif %}
@@ -189,7 +190,7 @@
                 <h3>دستگاه‌ها</h3>
             </div>
 
-            {% if edit_mode and group.has_editable_fields %}
+            {% if edit_mode and group.can_add %}
                 <button
                     type="button"
                     class="df-button df-button-secondary df-repeatable-add"
@@ -332,7 +333,7 @@
                   {% endif %}
                 </div>
 
-                {% if edit_mode and group.has_editable_fields %}
+                {% if edit_mode and group.can_add %}
                   <button
                     type="button"
                     class="df-button df-button-secondary df-repeatable-add"
@@ -425,18 +426,20 @@
                           {% elif item_field.field.field_type == "SELECT" %}
 
                             <select
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              id="field-{{ item.field.code }}"
+                              name="{{ item.field.code }}"
                             >
+                              <option value="">---------</option>
 
                               {% for choice in item_field.choices %}
 
                                 <option
-                                    value="{{ choice.0 }}"
+                                    value="{{ choice.value }}"
                                     {% if item_field.value|stringformat:"s" == choice.0|stringformat:"s" %}
                                         selected
                                     {% endif %}
                                 >
-                                    {{ choice.1 }}
+                                    {{ choice.label }}
                                 </option>
 
                               {% endfor %}

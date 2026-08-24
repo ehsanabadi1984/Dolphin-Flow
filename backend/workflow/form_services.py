@@ -9,6 +9,8 @@ from .models import (
     FormData,
     WorkflowInstance,
     FormDefinition,
+    LookupItem,
+    StaticChoiceItem,
     InstanceDevice,
     DeviceIdentifier,
     WorkflowStepExecution,
@@ -194,6 +196,127 @@ class DynamicFormService:
         return current_step_execution
 
     @staticmethod
+    def _get_field_choices(field):
+        """
+        Build choices for a SELECT FormField based on its choice source.
+        Returns a list of dictionaries:
+        {
+            "value": "...",
+            "label": "...",
+        }
+        """
+
+        if field.field_type != field.FieldType.SELECT:
+            return []
+
+        # --------------------------------------------------
+        # STATIC
+        # --------------------------------------------------
+
+        if field.choice_source == field.ChoiceSource.STATIC:
+            if not field.choice_static_set_id:
+                return []
+
+            return [
+                {
+                    "value": item.value,
+                    "label": item.label,
+                }
+                for item in (
+                    StaticChoiceItem.objects
+                    .filter(
+                        choice_set_id=field.choice_static_set_id,
+                        is_active=True,
+                    )
+                    .order_by("order", "id")
+                )
+            ]
+
+        # --------------------------------------------------
+        # LOOKUP
+        # --------------------------------------------------
+
+        if field.choice_source == field.ChoiceSource.LOOKUP:
+            if not field.choice_lookup_list_id:
+                return []
+
+            return [
+                {
+                    "value": item.value,
+                    "label": item.label,
+                }
+                for item in (
+                    LookupItem.objects
+                    .filter(
+                        lookup_list_id=field.choice_lookup_list_id,
+                        is_active=True,
+                    )
+                    .order_by("order", "id")
+                )
+            ]
+
+        # --------------------------------------------------
+        # MODEL
+        # --------------------------------------------------
+
+        if field.choice_source == field.ChoiceSource.MODEL:
+
+            print("=== DEBUG MODEL CHOICES ===")
+            print("field.code:", field.code)
+            print("field.name:", field.name)
+            print("choice_model:", field.choice_model)
+            print("choice_model_id:", field.choice_model_id)
+            print("choice_value_field:", field.choice_value_field)
+            print("choice_label_field:", field.choice_label_field)
+
+            if not field.choice_model_id:
+                print("MODEL DEBUG: NO choice_model_id")
+                return []
+
+            model_class = field.choice_model.model_class()
+            print("model_class:", model_class)
+
+            if not model_class:
+                print("MODEL DEBUG: NO model_class")
+                return []
+
+            queryset = model_class.objects.all()
+
+            print("queryset count:", queryset.count())
+            print(
+                "queryset objects:",
+                list(queryset.values()[:10]),
+            )
+
+            queryset = model_class.objects.all()
+
+            choices = []
+
+            for obj in queryset:
+                value = getattr(
+                    obj,
+                    field.choice_value_field,
+                    "",
+                )
+
+                label = getattr(
+                    obj,
+                    field.choice_label_field,
+                    "",
+                )
+
+                choices.append(
+                    {
+                        "value": str(value),
+                        "label": str(label),
+                    }
+                )
+
+            return choices
+
+        return []
+
+    @staticmethod
     def get_form_for_step(
         *,
         instance,
@@ -322,8 +445,17 @@ class DynamicFormService:
                         can_edit=True,
                     ).exists()
 
+                if not can_view:
+                    continue
+
                 if is_submitted:
                     can_edit = False
+
+                choices = (
+                    DynamicFormService._get_field_choices(field)
+                    if field.field_type == field.FieldType.SELECT
+                    else []
+                )
 
                 fields.append(
                     {
@@ -333,6 +465,7 @@ class DynamicFormService:
                             field.code,
                             "",
                         ),
+                        "choices": choices,
                     }
                 )
 
@@ -345,52 +478,61 @@ class DynamicFormService:
             for group in section.repeatable_groups.filter(
                 is_active=True,
             ):
-            #--------------TEST--------------------------------
-                # print(
-                #     "REPEATABLE GROUP DEBUG:",
-                #     "section=",
-                #     section.code,
-                #     "group=",
-                #     group.code,
-                #     "name=",
-                #     group.name,
-                #     "type=",
-                #     group.group_type,
-                #     "fields=",
-                #     list(
-                #         group.fields.filter(
-                #             is_active=True,
-                #         ).values(
-                #             "id",
-                #             "code",
-                #             "label",
-                #         )
-                #     ),
-                # )
-            #--------------End-TEST--------------------------------
+
+
+
+                # -------------------------------------------------
+                # Repeatable Group Access
+                # -------------------------------------------------
+
+                group_access_rules = group.access_rules.filter(
+                    group=group,
+                    step=step,
+                )
+
+                group_can_view = False
+                group_can_edit = False
+                group_can_add = False
+
+                user_rule = group_access_rules.filter(
+                    user=user,
+                ).first()
+
+                if user_rule:
+                    group_can_view = user_rule.can_view
+                    group_can_edit = user_rule.can_edit
+                    group_can_add = user_rule.can_add
+
+                else:
+                    role_rules = group_access_rules.filter(
+                        role__in=roles,
+                        user__isnull=True,
+                    )
+
+                    group_can_view = role_rules.filter(
+                        can_view=True,
+                    ).exists()
+
+                    group_can_edit = role_rules.filter(
+                        can_edit=True,
+                    ).exists()
+
+                    group_can_add = role_rules.filter(
+                        can_add=True,
+                    ).exists()
+
+                # Submitted step is always read-only.
+                if is_submitted:
+                    group_can_edit = False
+                    group_can_add = False
+
+                # User has no permission to see this group.
+                if not group_can_view:
+                    continue
 
                 group_fields = []
                 group_has_editable_fields = False
-#--------------------------TEST------------------------------
 
-                # print(
-                #     "DEVICE GROUP FIELDS DEBUG:",
-                #     group.code,
-                #     group.group_type,
-                #     list(
-                #         group.fields
-                #         .filter(is_active=True)
-                #         .values(
-                #             "id",
-                #             "code",
-                #             "name",
-                #             "label",
-                #             "repeatable_group_id",
-                #             "section_id",
-                #         )
-                #     ),
-                # )
-#------------------------End-TEST----------------------------
                 for field in group.fields.filter(
                     is_active=True,
                 ):
@@ -423,73 +565,54 @@ class DynamicFormService:
                             can_edit=True,
                         ).exists()
 
-        #--------------------TEST---------------------                
-
-                    # if group.code == "devices":
-                    #     print(
-                    #         "DEVICE FIELD ACCESS DEBUG:",
-                    #         field.code,
-                    #         "can_view=",
-                    #         can_view,
-                    #         "can_edit=",
-                    #         can_edit,
-                    #         "access_rules=",
-                    #         list(
-                    #             access_rules.values(
-                    #                 "id",
-                    #                 "step_id",
-                    #                 "role",
-                    #                 "user_id",
-                    #                 "can_view",
-                    #                 "can_edit",
-                    #             )
-                    #         ),
-                    #     )
-
-                    # if step_is_submitted:
-                    #     can_edit = False
-                    # if field.code in (
-                    #     "device_type",
-                    #     "device_model_id",
-                    # ):
-                        # print(
-                        #     "DEVICE FIELD ACCESS DEBUG:",
-                        #     field.code,
-                        #     "can_view=",
-                        #     can_view,
-                        #     "can_edit=",
-                        #     can_edit,
-                        #     "access_rules=",
-                        #     list(
-                        #         access_rules.values(
-                        #             "id",
-                        #             "step_id",
-                        #             "role",
-                        #             "user_id",
-                        #             "can_view",
-                        #             "can_edit",
-                        #         )
-                        #     ),
-                        # )
-        #--------------------END-TEST---------------------                
                     if not can_view:
                         continue
 
-                    if can_edit:
+                    effective_can_edit = (
+                        can_edit
+                        and group_can_edit
+                    )
+                    if effective_can_edit:
                         group_has_editable_fields = True
 
                     field_data = {
                         "field": field,
                         "can_edit": can_edit,
+                        "choices": (
+                            DynamicFormService._get_field_choices(field)
+                            if field.field_type == field.FieldType.SELECT
+                            else []
+                        ),
                     }
 
-                    if field.code == "device_model_id":
-                        field_data["device_models"] = (
-                            DeviceModel.objects
-                            .filter(is_active=True)
-                            .select_related("device_type")
-                            .order_by("name")
-                        )
+                    # if (
+                    #     field.field_type == field.FieldType.SELECT
+                    #     and field.choice_source == field.ChoiceSource.LOOKUP
+                    #     and field.choice_lookup_list_id
+                    # ):
+                    #     field_data["choices"] = list(
+                    #         field.choice_lookup_list.items
+                    #         .filter(
+                    #             is_active=True,
+                    #         )
+                    #         .order_by(
+                    #             "order",
+                    #             "id",
+                    #         )
+                    #         .values_list(
+                    #             "value",
+                    #             "label",
+                    #         )
+                    #     )
+#-----------------------Debut-------------------------------
+
+                    print(
+                        "DEBUG GROUP FIELD:",
+                        field.code,
+                        field.name,
+                        field.field_type,
+                        field.choice_source,
+                    )
 
                     if field.code == "device_type":
                         field_data["device_types"] = (
@@ -498,65 +621,47 @@ class DynamicFormService:
                             .order_by("name")
                         )
 
+#---------------------End-Debug-----------------------------
+
+                    # if field.code == "device_model_id":
+                    #     field_data["device_models"] = (
+                    #         DeviceModel.objects
+                    #         .filter(is_active=True)
+                    #         .select_related("device_type")
+                    #         .order_by("name")
+                    #     )
+
+                    # if field.code == "device_type":
+                    #     field_data["device_types"] = (
+                    #         DeviceType.objects
+                    #         .filter(is_active=True)
+                    #         .order_by("name")
+                    #     )
+#-----------------------------------Debug-------------------------------------------
                     if field.code == "device_type":
                         field_data["device_types"] = (
                             DeviceType.objects
                             .filter(is_active=True)
                             .order_by("name")
                         )
+
+                        print(
+                            "DEBUG DEVICE TYPE:",
+                            field.code,
+                            list(
+                                field_data["device_types"].values(
+                                    "id",
+                                    "name",
+                                )
+                            ),
+                        )
+
+#--------------------------------End-Debug-------------------------------------------
+
 
                     group_fields.append(field_data)
-#------------------------TEST--------------------------------
-                    if field.code == "device_type":
-                        print(
-                            "DEVICE TYPE DEBUG:",
-                            field.code,
-                            list(
-                                field_data.get(
-                                    "device_types",
-                                    []
-                                ).values(
-                                    "id",
-                                    "name"
-                                )
-                            ),
-                        )
-                    if field.code == "device_model_id":
-                        print(
-                            "DEVICE MODEL FIELD DEBUG:",
-                            field.code,
-                            "can_view=",
-                            can_view,
-                            "device_models=",
-                            list(
-                                field_data.get(
-                                    "device_models",
-                                    []
-                                ).values(
-                                    "id",
-                                    "name"
-                                )
-                            ),
-                        )
-#------------------------END-TEST-----------------------------
+                    
                 if not group_fields:
-                #--------TEST---------------------------------
-                    print(
-                        "REPEATABLE GROUP HIDDEN:",
-                        group.code,
-                        group.name,
-                        "fields=",
-                        list(
-                            group.fields.filter(
-                                is_active=True,
-                            ).values(
-                                "id",
-                                "code",
-                                "label",
-                            )
-                        ),
-                    )    
-                #---------End-TEST---------------------------
                     continue
 
                 # Saved repeatable items.
@@ -648,9 +753,9 @@ class DynamicFormService:
                                     ),
 
                                     "choices": (
-                                        device_model_choices
-                                        if field.code == "device_model_id"
-                                        else field.choices
+                                        DynamicFormService._get_field_choices(field)
+                                        if field.field_type == field.FieldType.SELECT
+                                        else []
                                     ),
                                     "device_types": field_info.get(
                                         "device_types",
@@ -662,16 +767,6 @@ class DynamicFormService:
                                     ),
                                 }
                             )
-                            #-------------------Test
-                            # if field.code == "device_type":
-                            #     print(
-                            #         "ITEM FIELD DEVICE TYPE DEBUG:",
-                            #         item_fields[-1].get(
-                            #             "device_types",
-                            #             [],
-                            #         ),
-                            #     )
-                            #--------------------End-test
                         items.append(
                             {
                                 "instance_device_id": instance_device.pk,
@@ -780,6 +875,11 @@ class DynamicFormService:
                                         field.code,
                                         "",
                                     ),
+                                    "choices": (
+                                        DynamicFormService._get_field_choices(field)
+                                        if field.field_type == field.FieldType.SELECT
+                                        else []
+                                    ),
                                 }
                             )
 
@@ -795,6 +895,9 @@ class DynamicFormService:
                         "fields": group_fields,
                         "items": items,
                         "has_editable_fields": group_has_editable_fields,
+                        "can_view": group_can_view,
+                        "can_edit": group_can_edit,
+                        "can_add": group_can_add,
                     }
                 )
 
