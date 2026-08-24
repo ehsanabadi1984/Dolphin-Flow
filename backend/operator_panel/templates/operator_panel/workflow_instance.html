@@ -424,10 +424,12 @@
                             />
 
                           {% elif item_field.field.field_type == "SELECT" %}
-
+<div style="color:red;">
+    DEBUG CHOICES: {{ item_field.choices }}
+</div>
                             <select
-                              id="field-{{ item.field.code }}"
-                              name="{{ item.field.code }}"
+                              id="field-{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
                             >
                               <option value="">---------</option>
 

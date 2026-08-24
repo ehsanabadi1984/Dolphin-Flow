@@ -657,7 +657,11 @@ class DynamicFormService:
                         )
 
 #--------------------------------End-Debug-------------------------------------------
-
+                    print("=== DEBUG FINAL FIELD DATA ===")
+                    print("field.code:", field.code)
+                    print("field_type:", field.field_type)
+                    print("choice_source:", field.choice_source)
+                    print("choices:", field_data.get("choices"))
 
                     group_fields.append(field_data)
                     
