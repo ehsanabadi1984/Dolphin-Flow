@@ -51,10 +51,10 @@ class InstanceDeviceService:
             warranty_status=warranty_status,
             status=status,
         )
-     
+
     @staticmethod
     @transaction.atomic
-    def add_device_by_imei(
+    def add_draft_device(
         *,
         instance,
         imei,
@@ -64,11 +64,8 @@ class InstanceDeviceService:
         status="",
     ):
         """
-        Find or create a persistent Device using its IMEI
-        and attach it to the given WorkflowInstance.
-
-        Returns:
-            (instance_device, device_created)
+        Create a temporary device record inside workflow.
+        Persistent Device is created only after submit.
         """
 
         if not instance:
@@ -78,8 +75,7 @@ class InstanceDeviceService:
 
         if instance.status != WorkflowInstance.Status.ACTIVE:
             raise ValidationError(
-                "امکان افزودن دستگاه به یک فرآیند "
-                "غیرفعال وجود ندارد."
+                "امکان افزودن دستگاه به یک فرآیند غیرفعال وجود ندارد."
             )
 
         if not imei:
@@ -99,50 +95,17 @@ class InstanceDeviceService:
                 "IMEI الزامی است."
             )
 
-        device, device_created = (
-            DeviceService.get_or_create_by_imei(
-                imei=imei,
-                device_model=device_model,
-            )
+        instance_device = InstanceDevice.objects.create(
+            instance=instance,
+            device=None,
+            draft_imei=imei,
+            draft_device_model=device_model,
+            reported_problem=reported_problem,
+            warranty_status=warranty_status,
+            status=status,
         )
 
-        existing_instance_device = (
-            InstanceDevice.objects
-            .filter(
-                instance=instance,
-                device=device,
-            )
-            .first()
-        )
-
-        if existing_instance_device:
-            existing_instance_device.reported_problem = reported_problem
-            existing_instance_device.warranty_status = warranty_status
-            existing_instance_device.status = status
-
-            existing_instance_device.save(
-                update_fields=[
-                    "reported_problem",
-                    "warranty_status",
-                    "status",
-                    "updated_at",
-                ]
-            )
-
-            return existing_instance_device, device_created
-
-        instance_device = (
-            InstanceDevice.objects.create(
-                instance=instance,
-                device=device,
-                reported_problem=reported_problem,
-                warranty_status=warranty_status,
-                status=status,
-            )
-        )
-
-        return instance_device, device_created
-
+        return instance_device
     @staticmethod
     def get_devices_for_instance(
         *,

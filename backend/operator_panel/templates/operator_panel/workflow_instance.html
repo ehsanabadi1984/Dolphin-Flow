@@ -178,11 +178,11 @@
 
           {% for group in section.repeatable_groups %}
 
-            {% if group.group.code == "devices" %}
+            {% if group.group.group_type == "DEVICE" %}
 
     <section
         class="df-repeatable-group df-device-group"
-        data-repeatable-group="devices"
+        data-repeatable-group="{{ group.group.code }}"
     >
 
         <div class="df-form-section-header">
@@ -194,7 +194,7 @@
                 <button
                     type="button"
                     class="df-button df-button-secondary df-repeatable-add"
-                    data-group-code="devices"
+                    data-group-code="{{ group.group.code }}"
                 >
                     + افزودن دستگاه
                 </button>
@@ -203,8 +203,97 @@
 
         <div
             class="df-repeatable-items"
-            data-group-code="devices"
+            data-group-code="{{ group.group.code }}"
         >
+
+        {% if not group.items %}
+
+    <div
+        class="df-repeatable-item df-device-item"
+        data-repeatable-item
+        data-repeatable-template
+        style="display: none;"
+    >
+
+        {% for item_field in group.fields %}
+
+            <div class="df-form-field">
+
+                <label>
+                    {{ item_field.field.label }}
+
+                    {% if item_field.field.is_required %}
+                        <span>*</span>
+                    {% endif %}
+                </label>
+
+                {% if item_field.can_edit %}
+
+                    {% if item_field.field.system_key == "DEVICE_TYPE" %}
+
+                        <select
+                            name="{{ group.group.code }}_0_{{ item_field.field.code }}"
+                        >
+                            <option value="">
+                                انتخاب نوع دستگاه
+                            </option>
+
+                            {% for device_type in item_field.device_types %}
+                                <option value="{{ device_type.id }}">
+                                    {{ device_type.name }}
+                                </option>
+                            {% endfor %}
+
+                        </select>
+
+                    {% elif item_field.field.system_key == "DEVICE_MODEL" %}
+
+                        <select
+                            name="{{ group.group.code }}_0_{{ item_field.field.code }}"
+                        >
+                            <option value="">
+                                انتخاب مدل دستگاه
+                            </option>
+
+                            {% for device_model in item_field.device_models %}
+                                <option value="{{ device_model.id }}">
+                                    {{ device_model.name }}
+                                </option>
+                            {% endfor %}
+
+                        </select>
+
+                    {% elif item_field.field.system_key == "IMEI" %}
+
+                        <input
+                            type="text"
+                            name="{{ group.group.code }}_0_{{ item_field.field.code }}"
+                            value=""
+                        />
+
+                    {% elif item_field.field.system_key == "REPORTED_PROBLEM" %}
+
+                        <textarea
+                            name="{{ group.group.code }}_0_{{ item_field.field.code }}"
+                        ></textarea>
+
+                    {% elif item_field.field.system_key == "DESCRIPTION" %}
+
+                        <textarea
+                            name="{{ group.group.code }}_0_{{ item_field.field.code }}"
+                        ></textarea>
+
+                    {% endif %}
+
+                {% endif %}
+
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+{% endif %}
 
             {% for item in group.items %}
 
@@ -212,6 +301,11 @@
                     class="df-repeatable-item df-device-item"
                     data-repeatable-item
                 >
+                <input
+    type="hidden"
+    name="{{ group.group.code }}_{{ forloop.counter0 }}_instance_device_id"
+    value="{{ item.instance_device_id }}"
+/>
 
                     {% for item_field in item.fields %}
 
@@ -227,10 +321,10 @@
 
                             {% if edit_mode and item_field.can_edit %}
 
-                                {% if item_field.field.code == "device_type" %}
+                                {% if item_field.field.system_key == "DEVICE_TYPE" %}
 
                                 <select
-                                    name="devices_{{ forloop.parentloop.counter0 }}_device_type"
+                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
                                 >
                                     <option value="">
                                         انتخاب نوع دستگاه
@@ -248,9 +342,9 @@
                 {% endfor %}
             </select>
 
-        {% elif item_field.field.code == "device_model_id" %}
+        {% elif item_field.field.system_key == "DEVICE_MODEL" %}
                                     <select
-                                        name="devices_{{ forloop.parentloop.counter0 }}_device_model_id"
+                                       name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
                                     >
                                         <option value="">
                                             انتخاب مدل دستگاه
@@ -269,26 +363,25 @@
 
                                     </select>
 
-                                {% elif item_field.field.code == "imei" %}
+                                {% elif item_field.field.system_key == "IMEI" %}
 
-                                    <input
-                                        type="text"
-                                        name="devices_{{ forloop.parentloop.counter0 }}_imei"
-                                        value="{{ item_field.value|default:'' }}"
-                                    />
+                                  <input
+                                      type="text"
+                                      name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                                      value="{{ item_field.value|default:'' }}"
+                                  />
 
-                                {% elif item_field.field.code == "problem" %}
+                              {% elif item_field.field.system_key == "REPORTED_PROBLEM" %}
 
-                                    <textarea
-                                        name="devices_{{ forloop.parentloop.counter0 }}_problem"
-                                    >{{ item_field.value|default:'' }}</textarea>
+                                  <textarea
+                                      name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                                  >{{ item_field.value|default:'' }}</textarea>
 
-                                {% elif item_field.field.code == "description" %}
+                              {% elif item_field.field.system_key == "DESCRIPTION" %}
 
-                                    <textarea
-                                        name="devices_{{ forloop.parentloop.counter0 }}_description"
-                                    >{{ item_field.value|default:'' }}</textarea>
-
+                                  <textarea
+                                      name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                                  >{{ item_field.value|default:'' }}</textarea>
                                 {% endif %}
 
                             {% else %}
@@ -424,9 +517,7 @@
                             />
 
                           {% elif item_field.field.field_type == "SELECT" %}
-<div style="color:red;">
-    DEBUG CHOICES: {{ item_field.choices }}
-</div>
+
                             <select
                               id="field-{{ item_field.field.code }}"
                               name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
@@ -612,7 +703,7 @@
                   {% for field_info in repeatable_item.fields %}
 
                     <td>
-                      {{ field_info.value|default:"—" }}
+                      {{ field_info.display_value|default:field_info.value|default:"—" }}
                     </td>
 
                   {% endfor %}

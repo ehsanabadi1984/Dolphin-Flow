@@ -2525,6 +2525,7 @@ class FormFieldAdmin(admin.ModelAdmin):
                     "code",
                     "label",
                     "field_type",
+                    "system_key",
                     "help_text",
                     "is_required",
                     "order",

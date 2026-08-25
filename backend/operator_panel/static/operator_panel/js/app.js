@@ -927,241 +927,302 @@ document.addEventListener("click", (event) => {
 
 
     /*
+ * ---------------------------------------------------------
+ * Repeatable Groups
+ * ---------------------------------------------------------
+ */
+
+document.addEventListener("click", (event) => {
+
+    const addButton = event.target.closest(
+        ".df-repeatable-add"
+    );
+
+    if (!addButton) {
+        return;
+    }
+
+    const groupCode =
+        addButton.dataset.groupCode;
+
+    if (!groupCode) {
+        console.error(
+            "Repeatable group code not found."
+        );
+
+        return;
+    }
+
+    const group =
+        document.querySelector(
+            `.df-repeatable-group[data-repeatable-group="${groupCode}"]`
+        );
+
+    if (!group) {
+        console.error(
+            "Repeatable group not found:",
+            groupCode
+        );
+
+        return;
+    }
+
+    const itemsContainer =
+        group.querySelector(
+            ".df-repeatable-items"
+        );
+
+    if (!itemsContainer) {
+        console.error(
+            "Repeatable items container not found:",
+            groupCode
+        );
+
+        return;
+    }
+
+    const items =
+        itemsContainer.querySelectorAll(
+            "[data-repeatable-item]:not([data-repeatable-template])"
+        );
+
+    /*
      * ---------------------------------------------------------
-     * Repeatable Groups
+     * Find source item
+     * ---------------------------------------------------------
+     *
+     * For an existing group, clone the last real item.
+     *
+     * For an empty group, use the server-rendered template.
+     */
+
+    let sourceItem;
+
+    if (items.length > 0) {
+
+        sourceItem =
+            items[items.length - 1];
+
+    } else {
+
+        sourceItem =
+            itemsContainer.querySelector(
+                "[data-repeatable-item][data-repeatable-template]"
+            );
+
+        if (!sourceItem) {
+            console.error(
+                "No repeatable item or template available:",
+                groupCode
+            );
+
+            return;
+        }
+    }
+
+    /*
+     * Clone the source.
+     */
+
+    const newItem =
+        sourceItem.cloneNode(true);
+
+    /*
+     * This is now a real item, not a template.
+     */
+
+    newItem.removeAttribute(
+        "data-repeatable-template"
+    );
+    newItem.style.display = "";
+
+    /*
+     * ---------------------------------------------------------
+     * Calculate new index
      * ---------------------------------------------------------
      */
 
-    document.addEventListener("click", (event) => {
+    const newIndex =
+        items.length;
 
-        const addButton = event.target.closest(
-            ".df-repeatable-add"
+    /*
+     * ---------------------------------------------------------
+     * Update fields
+     * ---------------------------------------------------------
+     */
+
+    const fields =
+        newItem.querySelectorAll(
+            "input, textarea, select"
         );
 
-        if (!addButton) {
-            return;
-        }
+    fields.forEach((field) => {
 
-        const groupCode =
-            addButton.dataset.groupCode;
-
-        if (!groupCode) {
-            console.error(
-                "Repeatable group code not found."
-            );
-
-            return;
-        }
-
-        const group =
-            document.querySelector(
-                `.df-repeatable-group[data-repeatable-group="${groupCode}"]`
-            );
-
-        if (!group) {
-            console.error(
-                "Repeatable group not found:",
-                groupCode
-            );
-
-            return;
-        }
-
-        const itemsContainer =
-            group.querySelector(
-                ".df-repeatable-items"
-            );
-
-        if (!itemsContainer) {
-            console.error(
-                "Repeatable items container not found:",
-                groupCode
-            );
-
-            return;
-        }
-
-        const items =
-            itemsContainer.querySelectorAll(
-                "[data-repeatable-item]"
-            );
-
-        if (items.length === 0) {
-            console.error(
-                "No repeatable item available to clone:",
-                groupCode
-            );
-
-            return;
-        }
+        const oldName =
+            field.getAttribute("name");
 
         /*
-         * Clone the last item.
-         */
-
-        const sourceItem =
-            items[items.length - 1];
-
-        const newItem =
-            sourceItem.cloneNode(true);
-
-        /*
-         * New index.
+         * Replace only the numeric repeatable index.
          *
          * Example:
-         * contacts-Test-Form-Display_0_name
-         * contacts-Test-Form-Display_1_name
+         *
+         * devices_0_imei
+         * devices_1_imei
          */
 
-        const newIndex =
-            items.length;
-        
-        console.log(
-            "Repeatable index calculation:",
-            {
-                groupCode,
-                existingItems: items.length,
-                newIndex,
-                names: Array.from(items).flatMap(
-                    item =>
-                        Array.from(
-                            item.querySelectorAll(
-                                "input, textarea, select"
-                            )
-                        ).map(
-                            field =>
-                                field.getAttribute("name")
-                        )
-                ),
-            }
-        );
+        if (oldName) {
 
-        /*
-         * Clear values and update field names.
-         */
+            const prefix =
+                `${groupCode}_`;
 
-        const fields =
-            newItem.querySelectorAll(
-                "input, textarea, select"
-            );
+            if (oldName.startsWith(prefix)) {
 
-        fields.forEach((field) => {
+                const remainder =
+                    oldName.slice(prefix.length);
 
-            const oldName =
-                field.getAttribute("name");
+                const separatorIndex =
+                    remainder.indexOf("_");
 
-            if (oldName) {
+                if (separatorIndex !== -1) {
 
-                const parts =
-                    oldName.split("_");
-
-                /*
-                 * Expected structure:
-                 *
-                 * groupCode_index_fieldCode
-                 *
-                 * Replace only the index.
-                 */
-
-                if (parts.length >= 3) {
-
-                    parts[1] =
-                        String(newIndex);
+                    const fieldCode =
+                        remainder.slice(
+                            separatorIndex + 1
+                        );
 
                     field.name =
-                        parts.join("_");
-
+                        `${groupCode}_${newIndex}_${fieldCode}`;
                 }
             }
-
-            /*
-             * Update ID if present.
-             */
-
-            const oldId =
-                field.getAttribute("id");
-
-            if (oldId) {
-
-                const newId =
-                    oldId.replace(
-                        /-\d+-/,
-                        `-${newIndex}-`
-                    );
-
-                field.id = newId;
-            }
-
-            /*
-             * Clear the value.
-             */
-
-            if (
-                field.type === "checkbox" ||
-                field.type === "radio"
-            ) {
-
-                field.checked = false;
-
-            } else if (
-                field.tagName === "SELECT"
-            ) {
-
-                field.selectedIndex = 0;
-
-            } else {
-
-                field.value = "";
-
-            }
-        });
+        }
 
         /*
-         * Make sure labels point to the
-         * newly-created input.
+         * -----------------------------------------------------
+         * IDs
+         * -----------------------------------------------------
          */
 
-        const labels =
-            newItem.querySelectorAll(
-                "label[for]"
-            );
+        const oldId =
+            field.getAttribute("id");
 
-        labels.forEach((label) => {
+        if (oldId) {
 
-            const oldFor =
-                label.getAttribute("for");
-
-            if (!oldFor) {
-                return;
-            }
-
-            const newFor =
-                oldFor.replace(
+            const newId =
+                oldId.replace(
                     /-\d+-/,
                     `-${newIndex}-`
                 );
 
-            label.setAttribute(
-                "for",
-                newFor
-            );
-        });
+            field.id = newId;
+        }
 
         /*
-         * Append the new item.
+         * -----------------------------------------------------
+         * IMPORTANT:
+         * A cloned item is ALWAYS a new item.
+         *
+         * Therefore instance_device_id MUST be empty.
+         * -----------------------------------------------------
          */
 
-        itemsContainer.appendChild(
-            newItem
+        if (
+            field.type === "hidden" &&
+            oldName &&
+            oldName.endsWith("_instance_device_id")
+        ) {
+
+            field.value = "";
+
+            return;
+        }
+
+        /*
+         * -----------------------------------------------------
+         * Clear normal values
+         * -----------------------------------------------------
+         */
+
+        if (
+            field.type === "checkbox" ||
+            field.type === "radio"
+        ) {
+
+            field.checked = false;
+
+        } else if (
+            field.tagName === "SELECT"
+        ) {
+
+            field.selectedIndex = 0;
+
+        } else {
+
+            field.value = "";
+        }
+    });
+
+    /*
+     * ---------------------------------------------------------
+     * Update label references
+     * ---------------------------------------------------------
+     */
+
+    const labels =
+        newItem.querySelectorAll(
+            "label[for]"
         );
 
-        console.log(
-            "Repeatable item added:",
-            {
-                groupCode,
-                index: newIndex,
-            }
+    labels.forEach((label) => {
+
+        const oldFor =
+            label.getAttribute("for");
+
+        if (!oldFor) {
+            return;
+        }
+
+        const newFor =
+            oldFor.replace(
+                /-\d+-/,
+                `-${newIndex}-`
+            );
+
+        label.setAttribute(
+            "for",
+            newFor
         );
     });
 
+    /*
+     * ---------------------------------------------------------
+     * Remove empty-state message
+     * ---------------------------------------------------------
+     */
+
+    const emptyState =
+        itemsContainer.querySelector(
+            ".df-empty-state"
+        );
+
+    if (emptyState) {
+        emptyState.remove();
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Append the new item
+     * ---------------------------------------------------------
+     */
+
+    itemsContainer.appendChild(
+        newItem
+    );
+
+    console.log(
+        "Repeatable item added:",
+        {
+            groupCode,
+            index: newIndex,
+        }
+    );
 });

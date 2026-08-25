@@ -386,6 +386,21 @@ class InstanceDevice(models.Model):
         Device,
         on_delete=models.PROTECT,
         related_name="workflow_instances",
+        null=True,
+        blank=True,
+    )
+
+    draft_imei = models.CharField(
+        max_length=150,
+        blank=True,
+    )
+
+    draft_device_model = models.ForeignKey(
+        DeviceModel,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="draft_instance_devices",
     )
 
     reported_problem = models.TextField(
@@ -1087,6 +1102,17 @@ class FormField(models.Model):
         BOOLEAN = "BOOLEAN", "بله/خیر"
         SELECT = "SELECT", "انتخابی"
 
+    class SystemKey(models.TextChoices):
+        NONE = "NONE", "بدون اتصال سیستمی"
+
+        DEVICE_TYPE = "DEVICE_TYPE", "نوع دستگاه"
+        DEVICE_MODEL = "DEVICE_MODEL", "مدل دستگاه"
+        IMEI = "IMEI", "IMEI"
+        REPORTED_PROBLEM = "REPORTED_PROBLEM", "شرح مشکل"
+        DESCRIPTION = "DESCRIPTION", "توضیحات تکمیلی"
+        WARRANTY_STATUS = "WARRANTY_STATUS", "وضعیت گارانتی"
+        STATUS = "STATUS", "وضعیت دستگاه"
+
     class ChoiceSource(models.TextChoices):
         NONE = "NONE", "بدون منبع"
         STATIC = "STATIC", "گزینه‌های ثابت"
@@ -1197,6 +1223,12 @@ class FormField(models.Model):
     choices = models.JSONField(
         default=list,
         blank=True,
+    )
+
+    system_key = models.CharField(
+        max_length=30,
+        choices=SystemKey.choices,
+        default=SystemKey.NONE,
     )
 
 
