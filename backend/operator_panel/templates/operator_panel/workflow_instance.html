@@ -437,7 +437,7 @@
 
                                 <option
                                     value="{{ choice.value }}"
-                                    {% if item_field.value|stringformat:"s" == choice.0|stringformat:"s" %}
+                                    {% if item_field.value|stringformat:"s" == choice.value|stringformat:"s" %}
                                         selected
                                     {% endif %}
                                 >

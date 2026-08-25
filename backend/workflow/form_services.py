@@ -604,7 +604,7 @@ class DynamicFormService:
                     #             "label",
                     #         )
                     #     )
-#-----------------------Debut-------------------------------
+#-----------------------Debug-------------------------------
 
                     print(
                         "DEBUG GROUP FIELD:",
@@ -680,7 +680,23 @@ class DynamicFormService:
                             instance=instance,
                         )
                     )
-
+#--------------------------Debug---------------------------------------------
+                    print("=*****= DEBUG INSTANCE DEVICES =*****=")
+                    print("instance.id:", instance.id)
+                    print("instance_devices:", instance_devices)
+                    print("instance_devices count:", instance_devices.count())
+                    print(
+                        "instance_devices data:",
+                        list(
+                            instance_devices.values(
+                                "id",
+                                "instance_id",
+                                "device_id",
+                            )
+                        ),
+                    )
+                    print("============================================")
+#----------------------End-Debug---------------------------------------------
                     device_model_choices = [
                         (str(device_model.id), device_model.name)
                         for device_model in DeviceModel.objects.filter(
@@ -741,7 +757,13 @@ class DynamicFormService:
 
                         for field_info in group_fields:
                             field = field_info["field"]
-
+#---------------------------Debug------------------------------
+                            print(
+                                "*****DEBUG ITEM FIELD:*****",
+                                field.code,
+                                field_info.get("choices", []),
+                            )
+#--------------------------End-Debug----------------------------
                             item_fields.append(
                                 {
                                     "field": field,
@@ -756,10 +778,9 @@ class DynamicFormService:
                                         values.get(field.code, ""),
                                     ),
 
-                                    "choices": (
-                                        DynamicFormService._get_field_choices(field)
-                                        if field.field_type == field.FieldType.SELECT
-                                        else []
+                                    "choices": field_info.get(
+                                        "choices",
+                                        [],
                                     ),
                                     "device_types": field_info.get(
                                         "device_types",
@@ -819,10 +840,15 @@ class DynamicFormService:
                                     "field": field,
                                     "can_edit": field_info["can_edit"],
                                     "value": "",
+                                    "choices": field_info.get(
+                                        "choices",
+                                        [],
+                                    ),
                                     "device_types": field_info.get(
                                         "device_types",
                                         [],
                                     ),
+                                    
                                     "device_models": field_info.get(
                                         "device_models",
                                         [],
