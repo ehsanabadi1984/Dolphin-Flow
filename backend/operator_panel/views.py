@@ -4,13 +4,19 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.http import JsonResponse
 from django.contrib.contenttypes.models import ContentType
+from workflow.device_services import DeviceService
 
 
 from workflow.notification_services import NotificationService
 from workflow.form_services import DynamicFormService
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.models import (
+    Device,
+    DeviceIdentifier,
     FormData,
+    FormRepeatableGroup,
+    InstanceDevice,
+    RepeatableGroupAccess,
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
@@ -23,6 +29,7 @@ from workflow.models import (
 )
 
 from workflow.services import WorkflowExecutionService
+from workflow.instance_device_services import InstanceDeviceService
 
 
 def formfield_model_fields(request):
@@ -56,6 +63,40 @@ def formfield_model_fields(request):
         })
 
     return JsonResponse({"fields": fields})
+
+@login_required
+def lookup_device_by_imei(request):
+    if request.method != "GET":
+        return JsonResponse(
+            {"error": "روش درخواست نامعتبر است."},
+            status=405,
+        )
+
+    imei = request.GET.get("imei", "").strip()
+
+    if not imei:
+        return JsonResponse({
+            "exists": False,
+        })
+
+    device = DeviceService.get_device_by_identifier(
+        identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+        value=imei,
+    )
+
+    if device is None:
+        return JsonResponse({
+            "exists": False,
+        })
+
+    device_model = device.device_model
+
+    return JsonResponse({
+        "exists": True,
+        "device_id": device.pk,
+        "device_type_id": device_model.device_type_id,
+        "device_model_id": device_model.pk,
+    })
 
 @login_required
 def dashboard(request):
@@ -119,6 +160,11 @@ def workflow_instance(request, instance_id):
 
     if request.method == "POST":
         try:
+
+            print("========== DEVICE POST DEBUG ==========")
+            print(request.POST)
+            print("========================================")
+
             DynamicFormService.save_form_for_step(
                 instance=instance,
                 user=request.user,
@@ -126,6 +172,10 @@ def workflow_instance(request, instance_id):
             )
 
         except ValidationError as exc:
+            print("========== VALIDATION ERROR ==========")
+            print("ERROR:", repr(exc))
+            print("MESSAGE:", str(exc))
+            print("======================================")
             form_context = (
                 DynamicFormService.get_form_for_step(
                     instance=instance,
@@ -200,8 +250,8 @@ def workflow_instance(request, instance_id):
         edit_mode = False
 
     elif has_saved_data:
-        # Save شده ولی Submit نشده → فقط با Edit قابل ویرایش
-        edit_mode = request.GET.get("edit") == "1"
+        # Save شده ولی Submit نشده 
+        edit_mode = True
 
     else:
         # هنوز چیزی Save نشده → فرم از ابتدا قابل ویرایش است
@@ -217,6 +267,110 @@ def workflow_instance(request, instance_id):
             "edit_mode": edit_mode,
             "current_step_execution": current_step_execution,
         },
+    )
+
+
+def _require_device_group_edit_permission(*, instance, user, group_code):
+    current_execution = (
+        instance.step_executions
+        .filter(workflow_step=instance.current_step)
+        .order_by("-performed_at")
+        .first()
+    )
+    if instance.status != WorkflowInstance.Status.ACTIVE or (
+        current_execution and current_execution.is_submitted
+    ):
+        raise ValidationError("این مرحله دیگر قابل ویرایش نیست.")
+
+    group = get_object_or_404(
+        FormRepeatableGroup,
+        code=group_code,
+        group_type=FormRepeatableGroup.GroupType.DEVICE,
+        is_active=True,
+        section__form__workflow=instance.workflow,
+        section__form__is_active=True,
+    )
+    roles = instance.workflow.memberships.filter(
+        user=user,
+        is_active=True,
+    ).values_list("role", flat=True)
+    rules = RepeatableGroupAccess.objects.filter(
+        group=group,
+        step=instance.current_step,
+    )
+    user_rule = rules.filter(user=user).first()
+    can_edit = (
+        user_rule.can_edit
+        if user_rule
+        else rules.filter(role__in=roles, user__isnull=True, can_edit=True).exists()
+    )
+    if not can_edit:
+        raise PermissionDenied("کاربر اجازه حذف دستگاه را ندارد.")
+    return group
+
+
+@login_required
+def delete_device(request, instance_id, group_code, instance_device_id):
+    if request.method != "POST":
+        return redirect("operator_panel:workflow_instance", instance_id=instance_id)
+
+    instance = get_object_or_404(
+        WorkflowInstance.objects.select_related("workflow", "current_step"),
+        pk=instance_id,
+    )
+    WorkflowAuthorizationService.require_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=WorkflowPermission.Action.VIEW,
+        step=instance.current_step,
+    )
+    _require_device_group_edit_permission(
+        instance=instance,
+        user=request.user,
+        group_code=group_code,
+    )
+    instance_device = get_object_or_404(
+        InstanceDevice,
+        pk=instance_device_id,
+        instance=instance,
+        is_active=True,
+    )
+    InstanceDeviceService.deactivate_device(instance_device=instance_device)
+    messages.success(request, "دستگاه از این فرآیند حذف شد.")
+    return redirect("operator_panel:workflow_instance", instance_id=instance.pk)
+
+
+@login_required
+def device_history(request, instance_id, device_id):
+    instance = get_object_or_404(
+        WorkflowInstance.objects.select_related("workflow", "current_step"),
+        pk=instance_id,
+    )
+    WorkflowAuthorizationService.require_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=WorkflowPermission.Action.VIEW,
+        step=instance.current_step,
+    )
+    device = get_object_or_404(
+        Device,
+        pk=device_id,
+        workflow_instances__instance=instance,
+    )
+    histories = (
+        InstanceDevice.objects.filter(
+            device=device,
+            instance__workflow__memberships__user=request.user,
+            instance__workflow__memberships__is_active=True,
+        )
+        .select_related("instance", "instance__workflow", "instance__current_step")
+        .distinct()
+        .order_by("-received_at")
+    )
+    return render(
+        request,
+        "operator_panel/device_history.html",
+        {"instance": instance, "device": device, "histories": histories},
     )
 
 @login_required

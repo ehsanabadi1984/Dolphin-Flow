@@ -47,9 +47,27 @@ urlpatterns = [
     ),
 
     path(
+        "workflow-instance/<int:instance_id>/device-group/<str:group_code>/device/<int:instance_device_id>/delete/",
+        views.delete_device,
+        name="delete_device",
+    ),
+
+    path(
+        "workflow-instance/<int:instance_id>/device/<int:device_id>/history/",
+        views.device_history,
+        name="device_history",
+    ),
+
+    path(
         "workflow-instance/<int:instance_id>/transition/<int:transition_id>/execute/",
         execute_transition,
         name="execute_transition",
+    ),
+
+    path(
+        "device/lookup-by-imei/",
+        views.lookup_device_by_imei,
+        name="lookup_device_by_imei",
     ),
 
     path(

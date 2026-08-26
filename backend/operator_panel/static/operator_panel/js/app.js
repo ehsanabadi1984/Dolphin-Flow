@@ -404,7 +404,767 @@ notificationToggle.addEventListener("click", async (event) => {
 
 });
 
+/*
+ * ---------------------------------------------------------
+ * Device Table + Add/Edit Modal
+ * ---------------------------------------------------------
+ */
+(() => {
 
+    const getModal = (groupCode) => {
+        return document.querySelector(
+            `.df-device-modal[data-device-modal="${groupCode}"]`
+        );
+    };
+
+    const openModal = (modal) => {
+        if (!modal) return;
+
+        modal.hidden = false;
+        document.body.classList.add("df-modal-open");
+
+        const firstField = modal.querySelector(
+            "[data-device-modal-field]"
+        );
+
+        firstField?.focus();
+    };
+
+    const closeModal = (modal) => {
+        if (!modal) return;
+
+        modal.hidden = true;
+        document.body.classList.remove("df-modal-open");
+    };
+
+    const clearModalErrors = (modal) => {
+        modal.querySelectorAll(
+            ".df-device-modal-field"
+        ).forEach((field) => {
+            field.classList.remove("has-error");
+
+            const error = field.querySelector(
+                ".df-device-modal-error"
+            );
+
+            if (error) {
+                error.textContent = "";
+            }
+        });
+    };
+
+    const resetModal = (modal) => {
+
+        modal.querySelectorAll(
+            "[data-device-modal-field]"
+        ).forEach((field) => {
+
+            if (
+                field.tagName === "SELECT"
+                || field.tagName === "TEXTAREA"
+                || field.tagName === "INPUT"
+            ) {
+                if (field.type === "checkbox") {
+                    field.checked = false;
+                } else {
+                    field.value = "";
+                }
+                field.disabled = false;
+            }
+
+        });
+
+        clearModalErrors(modal);
+    };
+
+        const lookupDeviceByImei = async (modal) => {
+
+        const imeiWrapper =
+            modal.querySelector(
+                '.df-device-modal-field[data-system-key="IMEI"]'
+            );
+
+        const imeiField =
+            imeiWrapper?.querySelector(
+                '[data-device-modal-field]'
+            );
+
+        if (!imeiField) {
+            return;
+        }
+
+        const imei =
+            imeiField.value.trim();
+
+        if (!imei) {
+            return;
+        }
+
+        const lookupUrl =
+            modal.dataset.deviceLookupUrl;
+
+        if (!lookupUrl) {
+            console.warn(
+                "Device lookup URL is not configured."
+            );
+            return;
+        }
+
+        try {
+
+            const response =
+                await fetch(
+                    `${lookupUrl}?imei=${encodeURIComponent(imei)}`,
+                    {
+                        method: "GET",
+                        headers: {
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                    }
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    "Device lookup failed."
+                );
+            }
+
+            const data =
+                await response.json();
+
+            const typeWrapper =
+                modal.querySelector(
+                    '.df-device-modal-field[data-system-key="DEVICE_TYPE"]'
+                );
+
+            const typeField =
+                typeWrapper?.querySelector(
+                    '[data-device-modal-field]'
+                );
+
+            const modelWrapper =
+                modal.querySelector(
+                    '.df-device-modal-field[data-system-key="DEVICE_MODEL"]'
+                );
+
+            const modelField =
+                modelWrapper?.querySelector(
+                    '[data-device-modal-field]'
+                );
+
+            if (!typeField || !modelField) {
+                return;
+            }
+
+            if (data.exists) {
+
+                /*
+                 * Existing device.
+                 *
+                 * Type and Model are taken from
+                 * the persistent Device record.
+                 */
+
+                typeField.value =
+                    String(data.device_type_id);
+
+                typeField.disabled = true;
+
+                modelField.value =
+                    String(data.device_model_id);
+
+                modelField.disabled = true;
+
+            } else {
+
+                /*
+                 * New device.
+                 *
+                 * Operator selects Type and Model.
+                 */
+
+                typeField.value = "";
+                typeField.disabled = false;
+
+                modelField.value = "";
+                modelField.disabled = false;
+            }
+
+        } catch (error) {
+
+            console.error(
+                "Unable to lookup device by IMEI:",
+                error
+            );
+        }
+    };
+
+    const validateModal = (modal) => {
+
+        clearModalErrors(modal);
+
+        let firstError = null;
+
+        modal.querySelectorAll(
+            ".df-device-modal-field"
+        ).forEach((wrapper) => {
+
+            const field = wrapper.querySelector(
+                "[data-device-modal-field]"
+            );
+
+            if (!field) return;
+
+            const required =
+                wrapper.querySelector("label span");
+
+            if (!required) return;
+
+            if (!field.value.trim()) {
+
+                wrapper.classList.add("has-error");
+
+                const error =
+                    wrapper.querySelector(
+                        ".df-device-modal-error"
+                    );
+
+                if (error) {
+                    error.textContent =
+                        "این فیلد الزامی است.";
+                }
+
+                if (!firstError) {
+                    firstError = field;
+                }
+            }
+
+        });
+
+        if (firstError) {
+            firstError.focus();
+            return false;
+        }
+
+        return true;
+    };
+
+const submitNewDevice = (modal, groupCode) => {
+
+    if (!validateModal(modal)) {
+        return;
+    }
+
+    const form = document.querySelector(
+        ".workflow-instance form"
+    );
+
+    if (!form) {
+        return;
+    }
+
+    const tbody = form.querySelector(
+        `.df-device-table-body[data-group-code="${groupCode}"]`
+    );
+
+    if (!tbody) {
+        return;
+    }
+
+    const existingRows = tbody.querySelectorAll(
+        "[data-device-row]"
+    );
+
+    const newIndex = existingRows.length;
+
+    const row = document.createElement("tr");
+
+    row.className = "df-device-row";
+    row.dataset.deviceRow = "";
+    row.dataset.deviceIndex = newIndex;
+
+    /*
+     * Hidden InstanceDevice ID
+     */
+    const instanceDeviceId =
+        document.createElement("input");
+
+    instanceDeviceId.type = "hidden";
+    instanceDeviceId.name =
+        `${groupCode}_${newIndex}_instance_device_id`;
+    instanceDeviceId.value = "";
+
+    /*
+     * Device fields
+     */
+    const fields = modal.querySelectorAll(
+        "[data-device-modal-field]"
+    );
+
+    fields.forEach((field) => {
+
+        const fieldCode =
+            field.dataset.fieldCode;
+
+        if (!fieldCode) {
+            return;
+        }
+
+        const cell = document.createElement("td");
+
+        /*
+         * Display value
+         */
+        const display =
+            document.createElement("span");
+
+        display.className =
+            "df-device-display";
+
+        if (field.tagName === "SELECT") {
+
+            const selected =
+                field.options[field.selectedIndex];
+
+            display.textContent =
+                selected
+                    ? selected.textContent
+                    : "—";
+
+        } else {
+
+            display.textContent =
+                field.value || "—";
+
+        }
+
+        cell.appendChild(display);
+
+        /*
+         * Editor
+         */
+        const editor =
+            document.createElement("span");
+
+        editor.className =
+            "df-device-editor";
+
+        editor.hidden = true;
+
+        const input =
+            field.cloneNode(true);
+
+        input.removeAttribute(
+            "data-device-modal-field"
+        );
+
+        input.name =
+            `${groupCode}_${newIndex}_${fieldCode}`;
+
+        input.classList.add(
+            "df-device-generated-field"
+        );
+
+        editor.appendChild(input);
+
+        cell.appendChild(editor);
+
+        row.appendChild(cell);
+    });
+
+    /*
+     * Actions
+     */
+    const actionsCell =
+        document.createElement("td");
+
+    actionsCell.className =
+        "df-device-actions";
+
+    /*
+     * Hidden instance_device_id
+     */
+    actionsCell.appendChild(
+        instanceDeviceId
+    );
+
+    /*
+     * Edit button
+     */
+    const editButton =
+        document.createElement("button");
+
+    editButton.type = "button";
+    editButton.className =
+        "df-button df-button-secondary df-device-edit";
+
+    editButton.textContent = "ویرایش";
+
+    actionsCell.appendChild(
+        editButton
+    );
+
+    /*
+     * Cancel button
+     */
+    const cancelButton =
+        document.createElement("button");
+
+    cancelButton.type = "button";
+    cancelButton.className =
+        "df-button df-button-secondary df-device-cancel";
+
+    cancelButton.hidden = true;
+    cancelButton.textContent = "انصراف";
+
+    actionsCell.appendChild(
+        cancelButton
+    );
+
+    /*
+     * Save button
+     */
+    const saveButton =
+        document.createElement("button");
+
+    saveButton.type = "submit";
+    saveButton.className =
+        "df-button df-device-save";
+
+    saveButton.hidden = true;
+    saveButton.textContent = "ذخیره";
+
+    actionsCell.appendChild(
+        saveButton
+    );
+
+    /*
+     * Delete button
+     */
+    const deleteButton =
+        document.createElement("button");
+
+    deleteButton.type = "button";
+    deleteButton.className =
+        "df-button df-button-danger df-device-delete";
+
+    deleteButton.textContent = "حذف";
+
+    actionsCell.appendChild(
+        deleteButton
+    );
+
+    row.appendChild(actionsCell);
+
+    /*
+     * Add row in NORMAL display mode.
+     */
+    tbody.appendChild(row);
+
+    /*
+     * Modal is closed only.
+     * The form is NOT submitted here.
+     */
+    closeModal(modal);
+};
+    const setDeviceRowEditing = (row, editing) => {
+
+        row.classList.toggle(
+            "is-editing",
+            editing
+        );
+
+        row.querySelectorAll(
+            ".df-device-display"
+        ).forEach((element) => {
+            element.hidden = editing;
+        });
+
+        row.querySelectorAll(
+            ".df-device-editor"
+        ).forEach((element) => {
+            element.hidden = !editing;
+        });
+
+        row.querySelectorAll(
+            ".df-device-edit, .df-device-delete"
+        ).forEach((element) => {
+            element.hidden = editing;
+        });
+
+        row.querySelectorAll(
+            ".df-device-cancel, .df-device-save"
+        ).forEach((element) => {
+            element.hidden = !editing;
+        });
+    };
+
+    document.addEventListener("click", (event) => {
+
+        /*
+         * ADD
+         */
+        const addButton =
+            event.target.closest(".df-device-add");
+
+        if (addButton) {
+
+            const groupCode =
+                addButton.dataset.groupCode;
+
+            const modal =
+                getModal(groupCode);
+
+            if (!modal) return;
+
+            resetModal(modal);
+            openModal(modal);
+
+            return;
+        }
+
+        /*
+         * MODAL CLOSE
+         */
+        const closeButton =
+            event.target.closest(
+                ".df-device-modal-close, .df-device-modal-cancel"
+            );
+
+        if (closeButton) {
+
+            const modal =
+                event.target.closest(".df-device-modal");
+
+            closeModal(modal);
+
+            return;
+        }
+
+        /*
+         * MODAL BACKDROP
+         */
+        if (
+            event.target.classList.contains(
+                "df-device-modal-backdrop"
+            )
+        ) {
+
+            const modal =
+                event.target.closest(".df-device-modal");
+
+            closeModal(modal);
+
+            return;
+        }
+
+        /*
+         * MODAL SUBMIT
+         */
+        const modalSubmit =
+            event.target.closest(
+                ".df-device-modal-submit"
+            );
+
+        if (modalSubmit) {
+
+            const groupCode =
+                modalSubmit.dataset.groupCode;
+
+            const modal =
+                getModal(groupCode);
+
+            if (!modal) return;
+
+            submitNewDevice(
+                modal,
+                groupCode
+            );
+
+            return;
+        }
+
+        /*
+         * EXISTING DEVICE ROW
+         */
+        const row =
+            event.target.closest(
+                "[data-device-row]"
+            );
+
+        if (!row) return;
+
+        if (
+            event.target.closest(
+                ".df-device-edit"
+            )
+        ) {
+
+            setDeviceRowEditing(
+                row,
+                true
+            );
+
+            return;
+        }
+
+        if (
+            event.target.closest(
+                ".df-device-cancel"
+            )
+        ) {
+
+            const id =
+                row.querySelector(
+                    'input[name$="_instance_device_id"]'
+                )?.value;
+
+            if (!id) {
+                row.remove();
+            } else {
+                setDeviceRowEditing(
+                    row,
+                    false
+                );
+            }
+
+            return;
+        }
+
+        if (
+            event.target.closest(
+                ".df-device-delete"
+            )
+        ) {
+
+            if (
+                !window.confirm(
+                    "آیا از حذف این دستگاه از فرآیند مطمئن هستید؟"
+                )
+            ) {
+                event.preventDefault();
+            }
+
+        }
+
+        });
+
+})();
+
+/*
+ * Device IMEI lookup
+ */
+
+document.addEventListener(
+    "change",
+    async (event) => {
+
+        const imeiField =
+            event.target.closest(
+                '[data-device-modal-field][data-system-key="IMEI"]'
+            );
+
+        if (!imeiField) {
+            return;
+        }
+
+        const modal =
+            imeiField.closest(
+                ".df-device-modal"
+            );
+
+        if (!modal) {
+            return;
+        }
+
+        const imei =
+            imeiField.value.trim();
+
+        if (!imei) {
+            return;
+        }
+
+        const lookupUrl =
+            modal.dataset.deviceLookupUrl;
+
+        if (!lookupUrl) {
+            console.warn(
+                "Device lookup URL is not configured."
+            );
+            return;
+        }
+
+        try {
+
+            const response =
+                await fetch(
+                    `${lookupUrl}?imei=${encodeURIComponent(imei)}`,
+                    {
+                        method: "GET",
+                        headers: {
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                    }
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    "Device lookup failed."
+                );
+            }
+
+            const data =
+                await response.json();
+
+            console.log(
+                "IMEI LOOKUP RESULT:",
+                data
+            );
+
+            const typeField =
+                modal.querySelector(
+                    '[data-device-modal-field][data-system-key="DEVICE_TYPE"]'
+                );
+
+            const modelField =
+                modal.querySelector(
+                    '[data-device-modal-field][data-system-key="DEVICE_MODEL"]'
+                );
+
+            if (!typeField || !modelField) {
+                return;
+            }
+
+            if (data.exists) {
+
+                typeField.value =
+                    String(data.device_type_id);
+
+                typeField.disabled = true;
+
+                modelField.value =
+                    String(data.device_model_id);
+
+                modelField.disabled = true;
+
+            } else {
+
+                typeField.value = "";
+                typeField.disabled = false;
+
+                modelField.value = "";
+                modelField.disabled = false;
+            }
+
+        } catch (error) {
+
+            console.error(
+                "Unable to lookup device by IMEI:",
+                error
+            );
+        }
+    }
+);
 /*
  * Close when clicking outside
  */
@@ -1225,4 +1985,5 @@ document.addEventListener("click", (event) => {
             index: newIndex,
         }
     );
+});
 });

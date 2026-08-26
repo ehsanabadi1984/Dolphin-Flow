@@ -226,6 +226,72 @@
 
                     {% endif %}
 
+                    {% if event.type == "step" and event.history %}
+
+                        {% if event.history.fields or event.history.repeatable_groups %}
+
+                            <div class="timeline-history">
+
+                                <div class="timeline-history-title">
+                                    اطلاعات ثبت‌شده
+                                </div>
+
+                                {% if event.history.fields %}
+
+                                    <div class="timeline-history-fields">
+                                        {% for field in event.history.fields %}
+                                            {% if field.display_value %}
+                                                <div class="timeline-history-field">
+                                                    <span class="timeline-history-label">
+                                                        {{ field.label }}
+                                                    </span>
+                                                    <strong class="timeline-history-value">
+                                                        {{ field.display_value }}
+                                                    </strong>
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+
+                                {% endif %}
+
+                                {% for group in event.history.repeatable_groups %}
+
+                                    <div class="timeline-history-group">
+                                        <div class="timeline-history-group-title">
+                                            {{ group.name }}
+                                        </div>
+
+                                        {% for item in group.items %}
+                                            <div class="timeline-history-item">
+                                                <div class="timeline-history-item-title">
+                                                    آیتم {{ forloop.counter }}
+                                                </div>
+
+                                                {% for field in item.fields %}
+                                                    {% if field.display_value %}
+                                                        <div class="timeline-history-field">
+                                                            <span class="timeline-history-label">
+                                                                {{ field.label }}
+                                                            </span>
+                                                            <strong class="timeline-history-value">
+                                                                {{ field.display_value }}
+                                                            </strong>
+                                                        </div>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+
+                                {% endfor %}
+
+                            </div>
+
+                        {% endif %}
+
+                    {% endif %}
+
 
                     {% if event.type == "step" %}
 

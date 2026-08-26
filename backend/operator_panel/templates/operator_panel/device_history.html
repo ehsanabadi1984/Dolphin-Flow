@@ -1,0 +1,23 @@
+{% extends "operator_panel/base.html" %}
+{% block content %}
+<section class="df-saved-data">
+  <div class="df-saved-data-header">
+    <div>
+      <h2>سوابق دستگاه</h2>
+      <p>{{ device }}{% for identifier in device.identifiers.all %}{% if identifier.identifier_type == "IMEI" %} — IMEI: {{ identifier.value }}{% endif %}{% endfor %}</p>
+    </div>
+    <a class="df-button df-button-secondary" href="{% url 'operator_panel:workflow_instance' instance.pk %}">بازگشت</a>
+  </div>
+  <div class="df-saved-table-wrapper">
+    <table class="df-saved-table">
+      <thead><tr><th>فرآیند</th><th>نمونه</th><th>مرحله</th><th>ثبت‌شده در</th><th>وضعیت اتصال</th></tr></thead>
+      <tbody>
+        {% for history in histories %}
+          <tr><td>{{ history.instance.workflow.name }}</td><td>#{{ history.instance.pk }}</td><td>{{ history.instance.current_step|default:"—" }}</td><td>{{ history.received_at|date:"Y/m/d H:i" }}</td><td>{% if history.is_active %}فعال{% else %}حذف‌شده از فرآیند{% endif %}</td></tr>
+        {% empty %}<tr><td colspan="5">سابقه قابل مشاهده‌ای برای این دستگاه وجود ندارد.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -216,15 +216,29 @@ class WorkflowExecutionService:
         # 8. Submit current step
         # ---------------------------------------------------------
 
+        # Preserve the form and device values as they exist at the
+        # moment this step is finalized. The timeline must later read
+        # this immutable snapshot, not current form or device data.
+        from .form_services import DynamicFormService
+
+        history_snapshot = DynamicFormService._build_history_snapshot(
+            instance=instance,
+            user=user,
+        )
+
         now = timezone.now()
 
         current_step_execution.is_submitted = True
         current_step_execution.submitted_at = now
+        current_step_execution.data = {
+            "history": history_snapshot,
+        }
 
         current_step_execution.save(
             update_fields=[
                 "is_submitted",
                 "submitted_at",
+                "data",
             ]
         )
 

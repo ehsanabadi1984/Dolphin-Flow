@@ -1207,6 +1207,7 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
                 "performed_by__last_name",
                 "notes",
                 "is_submitted",
+                "data",
 
                 "sla_started_at",
                 "sla_due_at",
@@ -1272,6 +1273,11 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
                         f"«{event['workflow_step__name']}»"
                     ),
                     "description": event["notes"],
+                    "history": (
+                        event["data"].get("history")
+                        if event["data"]
+                        else None
+                    ),
 
                     "is_submitted": event["is_submitted"],
 

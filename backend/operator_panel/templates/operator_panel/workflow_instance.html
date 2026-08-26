@@ -153,7 +153,6 @@
                           </option>
                       {% endfor %}
                   </select>
-                    </select>
 
                   {% endif %}
 
@@ -180,237 +179,238 @@
 
             {% if group.group.group_type == "DEVICE" %}
 
-    <section
-        class="df-repeatable-group df-device-group"
-        data-repeatable-group="{{ group.group.code }}"
-    >
+            <section
+                class="df-repeatable-group df-device-group"
+                data-repeatable-group="{{ group.group.code }}"
+            >
 
-        <div class="df-form-section-header">
-            <div>
-                <h3>دستگاه‌ها</h3>
-            </div>
+                <div class="df-form-section-header">
+                    <div>
+                        <h3>{{ group.group.name }}</h3>
 
-            {% if edit_mode and group.can_add %}
-                <button
-                    type="button"
-                    class="df-button df-button-secondary df-repeatable-add"
-                    data-group-code="{{ group.group.code }}"
-                >
-                    + افزودن دستگاه
-                </button>
-            {% endif %}
-        </div>
-
-        <div
-            class="df-repeatable-items"
-            data-group-code="{{ group.group.code }}"
-        >
-
-        {% if not group.items %}
-
-    <div
-        class="df-repeatable-item df-device-item"
-        data-repeatable-item
-        data-repeatable-template
-        style="display: none;"
-    >
-
-        {% for item_field in group.fields %}
-
-            <div class="df-form-field">
-
-                <label>
-                    {{ item_field.field.label }}
-
-                    {% if item_field.field.is_required %}
-                        <span>*</span>
-                    {% endif %}
-                </label>
-
-                {% if item_field.can_edit %}
-
-                    {% if item_field.field.system_key == "DEVICE_TYPE" %}
-
-                        <select
-                            name="{{ group.group.code }}_0_{{ item_field.field.code }}"
-                        >
-                            <option value="">
-                                انتخاب نوع دستگاه
-                            </option>
-
-                            {% for device_type in item_field.device_types %}
-                                <option value="{{ device_type.id }}">
-                                    {{ device_type.name }}
-                                </option>
-                            {% endfor %}
-
-                        </select>
-
-                    {% elif item_field.field.system_key == "DEVICE_MODEL" %}
-
-                        <select
-                            name="{{ group.group.code }}_0_{{ item_field.field.code }}"
-                        >
-                            <option value="">
-                                انتخاب مدل دستگاه
-                            </option>
-
-                            {% for device_model in item_field.device_models %}
-                                <option value="{{ device_model.id }}">
-                                    {{ device_model.name }}
-                                </option>
-                            {% endfor %}
-
-                        </select>
-
-                    {% elif item_field.field.system_key == "IMEI" %}
-
-                        <input
-                            type="text"
-                            name="{{ group.group.code }}_0_{{ item_field.field.code }}"
-                            value=""
-                        />
-
-                    {% elif item_field.field.system_key == "REPORTED_PROBLEM" %}
-
-                        <textarea
-                            name="{{ group.group.code }}_0_{{ item_field.field.code }}"
-                        ></textarea>
-
-                    {% elif item_field.field.system_key == "DESCRIPTION" %}
-
-                        <textarea
-                            name="{{ group.group.code }}_0_{{ item_field.field.code }}"
-                        ></textarea>
-
-                    {% endif %}
-
-                {% endif %}
-
-            </div>
-
-        {% endfor %}
-
-    </div>
-
-{% endif %}
-
-            {% for item in group.items %}
-
-                <div
-                    class="df-repeatable-item df-device-item"
-                    data-repeatable-item
-                >
-                <input
-    type="hidden"
-    name="{{ group.group.code }}_{{ forloop.counter0 }}_instance_device_id"
-    value="{{ item.instance_device_id }}"
-/>
-
-                    {% for item_field in item.fields %}
-
-                        <div class="df-form-field">
-
-                            <label>
-                                {{ item_field.field.label }}
-
-                                {% if item_field.field.is_required %}
-                                    <span>*</span>
-                                {% endif %}
-                            </label>
-
-                            {% if edit_mode and item_field.can_edit %}
-
-                                {% if item_field.field.system_key == "DEVICE_TYPE" %}
-
-                                <select
-                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                >
-                                    <option value="">
-                                        انتخاب نوع دستگاه
-                                    </option>
-
-                {% for device_type in item_field.device_types %}
-                    <option
-                        value="{{ device_type.id }}"
-                        {% if item_field.value|stringformat:"s" == device_type.id|stringformat:"s" %}
-                            selected
+                        {% if group.group.description %}
+                            <p>{{ group.group.description }}</p>
                         {% endif %}
-                    >
-                        {{ device_type.name }}
-                    </option>
-                {% endfor %}
-            </select>
+                    </div>
 
-        {% elif item_field.field.system_key == "DEVICE_MODEL" %}
-                                    <select
-                                       name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                    >
-                                        <option value="">
-                                            انتخاب مدل دستگاه
-                                        </option>
+                    {% if not dynamic_form.is_submitted and group.can_add %}
+                        <button
+                            type="button"
+                            class="df-button df-button-secondary df-device-add"
+                            data-group-code="{{ group.group.code }}"
+                        >
+                            + افزودن دستگاه
+                        </button>
+                    {% endif %}
+                </div>
 
-                                        {% for device_model in item_field.device_models %}
-                                            <option
-                                                value="{{ device_model.id }}"
-                                                {% if item_field.value|stringformat:"s" == device_model.id|stringformat:"s" %}
-                                                    selected
-                                                {% endif %}
+                <div class="df-device-table-wrapper">
+
+                    <table class="df-device-table">
+
+                        <thead>
+                            <tr>
+                                {% for field_info in group.fields %}
+                                    <th>{{ field_info.field.label }}</th>
+                                {% endfor %}
+                                <th>عملیات</th>
+                            </tr>
+                        </thead>
+
+                        <tbody
+                            class="df-device-table-body"
+                            data-group-code="{{ group.group.code }}"
+                        >
+
+                            {% for item in group.items %}
+
+                                <tr
+                                    class="df-device-row"
+                                    data-device-row
+                                    data-device-index="{{ forloop.counter0 }}"
+                                >
+
+                                    {% for item_field in item.fields %}
+
+                                        <td>
+
+                                            {% if forloop.first %}
+                                                <input
+                                                    type="hidden"
+                                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_instance_device_id"
+                                                    value="{{ item.instance_device_id }}"
+                                                >
+                                            {% endif %}
+
+                                            <span class="df-device-display">
+                                                {{ item_field.display_value|default:item_field.value|default:"—" }}
+                                            </span>
+
+                                            {% if not dynamic_form.is_submitted and item_field.can_edit %}
+
+                                                <span class="df-device-editor" hidden>
+
+                                                    {% if item_field.field.system_key == "DEVICE_TYPE" %}
+
+                                                        <select
+                                                            name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                                                            {% if item_field.field.system_key == "DEVICE_TYPE" %}disabled{% endif %}
+                                                        >
+                                                            <option value="">---------</option>
+
+                                                            {% for choice in item_field.device_types %}
+                                                                <option
+                                                                    value="{{ choice.id }}"
+                                                                    {% if item_field.value|stringformat:"s" == choice.id|stringformat:"s" %}
+                                                                        selected
+                                                                    {% endif %}
+                                                                >
+                                                                    {{ choice.name }}
+                                                                </option>
+                                                            {% endfor %}
+                                                        </select>
+
+                                                    {% elif item_field.field.system_key == "DEVICE_MODEL" %}
+
+                                                        <select
+                                                            name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                                                            disabled
+                                                        >
+                                                            <option value="">---------</option>
+
+                                                            {% for choice in item_field.device_models %}
+                                                                <option
+                                                                    value="{{ choice.id }}"
+                                                                    {% if item_field.value|stringformat:"s" == choice.id|stringformat:"s" %}
+                                                                        selected
+                                                                    {% endif %}
+                                                                >
+                                                                    {{ choice.name }}
+                                                                </option>
+                                                            {% endfor %}
+                                                        </select>
+
+                                                    {% elif item_field.field.system_key == "IMEI" %}
+
+                                                        <input
+                                                            type="text"
+                                                            value="{{ item_field.value|default:'' }}"
+                                                            disabled
+                                                        >
+
+                                                    {% elif item_field.field.field_type == "TEXTAREA" %}
+
+                                                        <textarea
+                                                            name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                                                        >{{ item_field.value|default:"" }}</textarea>
+
+                                                    {% elif item_field.field.field_type == "SELECT" %}
+
+                                                        <select
+                                                            name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                                                        >
+                                                            <option value="">---------</option>
+
+                                                            {% for choice in item_field.choices %}
+                                                                <option
+                                                                    value="{{ choice.value }}"
+                                                                    {% if item_field.value|stringformat:"s" == choice.value|stringformat:"s" %}
+                                                                        selected
+                                                                    {% endif %}
+                                                                >
+                                                                    {{ choice.label }}
+                                                                </option>
+                                                            {% endfor %}
+                                                        </select>
+
+                                                    {% else %}
+
+                                                        <input
+                                                            type="{% if item_field.field.field_type == 'NUMBER' %}number{% elif item_field.field.field_type == 'DATE' %}date{% elif item_field.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
+                                                            name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                                                            value="{{ item_field.value|default:'' }}"
+                                                        >
+
+                                                    {% endif %}
+
+                                                </span>
+
+                                            {% endif %}
+
+                                        </td>
+
+                                    {% endfor %}
+
+                                    <td class="df-device-actions">
+
+                                        {% if item.device_id %}
+                                            <a
+                                                class="df-button df-button-secondary"
+                                                href="{% url 'operator_panel:device_history' instance.pk item.device_id %}"
                                             >
-                                                {{ device_model.name }}
-                                            </option>
-                                        {% endfor %}
+                                                سوابق
+                                            </a>
+                                        {% endif %}
 
-                                    </select>
+                                        {% if not dynamic_form.is_submitted and group.can_edit %}
 
-                                {% elif item_field.field.system_key == "IMEI" %}
+                                            <button
+                                                type="button"
+                                                class="df-button df-button-secondary df-device-edit"
+                                            >
+                                                ویرایش
+                                            </button>
 
-                                  <input
-                                      type="text"
-                                      name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                      value="{{ item_field.value|default:'' }}"
-                                  />
+                                            <button
+                                                type="button"
+                                                class="df-button df-button-secondary df-device-cancel"
+                                                hidden
+                                            >
+                                                انصراف
+                                            </button>
 
-                              {% elif item_field.field.system_key == "REPORTED_PROBLEM" %}
+                                            <button
+                                                type="submit"
+                                                class="df-button df-device-save"
+                                                hidden
+                                            >
+                                                ذخیره
+                                            </button>
 
-                                  <textarea
-                                      name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                  >{{ item_field.value|default:'' }}</textarea>
+                                            <button
+                                                type="submit"
+                                                class="df-button df-button-danger df-device-delete"
+                                                formaction="{% url 'operator_panel:delete_device' instance.pk group.group.code item.instance_device_id %}"
+                                                formmethod="post"
+                                            >
+                                                حذف
+                                            </button>
 
-                              {% elif item_field.field.system_key == "DESCRIPTION" %}
+                                        {% endif %}
 
-                                  <textarea
-                                      name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                  >{{ item_field.value|default:'' }}</textarea>
-                                {% endif %}
+                                    </td>
 
-                            {% else %}
+                                </tr>
 
-                                <div class="df-form-value">
-                                     {{ item_field.display_value|default:item_field.value|default:"—" }}
-                                </div>
+                            {% empty %}
 
-                            {% endif %}
+                                <tr class="df-device-empty">
+                                    <td colspan="{{ group.fields|length|add:1 }}">
+                                        هنوز دستگاهی به این فرم اضافه نشده است.
+                                    </td>
+                                </tr>
 
-                        </div>
+                            {% endfor %}
 
-                    {% endfor %}
+                        </tbody>
+
+                    </table>
 
                 </div>
 
-            {% empty %}
+            </section>     
 
-                <div class="df-empty-state">
-                    هنوز دستگاهی به این فرم اضافه نشده است.
-                </div>
-
-            {% endfor %}
-
-        </div>
-
-    </section>
-
-{% else %}
+            {% else %}
 
 
             <section
@@ -426,7 +426,7 @@
                   {% endif %}
                 </div>
 
-                {% if edit_mode and group.can_add %}
+                {% if not dynamic_form.is_submitted and group.can_add %}
                   <button
                     type="button"
                     class="df-button df-button-secondary df-repeatable-add"
@@ -468,7 +468,7 @@
                         </label>
 
 
-                        {% if edit_mode and item_field.can_edit %}
+                        {% if not dynamic_form.is_submitted and item_field.can_edit %}
 
                           {% if item_field.field.field_type == "TEXT" %}
 
@@ -602,6 +602,207 @@
 {% endif %}
   </form>
 
+  {% for section in dynamic_form.sections %}
+    {% for group in section.repeatable_groups %}
+
+        {% if group.group.group_type == "DEVICE" and group.can_add %}
+
+            <div
+              class="df-device-modal"
+              data-device-modal="{{ group.group.code }}"
+              data-device-lookup-url="{% url 'operator_panel:lookup_device_by_imei' %}"
+              hidden
+          >
+
+                <div class="df-device-modal-backdrop"></div>
+
+                <div class="df-device-modal-card">
+
+                    <div class="df-device-modal-header">
+
+                        <div>
+                            <h2>افزودن دستگاه</h2>
+
+                            {% if group.group.description %}
+                                <p>{{ group.group.description }}</p>
+                            {% endif %}
+                        </div>
+
+                        <button
+                            type="button"
+                            class="df-device-modal-close"
+                        >
+                            ×
+                        </button>
+
+                    </div>
+
+                    <div class="df-device-modal-body">
+
+                      {# IMEI FIRST #}
+
+{% for field_info in group.fields %}
+
+    {% if field_info.can_edit and field_info.field.system_key == "IMEI" %}
+
+        <div
+            class="df-device-modal-field"
+            data-system-key="IMEI"
+        >
+
+            <label>
+                {{ field_info.field.label }}
+
+                {% if field_info.field.is_required %}
+                    <span>*</span>
+                {% endif %}
+            </label>
+
+            {% if field_info.field.help_text %}
+                <small>
+                    {{ field_info.field.help_text }}
+                </small>
+            {% endif %}
+
+            <input
+                type="text"
+                data-device-modal-field="{{ field_info.field.code }}"
+                data-field-code="{{ field_info.field.code }}"
+                data-system-key="IMEI"
+            >
+
+            <div class="df-device-modal-error"></div>
+
+        </div>
+
+    {% endif %}
+
+{% endfor %}
+
+                        {% for field_info in group.fields %}
+
+    {% if field_info.can_edit and field_info.field.system_key != "IMEI" %}
+
+        <div
+            class="df-device-modal-field"
+            data-system-key="{{ field_info.field.system_key }}"
+        >
+
+            <label>
+                {{ field_info.field.label }}
+
+                {% if field_info.field.is_required %}
+                    <span>*</span>
+                {% endif %}
+            </label>
+
+            {% if field_info.field.help_text %}
+                <small>
+                    {{ field_info.field.help_text }}
+                </small>
+            {% endif %}
+
+            {% if field_info.field.system_key == "DEVICE_TYPE" %}
+
+                <select
+                    data-device-modal-field="{{ field_info.field.code }}"
+                    data-field-code="{{ field_info.field.code }}"
+                    data-system-key="DEVICE_TYPE"
+                >
+                    <option value="">---------</option>
+
+                    {% for choice in field_info.device_types %}
+                        <option value="{{ choice.id }}">
+                            {{ choice.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+            {% elif field_info.field.system_key == "DEVICE_MODEL" %}
+
+                <select
+                    data-device-modal-field="{{ field_info.field.code }}"
+                    data-field-code="{{ field_info.field.code }}"
+                    data-system-key="DEVICE_MODEL"
+                >
+                    <option value="">---------</option>
+
+                    {% for choice in field_info.device_models %}
+                        <option value="{{ choice.id }}">
+                            {{ choice.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+            {% elif field_info.field.field_type == "TEXTAREA" %}
+
+                <textarea
+                    data-device-modal-field="{{ field_info.field.code }}"
+                    data-field-code="{{ field_info.field.code }}"
+                ></textarea>
+
+            {% elif field_info.field.field_type == "SELECT" %}
+
+                <select
+                    data-device-modal-field="{{ field_info.field.code }}"
+                    data-field-code="{{ field_info.field.code }}"
+                >
+                    <option value="">---------</option>
+
+                    {% for choice in field_info.choices %}
+                        <option value="{{ choice.value }}">
+                            {{ choice.label }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+            {% else %}
+
+                <input
+                    type="{% if field_info.field.field_type == 'NUMBER' %}number{% elif field_info.field.field_type == 'DATE' %}date{% elif field_info.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
+                    data-device-modal-field="{{ field_info.field.code }}"
+                    data-field-code="{{ field_info.field.code }}"
+                >
+
+            {% endif %}
+
+            <div class="df-device-modal-error"></div>
+
+        </div>
+
+    {% endif %}
+
+{% endfor %}
+
+                    </div>
+
+                    <div class="df-device-modal-footer">
+
+                        <button
+                            type="button"
+                            class="df-button df-button-secondary df-device-modal-cancel"
+                        >
+                            انصراف
+                        </button>
+
+                        <button
+                            type="button"
+                            class="df-button df-device-modal-submit"
+                            data-group-code="{{ group.group.code }}"
+                        >
+                            افزودن دستگاه
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        {% endif %}
+
+    {% endfor %}
+{% endfor %}
 
 <section class="df-saved-data">
 

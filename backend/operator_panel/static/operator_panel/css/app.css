@@ -1448,3 +1448,196 @@ a {
 .df-admin-model-card:hover {
     background: #e5e5e5;
 }
+
+/* Device Table */
+.df-device-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-2);
+}
+
+.df-device-table {
+    width: 100%;
+    min-width: 720px;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.df-device-table th,
+.df-device-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    vertical-align: middle;
+}
+
+.df-device-table th {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: rgba(255, 255, 255, .02);
+}
+
+.df-device-table tr:last-child td { border-bottom: 0; }
+.df-device-row.is-editing { background: rgba(59, 130, 246, .06); }
+.df-device-editor input,
+.df-device-editor select,
+.df-device-editor textarea { width: 100%; min-width: 130px; }
+.df-device-editor textarea { min-height: 54px; resize: vertical; }
+.df-device-actions { display: flex; gap: 6px; white-space: nowrap; }
+.df-device-actions .df-button { padding: 6px 9px; font-size: 10px; }
+.df-button-danger { color: #f87171; border-color: rgba(248, 113, 113, .35); }
+.df-device-empty td { color: var(--muted); text-align: center; padding: 24px; }
+
+
+/* ---------------------------------------------------------
+   Device Modal
+   --------------------------------------------------------- */
+
+body.df-modal-open {
+    overflow: hidden;
+}
+
+.df-device-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+}
+
+.df-device-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, .72);
+    backdrop-filter: blur(5px);
+}
+
+.df-device-modal-card {
+    position: relative;
+    width: min(760px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    margin: 24px auto;
+    display: flex;
+    flex-direction: column;
+
+    background: #171a20;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 20px;
+
+    box-shadow: 0 24px 80px rgba(0,0,0,.45);
+
+    overflow: hidden;
+}
+
+.df-device-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    padding: 20px 22px;
+
+    border-bottom: 1px solid rgba(255,255,255,.07);
+}
+
+.df-device-modal-header h2 {
+    margin: 0;
+}
+
+.df-device-modal-header p {
+    margin: 6px 0 0;
+    color: var(--muted);
+}
+
+.df-device-modal-close {
+    width: 36px;
+    height: 36px;
+
+    border: 0;
+    border-radius: 10px;
+
+    background: rgba(255,255,255,.06);
+    color: inherit;
+
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.df-device-modal-body {
+    padding: 22px;
+    overflow-y: auto;
+}
+
+.df-device-modal-field {
+    margin-bottom: 18px;
+}
+
+.df-device-modal-field label {
+    display: block;
+    margin-bottom: 7px;
+    font-weight: 600;
+}
+
+.df-device-modal-field label span {
+    color: #ef4444;
+    margin-right: 3px;
+}
+
+.df-device-modal-field small {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--muted);
+}
+
+.df-device-modal-field input,
+.df-device-modal-field select,
+.df-device-modal-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+
+    padding: 11px 13px;
+
+    background: #101318;
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 10px;
+
+    color: inherit;
+}
+
+.df-device-modal-field textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.df-device-modal-field.has-error input,
+.df-device-modal-field.has-error select,
+.df-device-modal-field.has-error textarea {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239,68,68,.10);
+}
+
+.df-device-modal-error {
+    min-height: 18px;
+    margin-top: 5px;
+
+    color: #ef4444;
+    font-size: 12px;
+}
+
+.df-device-modal-footer {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+
+    padding: 18px 22px;
+
+    border-top: 1px solid rgba(255,255,255,.07);
+}
+
+.df-device-modal-submit {
+    min-width: 130px;
+}
+
+.df-device-modal-close:hover {
+    background: rgba(255,255,255,.10);
+}
