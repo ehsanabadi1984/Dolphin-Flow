@@ -80,21 +80,11 @@ class DynamicFormService:
                     else ""
                 )
 
-        parsed_items = []
+        return [
+            items[index]
+            for index in sorted(items)
+        ]
 
-        for index in sorted(items):
-            item = items[index]
-
-            # Ignore completely empty repeatable rows.
-            has_value = any(
-                value not in ("", None, [])
-                for value in item.values()
-            )
-
-            if has_value:
-                parsed_items.append(item)
-
-        return parsed_items
      
     @staticmethod
     def _build_history_snapshot(
@@ -717,6 +707,7 @@ class DynamicFormService:
         instance,
         user,
         submitted_data=None,
+        edit_mode=False,
     ):
         workflow = instance.workflow
         step = instance.current_step
@@ -825,7 +816,7 @@ class DynamicFormService:
 
                 if user_rule:
                     can_view = user_rule.can_view
-                    can_edit = user_rule.can_edit
+                    permission_can_edit = user_rule.can_edit
 
                 else:
                     role_rules = access_rules.filter(
@@ -837,15 +828,18 @@ class DynamicFormService:
                         can_view=True,
                     ).exists()
 
-                    can_edit = role_rules.filter(
+                    permission_can_edit = role_rules.filter(
                         can_edit=True,
                     ).exists()
 
                 if not can_view:
                     continue
 
-                if is_submitted:
-                    can_edit = False
+                can_edit = (
+                    permission_can_edit
+                    and edit_mode
+                    and not is_submitted
+                )
 
                 choices = (
                     DynamicFormService._get_field_choices(field)
@@ -926,7 +920,6 @@ class DynamicFormService:
                 #----------Debug-----------
                 #-------End-Debug----------
                 if not group_can_view:
-                    print("!!! GROUP SKIPPED: NO VIEW ACCESS !!!", group.code)
                     continue
 
                 group_fields = []
@@ -971,8 +964,11 @@ class DynamicFormService:
                         continue
 
                     effective_can_edit = (
-                        can_edit
+                        can_view
+                        and can_edit
                         and group_can_edit
+                        and edit_mode
+                        and not is_submitted
                     )
                     if effective_can_edit:
                         group_has_editable_fields = True
@@ -1014,11 +1010,43 @@ class DynamicFormService:
                 #
 
                 if group.group_type == FormRepeatableGroup.GroupType.DEVICE:
+
+                    # =========================================================
+                    # DEVICE REPEATABLE GROUP
+                    # =========================================================
+                    #
+                    # Source of truth:
+                    #
+                    #     InstanceDevice
+                    #
+                    # A device can be in one of two states:
+                    #
+                    # 1. Draft device
+                    #    instance_device.device is None
+                    #
+                    #    IMEI / Device Type / Device Model are editable
+                    #    according to FieldAccess and edit_mode.
+                    #
+                    # 2. Existing device
+                    #    instance_device.device is not None
+                    #
+                    #    IMEI / Device Type / Device Model are immutable.
+                    #    Other fields remain editable according to permissions.
+                    #
+                    # =========================================================
+
                     instance_devices = (
                         InstanceDeviceService.get_devices_for_instance(
                             instance=instance,
                         )
                     )
+
+                    # ---------------------------------------------------------
+                    # POST data has priority only when validation failed.
+                    #
+                    # In normal GET requests, InstanceDevice remains the source
+                    # of truth.
+                    # ---------------------------------------------------------
 
                     submitted_device_items = []
 
@@ -1032,19 +1060,291 @@ class DynamicFormService:
 
                     items = []
 
-                    if submitted_data is not None and submitted_device_items:
+                    # =========================================================
+                    # FIELD HELPERS
+                    # =========================================================
+
+                    def get_field_info(field):
+                        """
+                        Return effective field permissions and metadata.
+                        """
+
+                        access_rules = field.access_rules.filter(
+                            step=step,
+                        )
+
+                        can_view = False
+                        permission_can_edit = False
+
+                        user_rule = access_rules.filter(
+                            user=user,
+                        ).first()
+
+                        if user_rule:
+
+                            can_view = user_rule.can_view
+                            permission_can_edit = user_rule.can_edit
+
+                        else:
+
+                            role_rules = access_rules.filter(
+                                role__in=roles,
+                                user__isnull=True,
+                            )
+
+                            can_view = role_rules.filter(
+                                can_view=True,
+                            ).exists()
+
+                            permission_can_edit = role_rules.filter(
+                                can_edit=True,
+                            ).exists()
+
+                        effective_can_edit = (
+                            can_view
+                            and permission_can_edit
+                            and edit_mode
+                            and not is_submitted
+                        )
+
+                        return {
+                            "can_view": can_view,
+                            "can_edit": effective_can_edit,
+                            "permission_can_edit": permission_can_edit,
+                        }
+
+                    # =========================================================
+                    # SYSTEM FIELD MAP
+                    # =========================================================
+
+                    field_map = {}
+
+                    for field in group.fields.filter(
+                        is_active=True,
+                    ):
+
+                        field_info = get_field_info(field)
+
+                        if not field_info["can_view"]:
+                            continue
+
+                        if field.system_key != FormField.SystemKey.NONE:
+                            field_map[field.system_key] = field
+
+                    imei_field = field_map.get(
+                        FormField.SystemKey.IMEI
+                    )
+
+                    device_type_field = field_map.get(
+                        FormField.SystemKey.DEVICE_TYPE
+                    )
+
+                    device_model_field = field_map.get(
+                        FormField.SystemKey.DEVICE_MODEL
+                    )
+
+                    # =========================================================
+                    # BUILD GROUP FIELDS
+                    # =========================================================
+
+                    group_fields = []
+
+                    for field in group.fields.filter(
+                        is_active=True,
+                    ):
+
+                        field_info = get_field_info(field)
+
+                        if not field_info["can_view"]:
+                            continue
+
+                        group_fields.append(
+                            {
+                                "field": field,
+                                "can_edit": field_info["can_edit"],
+                                "permission_can_edit": field_info[
+                                    "permission_can_edit"
+                                ],
+                                "choices": (
+                                    DynamicFormService._get_field_choices(field)
+                                    if field.field_type == field.FieldType.SELECT
+                                    else []
+                                ),
+                                "device_types": (
+                                    DeviceType.objects.filter(
+                                        is_active=True,
+                                    )
+                                    if field.system_key
+                                    == FormField.SystemKey.DEVICE_TYPE
+                                    else []
+                                ),
+                                "device_models": (
+                                    DeviceModel.objects.filter(
+                                        is_active=True,
+                                    )
+                                    if field.system_key
+                                    == FormField.SystemKey.DEVICE_MODEL
+                                    else []
+                                ),
+                            }
+                        )
+
+                    if not group_fields:
+                        continue
+
+                    group_has_editable_fields = any(
+                        field_info["can_edit"]
+                        for field_info in group_fields
+                    )
+
+                    # =========================================================
+                    # CASE 1
+                    # =========================================================
+                    #
+                    # Validation failed and POST contains device data.
+                    #
+                    # Render the submitted values so the operator does not lose
+                    # what was entered.
+                    #
+                    # =========================================================
+
+                    if submitted_device_items:
 
                         for submitted_item in submitted_device_items:
 
+                            if not isinstance(
+                                submitted_item,
+                                dict,
+                            ):
+                                continue
+
+                            # -------------------------------------------------
+                            # Resolve submitted IDs
+                            # -------------------------------------------------
+
+                            device_type = None
+                            device_model = None
+
+                            submitted_device_type_id = (
+                                submitted_item.get(
+                                    "device_type"
+                                )
+                            )
+
+                            submitted_device_model_id = (
+                                submitted_item.get(
+                                    "device_model_id"
+                                )
+                            )
+
+                            if submitted_device_type_id:
+
+                                device_type = (
+                                    DeviceType.objects
+                                    .filter(
+                                        pk=submitted_device_type_id,
+                                        is_active=True,
+                                    )
+                                    .first()
+                                )
+
+                            if submitted_device_model_id:
+
+                                device_model = (
+                                    DeviceModel.objects
+                                    .filter(
+                                        pk=submitted_device_model_id,
+                                        is_active=True,
+                                    )
+                                    .first()
+                                )
+
+                            # -------------------------------------------------
+                            # Existing device detection
+                            # -------------------------------------------------
+
+                            instance_device_id = (
+                                submitted_item.get(
+                                    "instance_device_id"
+                                )
+                            )
+
+                            existing_instance_device = None
+
+                            if instance_device_id:
+
+                                existing_instance_device = (
+                                    InstanceDevice.objects
+                                    .filter(
+                                        pk=instance_device_id,
+                                        instance=instance,
+                                        is_active=True,
+                                    )
+                                    .select_related(
+                                        "device",
+                                        "device__device_model",
+                                        "device__device_model__device_type",
+                                    )
+                                    .first()
+                                )
+
+                            is_existing_device = (
+                                existing_instance_device is not None
+                                and existing_instance_device.device_id
+                                is not None
+                            )
+
+                            # -------------------------------------------------
+                            # Existing device:
+                            #
+                            # Always use the real Device identity.
+                            # POST cannot change it.
+                            # -------------------------------------------------
+
+                            if is_existing_device:
+
+                                real_device = (
+                                    existing_instance_device.device
+                                )
+
+                                real_device_model = (
+                                    real_device.device_model
+                                )
+
+                                real_device_type = (
+                                    real_device_model.device_type
+                                )
+
+                                device_type = real_device_type
+                                device_model = real_device_model
+
+                                imei = ""
+
+                                for identifier in (
+                                    real_device.identifiers.all()
+                                ):
+
+                                    if (
+                                        identifier.identifier_type
+                                        == DeviceIdentifier.IdentifierType.IMEI
+                                    ):
+                                        imei = identifier.value
+                                        break
+
+                            else:
+
+                                imei = str(
+                                    submitted_item.get(
+                                        "imei",
+                                        "",
+                                    )
+                                ).strip()
+
+                            # -------------------------------------------------
+                            # Build fields
+                            # -------------------------------------------------
+
                             item_fields = []
-
-                            device_type = DeviceType.objects.filter(
-                                pk=submitted_item.get("device_type")
-                            ).first()
-
-                            device_model = DeviceModel.objects.filter(
-                                pk=submitted_item.get("device_model_id")
-                            ).first()
 
                             for field_info in group_fields:
 
@@ -1053,282 +1353,360 @@ class DynamicFormService:
                                 value = ""
                                 display_value = ""
 
-                                if field.system_key == FormField.SystemKey.IMEI:
-                                    value = submitted_item.get("imei", "")
+                                # ---------------------------------------------
+                                # IMEI
+                                # ---------------------------------------------
+
+                                if (
+                                    field.system_key
+                                    == FormField.SystemKey.IMEI
+                                ):
+
+                                    value = imei
+                                    display_value = imei
+
+                                # ---------------------------------------------
+                                # DEVICE TYPE
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.DEVICE_TYPE
+                                ):
+
+                                    value = (
+                                        device_type.pk
+                                        if device_type
+                                        else ""
+                                    )
+
+                                    display_value = (
+                                        device_type.name
+                                        if device_type
+                                        else ""
+                                    )
+
+                                # ---------------------------------------------
+                                # DEVICE MODEL
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.DEVICE_MODEL
+                                ):
+
+                                    value = (
+                                        device_model.pk
+                                        if device_model
+                                        else ""
+                                    )
+
+                                    display_value = (
+                                        str(device_model)
+                                        if device_model
+                                        else ""
+                                    )
+
+                                # ---------------------------------------------
+                                # REPORTED PROBLEM
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.REPORTED_PROBLEM
+                                ):
+
+                                    value = submitted_item.get(
+                                        "problem",
+                                        "",
+                                    )
+
                                     display_value = value
 
-                                elif field.system_key == FormField.SystemKey.DEVICE_TYPE:
-                                    value = device_type.pk if device_type else ""
-                                    display_value = device_type.name if device_type else ""
+                                # ---------------------------------------------
+                                # DESCRIPTION
+                                # ---------------------------------------------
 
-                                elif field.system_key == FormField.SystemKey.DEVICE_MODEL:
-                                    value = device_model.pk if device_model else ""
-                                    display_value = str(device_model) if device_model else ""
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.DESCRIPTION
+                                ):
 
-                                elif field.system_key == FormField.SystemKey.REPORTED_PROBLEM:
-                                    value = submitted_item.get("problem", "")
+                                    value = submitted_item.get(
+                                        "description",
+                                        "",
+                                    )
+
                                     display_value = value
 
-                                elif field.system_key == FormField.SystemKey.DESCRIPTION:
-                                    value = submitted_item.get("description", "")
+                                # ---------------------------------------------
+                                # WARRANTY STATUS
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.WARRANTY_STATUS
+                                ):
+
+                                    value = submitted_item.get(
+                                        "warranty_status",
+                                        "",
+                                    )
+
                                     display_value = value
 
-                                elif field.system_key == FormField.SystemKey.WARRANTY_STATUS:
-                                    value = submitted_item.get("warranty_status", "")
+                                # ---------------------------------------------
+                                # STATUS
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.STATUS
+                                ):
+
+                                    value = submitted_item.get(
+                                        "status",
+                                        "",
+                                    )
+
                                     display_value = value
 
-                                elif field.system_key == FormField.SystemKey.STATUS:
-                                    value = submitted_item.get("status", "")
+                                else:
+
+                                    value = submitted_item.get(
+                                        field.code,
+                                        "",
+                                    )
+
                                     display_value = value
+
+                                # -------------------------------------------------
+                                # Existing Device Identity Fields
+                                #
+                                # IMEI / TYPE / MODEL are immutable.
+                                # -------------------------------------------------
+
+                                field_can_edit = field_info[
+                                    "can_edit"
+                                ]
+
+                                if is_existing_device and (
+                                    field.system_key
+                                    in {
+                                        FormField.SystemKey.IMEI,
+                                        FormField.SystemKey.DEVICE_TYPE,
+                                        FormField.SystemKey.DEVICE_MODEL,
+                                    }
+                                ):
+                                    field_can_edit = False
+
+                                # -------------------------------------------------
+                                # Device models filtered by type
+                                # -------------------------------------------------
+
+                                device_models = (
+                                    DeviceModel.objects.filter(
+                                        device_type=device_type,
+                                        is_active=True,
+                                    )
+                                    .order_by(
+                                        "brand",
+                                        "name",
+                                    )
+                                    if (
+                                        field.system_key
+                                        == FormField.SystemKey.DEVICE_MODEL
+                                        and device_type
+                                    )
+                                    else field_info.get(
+                                        "device_models",
+                                        [],
+                                    )
+                                )
 
                                 item_fields.append(
                                     {
                                         "field": field,
-                                        "can_edit": field_info["can_edit"],
-                                        "is_immutable": field.system_key in {
-                                            FormField.SystemKey.IMEI,
-                                            FormField.SystemKey.DEVICE_TYPE,
-                                            FormField.SystemKey.DEVICE_MODEL,
-                                        },
+                                        "can_edit": field_can_edit,
+                                        "is_immutable": (
+                                            field.system_key
+                                            in {
+                                                FormField.SystemKey.IMEI,
+                                                FormField.SystemKey.DEVICE_TYPE,
+                                                FormField.SystemKey.DEVICE_MODEL,
+                                            }
+                                        ),
                                         "is_imei_immutable": (
-                                            field.system_key == FormField.SystemKey.IMEI
+                                            field.system_key
+                                            == FormField.SystemKey.IMEI
                                         ),
                                         "value": value,
                                         "display_value": display_value,
-                                        "choices": field_info.get("choices", []),
-                                        "device_types": field_info.get("device_types", []),
-                                        "device_models": (
-                                            DeviceModel.objects.filter(
-                                                device_type=device_type,
-                                                is_active=True,
-                                            ).order_by("brand", "name")
-                                            if (
-                                                field.system_key
-                                                == FormField.SystemKey.DEVICE_MODEL
-                                                and device_type
-                                            )
-                                            else field_info.get("device_models", [])
+                                        "choices": field_info.get(
+                                            "choices",
+                                            [],
                                         ),
+                                        "device_types": field_info.get(
+                                            "device_types",
+                                            [],
+                                        ),
+                                        "device_models": device_models,
                                     }
                                 )
 
-                            items.append(
-                                {
-                                    "instance_device_id": submitted_item.get(
-                                        "instance_device_id",
-                                        "",
-                                    ),
-                                    "device_id": "",
-                                    "device_model_id": submitted_item.get(
-                                        "device_model_id",
-                                        "",
-                                    ),
-                                    "device_type": (
-                                        device_type.name
-                                        if device_type
-                                        else ""
-                                    ),
-                                    "device_model": (
-                                        str(device_model)
-                                        if device_model
-                                        else ""
-                                    ),
-                                    "reported_problem": submitted_item.get(
-                                        "problem",
-                                        "",
-                                    ),
-                                    "description": submitted_item.get(
-                                        "description",
-                                        "",
-                                    ),
-                                    "warranty_status": submitted_item.get(
-                                        "warranty_status",
-                                        "",
-                                    ),
-                                    "status": submitted_item.get(
-                                        "status",
-                                        "",
-                                    ),
-                                    "identifiers": [
-                                        {
-                                            "type": "IMEI",
-                                            "value": submitted_item.get(
-                                                "imei",
-                                                "",
-                                            ),
-                                        }
-                                    ],
-                                    "fields": item_fields,
-                                }
+                            # -------------------------------------------------
+                            # Build item
+                            # -------------------------------------------------
+
+                            item = {
+                                "instance_device_id": (
+                                    instance_device_id or ""
+                                ),
+                                "device_id": (
+                                    existing_instance_device.device_id
+                                    if is_existing_device
+                                    else ""
+                                ),
+                                "is_existing_device": (
+                                    is_existing_device
+                                ),
+                                "device_model_id": (
+                                    device_model.pk
+                                    if device_model
+                                    else ""
+                                ),
+                                "device_type": (
+                                    device_type.name
+                                    if device_type
+                                    else ""
+                                ),
+                                "device_model": (
+                                    str(device_model)
+                                    if device_model
+                                    else ""
+                                ),
+                                "reported_problem": submitted_item.get(
+                                    "problem",
+                                    "",
+                                ),
+                                "description": submitted_item.get(
+                                    "description",
+                                    "",
+                                ),
+                                "warranty_status": submitted_item.get(
+                                    "warranty_status",
+                                    "",
+                                ),
+                                "status": submitted_item.get(
+                                    "status",
+                                    "",
+                                ),
+                                "identifiers": [
+                                    {
+                                        "type": "IMEI",
+                                        "value": imei,
+                                    }
+                                ],
+                                "fields": item_fields,
+                            }
+
+                            # -------------------------------------------------
+                            # History availability
+                            #
+                            # Template can use this flag for the "سوابق"
+                            # button.
+                            # -------------------------------------------------
+
+                            item["has_history"] = (
+                                is_existing_device
                             )
 
-                        instance_devices = []
+                            items.append(item)
 
-                        #----------------Debug--------------
-                        #------------End-Debug--------------
+                    # =========================================================
+                    # CASE 2
+                    # =========================================================
+                    #
+                    # Normal GET:
+                    #
+                    # Load devices from InstanceDevice.
+                    #
+                    # =========================================================
 
                     else:
-                        # No POST data → render saved devices from DB.
-                        pass
-                    #--------------Debug------------
-                    #------------End-Debug----------
-                    if submitted_data is not None and submitted_device_items:
+
                         for instance_device in instance_devices:
 
-                            post_item = {}
-                            if instance_device.device is None:
-                                item_fields = []
+                            # -------------------------------------------------
+                            # Determine device state
+                            # -------------------------------------------------
 
-                                for field_info in group_fields:
-                                    field = field_info["field"]
+                            is_existing_device = (
+                                instance_device.device_id
+                                is not None
+                            )
 
-                                    value = ""
-                                    display_value = ""
+                            # -------------------------------------------------
+                            # DRAFT DEVICE
+                            # -------------------------------------------------
 
-                                    if field.system_key == FormField.SystemKey.IMEI:
-                                        value = post_item.get(
-                                            field.code,
-                                            instance_device.draft_imei,
-                                        )
-                                        display_value = value
+                            if not is_existing_device:
 
-                                    elif field.system_key == FormField.SystemKey.DEVICE_TYPE:
-                                        if field.code in post_item:
-                                            value = post_item[field.code]
-
-                                            try:
-                                                device_type_obj = DeviceType.objects.get(
-                                                    pk=value
-                                                )
-                                                display_value = device_type_obj.name
-                                            except (DeviceType.DoesNotExist, ValueError, TypeError):
-                                                display_value = value
-
-                                        else:
-                                            value = (
-                                                instance_device.draft_device_model.device_type.id
-                                                if instance_device.draft_device_model
-                                                else ""
-                                            )
-                                            display_value = (
-                                                instance_device.draft_device_model.device_type.name
-                                                if instance_device.draft_device_model
-                                                else ""
-                                            )
-
-                                    elif field.system_key == FormField.SystemKey.DEVICE_MODEL:
-                                        if field.code in post_item:
-                                            value = post_item[field.code]
-
-                                            try:
-                                                device_model_obj = DeviceModel.objects.get(
-                                                    pk=value
-                                                )
-                                                display_value = str(device_model_obj)
-                                            except (DeviceModel.DoesNotExist, ValueError, TypeError):
-                                                display_value = value
-
-                                        else:
-                                            value = (
-                                                instance_device.draft_device_model.id
-                                                if instance_device.draft_device_model
-                                                else ""
-                                            )
-                                            display_value = (
-                                                str(instance_device.draft_device_model)
-                                                if instance_device.draft_device_model
-                                                else ""
-                                            )
-                                    elif field.system_key == FormField.SystemKey.REPORTED_PROBLEM:
-                                        value = post_item.get(
-                                            field.code,
-                                            instance_device.reported_problem,
-                                        )
-
-                                    elif field.system_key == FormField.SystemKey.DESCRIPTION:
-                                        value = post_item.get(
-                                            field.code,
-                                            instance_device.description,
-                                        )
-
-                                    elif field.system_key == FormField.SystemKey.WARRANTY_STATUS:
-                                        value = post_item.get(
-                                            field.code,
-                                            instance_device.warranty_status,
-                                        )
-
-                                    elif field.system_key == FormField.SystemKey.STATUS:
-                                        value = post_item.get(
-                                            field.code,
-                                            instance_device.status,
-                                        )
-                                    item_fields.append(
-                                        {
-                                            "field": field,
-                                            "can_edit": field_info["can_edit"],
-                                            "value": value,
-                                            "display_value": display_value,
-                                            "choices": field_info.get("choices", []),
-                                            "device_types": field_info.get("device_types", []),
-                                            "device_models": field_info.get("device_models", []),
-                                        }
-                                    )
-
-                                items.append(
-                                    {
-                                        "instance_device_id": instance_device.pk,
-                                        "device_id": "",
-                                        "device_model_id": (
-                                            instance_device.draft_device_model_id
-                                            if instance_device.draft_device_model
-                                            else ""
-                                        ),
-                                        "device_type": (
-                                            instance_device.draft_device_model.device_type.name
-                                            if instance_device.draft_device_model
-                                            else ""
-                                        ),
-                                        "device_model": (
-                                            str(instance_device.draft_device_model)
-                                            if instance_device.draft_device_model
-                                            else ""
-                                        ),
-                                        "reported_problem": instance_device.reported_problem,
-                                        "warranty_status": instance_device.warranty_status,
-                                        "status": instance_device.status,
-                                        "identifiers": [
-                                            {
-                                                "type": "IMEI",
-                                                "value": instance_device.draft_imei,
-                                            }
-                                        ],
-                                        "fields": item_fields,
-                                    }
+                                draft_model = (
+                                    instance_device.draft_device_model
                                 )
 
-                                continue
-                            
-                            imei = ""
+                                draft_type = (
+                                    draft_model.device_type
+                                    if draft_model
+                                    else None
+                                )
 
-                            if instance_device.device:
+                                imei = (
+                                    instance_device.draft_imei
+                                    or ""
+                                )
 
-                                for identifier in instance_device.device.identifiers.all():
-                                    if identifier.identifier_type == "IMEI":
-                                        imei = identifier.value
-                                        break
+                                device_type = draft_type
+                                device_model = draft_model
 
-                                device_type = (
-                                    instance_device
-                                    .device
-                                    .device_model
-                                    .device_type
+                            # -------------------------------------------------
+                            # EXISTING DEVICE
+                            # -------------------------------------------------
+
+                            else:
+
+                                device = (
+                                    instance_device.device
                                 )
 
                                 device_model = (
-                                    instance_device
-                                    .device
-                                    .device_model
+                                    device.device_model
                                 )
+
+                                device_type = (
+                                    device_model.device_type
+                                    if device_model
+                                    else None
+                                )
+
+                                imei = ""
+
+                                for identifier in (
+                                    device.identifiers.all()
+                                ):
+
+                                    if (
+                                        identifier.identifier_type
+                                        == DeviceIdentifier.IdentifierType.IMEI
+                                    ):
+
+                                        imei = identifier.value
+                                        break
+
+                            # -------------------------------------------------
+                            # Device models for selected type
+                            # -------------------------------------------------
 
                             device_models_for_type = (
                                 DeviceModel.objects
@@ -1344,51 +1722,201 @@ class DynamicFormService:
                                 else DeviceModel.objects.none()
                             )
 
+                            # -------------------------------------------------
+                            # Build fields
+                            # -------------------------------------------------
+
                             item_fields = []
 
                             for field_info in group_fields:
+
                                 field = field_info["field"]
 
                                 value = ""
                                 display_value = ""
 
-                                if field.system_key == FormField.SystemKey.IMEI:
+                                # ---------------------------------------------
+                                # IMEI
+                                # ---------------------------------------------
+
+                                if (
+                                    field.system_key
+                                    == FormField.SystemKey.IMEI
+                                ):
+
                                     value = imei
                                     display_value = imei
-                                elif field.system_key == FormField.SystemKey.DEVICE_TYPE:
-                                    value = device_type.pk
-                                    display_value = device_type.name
-                                elif field.system_key == FormField.SystemKey.DEVICE_MODEL:
-                                    value = device_model.pk
-                                    display_value = str(device_model)
-                                elif field.system_key == FormField.SystemKey.REPORTED_PROBLEM:
-                                    value = instance_device.reported_problem
+
+                                # ---------------------------------------------
+                                # DEVICE TYPE
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.DEVICE_TYPE
+                                ):
+
+                                    value = (
+                                        device_type.pk
+                                        if device_type
+                                        else ""
+                                    )
+
+                                    display_value = (
+                                        device_type.name
+                                        if device_type
+                                        else ""
+                                    )
+
+                                # ---------------------------------------------
+                                # DEVICE MODEL
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.DEVICE_MODEL
+                                ):
+
+                                    value = (
+                                        device_model.pk
+                                        if device_model
+                                        else ""
+                                    )
+
+                                    display_value = (
+                                        str(device_model)
+                                        if device_model
+                                        else ""
+                                    )
+
+                                # ---------------------------------------------
+                                # REPORTED PROBLEM
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.REPORTED_PROBLEM
+                                ):
+
+                                    value = (
+                                        instance_device.reported_problem
+                                        or ""
+                                    )
+
                                     display_value = value
-                                elif field.system_key == FormField.SystemKey.DESCRIPTION:
-                                    value = instance_device.description
+
+                                # ---------------------------------------------
+                                # DESCRIPTION
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.DESCRIPTION
+                                ):
+
+                                    value = (
+                                        instance_device.description
+                                        or ""
+                                    )
+
                                     display_value = value
-                                elif field.system_key == FormField.SystemKey.WARRANTY_STATUS:
-                                    value = instance_device.warranty_status
+
+                                # ---------------------------------------------
+                                # WARRANTY STATUS
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.WARRANTY_STATUS
+                                ):
+
+                                    value = (
+                                        instance_device.warranty_status
+                                        or ""
+                                    )
+
                                     display_value = value
-                                elif field.system_key == FormField.SystemKey.STATUS:
-                                    value = instance_device.status
+
+                                # ---------------------------------------------
+                                # STATUS
+                                # ---------------------------------------------
+
+                                elif (
+                                    field.system_key
+                                    == FormField.SystemKey.STATUS
+                                ):
+
+                                    value = (
+                                        instance_device.status
+                                        or ""
+                                    )
+
                                     display_value = value
+
+                                else:
+
+                                    value = ""
+
+                                    display_value = ""
+
+                                # -------------------------------------------------
+                                # Identity fields
+                                #
+                                # Existing Device:
+                                #     IMEI / TYPE / MODEL => immutable
+                                #
+                                # Draft Device:
+                                #     according to FieldAccess + edit_mode
+                                # -------------------------------------------------
+
+                                field_can_edit = field_info[
+                                    "can_edit"
+                                ]
+
+                                is_identity_field = (
+                                    field.system_key
+                                    in {
+                                        FormField.SystemKey.IMEI,
+                                        FormField.SystemKey.DEVICE_TYPE,
+                                        FormField.SystemKey.DEVICE_MODEL,
+                                    }
+                                )
+
+                                if (
+                                    is_existing_device
+                                    and is_identity_field
+                                ):
+                                    field_can_edit = False
+
+                                # -------------------------------------------------
+                                # Device model list
+                                # -------------------------------------------------
+
+                                device_models = (
+                                    device_models_for_type
+                                    if (
+                                        field.system_key
+                                        == FormField.SystemKey.DEVICE_MODEL
+                                    )
+                                    else field_info.get(
+                                        "device_models",
+                                        [],
+                                    )
+                                )
 
                                 item_fields.append(
                                     {
                                         "field": field,
-                                        "can_edit": field_info["can_edit"],
-                                        "is_immutable": field.system_key in {
-                                            FormField.SystemKey.IMEI,
-                                            FormField.SystemKey.DEVICE_TYPE,
-                                            FormField.SystemKey.DEVICE_MODEL,
-                                        },
+                                        "can_edit": field_can_edit,
+                                        "is_immutable": (
+                                            is_identity_field
+                                        ),
                                         "is_imei_immutable": (
-                                            field.system_key == FormField.SystemKey.IMEI
+                                            field.system_key
+                                            == FormField.SystemKey.IMEI
                                         ),
                                         "value": value,
                                         "display_value": display_value,
-
                                         "choices": field_info.get(
                                             "choices",
                                             [],
@@ -1397,48 +1925,78 @@ class DynamicFormService:
                                             "device_types",
                                             [],
                                         ),
-                                        "device_models": (
-                                            device_models_for_type
-                                            if field.system_key == FormField.SystemKey.DEVICE_MODEL
-                                            else field_info.get(
-                                                "device_models",
-                                                [],
-                                            )
-                                        ),
+                                        "device_models": device_models,
                                     }
                                 )
+
+                            # -------------------------------------------------
+                            # Build device item
+                            # -------------------------------------------------
+
                             items.append(
                                 {
-                                    "instance_device_id": instance_device.pk,
-                                    "device_id": instance_device.device.pk,
+                                    "instance_device_id": (
+                                        instance_device.pk
+                                    ),
+                                    "device_id": (
+                                        instance_device.device_id
+                                        or ""
+                                    ),
+                                    "is_existing_device": (
+                                        is_existing_device
+                                    ),
                                     "device_model_id": (
-                                        instance_device.device.device_model_id
+                                        device_model.pk
+                                        if device_model
+                                        else ""
                                     ),
                                     "device_type": (
-                                        instance_device
-                                        .device
-                                        .device_model
-                                        .device_type
-                                        .name
+                                        device_type.name
+                                        if device_type
+                                        else ""
                                     ),
-                                    "device_model": str(
-                                        instance_device.device.device_model
+                                    "device_model": (
+                                        str(device_model)
+                                        if device_model
+                                        else ""
                                     ),
                                     "reported_problem": (
                                         instance_device.reported_problem
+                                        or ""
+                                    ),
+                                    "description": (
+                                        instance_device.description
+                                        or ""
                                     ),
                                     "warranty_status": (
                                         instance_device.warranty_status
+                                        or ""
                                     ),
-                                    "status": instance_device.status,
+                                    "status": (
+                                        instance_device.status
+                                        or ""
+                                    ),
                                     "identifiers": [
                                         {
                                             "type": identifier.identifier_type,
                                             "value": identifier.value,
                                         }
                                         for identifier
-                                        in instance_device.device.identifiers.all()
+                                        in (
+                                            instance_device.device.identifiers.all()
+                                            if instance_device.device
+                                            else []
+                                        )
+                                    ]
+                                    or [
+                                        {
+                                            "type": "IMEI",
+                                            "value": imei,
+                                        }
                                     ],
+                                    "has_history": (
+                                        is_existing_device
+                                    ),
                                     "fields": item_fields,
                                 }
                             )
@@ -1449,19 +2007,17 @@ class DynamicFormService:
                         group.code,
                         [],
                     )
-                    print("NORMAL RAW ITEMS:", group.code, repr(raw_items))
+
+                    print("========== NORMAL REPEATABLE DEBUG ==========")
+                    print("GROUP:", group.code)
+                    print("FORM DATA:", repr(data))
+                    print("RAW ITEMS:", repr(raw_items))
+                    print("==============================================")
                     if not isinstance(raw_items, list):
                         raw_items = []
 
-                    if not raw_items and group.group_type != FormRepeatableGroup.GroupType.DEVICE:
-                        raw_items = [
-                            {}
-                        ]
-                    print(
-                        "NORMAL RAW ITEMS AFTER DEFAULT:",
-                        group.code,
-                        repr(raw_items),
-                    )
+                    if not raw_items:
+                        raw_items = [{}]                                   
                     items = []
 
                     for raw_item in raw_items:
@@ -1478,7 +2034,16 @@ class DynamicFormService:
                             item_fields.append(
                                 {
                                     "field": field,
-                                    "can_edit": field_info["can_edit"],
+                                    "can_edit": (
+                                        field_info["can_edit"]
+                                        and group_can_edit
+                                        and edit_mode
+                                        and not is_submitted
+                                    ),
+                                    "permission_can_edit": field_info.get(
+                                        "permission_can_edit",
+                                        False,
+                                    ),
                                     "value": raw_item.get(
                                         field.code,
                                         "",
@@ -1656,6 +2221,25 @@ class DynamicFormService:
                 if can_edit:
                     editable_codes.add(field.code)
 
+
+        print("========== REQUIRED VALIDATION DEBUG ==========")
+        print("SUBMITTED DATA:", repr(submitted_data))
+        print("EDITABLE CODES:", repr(editable_codes))
+
+        for section in form.sections.filter(is_active=True):
+            for field in section.fields.filter(
+                is_active=True,
+                repeatable_group__isnull=True,
+            ):
+                print(
+                    "NORMAL FIELD:",
+                    field.code,
+                    "label=", field.label,
+                    "required=", field.is_required,
+                    "editable=", field.code in editable_codes,
+                )
+
+        print("===============================================")
         # -------------------------------------------------
         # 2. Validate required normal fields
         # -------------------------------------------------
@@ -1702,12 +2286,10 @@ class DynamicFormService:
             for group in section.repeatable_groups.filter(
                 is_active=True,
             ):
-                if not group.is_required:
-                    continue
 
-                # ---------------------------------------------
+                # -------------------------------------------------
                 # Check repeatable-group visibility
-                # ---------------------------------------------
+                # -------------------------------------------------
 
                 group_access_rules = group.access_rules.filter(
                     step=step,
@@ -1723,72 +2305,38 @@ class DynamicFormService:
                     group_can_view = user_rule.can_view
 
                 else:
-                    group_can_view = group_access_rules.filter(
-                        role__in=roles,
-                        user__isnull=True,
-                        can_view=True,
-                    ).exists()
-
-                # ---------------------------------------------
-                # Hidden group must not be validated
-                # ---------------------------------------------
-
-                if not group_can_view:
-                    continue
-
-                # ---------------------------------------------
-                # Check field-level visibility
-                #
-                # A group is effectively visible only when
-                # at least one of its active fields is visible.
-                # ---------------------------------------------
-
-                group_has_visible_fields = False
-
-                for field in group.fields.filter(
-                    is_active=True,
-                ):
-                    access_rules = field.access_rules.filter(
-                        step=step,
-                    )
-
-                    user_rule = access_rules.filter(
-                        user=user,
-                    ).first()
-
-                    if user_rule:
-                        field_can_view = user_rule.can_view
-
-                    else:
-                        field_can_view = access_rules.filter(
+                    group_can_view = (
+                        group_access_rules
+                        .filter(
                             role__in=roles,
                             user__isnull=True,
                             can_view=True,
-                        ).exists()
+                        )
+                        .exists()
+                    )
 
-                    if field_can_view:
-                        group_has_visible_fields = True
-                        break
-
-                # ---------------------------------------------
-                # Group has no visible fields for this user.
-                # Therefore it must not participate in
-                # required validation.
-                # ---------------------------------------------
-
-                if not group_has_visible_fields:
+                # Hidden group does not participate in validation.
+                if not group_can_view:
                     continue
 
-                # ---------------------------------------------
-                # Validate required group
-                # ---------------------------------------------
+                # -------------------------------------------------
+                # Parse submitted items
+                #
+                # This must happen for BOTH required and optional
+                # repeatable groups.
+                # -------------------------------------------------
 
                 items = DynamicFormService._parse_repeatable_data(
                     submitted_data=submitted_data,
                     group_code=group.code,
                 )
 
-                if not items:
+                # -------------------------------------------------
+                # Required group validation
+                # -------------------------------------------------
+
+                if group.is_required and not items:
+
                     required_errors.append(
                         {
                             "type": "group",
@@ -1800,6 +2348,122 @@ class DynamicFormService:
                             ),
                         }
                     )
+
+                    # No items exist, therefore there is nothing
+                    # inside this group to validate.
+                    continue
+
+                # -------------------------------------------------
+                # No items → nothing to validate at field level
+                # -------------------------------------------------
+
+                if not items:
+                    continue
+
+                # -------------------------------------------------
+                # Validate required fields inside each item
+                # -------------------------------------------------
+
+                for item_index, item in enumerate(items):
+
+                    if not isinstance(item, dict):
+                        continue
+
+                    for field in group.fields.filter(
+                        is_active=True,
+                        is_required=True,
+                    ):
+
+                        access_rules = field.access_rules.filter(
+                            step=step,
+                        )
+
+                        field_can_view = False
+                        field_can_edit = False
+
+                        user_rule = access_rules.filter(
+                            user=user,
+                        ).first()
+
+                        if user_rule:
+
+                            field_can_view = user_rule.can_view
+                            field_can_edit = user_rule.can_edit
+
+                        else:
+
+                            role_rules = access_rules.filter(
+                                role__in=roles,
+                                user__isnull=True,
+                            )
+
+                            field_can_view = (
+                                role_rules
+                                .filter(
+                                    can_view=True,
+                                )
+                                .exists()
+                            )
+
+                            field_can_edit = (
+                                role_rules
+                                .filter(
+                                    can_edit=True,
+                                )
+                                .exists()
+                            )
+
+                        # Hidden field must not be validated.
+                        if not field_can_view:
+                            continue
+
+                        # Only fields the user is allowed to edit
+                        # participate in Save validation.
+                        if not field_can_edit:
+                            continue
+
+                        # -------------------------------------------------
+                        # Read submitted value
+                        # -------------------------------------------------
+
+                        value = item.get(
+                            field.code,
+                            "",
+                        )
+
+                        if isinstance(value, str):
+                            value = value.strip()
+
+                        # -------------------------------------------------
+                        # Empty required field
+                        # -------------------------------------------------
+
+                        if value in ("", None):
+
+                            required_errors.append(
+                                {
+                                    "type": "repeatable_field",
+                                    "group_code": group.code,
+                                    "group_label": group.name,
+                                    "field_code": field.code,
+                                    "field_label": field.label,
+                                    "item_index": item_index,
+                                    "message": (
+                                        f"فیلد «{field.label}» "
+                                        f"در ردیف {item_index + 1} "
+                                        "الزامی است."
+                                    ),
+                                }
+                            )
+        print("========== REQUIRED VALIDATION RESULT ==========")
+        print("REQUIRED ERRORS:", repr(required_errors))
+        print("=================================================")        
+        # -------------------------------------------------
+        # Stop immediately if validation failed
+        # -------------------------------------------------
+
+        if required_errors:
+            raise ValidationError(required_errors)
 
         form_data, _ = FormData.objects.get_or_create(
                     instance=instance,
@@ -1908,37 +2572,29 @@ class DynamicFormService:
                 # -------------------------------------------------
                 # Verify submitted repeatable group
                 # -------------------------------------------------
-                #--------------Debug---------------
-                print("========== REPEATABLE GROUP DEBUG ==========")
-                print("group.code:", repr(group.code))
-                print("group.name:", repr(group.name))
-
                 items = DynamicFormService._parse_repeatable_data(
                     submitted_data=submitted_data,
                     group_code=group.code,
                 )
 
-                print("PARSED ITEMS:", items)
-                print("============================================")
-#-------------End-Debug------------
+                print("========== REPEATABLE VALIDATION DEBUG ==========")
+                print("GROUP:", group.code)
+                print("GROUP REQUIRED:", group.is_required)
+                print("GROUP CAN VIEW:", group_can_view)
+                print("PARSED ITEMS:", repr(items))
 
-                items = DynamicFormService._parse_repeatable_data(
-                    submitted_data=submitted_data,
-                    group_code=group.code,
-                )
+                for debug_item_index, debug_item in enumerate(items):
+                    print(
+                        "ITEM",
+                        debug_item_index,
+                        ":",
+                        repr(debug_item),
+                    )
 
-#--------------Debug---------------
-                print("========== PARSED DEVICE DATA ==========")
-                print("group.code:", repr(group.code))
-                print("items:", repr(items))
-                print("group_can_add:", group_can_add)
-                print("group_can_edit:", group_can_edit)
-                print("========================================") 
-#-------------End-Debug------------
-
+                print("=================================================")
 
                 if not items:
-                    continue
+                    continue                
 
                 # -------------------------------------------------
                 # Existing items require can_edit
@@ -2624,7 +3280,99 @@ class DynamicFormService:
                 # Persist non-device repeatable groups
                 # -------------------------------------------------
 
-                current_data[group.code] = items
+                previous_items = current_data.get(
+                    group.code,
+                    [],
+                )
+
+                if not isinstance(previous_items, list):
+                    previous_items = []
+
+                # ---------------------------------------------
+                # Build field-level permission map
+                # ---------------------------------------------
+
+                field_permissions = {}
+
+                for field in group.fields.filter(
+                    is_active=True,
+                ):
+
+                    access_rules = field.access_rules.filter(
+                        step=step,
+                    )
+
+                    user_rule = access_rules.filter(
+                        user=user,
+                    ).first()
+
+                    if user_rule:
+
+                        field_permissions[field.code] = (
+                            user_rule.can_edit
+                        )
+
+                    else:
+
+                        field_permissions[field.code] = (
+                            access_rules
+                            .filter(
+                                role__in=roles,
+                                user__isnull=True,
+                                can_edit=True,
+                            )
+                            .exists()
+                        )
+
+                # ---------------------------------------------
+                # Existing items are used to preserve fields
+                # that the current user cannot edit.
+                # ---------------------------------------------
+
+                saved_items = []
+
+                for index, item in enumerate(items):
+
+                    if not isinstance(item, dict):
+                        continue
+
+                    previous_item = (
+                        previous_items[index]
+                        if index < len(previous_items)
+                        and isinstance(previous_items[index], dict)
+                        else {}
+                    )
+
+                    saved_item = {}
+
+                    for field in group.fields.filter(
+                        is_active=True,
+                    ):
+
+                        field_code = field.code
+
+                        if field_permissions.get(
+                            field_code,
+                            False,
+                        ):
+
+                            saved_item[field_code] = item.get(
+                                field_code,
+                                "",
+                            )
+
+                        else:
+
+                            saved_item[field_code] = previous_item.get(
+                                field_code,
+                                "",
+                            )
+
+                    saved_items.append(
+                        saved_item
+                    )
+
+                current_data[group.code] = saved_items
         # -------------------------------------------------
         # 5. Persist FormData
         # -------------------------------------------------

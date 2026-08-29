@@ -378,14 +378,23 @@
                                                 ذخیره
                                             </button>
 
-                                            <button
-                                                type="submit"
-                                                class="df-button df-button-danger df-device-delete"
-                                                formaction="{% url 'operator_panel:delete_device' instance.pk group.group.code item.instance_device_id %}"
-                                                formmethod="post"
-                                            >
-                                                حذف
-                                            </button>
+                                            {% if item.instance_device_id %}
+                                                <button
+                                                    type="submit"
+                                                    class="df-button df-button-danger df-device-delete"
+                                                    formaction="{% url 'operator_panel:delete_device' instance.pk group.group.code item.instance_device_id %}"
+                                                    formmethod="post"
+                                                >
+                                                    حذف
+                                                </button>
+                                            {% else %}
+                                                <button
+                                                    type="button"
+                                                    class="df-button df-button-danger df-device-delete"
+                                                >
+                                                    حذف
+                                                </button>
+                                            {% endif %}
 
                                         {% endif %}
 

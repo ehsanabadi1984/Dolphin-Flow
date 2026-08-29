@@ -141,6 +141,24 @@ def dashboard(request):
 def workflow_instance(request, instance_id):
     """
     Display and save a workflow instance form.
+
+    Form lifecycle:
+
+        Initial state
+            ↓
+        Editable
+            ↓
+        Save
+            ↓
+        Read-only
+            ↓
+        Edit
+            ↓
+        Editable
+            ↓
+        Submit
+            ↓
+        Locked
     """
 
     instance = get_object_or_404(
@@ -158,12 +176,37 @@ def workflow_instance(request, instance_id):
         step=instance.current_step,
     )
 
-    if request.method == "POST":
-        try:
+    # =========================================================
+    # EDIT MODE
+    # =========================================================
+    #
+    # Edit is an explicit action.
+    #
+    # We intentionally do NOT infer edit_mode from the existence
+    # of saved data.
+    #
+    # Therefore:
+    #
+    #   Save  -> readonly
+    #   Edit  -> editable
+    #
+    # =========================================================
 
-            print("========== DEVICE POST DEBUG ==========")
-            print(request.POST)
-            print("========================================")
+    edit_mode = (
+        request.GET.get("edit") == "1"
+    )
+
+    # =========================================================
+    # POST
+    # =========================================================
+
+    if request.method == "POST":
+
+        # -----------------------------------------------------
+        # Save
+        # -----------------------------------------------------
+
+        try:
 
             DynamicFormService.save_form_for_step(
                 instance=instance,
@@ -172,56 +215,95 @@ def workflow_instance(request, instance_id):
             )
 
         except ValidationError as exc:
-            print("========== POST DEVICE DATA ==========")
 
-            for key, value in request.POST.items():
-                if "_" in key:
-                    print("POST:", key, "=", value)
+            # -------------------------------------------------
+            # Validation failed
+            #
+            # Keep the operator in edit mode and rebuild the
+            # form from submitted POST data so the entered
+            # values are not lost.
+            # -------------------------------------------------
 
-            print("======================================")
             form_context = (
                 DynamicFormService.get_form_for_step(
                     instance=instance,
                     user=request.user,
                     submitted_data=request.POST,
+                    edit_mode=True,
                 )
             )
 
-            # normal fields
+            # -------------------------------------------------
+            # Normal fields
+            # -------------------------------------------------
+
             for section in form_context["sections"]:
+
                 for item in section["fields"]:
+
                     if item["field"].code in request.POST:
+
                         item["value"] = request.POST.get(
                             item["field"].code,
                             "",
                         )
 
-            # non-device repeatable groups
+            # -------------------------------------------------
+            # Non-device repeatable groups
+            # -------------------------------------------------
+
             for section in form_context["sections"]:
+
                 for group in section["repeatable_groups"]:
-                    if group["group"].group_type == "DEVICE":
+
+                    if (
+                        group["group"].group_type
+                        == "DEVICE"
+                    ):
                         continue
 
                     group_code = group["group"].code
 
-                    items = DynamicFormService._parse_repeatable_data(
-                        submitted_data=request.POST,
-                        group_code=group_code,
+                    items = (
+                        DynamicFormService
+                        ._parse_repeatable_data(
+                            submitted_data=request.POST,
+                            group_code=group_code,
+                        )
                     )
 
                     for index, raw_item in enumerate(items):
+
                         if index >= len(group["items"]):
                             break
 
                         for item_field in group["items"][index]["fields"]:
-                            field_code = item_field["field"].code
+
+                            field_code = (
+                                item_field["field"].code
+                            )
 
                             if field_code in raw_item:
-                                item_field["value"] = raw_item[field_code]
 
-            edit_mode = True
-            validation_errors = getattr(exc, "messages", [])
-            print("VALIDATION_ERRORS:", repr(validation_errors))
+                                item_field["value"] = (
+                                    raw_item[field_code]
+                                )
+
+            # -------------------------------------------------
+            # Validation errors
+            # -------------------------------------------------
+
+            validation_errors = getattr(
+                exc,
+                "messages",
+                [],
+            )
+
+            print(
+                "VALIDATION_ERRORS:",
+                repr(validation_errors),
+            )
+
             transitions = (
                 WorkflowAuthorizationService
                 .get_allowed_transitions(
@@ -230,6 +312,11 @@ def workflow_instance(request, instance_id):
                     from_step=instance.current_step,
                 )
             )
+
+            # Validation failure means the form must remain
+            # editable so the operator can correct it.
+            edit_mode = True
+
             return render(
                 request,
                 "operator_panel/workflow_instance.html",
@@ -244,10 +331,28 @@ def workflow_instance(request, instance_id):
                 status=400,
             )
 
+        # -----------------------------------------------------
+        # Successful Save
+        # -----------------------------------------------------
+        #
+        # IMPORTANT:
+        #
+        # A successful Save does NOT mean Submit.
+        #
+        # The data is saved as Draft/working data, but the UI
+        # becomes read-only.
+        #
+        # The operator must explicitly press Edit to continue.
+        # -----------------------------------------------------
+
         return redirect(
             "operator_panel:workflow_instance",
             instance_id=instance.pk,
         )
+
+    # =========================================================
+    # GET
+    # =========================================================
 
     transitions = (
         WorkflowAuthorizationService
@@ -258,12 +363,10 @@ def workflow_instance(request, instance_id):
         )
     )
 
-    dynamic_form = (
-        DynamicFormService.get_form_for_step(
-            instance=instance,
-            user=request.user,
-        )
-    )
+    # ---------------------------------------------------------
+    # Current step execution
+    # ---------------------------------------------------------
+
     current_step_execution = (
         instance.step_executions
         .filter(
@@ -273,6 +376,19 @@ def workflow_instance(request, instance_id):
         .first()
     )
 
+    # ---------------------------------------------------------
+    # Determine whether current step is submitted
+    # ---------------------------------------------------------
+
+    is_submitted = (
+        current_step_execution is not None
+        and current_step_execution.is_submitted
+    )
+
+    # ---------------------------------------------------------
+    # Determine whether data has already been saved
+    # ---------------------------------------------------------
+
     form_data = (
         FormData.objects
         .filter(
@@ -281,22 +397,74 @@ def workflow_instance(request, instance_id):
         .first()
     )
 
-    has_saved_data = (
+    has_form_data = (
         form_data is not None
         and bool(form_data.data)
     )
 
-    if current_step_execution and current_step_execution.is_submitted:
-        # مرحله فعلی Submit شده → کاملاً قفل
+    has_device_data = (
+        InstanceDevice.objects
+        .filter(
+            instance=instance,
+            is_active=True,
+        )
+        .exists()
+    )
+
+    has_saved_data = (
+        has_form_data
+        or has_device_data
+    )
+    # =========================================================
+    # EDIT MODE DECISION
+    # =========================================================
+   
+    if is_submitted:
+
         edit_mode = False
 
-    elif has_saved_data:
-        # Save شده ولی Submit نشده 
+    elif request.GET.get("edit") == "1":
+
         edit_mode = True
 
+    elif has_saved_data:
+
+        # -----------------------------------------------------
+        # Saved but not submitted.
+        #
+        # IMPORTANT:
+        # Do NOT automatically enter edit mode.
+        # -----------------------------------------------------
+
+        edit_mode = False
+
     else:
-        # هنوز چیزی Save نشده → فرم از ابتدا قابل ویرایش است
+
+        # -----------------------------------------------------
+        # First visit.
+        #
+        # Nothing has been saved yet, so the form is naturally
+        # editable.
+        # -----------------------------------------------------
+
         edit_mode = True
+
+    # =========================================================
+    # BUILD DYNAMIC FORM
+    # =========================================================
+
+    dynamic_form = (
+        DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=request.user,
+            edit_mode=edit_mode,
+        )
+    )
+
+
+    # =========================================================
+    # FINAL CONTEXT
+    # =========================================================
 
     return render(
         request,
@@ -307,9 +475,9 @@ def workflow_instance(request, instance_id):
             "dynamic_form": dynamic_form,
             "edit_mode": edit_mode,
             "current_step_execution": current_step_execution,
+            "has_saved_data": has_saved_data,
         },
     )
-
 
 def _require_device_group_edit_permission(*, instance, user, group_code):
     current_execution = (
