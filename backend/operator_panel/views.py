@@ -172,17 +172,56 @@ def workflow_instance(request, instance_id):
             )
 
         except ValidationError as exc:
-            print("========== VALIDATION ERROR ==========")
-            print("ERROR:", repr(exc))
-            print("MESSAGE:", str(exc))
+            print("========== POST DEVICE DATA ==========")
+
+            for key, value in request.POST.items():
+                if "_" in key:
+                    print("POST:", key, "=", value)
+
             print("======================================")
             form_context = (
                 DynamicFormService.get_form_for_step(
                     instance=instance,
                     user=request.user,
+                    submitted_data=request.POST,
                 )
             )
 
+            # normal fields
+            for section in form_context["sections"]:
+                for item in section["fields"]:
+                    if item["field"].code in request.POST:
+                        item["value"] = request.POST.get(
+                            item["field"].code,
+                            "",
+                        )
+
+            # non-device repeatable groups
+            for section in form_context["sections"]:
+                for group in section["repeatable_groups"]:
+                    if group["group"].group_type == "DEVICE":
+                        continue
+
+                    group_code = group["group"].code
+
+                    items = DynamicFormService._parse_repeatable_data(
+                        submitted_data=request.POST,
+                        group_code=group_code,
+                    )
+
+                    for index, raw_item in enumerate(items):
+                        if index >= len(group["items"]):
+                            break
+
+                        for item_field in group["items"][index]["fields"]:
+                            field_code = item_field["field"].code
+
+                            if field_code in raw_item:
+                                item_field["value"] = raw_item[field_code]
+
+            edit_mode = True
+            validation_errors = getattr(exc, "messages", [])
+            print("VALIDATION_ERRORS:", repr(validation_errors))
             transitions = (
                 WorkflowAuthorizationService
                 .get_allowed_transitions(
@@ -199,6 +238,8 @@ def workflow_instance(request, instance_id):
                     "transitions": transitions,
                     "dynamic_form": form_context,
                     "error": str(exc),
+                    "edit_mode": edit_mode,
+                    "validation_errors": validation_errors,
                 },
                 status=400,
             )

@@ -754,12 +754,33 @@ const submitNewDevice = (modal, groupCode) => {
         const input =
             field.cloneNode(true);
 
+        input.disabled = false;
+
         input.removeAttribute(
             "data-device-modal-field"
         );
 
         input.name =
             `${groupCode}_${newIndex}_${fieldCode}`;
+
+        /*
+        * Preserve the value selected/entered
+        * in the modal.
+        */
+        if (field.tagName === "SELECT") {
+
+            input.value = field.value;
+
+        } else if (field.type === "checkbox") {
+
+            input.checked = field.checked;
+
+        } else {
+
+            input.value = field.value;
+
+        }
+
 
         input.classList.add(
             "df-device-generated-field"
@@ -1985,5 +2006,145 @@ document.addEventListener("click", (event) => {
             index: newIndex,
         }
     );
+/*-------------------------------------- */
+
+
+const validateMainWorkflowForm = (form) => {
+
+    const errorScript =
+        document.getElementById("validation-errors");
+
+    if (!errorScript) {
+        return true;
+    }
+
+    let errors = [];
+
+    try {
+        errors = JSON.parse(
+            errorScript.textContent || "[]"
+        );
+    } catch (error) {
+        console.error(
+            "Unable to parse validation errors:",
+            error
+        );
+
+        return true;
+    }
+
+    if (!Array.isArray(errors) || !errors.length) {
+        return true;
+    }
+
+    let firstError = null;
+
+    errors.forEach((errorData) => {
+
+        if (
+            !errorData ||
+            errorData.type !== "field"
+        ) {
+            return;
+        }
+
+        const fieldCode =
+            errorData.code;
+
+        const wrapper =
+            form.querySelector(
+                `[data-field-code="${CSS.escape(fieldCode)}"]`
+            );
+
+        if (!wrapper) {
+            return;
+        }
+
+        const field =
+            wrapper.querySelector(
+                `#field-${CSS.escape(fieldCode)}`
+            );
+
+        if (!field) {
+            return;
+        }
+
+        wrapper.classList.add("has-error");
+
+        const errorElement =
+            wrapper.querySelector(
+                `[data-field-error="${CSS.escape(fieldCode)}"]`
+            );
+
+        if (errorElement) {
+            errorElement.textContent =
+                errorData.message ||
+                "این فیلد الزامی است.";
+
+            errorElement.hidden = false;
+        }
+
+        if (!firstError) {
+            firstError = field;
+        }
+    });
+
+    if (firstError) {
+        firstError.focus();
+        return false;
+    }
+
+    return true;
+};
+
+
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+
+        const form =
+            document.querySelector(
+                ".workflow-instance > form"
+            );
+
+        if (!form) {
+            return;
+        }
+
+        form.addEventListener(
+            "submit",
+            (event) => {
+
+                /*
+                 * Device row save/delete buttons must
+                 * keep their existing behavior.
+                 */
+                if (
+                    event.submitter &&
+                    (
+                        event.submitter.classList.contains(
+                            "df-device-save"
+                        ) ||
+                        event.submitter.classList.contains(
+                            "df-device-delete"
+                        )
+                    )
+                ) {
+                    return;
+                }
+
+                /*
+                 * Backend validation errors are displayed
+                 * after the POST returns.
+                 *
+                 * Client-side validation is handled separately
+                 * when there are no server errors.
+                 */
+            }
+        );
+    }
+);
+
+
 });
 });

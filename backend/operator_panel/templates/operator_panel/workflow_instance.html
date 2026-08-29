@@ -26,6 +26,7 @@
   >
 
     {% csrf_token %}
+        {{ validation_errors|json_script:"validation-errors" }}
 
     <section class="df-form">
 
@@ -60,7 +61,10 @@
 
             {% for item in section.fields %}
 
-              <div class="df-form-field">
+              <div
+                class="df-form-field"
+                data-field-code="{{ item.field.code }}"
+              >
 
                 <label for="field-{{ item.field.code }}">
 
@@ -164,6 +168,14 @@
 
                 {% endif %}
 
+                {% if item.field.is_required %}
+                  <div
+                    class="df-form-field-error"
+                    data-field-error="{{ item.field.code }}"
+                    hidden
+                  ></div>
+                {% endif %}
+
               </div>
 
             {% endfor %}
@@ -192,6 +204,13 @@
                             <p>{{ group.group.description }}</p>
                         {% endif %}
                     </div>
+
+<div style="background:red;color:white;padding:10px;">
+    submitted={{ dynamic_form.is_submitted }}
+    | can_add={{ group.can_add }}
+    | can_edit={{ group.can_edit }}
+    | items={{ group.items|length }}
+</div>
 
                     {% if not dynamic_form.is_submitted and group.can_add %}
                         <button
@@ -376,7 +395,7 @@
                                             >
                                                 ذخیره
                                             </button>
-
+                                            {% if item.instance_device_id %}
                                             <button
                                                 type="submit"
                                                 class="df-button df-button-danger df-device-delete"
@@ -385,7 +404,7 @@
                                             >
                                                 حذف
                                             </button>
-
+                                            {% endif %}
                                         {% endif %}
 
                                     </td>
@@ -639,142 +658,111 @@
 
                     <div class="df-device-modal-body">
 
-                      {# IMEI FIRST #}
+    {% for field_info in group.fields %}
 
-{% for field_info in group.fields %}
+        {% if field_info.can_edit %}
 
-    {% if field_info.can_edit and field_info.field.system_key == "IMEI" %}
-
-        <div
-            class="df-device-modal-field"
-            data-system-key="IMEI"
-        >
-
-            <label>
-                {{ field_info.field.label }}
-
-                {% if field_info.field.is_required %}
-                    <span>*</span>
-                {% endif %}
-            </label>
-
-            {% if field_info.field.help_text %}
-                <small>
-                    {{ field_info.field.help_text }}
-                </small>
-            {% endif %}
-
-            <input
-                type="text"
-                data-device-modal-field="{{ field_info.field.code }}"
-                data-field-code="{{ field_info.field.code }}"
-                data-system-key="IMEI"
+            <div
+                class="df-device-modal-field"
+                data-system-key="{{ field_info.field.system_key }}"
             >
 
-            <div class="df-device-modal-error"></div>
+                <label>
+                    {{ field_info.field.label }}
 
-        </div>
+                    {% if field_info.field.is_required %}
+                        <span>*</span>
+                    {% endif %}
+                </label>
 
-    {% endif %}
-
-{% endfor %}
-
-                        {% for field_info in group.fields %}
-
-    {% if field_info.can_edit and field_info.field.system_key != "IMEI" %}
-
-        <div
-            class="df-device-modal-field"
-            data-system-key="{{ field_info.field.system_key }}"
-        >
-
-            <label>
-                {{ field_info.field.label }}
-
-                {% if field_info.field.is_required %}
-                    <span>*</span>
+                {% if field_info.field.help_text %}
+                    <small>
+                        {{ field_info.field.help_text }}
+                    </small>
                 {% endif %}
-            </label>
 
-            {% if field_info.field.help_text %}
-                <small>
-                    {{ field_info.field.help_text }}
-                </small>
-            {% endif %}
+                {% if field_info.field.system_key == "IMEI" %}
 
-            {% if field_info.field.system_key == "DEVICE_TYPE" %}
+                    <input
+                        type="text"
+                        data-device-modal-field="{{ field_info.field.code }}"
+                        data-field-code="{{ field_info.field.code }}"
+                        data-system-key="IMEI"
+                    >
 
-                <select
-                    data-device-modal-field="{{ field_info.field.code }}"
-                    data-field-code="{{ field_info.field.code }}"
-                    data-system-key="DEVICE_TYPE"
-                >
-                    <option value="">---------</option>
+                {% elif field_info.field.system_key == "DEVICE_TYPE" %}
 
-                    {% for choice in field_info.device_types %}
-                        <option value="{{ choice.id }}">
-                            {{ choice.name }}
-                        </option>
-                    {% endfor %}
-                </select>
+                    <select
+                        data-device-modal-field="{{ field_info.field.code }}"
+                        data-field-code="{{ field_info.field.code }}"
+                        data-system-key="DEVICE_TYPE"
+                    >
+                        <option value="">---------</option>
 
-            {% elif field_info.field.system_key == "DEVICE_MODEL" %}
+                        {% for choice in field_info.device_types %}
+                            <option value="{{ choice.id }}">
+                                {{ choice.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
 
-                <select
-                    data-device-modal-field="{{ field_info.field.code }}"
-                    data-field-code="{{ field_info.field.code }}"
-                    data-system-key="DEVICE_MODEL"
-                >
-                    <option value="">---------</option>
+                {% elif field_info.field.system_key == "DEVICE_MODEL" %}
 
-                    {% for choice in field_info.device_models %}
-                        <option value="{{ choice.id }}">
-                            {{ choice.name }}
-                        </option>
-                    {% endfor %}
-                </select>
+                    <select
+                        data-device-modal-field="{{ field_info.field.code }}"
+                        data-field-code="{{ field_info.field.code }}"
+                        data-system-key="DEVICE_MODEL"
+                    >
+                        <option value="">---------</option>
 
-            {% elif field_info.field.field_type == "TEXTAREA" %}
+                        {% for choice in field_info.device_models %}
+                            <option value="{{ choice.id }}">
+                                {{ choice.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
 
-                <textarea
-                    data-device-modal-field="{{ field_info.field.code }}"
-                    data-field-code="{{ field_info.field.code }}"
-                ></textarea>
+                {% elif field_info.field.field_type == "TEXTAREA" %}
 
-            {% elif field_info.field.field_type == "SELECT" %}
+                    <textarea
+                        data-device-modal-field="{{ field_info.field.code }}"
+                        data-field-code="{{ field_info.field.code }}"
+                    ></textarea>
 
-                <select
-                    data-device-modal-field="{{ field_info.field.code }}"
-                    data-field-code="{{ field_info.field.code }}"
-                >
-                    <option value="">---------</option>
+                {% elif field_info.field.field_type == "SELECT" %}
 
-                    {% for choice in field_info.choices %}
-                        <option value="{{ choice.value }}">
-                            {{ choice.label }}
-                        </option>
-                    {% endfor %}
-                </select>
+                    <select
+                        data-device-modal-field="{{ field_info.field.code }}"
+                        data-field-code="{{ field_info.field.code }}"
+                    >
+                        <option value="">---------</option>
 
-            {% else %}
+                        {% for choice in field_info.choices %}
+                            <option value="{{ choice.value }}">
+                                {{ choice.label }}
+                            </option>
+                        {% endfor %}
+                    </select>
 
-                <input
-                    type="{% if field_info.field.field_type == 'NUMBER' %}number{% elif field_info.field.field_type == 'DATE' %}date{% elif field_info.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
-                    data-device-modal-field="{{ field_info.field.code }}"
-                    data-field-code="{{ field_info.field.code }}"
-                >
+                {% else %}
 
-            {% endif %}
+                    <input
+                        type="{% if field_info.field.field_type == 'NUMBER' %}number{% elif field_info.field.field_type == 'DATE' %}date{% elif field_info.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
+                        data-device-modal-field="{{ field_info.field.code }}"
+                        data-field-code="{{ field_info.field.code }}"
+                    >
 
-            <div class="df-device-modal-error"></div>
+                {% endif %}
 
-        </div>
+                <div class="df-device-modal-error"></div>
 
-    {% endif %}
+            </div>
 
-{% endfor %}
+        {% endif %}
 
-                    </div>
+    {% endfor %}
+
+</div>
 
                     <div class="df-device-modal-footer">
 
