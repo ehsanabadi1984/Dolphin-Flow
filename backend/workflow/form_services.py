@@ -924,14 +924,6 @@ class DynamicFormService:
 
                 # User has no permission to see this group.
                 #----------Debug-----------
-                print(
-                    "GROUP ACCESS RESULT:",
-                    group.code,
-                    "can_view=", group_can_view,
-                    "can_edit=", group_can_edit,
-                    "can_add=", group_can_add,
-                )
-
                 #-------End-Debug----------
                 if not group_can_view:
                     print("!!! GROUP SKIPPED: NO VIEW ACCESS !!!", group.code)
@@ -972,6 +964,9 @@ class DynamicFormService:
                             can_edit=True,
                         ).exists()
 
+                    #---------------Debug-------------
+                    #------------End-Debug------------
+
                     if not can_view:
                         continue
 
@@ -1008,44 +1003,6 @@ class DynamicFormService:
 
                     group_fields.append(field_data)
 #------------------------Debug-----------------------
-                    print(
-                        "GROUP FIELDS RESULT:",
-                        group.code,
-                        [
-                            (
-                                f["field"].id,
-                                f["field"].code,
-                                f["field"].label,
-                            )
-                            for f in group_fields
-                        ],
-                    )
-
-                    if not group_fields:
-                        print("!!! GROUP SKIPPED: NO VISIBLE FIELDS !!!", group.code)
-                        continue
-
-                    print(
-                        "FIELD ACCESS RESULT:",
-                        {
-                            "group": group.code,
-                            "field_id": field.id,
-                            "field_code": field.code,
-                            "label": field.label,
-                            "step": step.id,
-                            "roles": list(roles),
-                            "can_view": can_view,
-                            "can_edit": can_edit,
-                        }
-                    )
-
-                    if not can_view:
-                        print(
-                            "!!! FIELD SKIPPED: NO VIEW ACCESS !!!",
-                            field.id,
-                            field.code,
-                        )
-                        continue
 # --------------------End-Debug----------------------                    
                 if not group_fields:
                     continue
@@ -1055,11 +1012,6 @@ class DynamicFormService:
                 # Device groups use InstanceDevice
                 # as their source of truth.
                 #
-                print("========== REPEATABLE DEBUG ==========")
-                print("GROUP:", group.code)
-                print("GROUP TYPE:", group.group_type)
-                print("SUBMITTED DATA:", repr(submitted_data))
-                print("======================================")
 
                 if group.group_type == FormRepeatableGroup.GroupType.DEVICE:
                     instance_devices = (
@@ -1077,12 +1029,6 @@ class DynamicFormService:
                                 group_code=group.code,
                             )
                         )
-
-                    print("========== DEVICE SOURCE DEBUG ==========")
-                    print("submitted_data is None:", submitted_data is None)
-                    print("submitted_device_items:", repr(submitted_device_items))
-                    print("existing instance_devices:", list(instance_devices))
-                    print("=========================================")
 
                     items = []
 
@@ -1219,22 +1165,12 @@ class DynamicFormService:
                         instance_devices = []
 
                         #----------------Debug--------------
-                        print("========== FINAL DEVICE ITEMS ==========")
-                        print("items:", repr(items))
-                        print("len(items):", len(items))
-                        print("========================================")
                         #------------End-Debug--------------
 
                     else:
                         # No POST data → render saved devices from DB.
                         pass
                     #--------------Debug------------
-                    print("========== BEFORE SECOND DEVICE LOOP ==========")
-                    print("instance_devices:", list(instance_devices))
-                    print("items:", repr(items))
-                    print("len(items):", len(items))
-                    print("submitted_device_items:", repr(submitted_device_items))
-                    print("================================================")
                     #------------End-Debug----------
                     if submitted_data is not None and submitted_device_items:
                         for instance_device in instance_devices:
@@ -1508,148 +1444,78 @@ class DynamicFormService:
                             )
 
                                         
-                    else:
-                        raw_items = data.get(
-                            group.code,
-                            [],
-                        )
-                        print("NORMAL RAW ITEMS:", group.code, repr(raw_items))
-                        if not isinstance(raw_items, list):
-                            raw_items = []
+                else:
+                    raw_items = data.get(
+                        group.code,
+                        [],
+                    )
+                    print("NORMAL RAW ITEMS:", group.code, repr(raw_items))
+                    if not isinstance(raw_items, list):
+                        raw_items = []
 
-                        if not raw_items and group.group_type != FormRepeatableGroup.GroupType.DEVICE:
-                            raw_items = [
-                                {}
-                            ]
-                        print(
-                            "NORMAL RAW ITEMS AFTER DEFAULT:",
-                            group.code,
-                            repr(raw_items),
-                        )
-                        items = []
+                    if not raw_items and group.group_type != FormRepeatableGroup.GroupType.DEVICE:
+                        raw_items = [
+                            {}
+                        ]
+                    print(
+                        "NORMAL RAW ITEMS AFTER DEFAULT:",
+                        group.code,
+                        repr(raw_items),
+                    )
+                    items = []
 
-                        for raw_item in raw_items:
+                    for raw_item in raw_items:
 
-                            if not isinstance(raw_item, dict):
-                                continue
+                        if not isinstance(raw_item, dict):
+                            continue
 
-                            item_fields = []
+                        item_fields = []
 
-                            for field_info in group_fields:
+                        for field_info in group_fields:
 
-                                field = field_info["field"]
+                            field = field_info["field"]
 
-                                item_fields.append(
-                                    {
-                                        "field": field,
-                                        "can_edit": field_info["can_edit"],
-                                        "value": raw_item.get(
-                                            field.code,
-                                            "",
-                                        ),
-                                        "choices": (
-                                            DynamicFormService._get_field_choices(field)
-                                            if field.field_type == field.FieldType.SELECT
-                                            else []
-                                        ),
-                                    }
-                                )
-
-                            items.append(
+                            item_fields.append(
                                 {
-                                    "fields": item_fields,
+                                    "field": field,
+                                    "can_edit": field_info["can_edit"],
+                                    "value": raw_item.get(
+                                        field.code,
+                                        "",
+                                    ),
+                                    "choices": (
+                                        DynamicFormService._get_field_choices(field)
+                                        if field.field_type == field.FieldType.SELECT
+                                        else []
+                                    ),
                                 }
                             )
-                    #--------------Debug---------------
-                    print("========== REPEATABLE GROUP DEBUG ==========")
-                    print("GROUP:", group.code, group.name)
-                    print("GROUP TYPE:", group.group_type)
-                    print("group_can_view:", group_can_view)
-                    print("group_can_edit:", group_can_edit)
-                    print("group_can_add:", group_can_add)
 
-                    print(
-                        "GROUP FIELDS:",
-                        [
-                            (
-                                field_info["field"].id,
-                                field_info["field"].code,
-                                field_info["field"].label,
-                                field_info["can_edit"],
-                            )
-                            for field_info in group_fields
-                        ],
-                    )
-
-                    print("ITEMS:", repr(items))
-
-                    for item in items:
-                        print(
-                            "ITEM FIELDS:",
-                            [
-                                (
-                                    field_info["field"].id,
-                                    field_info["field"].code,
-                                    field_info["field"].label,
-                                    field_info.get("value"),
-                                    field_info.get("can_edit"),
-                                )
-                                for field_info in item.get("fields", [])
-                            ]
+                        items.append(
+                            {
+                                "fields": item_fields,
+                            }
                         )
-
-                    print("============================================")
-
-
-                    print(
-                        "FINAL NORMAL GROUP:",
-                        group.code,
-                        "items=",
-                        repr(items),
-                        "fields=",
-                        [
-                            (
-                                f["field"].id,
-                                f["field"].code,
-                                f["field"].label,
-                                f["can_edit"],
-                            )
-                            for f in group_fields
-                        ],
-                    )
+                    #--------------Debug---------------
                     #---------End-Debug----------------
-                    repeatable_groups.append(
-                        {
-                            "group": group,
-                            "fields": group_fields,
-                            "items": items,
-                            "has_editable_fields": group_has_editable_fields,
-                            "can_view": group_can_view,
-                            "can_edit": group_can_edit,
-                            "can_add": group_can_add,
-                        }
-                    )
+                repeatable_groups.append(
+                    {
+                        "group": group,
+                        "fields": group_fields,
+                        "items": items,
+                        "has_editable_fields": group_has_editable_fields,
+                        "can_view": group_can_view,
+                        "can_edit": group_can_edit,
+                        "can_add": group_can_add,
+                    }
+                )
+
+                    #------------------Debug--------------
+                    #---------------End-Debug-------------
 
             # -------------------------------------------------
             # Add section only when it contains something
             # -------------------------------------------------
-#--------------Debug--------------
-            print(
-                "========== SECTION RESULT ==========",
-                section.name,
-                [
-                    (
-                        rg["group"].code,
-                        rg["group"].name,
-                        rg["can_view"],
-                        rg["can_add"],
-                        len(rg["fields"]),
-                        len(rg["items"]),
-                    )
-                    for rg in repeatable_groups
-                ],
-            )
-#-----------End-Debug-------------
             if fields or repeatable_groups:
                 sections.append(
                     {
@@ -1669,30 +1535,6 @@ class DynamicFormService:
             for group in section["repeatable_groups"]
             for field_info in group["fields"]
         )
-
-#---------Debug-----------------
-        print(
-            "========== FINAL SECTIONS =========="
-        )
-
-        for section_data in sections:
-            print(
-                "SECTION:",
-                section_data["section"].name,
-                "REPEATABLE GROUPS:",
-                [
-                    (
-                        rg["group"].code,
-                        rg["group"].name,
-                        rg["can_view"],
-                        rg["can_add"],
-                        len(rg["fields"]),
-                        len(rg["items"]),
-                    )
-                    for rg in section_data["repeatable_groups"]
-                ],
-            )
-#------End-Debug----------------
 
         return {
             "form": form,
@@ -1888,11 +1730,58 @@ class DynamicFormService:
                     ).exists()
 
                 # ---------------------------------------------
-                # Hidden groups must not be validated
+                # Hidden group must not be validated
                 # ---------------------------------------------
 
                 if not group_can_view:
                     continue
+
+                # ---------------------------------------------
+                # Check field-level visibility
+                #
+                # A group is effectively visible only when
+                # at least one of its active fields is visible.
+                # ---------------------------------------------
+
+                group_has_visible_fields = False
+
+                for field in group.fields.filter(
+                    is_active=True,
+                ):
+                    access_rules = field.access_rules.filter(
+                        step=step,
+                    )
+
+                    user_rule = access_rules.filter(
+                        user=user,
+                    ).first()
+
+                    if user_rule:
+                        field_can_view = user_rule.can_view
+
+                    else:
+                        field_can_view = access_rules.filter(
+                            role__in=roles,
+                            user__isnull=True,
+                            can_view=True,
+                        ).exists()
+
+                    if field_can_view:
+                        group_has_visible_fields = True
+                        break
+
+                # ---------------------------------------------
+                # Group has no visible fields for this user.
+                # Therefore it must not participate in
+                # required validation.
+                # ---------------------------------------------
+
+                if not group_has_visible_fields:
+                    continue
+
+                # ---------------------------------------------
+                # Validate required group
+                # ---------------------------------------------
 
                 items = DynamicFormService._parse_repeatable_data(
                     submitted_data=submitted_data,
@@ -1911,9 +1800,6 @@ class DynamicFormService:
                             ),
                         }
                     )
-
-        if required_errors:
-            raise ValidationError(required_errors)
 
         form_data, _ = FormData.objects.get_or_create(
                     instance=instance,
