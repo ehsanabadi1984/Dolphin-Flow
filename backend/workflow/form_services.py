@@ -970,7 +970,12 @@ class DynamicFormService:
                         and edit_mode
                         and not is_submitted
                     )
-                    if effective_can_edit:
+                    if (
+                        can_view
+                        and can_edit
+                        and group_can_edit
+                        and not is_submitted
+                    ):
                         group_has_editable_fields = True
 
                     field_data = {
@@ -2095,10 +2100,9 @@ class DynamicFormService:
             for section in sections
             for item in section["fields"]
         ) or any(
-            field_info["can_edit"]
+            group["has_editable_fields"]
             for section in sections
             for group in section["repeatable_groups"]
-            for field_info in group["fields"]
         )
 
         return {
