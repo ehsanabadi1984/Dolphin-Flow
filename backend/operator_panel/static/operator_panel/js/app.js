@@ -1035,19 +1035,10 @@ const submitNewDevice = (modal, groupCode) => {
             )
         ) {
 
-            const id =
-                row.querySelector(
-                    'input[name$="_instance_device_id"]'
-                )?.value;
-
-            if (!id) {
-                row.remove();
-            } else {
                 setDeviceRowEditing(
                     row,
                     false
                 );
-            }
 
             return;
         }
@@ -1058,6 +1049,34 @@ const submitNewDevice = (modal, groupCode) => {
             )
         ) {
 
+            const id =
+                row.querySelector(
+                    'input[name$="_instance_device_id"]'
+                )?.value;
+
+            /*
+            * Unsaved device:
+            * The row does not have an InstanceDevice yet.
+            * Remove it only from the UI.
+            */
+            if (!id) {
+
+                if (
+                    window.confirm(
+                        "آیا از حذف این دستگاه مطمئن هستید؟"
+                    )
+                ) {
+                    row.remove();
+                }
+
+                return;
+            }
+
+            /*
+            * Existing device:
+            * Allow the normal form submission to continue.
+            * The button's formaction points to delete_device.
+            */
             if (
                 !window.confirm(
                     "آیا از حذف این دستگاه از فرآیند مطمئن هستید؟"
@@ -1066,6 +1085,7 @@ const submitNewDevice = (modal, groupCode) => {
                 event.preventDefault();
             }
 
+            return;
         }
 
         });
@@ -2006,8 +2026,8 @@ document.addEventListener("click", (event) => {
             index: newIndex,
         }
     );
+});
 /*-------------------------------------- */
-
 
 const validateMainWorkflowForm = (form) => {
 
@@ -2098,53 +2118,38 @@ const validateMainWorkflowForm = (form) => {
 };
 
 
-document.addEventListener(
-    "DOMContentLoaded",
-    () => {
+const form =
+    document.querySelector(
+        ".workflow-instance > form"
+    );
 
-        const form =
-            document.querySelector(
-                ".workflow-instance > form"
-            );
+if (form) {
 
-        if (!form) {
-            return;
-        }
+    validateMainWorkflowForm(form);
 
-        form.addEventListener(
-            "submit",
-            (event) => {
+    form.addEventListener(
+        "submit",
+        (event) => {
 
-                /*
-                 * Device row save/delete buttons must
-                 * keep their existing behavior.
-                 */
-                if (
-                    event.submitter &&
-                    (
-                        event.submitter.classList.contains(
-                            "df-device-save"
-                        ) ||
-                        event.submitter.classList.contains(
-                            "df-device-delete"
-                        )
+            /*
+             * Device row save/delete buttons must
+             * keep their existing behavior.
+             */
+            if (
+                event.submitter &&
+                (
+                    event.submitter.classList.contains(
+                        "df-device-save"
+                    ) ||
+                    event.submitter.classList.contains(
+                        "df-device-delete"
                     )
-                ) {
-                    return;
-                }
-
-                /*
-                 * Backend validation errors are displayed
-                 * after the POST returns.
-                 *
-                 * Client-side validation is handled separately
-                 * when there are no server errors.
-                 */
+                )
+            ) {
+                return;
             }
-        );
-    }
-);
+        }
+    );
+}
 
-
-});
 });

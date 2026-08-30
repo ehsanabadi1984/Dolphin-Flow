@@ -295,7 +295,7 @@ def workflow_instance(request, instance_id):
 
             validation_errors = getattr(
                 exc,
-                "messages",
+                "validation_errors",
                 [],
             )
 

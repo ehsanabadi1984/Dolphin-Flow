@@ -60,7 +60,10 @@
 
             {% for item in section.fields %}
 
-              <div class="df-form-field">
+              <div
+                class="df-form-field"
+                data-field-code="{{ item.field.code }}"
+            >
 
                 <label for="field-{{ item.field.code }}">
 
@@ -163,6 +166,12 @@
                   </div>
 
                 {% endif %}
+
+                <div
+                    class="df-field-error"
+                    data-field-error="{{ item.field.code }}"
+                    hidden
+                ></div>
 
               </div>
 
@@ -465,9 +474,12 @@
 
                     {% for item_field in item.fields %}
 
-                      <div class="df-form-field">
+                      <div
+                          class="df-form-field"
+                          data-field-code="{{ item.field.code }}"
+                      >
 
-                        <label>
+                        <label for="field-{{ item.field.code }}">
 
                           {{ item_field.field.label }}
 
@@ -975,6 +987,7 @@
           پاک کردن اطلاعات
         </button>
       </form>
+
     {% endif %}
 
   </div>
@@ -986,7 +999,19 @@
   
 {% if error %}
   <div class="error">{{ error }}</div>
-  {% endif %} {% if instance.status == "ACTIVE" %}
+  {% endif %}
+
+  {% if validation_errors %}
+  {{ validation_errors|json_script:"validation-errors" }}
+{% endif %}
+
+  
+  <pre style="direction:ltr; text-align:left; background:#222; color:#fff; padding:20px;">
+VALIDATION DEBUG:
+{{ validation_errors|default:"NO VALIDATION_ERRORS" }}
+</pre>
+  
+  {% if instance.status == "ACTIVE" %}
 
   <h2>Transitionهای قابل اجرا</h2>
   <section class="df-workflow-actions">
@@ -1015,7 +1040,9 @@
 
     <p>هیچ Transition فعالی برای این مرحله وجود ندارد.</p>
 
-    {% endif %} {% else %}
+    {% endif %} 
+
+    {% else %}
 
     <p>این فرآیند فعال نیست.</p>
 

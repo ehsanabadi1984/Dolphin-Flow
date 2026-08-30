@@ -1641,3 +1641,19 @@ body.df-modal-open {
 .df-device-modal-close:hover {
     background: rgba(255,255,255,.10);
 }
+
+.df-form-field.has-error input,
+.df-form-field.has-error textarea,
+.df-form-field.has-error select {
+    border-color: #dc3545;
+}
+
+.df-field-error {
+    margin-top: 6px;
+    color: #dc3545;
+    font-size: 0.85rem;
+}
+
+.df-form-field.has-error .df-field-error {
+    display: block;
+}

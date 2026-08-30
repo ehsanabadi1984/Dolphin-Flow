@@ -2454,16 +2454,21 @@ class DynamicFormService:
                                         "الزامی است."
                                     ),
                                 }
-                            )
-        print("========== REQUIRED VALIDATION RESULT ==========")
-        print("REQUIRED ERRORS:", repr(required_errors))
-        print("=================================================")        
+                            )        
         # -------------------------------------------------
         # Stop immediately if validation failed
         # -------------------------------------------------
 
         if required_errors:
-            raise ValidationError(required_errors)
+            validation_error = ValidationError(
+                "Validation failed."
+            )
+
+            validation_error.validation_errors = (
+                required_errors
+            )
+
+            raise validation_error
 
         form_data, _ = FormData.objects.get_or_create(
                     instance=instance,
