@@ -214,6 +214,16 @@
                     {% endif %}
                 </div>
 
+                
+
+                  {% for validation_error in validation_errors %}
+                      {% if validation_error.type == "device_group" and validation_error.group_code == group.group.code %}
+                          <div class="df-device-group-error">
+                              {{ validation_error.message }}
+                          </div>
+                      {% endif %}
+                  {% endfor %}
+
                 <div class="df-device-table-wrapper">
 
                     <table class="df-device-table">
@@ -455,6 +465,15 @@
                   </button>
                 {% endif %}
               </div>
+              {% for validation_error in validation_errors %}
+              {% if validation_error.type == "group" and validation_error.code == group.group.code %}
+                <div class="df-repeatable-validation-error">
+                  <span class="df-repeatable-validation-error-icon">!</span>
+                  <span>{{ validation_error.message }}</span>
+                </div>
+              {% endif %}
+            {% endfor %}
+
 
               <div
                 class="df-repeatable-items"
@@ -467,6 +486,8 @@
 
                   {% for item in group.items %}
 
+                  {% with item_index=forloop.counter0 %}
+
                     <div
                       class="df-repeatable-item"
                       data-repeatable-item
@@ -476,10 +497,10 @@
 
                       <div
                           class="df-form-field"
-                          data-field-code="{{ item.field.code }}"
+                          data-field-code="{{ item_field.field.code }}"
                       >
 
-                        <label for="field-{{ item.field.code }}">
+                        <label>
 
                           {{ item_field.field.label }}
 
@@ -570,12 +591,32 @@
                           </div>
 
                         {% endif %}
+                        
+                        {% for validation_error in validation_errors %}
 
+                            {% if validation_error.type == "repeatable_field" %}
+                                {% if validation_error.group_code == group.group.code %}
+                                    {% if validation_error.field_code == item_field.field.code %}
+                                        {% if validation_error.item_index == item_index %}
+
+                                            <div class="df-repeatable-field-error">
+                                                <span class="df-repeatable-field-error-icon">!</span>
+                                                <span>{{ validation_error.message }}</span>
+                                            </div>
+
+                                        {% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            {% endif %}
+
+                        {% endfor %}
                       </div>
 
                     {% endfor %}
                     
                   </div>
+
+                  {% endwith %}
 
                 {% endfor %}
 
@@ -825,7 +866,7 @@
 
     {% endfor %}
 {% endfor %}
-
+{% if not validation_errors %}
 <section class="df-saved-data">
 
   <div class="df-saved-data-header">
@@ -954,6 +995,7 @@
   {% endfor %}
 
 </section>
+{% endif %}
 
   {% if current_step_execution and not current_step_execution.is_submitted %}
 
@@ -1004,12 +1046,6 @@
   {% if validation_errors %}
   {{ validation_errors|json_script:"validation-errors" }}
 {% endif %}
-
-  
-  <pre style="direction:ltr; text-align:left; background:#222; color:#fff; padding:20px;">
-VALIDATION DEBUG:
-{{ validation_errors|default:"NO VALIDATION_ERRORS" }}
-</pre>
   
   {% if instance.status == "ACTIVE" %}
 

@@ -982,6 +982,12 @@ const submitNewDevice = (modal, groupCode) => {
         /*
          * MODAL SUBMIT
          */
+
+        console.log(
+            "DEVICE MODAL CLICK:",
+            event.target,
+            event.target.closest(".df-device-modal-submit")
+        );
         const modalSubmit =
             event.target.closest(
                 ".df-device-modal-submit"

@@ -2332,6 +2332,33 @@ class DynamicFormService:
                 )
 
                 # -------------------------------------------------
+                # DEVICE group
+                #
+                # At least one device is mandatory.
+                # Device field validation is handled separately
+                # inside the device modal and must not be duplicated here.
+                # -------------------------------------------------
+
+                if group.group_type == FormRepeatableGroup.GroupType.DEVICE:
+
+                    if not items:
+                        required_errors.append(
+                            {
+                                "type": "device_group",
+                                "group_code": group.code,
+                                "group_label": group.name,
+                                "message": (
+                                    f"حداقل یک دستگاه باید در گروه «{group.name}» "
+                                    "اضافه شود."
+                                ),
+                            }
+                        )
+
+                    # Do not perform normal repeatable-field validation
+                    # for DEVICE groups here.
+                    continue
+
+                # -------------------------------------------------
                 # Required group validation
                 # -------------------------------------------------
 
@@ -2581,22 +2608,6 @@ class DynamicFormService:
                     submitted_data=submitted_data,
                     group_code=group.code,
                 )
-
-                print("========== REPEATABLE VALIDATION DEBUG ==========")
-                print("GROUP:", group.code)
-                print("GROUP REQUIRED:", group.is_required)
-                print("GROUP CAN VIEW:", group_can_view)
-                print("PARSED ITEMS:", repr(items))
-
-                for debug_item_index, debug_item in enumerate(items):
-                    print(
-                        "ITEM",
-                        debug_item_index,
-                        ":",
-                        repr(debug_item),
-                    )
-
-                print("=================================================")
 
                 if not items:
                     continue                
