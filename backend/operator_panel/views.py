@@ -486,9 +486,7 @@ def _require_device_group_edit_permission(*, instance, user, group_code):
         .order_by("-performed_at")
         .first()
     )
-    if instance.status != WorkflowInstance.Status.ACTIVE or (
-        current_execution and current_execution.is_submitted
-    ):
+    if current_execution and current_execution.is_submitted:
         raise ValidationError("این مرحله دیگر قابل ویرایش نیست.")
 
     group = get_object_or_404(

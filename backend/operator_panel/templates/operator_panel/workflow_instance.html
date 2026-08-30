@@ -997,15 +997,12 @@
 </section>
 {% endif %}
 
-  {% if current_step_execution and not current_step_execution.is_submitted %}
-
-    <div class="df-form-actions">
-
-{% if instance.status == "ACTIVE" and current_step_execution and not current_step_execution.is_submitted %}
+{% if not dynamic_form.is_submitted %}
 
   <div class="df-form-actions">
 
-{% if dynamic_form.has_saved_data and dynamic_form.has_editable_fields and not edit_mode and not dynamic_form.is_submitted %}      <a
+    {% if dynamic_form.has_saved_data and dynamic_form.has_editable_fields and not edit_mode %}
+      <a
         href="?edit=1"
         class="df-button"
       >
@@ -1013,8 +1010,8 @@
       </a>
     {% endif %}
 
-    
-{% if dynamic_form.has_saved_data and dynamic_form.has_editable_fields and not dynamic_form.is_submitted %}      <form
+    {% if dynamic_form.has_saved_data and dynamic_form.has_editable_fields %}
+      <form
         method="post"
         action="{% url 'operator_panel:clear_form_data' instance.pk %}"
         style="display: inline"
@@ -1029,15 +1026,16 @@
           پاک کردن اطلاعات
         </button>
       </form>
-
     {% endif %}
 
   </div>
 
-{% endif %}    </div>
+{% endif %}
+
+
 
   {% endif %}
-{% endif %}
+
   
 {% if error %}
   <div class="error">{{ error }}</div>

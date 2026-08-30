@@ -501,26 +501,6 @@ class DynamicFormService:
                 "این Workflow مرحله فعلی ندارد."
             )
 
-        current_step_execution = (
-            instance.step_executions
-            .select_for_update()
-            .filter(
-                workflow_step=step,
-            )
-            .order_by("-performed_at")
-            .first()
-        )
-        
-        if current_step_execution is None:
-            raise ValidationError(
-                "اجرای مرحله فعلی این Workflow پیدا نشد."
-            )
-
-        if current_step_execution.is_submitted:
-            raise ValidationError(
-                "فرم این مرحله قبلاً ارسال شده است."
-            )
-
         form_data = (
             FormData.objects
             .filter(instance=instance)
@@ -536,7 +516,22 @@ class DynamicFormService:
             raise ValidationError(
                 "ابتدا اطلاعات فرم را ذخیره کنید."
             )
+        # -------------------------------------------------
+        # Create step execution on Submit
+        # -------------------------------------------------
 
+        current_step_execution = (
+            WorkflowStepExecution.objects.create(
+                instance=instance,
+                workflow_step=step,
+                performed_by=user,
+                data={},
+            )
+        )
+
+        SLAService.start_sla_if_configured(
+            step_execution=current_step_execution,
+        )
         # -------------------------------------------------
         # Build immutable history snapshot
         # BEFORE locking the step
@@ -577,6 +572,17 @@ class DynamicFormService:
             ]
         )
 
+        # -------------------------------------------------
+        # Activate workflow on first Submit
+        # -------------------------------------------------
+
+        if instance.status == WorkflowInstance.Status.DRAFT:
+            instance.status = WorkflowInstance.Status.ACTIVE
+            instance.save(
+                update_fields=[
+                    "status",
+                ]
+            )
         # -------------------------------------------------
         # Complete workflow if this is the final step
         # -------------------------------------------------
@@ -851,6 +857,10 @@ class DynamicFormService:
                     {
                         "field": field,
                         "can_edit": can_edit,
+                        "permission_can_edit": (
+                            permission_can_edit
+                            and not is_submitted
+                        ),
                         "value": data.get(
                             field.code,
                             "",
@@ -2096,7 +2106,7 @@ class DynamicFormService:
                 )
 
         has_editable_fields = any(
-            item["can_edit"]
+            item["permission_can_edit"]
             for section in sections
             for item in section["fields"]
         ) or any(
@@ -2510,48 +2520,7 @@ class DynamicFormService:
         
         current_data = dict(form_data.data or {})
 
-        # ---------------------------------------------------------
-        # Activate DRAFT on first valid form save
-        # ---------------------------------------------------------
-
-        if instance.status == WorkflowInstance.Status.DRAFT:
-
-            if current_step_execution is not None:
-                raise ValidationError(
-                    "وضعیت Draft این Workflow نامعتبر است."
-                )
-
-            instance.status = WorkflowInstance.Status.ACTIVE
-            instance.save(
-                update_fields=[
-                    "status",
-                ]
-            )
-
-            current_step_execution = (
-                WorkflowStepExecution.objects.create(
-                    instance=instance,
-                    workflow_step=step,
-                    performed_by=user,
-                    data={},
-                )
-            )
-
-            SLAService.start_sla_if_configured(
-                step_execution=current_step_execution,
-            )
-
-        # ---------------------------------------------------------
-        # Active workflow must have current step execution
-        # ---------------------------------------------------------
-
-        elif current_step_execution is None:
-
-            raise ValidationError(
-                "اجرای مرحله فعلی این Workflow پیدا نشد."
-            )
         
-
         # -------------------------------------------------
         # 3. Save normal fields
         # -------------------------------------------------
@@ -3216,19 +3185,6 @@ class DynamicFormService:
                             )
                         except DeviceModel.DoesNotExist:
                             raise ValidationError("مدل دستگاه معتبر نیست.")
-#--------------------Debug-----------------
-                        print("========== DEBUG NEW DEVICE ==========")
-                        print("instance.id:", instance.id)
-                        print("item:", item)
-                        print("imei_code:", imei_code)
-                        print("device_model_code:", device_model_code)
-                        print("imei:", imei)
-                        print("device_model_id:", device_model_id)
-                        print("device_model:", device_model)
-                        print("can_add:", can_add)
-                        print("editable_system_keys:", editable_system_keys)
-                        print("======================================")
-#-----------------End-Debug----------------
                         existing_device = DeviceService.get_device_by_identifier(
                             identifier_type=DeviceIdentifier.IdentifierType.IMEI,
                             value=imei,
