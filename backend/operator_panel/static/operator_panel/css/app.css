@@ -1775,3 +1775,20 @@ body.df-modal-open {
 .df-form-field.has-validation-error label {
     color: #dc2626;
 }
+
+/* ---------------------------------------------------------
+   Repeatable Item Actions
+   --------------------------------------------------------- */
+
+.df-repeatable-item-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 8px;
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+}
+
+.df-repeatable-item-actions .df-button {
+    padding: 5px 12px;
+    font-size: 11px;
+}

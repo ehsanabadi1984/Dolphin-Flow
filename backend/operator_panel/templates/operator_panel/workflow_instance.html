@@ -613,7 +613,19 @@
                       </div>
 
                     {% endfor %}
-                    
+
+                    {% if not dynamic_form.is_submitted and group.can_edit %}
+                      <div class="df-repeatable-item-actions">
+                        <button
+                          type="button"
+                          class="df-button df-button-danger df-repeatable-delete"
+                          title="حذف این ردیف"
+                        >
+                          حذف
+                        </button>
+                      </div>
+                    {% endif %}
+
                   </div>
 
                   {% endwith %}

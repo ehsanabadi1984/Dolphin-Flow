@@ -1741,6 +1741,82 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("click", (event) => {
 
+    /* ---------------------------------------------------------
+     * Delete a normal repeatable row
+     * --------------------------------------------------------- */
+
+    const repeatableDeleteBtn = event.target.closest(
+        ".df-repeatable-delete"
+    );
+
+    if (repeatableDeleteBtn) {
+        const row = repeatableDeleteBtn.closest(
+            "[data-repeatable-item]"
+        );
+
+        if (!row) return;
+
+        const container = row.closest(
+            ".df-repeatable-items"
+        );
+
+        if (!container) return;
+
+        if (
+            window.confirm(
+                "آیا از حذف این ردیف مطمئن هستید؟"
+            )
+        ) {
+            row.remove();
+
+            /* Re-index remaining rows so the next
+             * "افزودن" click gets the correct index. */
+
+            const remaining =
+                container.querySelectorAll(
+                    "[data-repeatable-item]"
+                );
+
+            const gc =
+                container.dataset.groupCode;
+
+            remaining.forEach((r, i) => {
+                r.querySelectorAll(
+                    "input, textarea, select"
+                ).forEach((f) => {
+                    const old =
+                        f.getAttribute("name");
+
+                    if (
+                        old &&
+                        old.startsWith(gc + "_")
+                    ) {
+                        const tail =
+                            old.slice(
+                                gc.length + 1
+                            );
+
+                        const sep =
+                            tail.indexOf("_");
+
+                        if (sep !== -1) {
+                            f.name =
+                                gc +
+                                "_" +
+                                i +
+                                "_" +
+                                tail.slice(
+                                    sep + 1
+                                );
+                        }
+                    }
+                });
+            });
+        }
+
+        return;
+    }
+
     const addButton = event.target.closest(
         ".df-repeatable-add"
     );
