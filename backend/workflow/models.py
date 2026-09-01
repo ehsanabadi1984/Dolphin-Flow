@@ -35,6 +35,12 @@ class Workflow(models.Model):
     class Meta:
         ordering = ["name"]
 
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = f"WF_{uuid.uuid4().hex[:8].upper()}"
+
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.name
 
@@ -545,6 +551,8 @@ class WorkflowTransition(models.Model):
         WorkflowStep,
         on_delete=models.PROTECT,
         related_name="incoming_transitions",
+        null=True,
+        blank=True,
     )
 
     name = models.CharField(
@@ -590,9 +598,14 @@ class WorkflowTransition(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
+        if self.to_step:
+            return (
+                f"{self.workflow.name}: "
+                f"{self.from_step.name} → {self.to_step.name}"
+            )
         return (
             f"{self.workflow.name}: "
-            f"{self.from_step.name} → {self.to_step.name}"
+            f"{self.from_step.name} → [FINISH]"
         )
 
 class WorkflowTransitionExecution(models.Model):

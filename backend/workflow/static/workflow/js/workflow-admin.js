@@ -45,11 +45,14 @@
         field.disabled = true;
     }
 
-    function populateField(field, results) {
+    function populateField(field, results, preservedValue) {
         if (!field) {
             return;
         }
 
+        /* preservedValue is captured before setLoading clears
+         * the field, so editing an existing record keeps the
+         * saved from_step / to_step selected after AJAX reload. */
         resetField(field);
 
         results.forEach(function (item) {
@@ -57,6 +60,13 @@
 
             option.value = item.id;
             option.textContent = item.label;
+
+            if (
+                preservedValue &&
+                String(item.id) === String(preservedValue)
+            ) {
+                option.selected = true;
+            }
 
             field.appendChild(option);
         });
@@ -75,6 +85,10 @@
             resetField(field);
             return;
         }
+
+        /* Capture the currently-selected value BEFORE setLoading
+         * clears the field, so populateField can re-select it. */
+        const preservedValue = field.value;
 
         setLoading(field);
 
@@ -101,7 +115,8 @@
             .then(function (data) {
                 populateField(
                     field,
-                    data.results || []
+                    data.results || [],
+                    preservedValue
                 );
             })
             .catch(function (error) {

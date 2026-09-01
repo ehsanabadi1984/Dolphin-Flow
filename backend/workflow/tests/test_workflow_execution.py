@@ -27,6 +27,11 @@ class WorkflowExecutionTests(TestCase):
             password="test-password",
         )
 
+        self.destination_user = User.objects.create_user(
+            username="auth_exec_destination",
+            password="test-password",
+        )
+
         self.workflow = Workflow.objects.create(
             name="Authorization Execution Test",
             code="AUTH_EXEC_TEST",
@@ -174,6 +179,10 @@ class WorkflowExecutionTests(TestCase):
         self.grant_execute_permission()
         self.grant_transition_permission(self.transition_one)
 
+        # Assign destination step to a different user
+        self.step_two.assigned_to = self.destination_user
+        self.step_two.save(update_fields=["assigned_to"])
+
         instance = self.start_instance()
 
         WorkflowExecutionService.execute_transition(
@@ -183,14 +192,14 @@ class WorkflowExecutionTests(TestCase):
         )
 
         notification = Notification.objects.get(
-            recipient=self.user,
+            recipient=self.destination_user,
             workflow_instance=instance,
             workflow_step=self.step_two,
         )
 
         self.assertEqual(
             notification.notification_type,
-            Notification.NotificationType.STEP_ENTERED,
+            Notification.NotificationType.ACTION_REQUIRED,
         )
 
         self.assertIsNotNone(

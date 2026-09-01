@@ -117,6 +117,16 @@ def create_repair_workflow():
         ),
     ]
 
+    # Finish transition: to_step is NULL → completes the workflow
+    finish_transition = WorkflowTransition.objects.create(
+        workflow=workflow,
+        name="پایان",
+        code="FINISH",
+        from_step=delivery,
+        to_step=None,
+        is_active=True,
+    )
+
     created_transitions = {}
 
     for code, name, from_step, to_step in transitions:
@@ -130,6 +140,8 @@ def create_repair_workflow():
         )
 
         created_transitions[code] = transition
+
+    created_transitions["FINISH"] = finish_transition
 
     return (
         workflow,
@@ -252,11 +264,21 @@ class RepairWorkflowTests(TestCase):
                 == expected_step.pk
             )
 
+        # Execute the Finish transition to complete the workflow
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=transitions["FINISH"],
+            user=user,
+        )
+
+        instance.refresh_from_db()
+
         assert (
             instance.status
             == WorkflowInstance.Status.COMPLETED
         )
 
+        # 6 step executions: 1 at start + 5 normal transitions
         assert (
             WorkflowStepExecution.objects
             .filter(instance=instance)
@@ -264,11 +286,12 @@ class RepairWorkflowTests(TestCase):
             == 6
         )
 
+        # 6 transition executions: 5 normal + 1 finish
         assert (
             WorkflowTransitionExecution.objects
             .filter(instance=instance)
             .count()
-            == 5
+            == 6
         )
 
 

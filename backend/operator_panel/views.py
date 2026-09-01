@@ -642,10 +642,16 @@ def execute_transition(request, instance_id, transition_id):
             status=400,
         )
 
-    messages.success(
-        request,
-        f"فرآیند با موفقیت به «{transition.to_step.name}» منتقل شد.",
-    )
+    if transition.to_step:
+        messages.success(
+            request,
+            f"فرآیند با موفقیت به «{transition.to_step.name}» منتقل شد.",
+        )
+    else:
+        messages.success(
+            request,
+            f"فرآیند «{instance.workflow.name}» با موفقیت تکمیل شد.",
+        )
 
     return redirect(
         "operator_panel:dashboard",
@@ -749,65 +755,6 @@ def clear_form_data(request, instance_id):
         "operator_panel:workflow_instance",
         instance_id=instance.pk,
     )
-
-@login_required
-def submit_form(request, instance_id):
-    if request.method != "POST":
-        return redirect(
-            "operator_panel:workflow_instance",
-            instance_id=instance_id,
-        )
-
-    instance = get_object_or_404(
-        WorkflowInstance.objects.select_related(
-            "workflow",
-            "current_step",
-        ),
-        pk=instance_id,
-    )
-
-    if instance.status != WorkflowInstance.Status.ACTIVE:
-        raise ValidationError(
-            "این Workflow Instance فعال نیست."
-        )
-
-    WorkflowAuthorizationService.require_permission(
-        user=request.user,
-        workflow=instance.workflow,
-        action=WorkflowPermission.Action.VIEW,
-        step=instance.current_step,
-    )
-
-    try:
-        DynamicFormService.submit_form_for_step(
-            instance=instance,
-            user=request.user,
-        )
-
-    except PermissionDenied:
-        raise
-
-    except ValidationError as exc:
-        messages.error(
-            request,
-            str(exc),
-        )
-
-        return redirect(
-            "operator_panel:workflow_instance",
-            instance_id=instance.pk,
-        )
-
-    messages.success(
-        request,
-        "فرم با موفقیت ارسال شد و دیگر قابل ویرایش نیست.",
-    )
-
-    return redirect(
-        "operator_panel:workflow_instance",
-        instance_id=instance.pk,
-    )
-
 
 @login_required
 def notifications(request):

@@ -384,6 +384,9 @@ def workflow_dynamic_transitions(request):
                     f"{transition.from_step.name}"
                     f" → "
                     f"{transition.to_step.name}"
+                    if transition.to_step
+                    else f"{transition.from_step.name}"
+                    f" → [تکمیل فرآیند]"
                 ),
             }
             for transition in transitions
@@ -797,6 +800,20 @@ class WorkflowStepAdmin(admin.ModelAdmin):
         WorkflowStepPermissionInline,
     )
 
+    def save_formset(self, request, form, formset, change):
+        instances = formset.save(commit=False)
+        for instance in instances:
+            if (
+                isinstance(instance, WorkflowPermission)
+                and not instance.workflow_id
+                and instance.step_id
+            ):
+                instance.workflow = (
+                    instance.step.workflow
+                )
+            instance.save()
+        formset.save_m2m()
+
 #++++++++++++++++++++++
 #ٌ WorkFlow DynamicStep
 #++++++++++++++++++++++
@@ -955,6 +972,20 @@ class WorkflowTransitionAdmin(admin.ModelAdmin):
     inlines = (
         WorkflowTransitionPermissionInline,
     )
+
+    def save_formset(self, request, form, formset, change):
+        instances = formset.save(commit=False)
+        for instance in instances:
+            if (
+                isinstance(instance, WorkflowPermission)
+                and not instance.workflow_id
+                and instance.transition_id
+            ):
+                instance.workflow = (
+                    instance.transition.workflow
+                )
+            instance.save()
+        formset.save_m2m()
 
 # ============================================================
 # Workflow Permission
@@ -1315,6 +1346,9 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
                         f"{event['transition__from_step__name']}"
                         f" → "
                         f"{event['transition__to_step__name']}"
+                        if event['transition__to_step__name']
+                        else f"{event['transition__from_step__name']}"
+                        f" → [تکمیل فرآیند]"
                     ),
                     "is_submitted": False,
                     "sla_completed": False,
@@ -1492,7 +1526,9 @@ class WorkflowTransitionExecutionAdmin(admin.ModelAdmin):
         ordering="transition__to_step__order",
     )
     def to_step(self, obj):
-        return obj.transition.to_step
+        if obj.transition.to_step:
+            return obj.transition.to_step
+        return "[تکمیل فرآیند]"
 
     list_display = (
         "id",

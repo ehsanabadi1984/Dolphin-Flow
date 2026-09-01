@@ -23,12 +23,6 @@ urlpatterns = [
     ),
 
     path(
-        "workflow/<int:instance_id>/submit-form/",
-        views.submit_form,
-        name="submit_form",
-    ),
-    
-    path(
         "",
         dashboard,
         name="dashboard",

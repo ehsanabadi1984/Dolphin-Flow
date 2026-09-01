@@ -476,6 +476,12 @@ class DynamicFormService:
             if item_fields:
                 items.append(
                     {
+                        "device_id": (
+                            instance_device.device_id
+                        ),
+                        "instance_device_id": (
+                            instance_device.pk
+                        ),
                         "fields": item_fields,
                     }
                 )
@@ -484,128 +490,7 @@ class DynamicFormService:
             "code": group.code,
             "name": group.name,
             "items": items,
-        }
-
-    @staticmethod
-    @transaction.atomic
-    def submit_form_for_step(
-        *,
-        instance,
-        user,
-    ):
-        workflow = instance.workflow
-        step = instance.current_step
-
-        if step is None:
-            raise ValidationError(
-                "این Workflow مرحله فعلی ندارد."
-            )
-
-        form_data = (
-            FormData.objects
-            .filter(instance=instance)
-            .first()
-        )
-
-        if form_data is None:
-            raise ValidationError(
-                "اطلاعات فرم هنوز ذخیره نشده است."
-            )
-
-        if not form_data.data:
-            raise ValidationError(
-                "ابتدا اطلاعات فرم را ذخیره کنید."
-            )
-        # -------------------------------------------------
-        # Create step execution on Submit
-        # -------------------------------------------------
-
-        current_step_execution = (
-            WorkflowStepExecution.objects.create(
-                instance=instance,
-                workflow_step=step,
-                performed_by=user,
-                data={},
-            )
-        )
-
-        SLAService.start_sla_if_configured(
-            step_execution=current_step_execution,
-        )
-        # -------------------------------------------------
-        # Build immutable history snapshot
-        # BEFORE locking the step
-        # -------------------------------------------------
-
-        history_snapshot = (
-            DynamicFormService._build_history_snapshot(
-                instance=instance,
-                user=user,
-            )
-        )
-
-        now = timezone.now()
-
-        current_step_execution.is_submitted = True
-        current_step_execution.submitted_at = now
-        current_step_execution.is_submitted = True
-        current_step_execution.submitted_at = now
-        current_step_execution.data = {
-            "history": history_snapshot,
-        }
-
-        current_step_execution.save(
-            update_fields=[
-                "is_submitted",
-                "submitted_at",
-                "data",
-            ]
-        )
-        form_data.is_submitted = True
-        form_data.submitted_at = now
-        form_data.submitted_by = user
-        form_data.save(
-            update_fields=[
-                "is_submitted",
-                "submitted_at",
-                "submitted_by",
-            ]
-        )
-
-        # -------------------------------------------------
-        # Activate workflow on first Submit
-        # -------------------------------------------------
-
-        if instance.status == WorkflowInstance.Status.DRAFT:
-            instance.status = WorkflowInstance.Status.ACTIVE
-            instance.save(
-                update_fields=[
-                    "status",
-                ]
-            )
-        # -------------------------------------------------
-        # Complete workflow if this is the final step
-        # -------------------------------------------------
-
-        has_next_step = workflow.steps.filter(
-            is_active=True,
-            order__gt=step.order,
-        ).exists()
-
-        if not has_next_step:
-            instance.status = WorkflowInstance.Status.COMPLETED
-            instance.completed_at = now
-
-            instance.save(
-                update_fields=[
-                    "status",
-                    "completed_at",
-                ]
-            )
-
-        return current_step_execution
-
-    @staticmethod
+        }    @staticmethod
     def _get_field_choices(field):
         """
         Build choices for a SELECT FormField based on its choice source.
