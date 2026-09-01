@@ -23,6 +23,7 @@
   <form
     method="post"
     action="{% url 'operator_panel:workflow_instance' instance.pk %}"
+    data-instance-id="{{ instance.pk }}"
   >
 
     {% csrf_token %}
@@ -686,6 +687,7 @@
               class="df-device-modal"
               data-device-modal="{{ group.group.code }}"
               data-device-lookup-url="{% url 'operator_panel:lookup_device_by_imei' %}"
+              data-device-history-base="{% url 'operator_panel:workflow_instance' instance.pk %}device/"
               hidden
           >
 

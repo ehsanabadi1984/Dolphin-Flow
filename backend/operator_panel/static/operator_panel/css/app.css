@@ -1491,6 +1491,28 @@ a {
 .df-button-danger { color: #f87171; border-color: rgba(248, 113, 113, .35); }
 .df-device-empty td { color: var(--muted); text-align: center; padding: 24px; }
 
+.df-device-row-existing td:first-child {
+    position: relative;
+}
+
+.df-device-row-existing td:first-child::after {
+    content: "قبلی";
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    font-size: 9px;
+    background: rgba(99, 102, 241, .15);
+    color: #818cf8;
+    padding: 1px 5px;
+    border-radius: 3px;
+    line-height: 1.4;
+}
+
+.df-device-actions .df-device-history {
+    padding: 6px 9px;
+    font-size: 10px;
+}
+
 
 /* ---------------------------------------------------------
    Device Modal
@@ -1791,4 +1813,10 @@ body.df-modal-open {
 .df-repeatable-item-actions .df-button {
     padding: 5px 12px;
     font-size: 11px;
+}
+
+.df-repeatable-delete[disabled] {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
 }

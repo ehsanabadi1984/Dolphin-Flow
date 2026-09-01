@@ -475,128 +475,8 @@ notificationToggle.addEventListener("click", async (event) => {
         });
 
         clearModalErrors(modal);
-    };
 
-        const lookupDeviceByImei = async (modal) => {
-
-        const imeiWrapper =
-            modal.querySelector(
-                '.df-device-modal-field[data-system-key="IMEI"]'
-            );
-
-        const imeiField =
-            imeiWrapper?.querySelector(
-                '[data-device-modal-field]'
-            );
-
-        if (!imeiField) {
-            return;
-        }
-
-        const imei =
-            imeiField.value.trim();
-
-        if (!imei) {
-            return;
-        }
-
-        const lookupUrl =
-            modal.dataset.deviceLookupUrl;
-
-        if (!lookupUrl) {
-            console.warn(
-                "Device lookup URL is not configured."
-            );
-            return;
-        }
-
-        try {
-
-            const response =
-                await fetch(
-                    `${lookupUrl}?imei=${encodeURIComponent(imei)}`,
-                    {
-                        method: "GET",
-                        headers: {
-                            "X-Requested-With": "XMLHttpRequest",
-                        },
-                    }
-                );
-
-            if (!response.ok) {
-                throw new Error(
-                    "Device lookup failed."
-                );
-            }
-
-            const data =
-                await response.json();
-
-            const typeWrapper =
-                modal.querySelector(
-                    '.df-device-modal-field[data-system-key="DEVICE_TYPE"]'
-                );
-
-            const typeField =
-                typeWrapper?.querySelector(
-                    '[data-device-modal-field]'
-                );
-
-            const modelWrapper =
-                modal.querySelector(
-                    '.df-device-modal-field[data-system-key="DEVICE_MODEL"]'
-                );
-
-            const modelField =
-                modelWrapper?.querySelector(
-                    '[data-device-modal-field]'
-                );
-
-            if (!typeField || !modelField) {
-                return;
-            }
-
-            if (data.exists) {
-
-                /*
-                 * Existing device.
-                 *
-                 * Type and Model are taken from
-                 * the persistent Device record.
-                 */
-
-                typeField.value =
-                    String(data.device_type_id);
-
-                typeField.disabled = true;
-
-                modelField.value =
-                    String(data.device_model_id);
-
-                modelField.disabled = true;
-
-            } else {
-
-                /*
-                 * New device.
-                 *
-                 * Operator selects Type and Model.
-                 */
-
-                typeField.value = "";
-                typeField.disabled = false;
-
-                modelField.value = "";
-                modelField.disabled = false;
-            }
-
-        } catch (error) {
-
-            console.error(
-                "Unable to lookup device by IMEI:",
-                error
-            );
-        }
+        delete modal.dataset.deviceId;
     };
 
     const validateModal = (modal) => {
@@ -874,6 +754,44 @@ const submitNewDevice = (modal, groupCode) => {
     actionsCell.appendChild(
         deleteButton
     );
+
+    /*
+     * ---------------------------------------------------------
+     * History button for existing (previously registered) devices
+     * ---------------------------------------------------------
+     */
+    const existingDeviceId =
+        modal.dataset.deviceId || "";
+
+    if (existingDeviceId) {
+
+        /*
+         * Mark the row as an existing device.
+         */
+        row.dataset.deviceId =
+            existingDeviceId;
+
+        row.classList.add(
+            "df-device-row-existing"
+        );
+
+        /*
+         * Add a hidden input so the backend can
+         * identify the device reference.
+         */
+        const deviceRefInput =
+            document.createElement("input");
+
+        deviceRefInput.type = "hidden";
+        deviceRefInput.name =
+            `${groupCode}_${newIndex}_device_id`;
+        deviceRefInput.value =
+            existingDeviceId;
+
+        actionsCell.appendChild(
+            deviceRefInput
+        );
+    }
 
     row.appendChild(actionsCell);
 
@@ -1194,6 +1112,11 @@ document.addEventListener(
 
                 modelField.disabled = true;
 
+                /* Store device_id so submitNewDevice
+                 * can create a History link. */
+                modal.dataset.deviceId =
+                    String(data.device_id);
+
             } else {
 
                 typeField.value = "";
@@ -1201,6 +1124,8 @@ document.addEventListener(
 
                 modelField.value = "";
                 modelField.disabled = false;
+
+                delete modal.dataset.deviceId;
             }
 
         } catch (error) {
@@ -1739,6 +1664,35 @@ document.addEventListener("click", (event) => {
  * ---------------------------------------------------------
  */
 
+/*
+ * Update the disabled state of delete buttons in a
+ * normal (non-DEVICE) repeatable group container.
+ *
+ * When only one row remains the delete button is
+ * disabled so the last row cannot be removed.
+ */
+function updateRepeatableDeleteState(container) {
+    const group = container.closest(".df-repeatable-group");
+    if (!group) return;
+
+    /* DEVICE groups must remain completely unaffected. */
+    if (group.classList.contains("df-device-group")) return;
+
+    const rows = container.querySelectorAll(
+        "[data-repeatable-item]:not([data-repeatable-template])"
+    );
+
+    const buttons = container.querySelectorAll(
+        ".df-repeatable-delete"
+    );
+
+    const disable = rows.length <= 1;
+
+    buttons.forEach((btn) => {
+        btn.disabled = disable;
+    });
+}
+
 document.addEventListener("click", (event) => {
 
     /* ---------------------------------------------------------
@@ -1750,6 +1704,9 @@ document.addEventListener("click", (event) => {
     );
 
     if (repeatableDeleteBtn) {
+        /* Do not allow deleting the last row. */
+        if (repeatableDeleteBtn.disabled) return;
+
         const row = repeatableDeleteBtn.closest(
             "[data-repeatable-item]"
         );
@@ -1812,6 +1769,9 @@ document.addEventListener("click", (event) => {
                     }
                 });
             });
+
+            /* Immediately recalculate delete-button state. */
+            updateRepeatableDeleteState(container);
         }
 
         return;
@@ -2101,6 +2061,9 @@ document.addEventListener("click", (event) => {
         newItem
     );
 
+    /* Immediately recalculate delete-button state. */
+    updateRepeatableDeleteState(itemsContainer);
+
     console.log(
         "Repeatable item added:",
         {
@@ -2108,6 +2071,14 @@ document.addEventListener("click", (event) => {
             index: newIndex,
         }
     );
+});
+
+/*
+ * Set initial delete-button state for every normal
+ * (non-DEVICE) repeatable group already on the page.
+ */
+document.querySelectorAll(".df-repeatable-items").forEach((c) => {
+    updateRepeatableDeleteState(c);
 });
 /*-------------------------------------- */
 
