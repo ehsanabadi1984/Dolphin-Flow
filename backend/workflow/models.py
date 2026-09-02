@@ -1845,6 +1845,10 @@ class RepeatableGroupAccess(models.Model):
         default=False,
     )
 
+    can_delete = models.BooleanField(
+        default=False,
+    )
+
     def clean(self):
         super().clean()
 
