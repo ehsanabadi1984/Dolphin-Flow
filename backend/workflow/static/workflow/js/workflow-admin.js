@@ -50,9 +50,6 @@
             return;
         }
 
-        /* preservedValue is captured before setLoading clears
-         * the field, so editing an existing record keeps the
-         * saved from_step / to_step selected after AJAX reload. */
         resetField(field);
 
         results.forEach(function (item) {
@@ -86,13 +83,6 @@
             return;
         }
 
-        /* If no preservedValue was passed, capture the
-         * currently-selected value so edit pages keep
-         * the saved selection after the AJAX reload. */
-        if (preservedValue === undefined) {
-            preservedValue = field.value;
-        }
-
         setLoading(field);
 
         const url =
@@ -108,9 +98,7 @@
         })
             .then(function (response) {
                 if (!response.ok) {
-                    throw new Error(
-                        "HTTP " + response.status
-                    );
+                    throw new Error("HTTP " + response.status);
                 }
 
                 return response.json();
@@ -127,7 +115,6 @@
                     "Workflow dynamic select error:",
                     error
                 );
-
                 resetField(field);
             });
     }
@@ -144,96 +131,88 @@
         );
     }
 
-    function loadDependencies() {
+    function loadDependencies(preserveValues) {
         const workflowId = getWorkflowId();
 
         if (isTransitionForm()) {
+            const fromStep = getField("id_from_step");
+            const toStep = getField("id_to_step");
+
             loadField(
                 "id_from_step",
                 "/admin/workflow/dynamic/steps/",
-                workflowId
+                workflowId,
+                preserveValues && fromStep ? fromStep.value : ""
             );
 
             loadField(
                 "id_to_step",
                 "/admin/workflow/dynamic/steps/",
-                workflowId
+                workflowId,
+                preserveValues && toStep ? toStep.value : ""
             );
         }
 
         if (isPermissionForm()) {
+            const step = getField("id_step");
+            const transition = getField("id_transition");
+
             loadField(
                 "id_step",
                 "/admin/workflow/dynamic/steps/",
-                workflowId
+                workflowId,
+                preserveValues && step ? step.value : ""
             );
 
             loadField(
                 "id_transition",
                 "/admin/workflow/dynamic/transitions/",
-                workflowId
+                workflowId,
+                preserveValues && transition ? transition.value : ""
             );
         }
     }
 
-    /**
-     * Detect workflow value changes and reload dependent
-     * selects (step, transition, from_step, to_step).
-     *
-     * Handles two scenarios:
-     *   1. Standard <select> — native "change" event.
-     *   2. Select2 autocomplete — the native "change" event
-     *      may not always fire, so a polling fallback
-     *      compares the current value against the last known
-     *      value every 500 ms.
-     */
     function setupWorkflowDependencyLoader() {
+        if (document.body.dataset.workflowDependencyLoaderInitialized === "true") {
+            return;
+        }
+
         const workflow = getField("id_workflow");
 
         if (!workflow) {
             return;
         }
 
-        /* Attach the standard change listener. For standard
-         * selects this fires immediately. For Select2 it may
-         * or may not fire, but the polling fallback below
-         * covers the case where it doesn't. */
+        document.body.dataset.workflowDependencyLoaderInitialized = "true";
+
+        /* Django Admin autocomplete uses Select2, but Select2
+         * updates the original <select> and emits a change
+         * event. Listening to that event keeps this independent
+         * of Select2's internal implementation. */
         workflow.addEventListener("change", function () {
-            loadDependencies();
+            /* A changed workflow must never retain a step or
+             * transition belonging to the previous workflow. */
+            loadDependencies(false);
         });
 
-        /* Polling fallback for Select2 autocomplete.
-         *
-         * Select2 sometimes does not fire the native change
-         * event on the original <select>. We therefore
-         * compare the current value against the last known
-         * value every 500 ms and trigger a reload when a
-         * change is detected.
-         *
-         * This is lightweight — a single comparison per tick
-         * — and self-stops when the workflow field leaves
-         * the page. */
-        var lastKnownValue = workflow.value;
-
-        setInterval(function () {
-            if (workflow.value !== lastKnownValue) {
-                lastKnownValue = workflow.value;
-                loadDependencies();
-            }
-        }, 500);
-
-        /* On initial load (e.g. editing an existing record),
-         * the workflow value is already set. Load the
-         * dependent selects immediately so the admin sees
-         * the correct steps/transitions without a page
-         * reload. */
+        /* Initial load is needed on edit pages. On add pages
+         * there is normally no workflow yet, so this is a no-op. */
         if (workflow.value) {
-            loadDependencies();
+            loadDependencies(true);
         }
     }
 
-    document.addEventListener(
-        "DOMContentLoaded",
-        setupWorkflowDependencyLoader
-    );
+    /* Django Admin can load custom media after DOMContentLoaded.
+     * Handle both execution orders so initialization is never
+     * skipped. */
+    if (document.readyState === "loading") {
+        document.addEventListener(
+            "DOMContentLoaded",
+            setupWorkflowDependencyLoader,
+            { once: true }
+        );
+    } else {
+        setupWorkflowDependencyLoader();
+    }
 })();
