@@ -654,6 +654,7 @@ class WorkflowPermission(models.Model):
     class Action(models.TextChoices):
         VIEW = "VIEW", "مشاهده"
         EXECUTE = "EXECUTE", "اجرا"
+        START = "START", "شروع فرآیند"
         TRANSITION = "TRANSITION", "تغییر مرحله"
         MANAGE = "MANAGE", "مدیریت"
 

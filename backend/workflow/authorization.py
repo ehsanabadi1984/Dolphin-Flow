@@ -1,4 +1,5 @@
 from django.core.exceptions import PermissionDenied
+from django.db.models import Q
 
 from .models import WorkflowPermission
 
@@ -10,7 +11,10 @@ class WorkflowAuthorizationService:
     Authorization is resolved using:
         1. Explicit user permission
         2. Role-based permission
-        3. Deny by default
+        3. Instance-level implicit permissions
+           (e.g. the user who started an instance
+            may implicitly VIEW that instance)
+        4. Deny by default
 
     Explicit DENY always overrides ALLOW
     at the same authorization level.
@@ -24,10 +28,16 @@ class WorkflowAuthorizationService:
         action,
         step=None,
         transition=None,
+        instance=None,
     ):
         """
         Return True if the user is authorized to perform
         the requested action.
+
+        When ``instance`` is provided and ``action`` is VIEW,
+        the user who started the instance is implicitly
+        authorized to view it — without requiring an
+        explicit VIEW permission record.
         """
 
         # -----------------------------------------------------
@@ -136,7 +146,29 @@ class WorkflowAuthorizationService:
             return True
 
         # -----------------------------------------------------
-        # 7. Deny by default
+        # 7. Instance-level implicit permissions
+        # -----------------------------------------------------
+        #
+        # The user who started a WorkflowInstance is
+        # implicitly authorized to VIEW that specific
+        # instance, without an explicit VIEW permission.
+        #
+        # This does NOT create a database record and
+        # does NOT grant access to other instances.
+        #
+        # Explicit DENY (checked above in steps 5–6)
+        # always takes precedence over this implicit
+        # grant.
+
+        if (
+            action == WorkflowPermission.Action.VIEW
+            and instance is not None
+            and instance.started_by_id == user.pk
+        ):
+            return True
+
+        # -----------------------------------------------------
+        # 8. Deny by default
         # -----------------------------------------------------
 
         return False
@@ -149,6 +181,7 @@ class WorkflowAuthorizationService:
         action,
         step=None,
         transition=None,
+        instance=None,
     ):
         """
         Require authorization.
@@ -162,6 +195,7 @@ class WorkflowAuthorizationService:
             action=action,
             step=step,
             transition=transition,
+            instance=instance,
         )
 
         if not allowed:
@@ -171,6 +205,45 @@ class WorkflowAuthorizationService:
             
         return True
 
+
+    @staticmethod
+    def get_startable_workflows(user):
+        """
+        Return a queryset of active Workflow objects
+        that the user is authorized to start.
+
+        A workflow is startable if:
+          1. The workflow is active.
+          2. The user has an active membership.
+          3. The user has effective START permission
+             (no explicit DENY overrides).
+        """
+        from .models import Workflow, WorkflowMembership
+
+        if not user or not user.is_authenticated:
+            return Workflow.objects.none()
+
+        if not user.is_active:
+            return Workflow.objects.none()
+
+        # Get workflows where user has active membership.
+        workflows = Workflow.objects.filter(
+            is_active=True,
+            memberships__user=user,
+            memberships__is_active=True,
+        ).distinct()
+
+        startable = []
+
+        for workflow in workflows:
+            if WorkflowAuthorizationService.has_permission(
+                user=user,
+                workflow=workflow,
+                action=WorkflowPermission.Action.START,
+            ):
+                startable.append(workflow.pk)
+
+        return Workflow.objects.filter(pk__in=startable)
 
     @staticmethod
     def get_allowed_transitions(

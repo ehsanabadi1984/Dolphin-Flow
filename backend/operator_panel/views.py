@@ -101,13 +101,10 @@ def lookup_device_by_imei(request):
 @login_required
 def dashboard(request):
     workflows = (
-        Workflow.objects
-        .filter(
-            is_active=True,
-            memberships__user=request.user,
-            memberships__is_active=True,
+        WorkflowAuthorizationService
+        .get_startable_workflows(
+            user=request.user,
         )
-        .distinct()
         .order_by("name")
     )
 
@@ -174,6 +171,7 @@ def workflow_instance(request, instance_id):
         workflow=instance.workflow,
         action=WorkflowPermission.Action.VIEW,
         step=instance.current_step,
+        instance=instance,
     )
 
     # =========================================================
@@ -530,6 +528,7 @@ def delete_device(request, instance_id, group_code, instance_device_id):
         workflow=instance.workflow,
         action=WorkflowPermission.Action.VIEW,
         step=instance.current_step,
+        instance=instance,
     )
     _require_device_group_edit_permission(
         instance=instance,
@@ -558,6 +557,7 @@ def device_history(request, instance_id, device_id):
         workflow=instance.workflow,
         action=WorkflowPermission.Action.VIEW,
         step=instance.current_step,
+        instance=instance,
     )
     device = get_object_or_404(
         Device,
@@ -737,6 +737,7 @@ def clear_form_data(request, instance_id):
         workflow=instance.workflow,
         action=WorkflowPermission.Action.VIEW,
         step=instance.current_step,
+        instance=instance,
     )
 
     DynamicFormService.clear_form_for_step(

@@ -146,6 +146,13 @@ def test_role_allow():
     WorkflowPermission.objects.create(
         workflow=workflow,
         role=WorkflowMembership.Role.EXECUTOR,
+        action=WorkflowPermission.Action.START,
+        effect=WorkflowPermission.Effect.ALLOW,
+    )
+
+    WorkflowPermission.objects.create(
+        workflow=workflow,
+        role=WorkflowMembership.Role.EXECUTOR,
         transition=transition,
         action=WorkflowPermission.Action.TRANSITION,
         effect=WorkflowPermission.Effect.ALLOW,
@@ -173,6 +180,13 @@ def test_user_deny_overrides_role_allow():
         workflow=workflow,
         role=WorkflowMembership.Role.EXECUTOR,
         action=WorkflowPermission.Action.EXECUTE,
+        effect=WorkflowPermission.Effect.ALLOW,
+    )
+
+    WorkflowPermission.objects.create(
+        workflow=workflow,
+        role=WorkflowMembership.Role.EXECUTOR,
+        action=WorkflowPermission.Action.START,
         effect=WorkflowPermission.Effect.ALLOW,
     )
 
@@ -229,6 +243,13 @@ def test_user_allow_overrides_role_deny():
     WorkflowPermission.objects.create(
         workflow=workflow,
         role=WorkflowMembership.Role.EXECUTOR,
+        action=WorkflowPermission.Action.START,
+        effect=WorkflowPermission.Effect.ALLOW,
+    )
+
+    WorkflowPermission.objects.create(
+        workflow=workflow,
+        role=WorkflowMembership.Role.EXECUTOR,
         transition=transition,
         action=WorkflowPermission.Action.TRANSITION,
         effect=WorkflowPermission.Effect.DENY,
@@ -267,6 +288,13 @@ def test_no_permission():
         workflow=workflow,
         role=WorkflowMembership.Role.EXECUTOR,
         action=WorkflowPermission.Action.EXECUTE,
+        effect=WorkflowPermission.Effect.ALLOW,
+    )
+
+    WorkflowPermission.objects.create(
+        workflow=workflow,
+        role=WorkflowMembership.Role.EXECUTOR,
+        action=WorkflowPermission.Action.START,
         effect=WorkflowPermission.Effect.ALLOW,
     )
 

@@ -95,6 +95,14 @@ class WorkflowExecutionTests(TestCase):
             effect=WorkflowPermission.Effect.ALLOW,
         )
 
+    def grant_start_permission(self):
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            action=WorkflowPermission.Action.START,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
     def grant_transition_permission(self, transition):
         WorkflowPermission.objects.create(
             workflow=self.workflow,
@@ -112,6 +120,7 @@ class WorkflowExecutionTests(TestCase):
 
     def test_allow(self):
         self.grant_execute_permission()
+        self.grant_start_permission()
         self.grant_transition_permission(self.transition_one)
 
         instance = self.start_instance()
@@ -131,6 +140,7 @@ class WorkflowExecutionTests(TestCase):
 
     def test_deny(self):
         self.grant_execute_permission()
+        self.grant_start_permission()
 
         WorkflowPermission.objects.create(
             workflow=self.workflow,
@@ -158,6 +168,7 @@ class WorkflowExecutionTests(TestCase):
 
     def test_no_permission(self):
         self.grant_execute_permission()
+        self.grant_start_permission()
 
         instance = self.start_instance()
 
@@ -177,6 +188,7 @@ class WorkflowExecutionTests(TestCase):
 
     def test_transition_creates_notification_for_destination_executors(self):
         self.grant_execute_permission()
+        self.grant_start_permission()
         self.grant_transition_permission(self.transition_one)
 
         # Assign destination step to a different user

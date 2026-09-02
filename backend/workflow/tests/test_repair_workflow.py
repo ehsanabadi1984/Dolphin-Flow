@@ -172,6 +172,12 @@ def grant_execute_permission(
         action=WorkflowPermission.Action.EXECUTE,
         effect=WorkflowPermission.Effect.ALLOW,
     )
+    WorkflowPermission.objects.create(
+        workflow=workflow,
+        user=user,
+        action=WorkflowPermission.Action.START,
+        effect=WorkflowPermission.Effect.ALLOW,
+    )
 
 
 def grant_transition_permission(

@@ -81,6 +81,13 @@ class SLAIntegrationTests(TestCase):
 
         WorkflowPermission.objects.create(
             workflow=self.workflow,
+            user=self.user,
+            action=WorkflowPermission.Action.START,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
             transition=self.transition,
             user=self.user,
             action=WorkflowPermission.Action.TRANSITION,

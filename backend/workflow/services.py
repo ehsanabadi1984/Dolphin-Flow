@@ -49,7 +49,7 @@ class WorkflowExecutionService:
         WorkflowAuthorizationService.require_permission(
             user=user,
             workflow=workflow,
-            action=WorkflowPermission.Action.EXECUTE,
+            action=WorkflowPermission.Action.START,
         )
 
         # ---------------------------------------------------------
