@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .process_views import my_processes
 from .views import (
     dashboard,
     execute_transition,
@@ -17,15 +18,21 @@ app_name = "operator_panel"
 urlpatterns = [
 
     path(
-    "workflow-instance/<int:instance_id>/clear/",
-    clear_form_data,
-    name="clear_form_data",
+        "workflow-instance/<int:instance_id>/clear/",
+        clear_form_data,
+        name="clear_form_data",
     ),
 
     path(
         "",
         dashboard,
         name="dashboard",
+    ),
+
+    path(
+        "my-processes/",
+        my_processes,
+        name="my_processes",
     ),
 
     path(
@@ -65,9 +72,9 @@ urlpatterns = [
     ),
 
     path(
-    "notifications/",
-    notifications,
-    name="notifications",
+        "notifications/",
+        notifications,
+        name="notifications",
     ),
 
     path(
