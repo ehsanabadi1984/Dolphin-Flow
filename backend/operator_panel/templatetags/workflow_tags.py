@@ -1,5 +1,6 @@
 from django import template
 
+from workflow.authorization import WorkflowAuthorizationService
 from workflow.models import FormData, InstanceDevice, WorkflowInstance, WorkflowStep
 
 
@@ -48,3 +49,17 @@ def is_abandoned_start(instance):
         return False
 
     return True
+
+
+@register.simple_tag(takes_context=True)
+def startable_workflows(context):
+    """Return workflows the current user is authorized to start."""
+    request = context.get("request")
+    if not request or not request.user.is_authenticated:
+        return []
+
+    return (
+        WorkflowAuthorizationService
+        .get_startable_workflows(request.user)
+        .order_by("name")
+    )
