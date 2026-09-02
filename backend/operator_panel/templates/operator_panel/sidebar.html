@@ -1,3 +1,5 @@
+{% load workflow_tags %}
+
 <aside class="df-sidebar">
 
     <div class="df-brand">
@@ -7,7 +9,7 @@
 
         <div class="df-brand-text">
             <div class="df-brand-name">Dolphin Flow</div>
-            <div class="df-brand-subtitle">Repair Management</div>
+            <div class="df-brand-subtitle">Process Management</div>
         </div>
     </div>
 
@@ -21,7 +23,6 @@
             <path d="m15 18-6-6 6-6"></path>
         </svg>
     </button>
-
 
     <nav class="df-nav">
 
@@ -39,10 +40,8 @@
                 <path d="M5 9.5V21h14V9.5"></path>
                 <path d="M9 21v-6h6v6"></path>
             </svg>
-
             <span>داشبورد</span>
         </a>
-
 
         <a
             href="#"
@@ -55,31 +54,54 @@
                 <path d="M16 4.5a3 3 0 0 1 0 7"></path>
                 <path d="M18 15c1.8.8 2.8 2.7 3 6"></path>
             </svg>
-
             <span>مشتریان</span>
         </a>
 
-
-        <a
-            href="#"
-            class="df-nav-link"
-            data-tooltip="فرم‌های تعمیر"
-        >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="5" y="3" width="14" height="18" rx="2"></rect>
-                <path d="M9 7h6"></path>
-                <path d="M9 11h6"></path>
-                <path d="M9 15h4"></path>
-            </svg>
-
-            <span>فرم‌های تعمیر</span>
-        </a>
-
-
         <div class="df-nav-label">
-            فرآیند
+            فرآیندها
         </div>
 
+        <div class="df-nav-group">
+            <a
+                href="{% url 'operator_panel:my_processes' %}"
+                class="df-nav-link"
+                data-tooltip="فرآیندهای من"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 4h14v16H5z"></path>
+                    <path d="M8 9h8"></path>
+                    <path d="M8 13h6"></path>
+                    <path d="M8 17h4"></path>
+                </svg>
+                <span>فرآیندهای من</span>
+            </a>
+        </div>
+
+        <div class="df-nav-label df-nav-label-workflows">
+            شروع فرآیند
+        </div>
+
+        <div class="df-nav-workflows">
+            {% startable_workflows as sidebar_workflows %}
+
+            {% for workflow in sidebar_workflows %}
+                <a
+                    href="{% url 'operator_panel:start_workflow' workflow.pk %}"
+                    class="df-nav-link df-nav-workflow-link"
+                    data-tooltip="{{ workflow.name }}"
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 4h14v16H5z"></path>
+                        <path d="m9 12 2 2 4-4"></path>
+                    </svg>
+                    <span>{{ workflow.name }}</span>
+                </a>
+            {% empty %}
+                <div class="df-nav-empty">
+                    فرآیند قابل شروعی وجود ندارد.
+                </div>
+            {% endfor %}
+        </div>
 
         <a
             href="#"
@@ -91,10 +113,8 @@
                 <path d="m8 9 2 2 4-4"></path>
                 <path d="M8 15h8"></path>
             </svg>
-
             <span>وظایف من</span>
         </a>
-
 
         <a
             href="#"
@@ -105,12 +125,10 @@
                 <circle cx="12" cy="12" r="8"></circle>
                 <path d="M12 8v4l2.5 2"></path>
             </svg>
-
             <span>در انتظار اقدام</span>
         </a>
 
     </nav>
-
 
     <div class="df-sidebar-footer">
 
@@ -121,12 +139,10 @@
         >
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1V13.6h-.1a1.7 1.7 0 0 0-1.5 1.4Z"></path>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1V13.6h-.1a1.7 1.7 0 0 0-1.5 1.4Z"></path>
             </svg>
-
             <span>تنظیمات</span>
         </a>
-
 
         <a
             href="{% url 'logout' %}"
@@ -138,7 +154,6 @@
                 <path d="M15 12H3"></path>
                 <path d="M21 3v18"></path>
             </svg>
-
             <span>خروج</span>
         </a>
 
