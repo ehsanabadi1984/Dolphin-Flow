@@ -2,6 +2,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /*
      * ---------------------------------------------------------
+     * UUID generator for stable row identity
+     * ---------------------------------------------------------
+     */
+
+    function generateRowId() {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+            /[xy]/g,
+            function (c) {
+                const r = (Math.random() * 16) | 0;
+                const v = c === "x" ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+            }
+        );
+    }
+
+    /*
+     * ---------------------------------------------------------
      * Sidebar
      * ---------------------------------------------------------
      */
@@ -1738,6 +1755,11 @@ document.addEventListener("click", (event) => {
                 container.dataset.groupCode;
 
             remaining.forEach((r, i) => {
+                /*
+                 * Preserve data-row-id across reindex.
+                 * The identity is stable; only the DOM index changes.
+                 */
+
                 r.querySelectorAll(
                     "input, textarea, select"
                 ).forEach((f) => {
@@ -1890,6 +1912,19 @@ document.addEventListener("click", (event) => {
 
     /*
      * ---------------------------------------------------------
+     * Stable row identity
+     * ---------------------------------------------------------
+     *
+     * A cloned item is ALWAYS a new row.
+     * Generate a fresh UUID and set it on the row.
+     */
+
+    const newRowId = generateRowId();
+
+    newItem.dataset.rowId = newRowId;
+
+    /*
+     * ---------------------------------------------------------
      * Update fields
      * ---------------------------------------------------------
      */
@@ -1975,6 +2010,29 @@ document.addEventListener("click", (event) => {
         ) {
 
             field.value = "";
+
+            return;
+        }
+
+        /*
+         * -----------------------------------------------------
+         * Stable row identity
+         * -----------------------------------------------------
+         *
+         * A cloned _id hidden input must be replaced with
+         * the newly generated row UUID.
+         */
+
+        if (
+            field.type === "hidden" &&
+            oldName &&
+            oldName.endsWith("__id")
+        ) {
+
+            field.name =
+                `${groupCode}_${newIndex}__id`;
+
+            field.value = newRowId;
 
             return;
         }

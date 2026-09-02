@@ -492,7 +492,12 @@
                     <div
                       class="df-repeatable-item"
                       data-repeatable-item
+                      {% if item._id %}data-row-id="{{ item._id }}"{% endif %}
                     >
+
+                    {% if item._id %}
+                      <input type="hidden" name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}__id" value="{{ item._id }}" />
+                    {% endif %}
 
                     {% for item_field in item.fields %}
 

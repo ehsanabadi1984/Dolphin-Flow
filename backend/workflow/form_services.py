@@ -1,3 +1,5 @@
+import uuid
+
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -38,6 +40,9 @@ class DynamicFormService:
         """
         Convert flat POST keys of a repeatable group into
         a list of dictionaries.
+
+        Each row may include a ``_id`` key extracted from
+        a hidden input named ``{group}_{index}__id``.
         """
         if submitted_data is None:
             return []
@@ -69,7 +74,14 @@ class DynamicFormService:
                 {},
             )
 
-            values = submitted_data.getlist(key)
+            # Support both QueryDict (getlist) and plain dict
+            if hasattr(submitted_data, "getlist"):
+                values = submitted_data.getlist(key)
+            else:
+                raw = submitted_data.get(key, "")
+                values = (
+                    raw if isinstance(raw, list) else [raw]
+                )
 
             if len(values) > 1:
                 items[index][field_code] = values
@@ -79,6 +91,39 @@ class DynamicFormService:
                     if values
                     else ""
                 )
+
+        # -----------------------------------------------------
+        # Extract stable _id from hidden inputs.
+        #
+        # POST key pattern: {group}_{index}__id
+        # (single underscore before "id" to distinguish from
+        #  field codes like ``device_id``)
+        # -----------------------------------------------------
+
+        id_prefix = f"{group_code}_"
+        id_suffix = "__id"
+
+        for key in submitted_data.keys():
+
+            if (
+                key.startswith(id_prefix)
+                and key.endswith(id_suffix)
+            ):
+
+                middle = key[
+                    len(id_prefix):-len(id_suffix)
+                ]
+
+                if middle.isdigit():
+                    idx = int(middle)
+
+                    if idx in items:
+                        row_id = (
+                            submitted_data.get(key, "").strip()
+                        )
+
+                        if row_id:
+                            items[idx]["_id"] = row_id
 
         return [
             items[index]
@@ -490,7 +535,42 @@ class DynamicFormService:
             "code": group.code,
             "name": group.name,
             "items": items,
-        }    @staticmethod
+        }
+
+    @staticmethod
+    def _get_lookup_label(*, field, value):
+        """
+        Return the human-readable label for a LOOKUP field value.
+
+        Returns an empty string when the label cannot be resolved.
+        """
+        if not value:
+            return ""
+
+        if (
+            field.field_type != FormField.FieldType.SELECT
+            or field.choice_source != FormField.ChoiceSource.LOOKUP
+        ):
+            return ""
+
+        if not field.choice_lookup_list_id:
+            return ""
+
+        value_str = str(value)
+
+        item = (
+            LookupItem.objects
+            .filter(
+                lookup_list_id=field.choice_lookup_list_id,
+                value=value_str,
+                is_active=True,
+            )
+            .first()
+        )
+
+        return item.label if item else ""
+
+    @staticmethod
     def _get_field_choices(field):
         """
         Build choices for a SELECT FormField based on its choice source.
@@ -1956,8 +2036,15 @@ class DynamicFormService:
                                 }
                             )
 
+                        row_id = (
+                            raw_item.get("_id", "")
+                            if isinstance(raw_item, dict)
+                            else ""
+                        )
+
                         items.append(
                             {
+                                "_id": row_id,
                                 "fields": item_fields,
                             }
                         )
@@ -3186,8 +3273,26 @@ class DynamicFormService:
                         )
 
                 # ---------------------------------------------
+                # Build a lookup of previous items by _id
+                # for matching submitted rows to existing rows.
+                # ---------------------------------------------
+
+                previous_by_id = {}
+
+                for prev in previous_items:
+                    if (
+                        isinstance(prev, dict)
+                        and prev.get("_id")
+                    ):
+                        previous_by_id[prev["_id"]] = prev
+
+                # ---------------------------------------------
                 # Existing items are used to preserve fields
                 # that the current user cannot edit.
+                #
+                # Each row is matched by _id when present.
+                # New rows get a freshly generated UUID.
+                # Legacy rows without _id are assigned one.
                 # ---------------------------------------------
 
                 saved_items = []
@@ -3197,14 +3302,31 @@ class DynamicFormService:
                     if not isinstance(item, dict):
                         continue
 
-                    previous_item = (
-                        previous_items[index]
-                        if index < len(previous_items)
-                        and isinstance(previous_items[index], dict)
-                        else {}
-                    )
+                    # -----------------------------------------
+                    # Resolve row identity
+                    # -----------------------------------------
 
-                    saved_item = {}
+                    row_id = item.get("_id", "").strip()
+
+                    if row_id and row_id in previous_by_id:
+                        previous_item = previous_by_id[row_id]
+                    else:
+                        previous_item = {}
+
+                    # -----------------------------------------
+                    # Assign _id if missing (new or legacy row)
+                    # -----------------------------------------
+
+                    if not row_id:
+                        row_id = str(uuid.uuid4())
+
+                    saved_item = {"_id": row_id}
+
+                    # -----------------------------------------
+                    # Snapshot lookup labels at save time
+                    # -----------------------------------------
+
+                    lookup_labels = {}
 
                     for field in group.fields.filter(
                         is_active=True,
@@ -3221,13 +3343,69 @@ class DynamicFormService:
                                 field_code,
                                 "",
                             )
-
                         else:
 
                             saved_item[field_code] = previous_item.get(
                                 field_code,
                                 "",
                             )
+
+                        # Snapshot lookup label for SELECT fields
+
+                        if (
+                            field.field_type
+                            == FormField.FieldType.SELECT
+                            and field.choice_source
+                            == FormField.ChoiceSource.LOOKUP
+                        ):
+
+                            current_value = saved_item.get(
+                                field_code, ""
+                            )
+
+                            if current_value:
+                                # Check previous snapshot first
+                                prev_labels = (
+                                    previous_item.get(
+                                        "_lookup_labels", {}
+                                    )
+                                    if isinstance(
+                                        previous_item, dict
+                                    )
+                                    else {}
+                                )
+
+                                if (
+                                    field_code in prev_labels
+                                    and item.get(field_code)
+                                    == previous_item.get(
+                                        field_code
+                                    )
+                                ):
+                                    # Value unchanged,
+                                    # keep previous snapshot
+                                    lookup_labels[field_code] = (
+                                        prev_labels[field_code]
+                                    )
+                                else:
+                                    # Resolve fresh label
+                                    label = (
+                                        DynamicFormService
+                                        ._get_lookup_label(
+                                            field=field,
+                                            value=current_value,
+                                        )
+                                    )
+
+                                    if label:
+                                        lookup_labels[field_code] = (
+                                            label
+                                        )
+
+                    if lookup_labels:
+                        saved_item["_lookup_labels"] = (
+                            lookup_labels
+                        )
 
                     saved_items.append(
                         saved_item
