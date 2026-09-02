@@ -2045,6 +2045,7 @@ class DynamicFormService:
                         items.append(
                             {
                                 "_id": row_id,
+                                "row_id": row_id,
                                 "fields": item_fields,
                             }
                         )
