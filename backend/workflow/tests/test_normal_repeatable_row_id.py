@@ -824,3 +824,282 @@ class NormalRepeatableRowIdEdgeCaseTests(TestCase):
         # The fabricated _id is used as-is (it becomes the new identity)
         self.assertEqual(rows[0]["_id"], "nonexistent-id-12345")
         self.assertEqual(rows[0]["name"], "B")
+
+
+class LegacyRowFallbackTests(TestCase):
+    """Test fallback matching for legacy rows without _id."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            username="legacy_fallback_user",
+            password="test-password",
+        )
+
+        cls.other_user = User.objects.create_user(
+            username="legacy_fallback_other",
+            password="test-password",
+        )
+
+        cls.workflow = Workflow.objects.create(
+            name="Legacy Fallback Workflow",
+            code="LEGACY_FB_WF",
+            is_active=True,
+        )
+
+        cls.step = WorkflowStep.objects.create(
+            workflow=cls.workflow,
+            name="Step",
+            code="STEP",
+            order=1,
+            is_active=True,
+        )
+
+        cls.membership = WorkflowMembership.objects.create(
+            workflow=cls.workflow,
+            user=cls.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+
+        cls.form = FormDefinition.objects.create(
+            workflow=cls.workflow,
+            name="Legacy Form",
+            is_active=True,
+        )
+
+        cls.section = FormSection.objects.create(
+            form=cls.form,
+            name="Section",
+            code="SEC",
+            order=1,
+            is_active=True,
+        )
+
+        cls.group = FormRepeatableGroup.objects.create(
+            section=cls.section,
+            name="Items",
+            code="items",
+            order=1,
+            is_active=True,
+        )
+
+        cls.name_field = FormField.objects.create(
+            section=cls.section,
+            repeatable_group=cls.group,
+            name="Name",
+            code="name",
+            field_type=FormField.FieldType.TEXT,
+            label="Name",
+            order=1,
+            is_required=True,
+            is_active=True,
+        )
+
+        cls.note_field = FormField.objects.create(
+            section=cls.section,
+            repeatable_group=cls.group,
+            name="Note",
+            code="note",
+            field_type=FormField.FieldType.TEXT,
+            label="Note",
+            order=2,
+            is_required=False,
+            is_active=True,
+        )
+
+        # User can edit 'name' but NOT 'note'
+        FieldAccess.objects.create(
+            field=cls.name_field,
+            step=cls.step,
+            user=cls.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        FieldAccess.objects.create(
+            field=cls.note_field,
+            step=cls.step,
+            user=cls.user,
+            can_view=True,
+            can_edit=False,
+        )
+
+        RepeatableGroupAccess.objects.create(
+            group=cls.group,
+            step=cls.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+        )
+
+    def create_instance(self):
+        instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+            status=WorkflowInstance.Status.ACTIVE,
+        )
+
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step,
+            performed_by=self.user,
+        )
+
+        return instance
+
+    def test_legacy_row_preserves_non_editable_fields(self):
+        """
+        Legacy row without _id: non-editable field value is preserved,
+        row receives a _id, and subsequent save matches by _id.
+        """
+        instance = self.create_instance()
+
+        # Create legacy data: row without _id
+        # 'note' has a value that the current user cannot edit
+        form_data = FormData.objects.create(
+            instance=instance,
+            data={
+                "items": [
+                    {
+                        "name": "Original Name",
+                        "note": "Important note set by admin",
+                    },
+                ],
+            },
+        )
+
+        # Submit the row without _id (legacy behavior)
+        submitted_data = {
+            "items_0_name": "Updated Name",
+            "items_0_note": "",
+        }
+
+        form_data = DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=submitted_data,
+        )
+
+        rows = form_data.data.get("items", [])
+        self.assertEqual(len(rows), 1)
+
+        # Row must receive a _id
+        self.assertTrue(rows[0].get("_id"))
+
+        # Editable field was updated
+        self.assertEqual(rows[0]["name"], "Updated Name")
+
+        # Non-editable field was preserved (not overwritten with empty)
+        self.assertEqual(
+            rows[0]["note"],
+            "Important note set by admin",
+        )
+
+    def test_legacy_row_subsequent_save_matches_by_id(self):
+        """
+        After a legacy row receives a _id, the next save
+        must match it by _id, not by index.
+        """
+        instance = self.create_instance()
+
+        # Create legacy data
+        FormData.objects.create(
+            instance=instance,
+            data={
+                "items": [
+                    {
+                        "name": "Original",
+                        "note": "Admin note",
+                    },
+                ],
+            },
+        )
+
+        # First save: legacy row gets _id
+        first_data = {
+            "items_0_name": "First Update",
+            "items_0_note": "",
+        }
+
+        form_data = DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=first_data,
+        )
+
+        row_id = form_data.data["items"][0]["_id"]
+        self.assertTrue(row_id)
+
+        # Second save: include _id explicitly
+        second_data = {
+            "items_0_name": "Second Update",
+            "items_0_note": "",
+            "items_0__id": row_id,
+        }
+
+        form_data = DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=second_data,
+        )
+
+        rows = form_data.data.get("items", [])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["_id"], row_id)
+        self.assertEqual(rows[0]["name"], "Second Update")
+        self.assertEqual(rows[0]["note"], "Admin note")
+
+    def test_two_legacy_rows_matched_by_respective_indexes(self):
+        """
+        Two legacy rows without _id are matched by their
+        respective array indexes, not swapped.
+        """
+        instance = self.create_instance()
+
+        FormData.objects.create(
+            instance=instance,
+            data={
+                "items": [
+                    {
+                        "name": "Row A",
+                        "note": "Note A (admin)",
+                    },
+                    {
+                        "name": "Row B",
+                        "note": "Note B (admin)",
+                    },
+                ],
+            },
+        )
+
+        # Submit both rows without _id, swapping names
+        submitted_data = {
+            "items_0_name": "Row A updated",
+            "items_0_note": "",
+            "items_1_name": "Row B updated",
+            "items_1_note": "",
+        }
+
+        form_data = DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=submitted_data,
+        )
+
+        rows = form_data.data["items"]
+        self.assertEqual(len(rows), 2)
+
+        # Each row got a _id
+        self.assertTrue(rows[0].get("_id"))
+        self.assertTrue(rows[1].get("_id"))
+        self.assertNotEqual(rows[0]["_id"], rows[1]["_id"])
+
+        # Names were updated
+        self.assertEqual(rows[0]["name"], "Row A updated")
+        self.assertEqual(rows[1]["name"], "Row B updated")
+
+        # Non-editable notes preserved from correct legacy rows
+        self.assertEqual(rows[0]["note"], "Note A (admin)")
+        self.assertEqual(rows[1]["note"], "Note B (admin)")

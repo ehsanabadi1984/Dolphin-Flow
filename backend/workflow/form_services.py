@@ -3287,12 +3287,33 @@ class DynamicFormService:
                         previous_by_id[prev["_id"]] = prev
 
                 # ---------------------------------------------
+                # Build an index-based list of legacy rows
+                # (previous rows without _id) for fallback
+                # matching when a submitted row has no _id.
+                # ---------------------------------------------
+
+                legacy_rows_by_index = {}
+
+                for idx, prev in enumerate(previous_items):
+                    if (
+                        isinstance(prev, dict)
+                        and not prev.get("_id")
+                    ):
+                        legacy_rows_by_index[idx] = prev
+
+                # Track which legacy indexes have been consumed
+                # so each is matched at most once.
+
+                consumed_legacy_indexes = set()
+
+                # ---------------------------------------------
                 # Existing items are used to preserve fields
                 # that the current user cannot edit.
                 #
                 # Each row is matched by _id when present.
                 # New rows get a freshly generated UUID.
-                # Legacy rows without _id are assigned one.
+                # Legacy rows without _id are matched by index
+                # as a one-time fallback, then assigned a UUID.
                 # ---------------------------------------------
 
                 saved_items = []
@@ -3310,6 +3331,14 @@ class DynamicFormService:
 
                     if row_id and row_id in previous_by_id:
                         previous_item = previous_by_id[row_id]
+                    elif (
+                        not row_id
+                        and index in legacy_rows_by_index
+                        and index not in consumed_legacy_indexes
+                    ):
+                        # Fallback: match legacy row by index
+                        previous_item = legacy_rows_by_index[index]
+                        consumed_legacy_indexes.add(index)
                     else:
                         previous_item = {}
 
