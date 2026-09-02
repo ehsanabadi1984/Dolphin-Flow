@@ -1,7 +1,14 @@
 from django import template
+from django.db.models import Exists, OuterRef, Q, Subquery
 
 from workflow.authorization import WorkflowAuthorizationService
-from workflow.models import FormData, InstanceDevice, WorkflowInstance, WorkflowStep
+from workflow.models import (
+    FormData,
+    InstanceDevice,
+    WorkflowInstance,
+    WorkflowStep,
+    WorkflowTransitionExecution,
+)
 
 
 register = template.Library()
@@ -62,4 +69,55 @@ def startable_workflows(context):
         WorkflowAuthorizationService
         .get_startable_workflows(request.user)
         .order_by("name")
+    )
+
+
+@register.simple_tag
+def recent_processes(user, limit=10):
+    """Return the user's newest meaningful workflow instances."""
+    if not user or not user.is_authenticated:
+        return []
+
+    first_step_id = Subquery(
+        WorkflowStep.objects
+        .filter(
+            workflow_id=OuterRef("workflow_id"),
+            is_active=True,
+        )
+        .order_by("order")
+        .values("pk")[:1]
+    )
+
+    has_form_data = Exists(
+        FormData.objects.filter(instance_id=OuterRef("pk"))
+    )
+    has_active_device = Exists(
+        InstanceDevice.objects.filter(
+            instance_id=OuterRef("pk"),
+            is_active=True,
+        )
+    )
+    has_transition = Exists(
+        WorkflowTransitionExecution.objects.filter(
+            instance_id=OuterRef("pk")
+        )
+    )
+
+    abandoned_start = (
+        Q(
+            status=WorkflowInstance.Status.ACTIVE,
+            current_step_id=first_step_id,
+        )
+        & ~has_form_data
+        & ~has_active_device
+        & ~has_transition
+    )
+
+    return list(
+        WorkflowInstance.objects
+        .filter(started_by=user)
+        .exclude(status=WorkflowInstance.Status.DRAFT)
+        .exclude(abandoned_start)
+        .select_related("workflow", "current_step")
+        .order_by("-started_at")[:limit]
     )
