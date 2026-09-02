@@ -24,10 +24,7 @@
 
     <section class="df-grid">
         <div class="df-card df-panel">
-            <div class="df-panel-header">
-                <div class="df-panel-title">فرآیندهای قابل شروع</div>
-                <span class="df-panel-link">از منوی فرآیندها</span>
-            </div>
+            <div class="df-panel-header"><div class="df-panel-title">فرآیندهای قابل شروع</div><span class="df-panel-link">از منوی فرآیندها</span></div>
             <div class="df-activity">
                 {% for workflow in workflows %}
                     <div class="df-activity-item">
@@ -37,8 +34,7 @@
                             {% if workflow.description %}<div class="df-activity-meta">{{ workflow.description }}</div>{% endif %}
                         </div>
                         <form method="post" action="{% url 'operator_panel:start_workflow' workflow.pk %}">
-                            {% csrf_token %}
-                            <button type="submit" class="df-status df-status-info">شروع فرآیند</button>
+                            {% csrf_token %}<button type="submit" class="df-status df-status-info">شروع فرآیند</button>
                         </form>
                     </div>
                 {% empty %}
@@ -53,22 +49,20 @@
                 <a href="{% url 'operator_panel:my_processes' %}" class="df-panel-link">مشاهده همه</a>
             </div>
 
+            {% recent_processes request.user as recent_instances %}
             <div class="df-activity df-my-processes-scroll">
-                {% for instance in instances|slice:":10" %}
-                    {% is_abandoned_start instance as abandoned_start %}
-                    {% if not abandoned_start %}
-                        <div class="df-activity-item">
-                            <div class="df-activity-dot"></div>
-                            <div class="df-activity-main">
-                                <div class="df-activity-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
-                                <div class="df-activity-meta">
-                                    {% if instance.current_step %}مرحله: {{ instance.current_step.name }}{% else %}بدون مرحله فعلی{% endif %}
-                                    · {{ instance.get_status_display }}
-                                </div>
+                {% for instance in recent_instances %}
+                    <div class="df-activity-item">
+                        <div class="df-activity-dot"></div>
+                        <div class="df-activity-main">
+                            <div class="df-activity-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
+                            <div class="df-activity-meta">
+                                {% if instance.current_step %}مرحله: {{ instance.current_step.name }}{% else %}بدون مرحله فعلی{% endif %}
+                                · {{ instance.get_status_display }}
                             </div>
-                            <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
                         </div>
-                    {% endif %}
+                        <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
+                    </div>
                 {% empty %}
                     <div class="df-activity-item"><div class="df-activity-main"><div class="df-activity-title">هنوز فرآیندی برای شما ایجاد نشده است.</div></div></div>
                 {% endfor %}
