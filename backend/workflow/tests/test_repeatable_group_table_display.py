@@ -452,3 +452,20 @@ class TableModeRenderTests(TestCase):
 
         # Should not contain item._id (Django template syntax)
         self.assertNotIn("item._id", content)
+
+    def test_table_hidden_id_in_actions_cell(self):
+        """TABLE hidden _id input is inside actions cell, not extra column."""
+        import os
+
+        template_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "..", "operator_panel", "templates",
+            "operator_panel", "workflow_instance.html",
+        )
+        template_path = os.path.normpath(template_path)
+
+        with open(template_path, "r") as f:
+            content = f.read()
+
+        # Should not have a hidden td for row_id
+        self.assertNotIn("<td style=\"display:none;\">", content)

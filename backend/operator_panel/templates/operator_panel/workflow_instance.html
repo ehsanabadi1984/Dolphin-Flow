@@ -481,9 +481,7 @@
                       {% for field_info in group.fields %}
                         <th>{{ field_info.field.label }}</th>
                       {% endfor %}
-                      {% if not dynamic_form.is_submitted and group.can_edit %}
-                        <th>عملیات</th>
-                      {% endif %}
+                      <th>عملیات</th>
                     </tr>
                   </thead>
                   <tbody
@@ -500,12 +498,6 @@
                           data-repeatable-item
                           {% if item.row_id %}data-row-id="{{ item.row_id }}"{% endif %}
                         >
-
-                          {% if item.row_id %}
-                            <td style="display:none;">
-                              <input type="hidden" name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}__id" value="{{ item.row_id }}" />
-                            </td>
-                          {% endif %}
 
                           {% for item_field in item.fields %}
                             <td>
@@ -600,8 +592,11 @@
                             </td>
                           {% endfor %}
 
-                          {% if not dynamic_form.is_submitted and group.can_edit %}
-                            <td class="df-table-actions">
+                          <td class="df-table-actions">
+                            {% if item.row_id %}
+                              <input type="hidden" name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}__id" value="{{ item.row_id }}" />
+                            {% endif %}
+                            {% if not dynamic_form.is_submitted and group.can_edit %}
                               <button
                                 type="button"
                                 class="df-button df-button-danger df-repeatable-delete"
@@ -609,8 +604,8 @@
                               >
                                 حذف
                               </button>
-                            </td>
-                          {% endif %}
+                            {% endif %}
+                          </td>
 
                         </tr>
 

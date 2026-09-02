@@ -2015,6 +2015,7 @@ class FormRepeatableGroupInline(admin.TabularInline):
         "name",
         "code",
         "group_type",
+        "display_type",
         "description",
         "order",
         "is_required",
