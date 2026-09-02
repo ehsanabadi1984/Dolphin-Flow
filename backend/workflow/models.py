@@ -914,6 +914,10 @@ class FormRepeatableGroup(models.Model):
         NORMAL = "NORMAL", "گروه معمولی"
         DEVICE = "DEVICE", "گروه دستگاه‌ها"
 
+    class DisplayType(models.TextChoices):
+        LIST = "LIST", "لیست"
+        TABLE = "TABLE", "جدول"
+
     section = models.ForeignKey(
         FormSection,
         on_delete=models.PROTECT,
@@ -932,6 +936,12 @@ class FormRepeatableGroup(models.Model):
         max_length=20,
         choices=GroupType.choices,
         default=GroupType.NORMAL,
+    )
+
+    display_type = models.CharField(
+        max_length=20,
+        choices=DisplayType.choices,
+        default=DisplayType.LIST,
     )
 
     description = models.TextField(
