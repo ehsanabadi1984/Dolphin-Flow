@@ -1,23 +1,45 @@
 {% extends "operator_panel/base.html" %}
 
-{% block title %}
-    فرآیندهای من | Dolphin Flow
-{% endblock %}
+{% block title %}فرآیندهای من | Dolphin Flow{% endblock %}
 
 {% block content %}
-<section class="df-content">
+<style>
+.df-page-heading { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; }
+.df-page-heading-title { margin:8px 0 6px; font-size:22px; }
+.df-page-heading-meta { margin:0; color:var(--muted); font-size:11px; }
+.df-process-filters { padding:18px; margin-bottom:18px; }
+.df-process-filter-form { display:grid; grid-template-columns:minmax(220px,2fr) minmax(150px,1fr) minmax(180px,1fr) auto; gap:12px; align-items:end; }
+.df-filter-field { display:flex; flex-direction:column; gap:7px; }
+.df-filter-field label { color:var(--muted); font-size:10px; }
+.df-filter-field input, .df-filter-field select { width:100%; min-height:40px; padding:8px 11px; border:1px solid var(--border); border-radius:9px; background:var(--surface-2); color:var(--text); font:inherit; font-size:11px; outline:none; }
+.df-filter-field input:focus, .df-filter-field select:focus { border-color:rgba(250,204,21,.45); }
+.df-filter-actions { display:flex; gap:8px; }
+.df-button { min-height:40px; padding:0 15px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--accent); border-radius:9px; background:var(--accent); color:#111; font:inherit; font-size:11px; cursor:pointer; }
+.df-button-secondary { border-color:var(--border); background:var(--surface-2); color:var(--muted); }
+.df-process-list-panel { overflow:hidden; }
+.df-process-count { color:var(--muted); font-size:10px; }
+.df-process-list { max-height:620px; overflow-y:auto; scrollbar-width:thin; }
+.df-process-row { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:17px 20px; border-bottom:1px solid var(--border); }
+.df-process-row:last-child { border-bottom:0; }
+.df-process-row-main { min-width:0; }
+.df-process-row-title { font-size:12px; font-weight:600; }
+.df-process-row-title span { color:var(--muted); font-weight:500; }
+.df-process-row-meta { display:flex; flex-wrap:wrap; gap:7px; margin-top:7px; color:var(--muted); font-size:9px; }
+.df-empty-state { padding:45px 20px; text-align:center; }
+.df-empty-state-title { font-size:12px; }
+.df-empty-state-meta { margin-top:7px; color:var(--muted); font-size:10px; }
+.df-pagination { display:flex; align-items:center; justify-content:center; gap:16px; padding:16px; border-top:1px solid var(--border); color:var(--muted); font-size:10px; }
+.df-pagination a { padding:7px 11px; border:1px solid var(--border); border-radius:8px; background:var(--surface-2); color:var(--text); }
+@media (max-width: 900px) { .df-process-filter-form { grid-template-columns:1fr 1fr; } .df-filter-search { grid-column:1 / -1; } .df-filter-actions { grid-column:1 / -1; } }
+@media (max-width: 600px) { .df-process-filter-form { grid-template-columns:1fr; } .df-filter-search, .df-filter-actions { grid-column:auto; } .df-process-row { align-items:flex-start; flex-direction:column; } }
+</style>
 
+<section class="df-content">
     <div class="df-page-heading">
         <div>
-            <div class="df-breadcrumb">
-                <span>فرآیندها</span>
-                <span class="df-breadcrumb-separator">/</span>
-                <span>فرآیندهای من</span>
-            </div>
+            <div class="df-breadcrumb"><span>فرآیندها</span><span class="df-breadcrumb-separator">/</span><span>فرآیندهای من</span></div>
             <h1 class="df-page-heading-title">فرآیندهای من</h1>
-            <p class="df-page-heading-meta">
-                فرآیندهایی که توسط شما شروع شده‌اند.
-            </p>
+            <p class="df-page-heading-meta">فرآیندهایی که توسط شما شروع شده‌اند.</p>
         </div>
     </div>
 
@@ -25,116 +47,54 @@
         <form method="get" class="df-process-filter-form">
             <div class="df-filter-field df-filter-search">
                 <label for="process-search">جستجو</label>
-                <input
-                    id="process-search"
-                    type="search"
-                    name="q"
-                    value="{{ search }}"
-                    placeholder="نام فرآیند، کد یا شماره..."
-                >
+                <input id="process-search" type="search" name="q" value="{{ search }}" placeholder="نام فرآیند، کد یا شماره...">
             </div>
-
             <div class="df-filter-field">
                 <label for="process-status">وضعیت</label>
                 <select id="process-status" name="status">
                     <option value="">همه وضعیت‌ها</option>
-                    {% for value, label in status_choices %}
-                        <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
-                            {{ label }}
-                        </option>
-                    {% endfor %}
+                    {% for value, label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
                 </select>
             </div>
-
             <div class="df-filter-field">
                 <label for="process-workflow">نوع فرآیند</label>
                 <select id="process-workflow" name="workflow">
                     <option value="">همه فرآیندها</option>
-                    {% for item in workflows %}
-                        <option
-                            value="{{ item.workflow_id }}"
-                            {% if selected_workflow == item.workflow_id|stringformat:"s" %}selected{% endif %}
-                        >
-                            {{ item.workflow__name }}
-                        </option>
-                    {% endfor %}
+                    {% for item in workflows %}<option value="{{ item.workflow_id }}" {% if selected_workflow == item.workflow_id|stringformat:"s" %}selected{% endif %}>{{ item.workflow__name }}</option>{% endfor %}
                 </select>
             </div>
-
             <div class="df-filter-actions">
                 <button type="submit" class="df-button">جستجو</button>
-                <a href="{% url 'operator_panel:my_processes' %}" class="df-button df-button-secondary">
-                    پاک کردن
-                </a>
+                <a href="{% url 'operator_panel:my_processes' %}" class="df-button df-button-secondary">پاک کردن</a>
             </div>
         </form>
     </div>
 
     <div class="df-card df-panel df-process-list-panel">
-        <div class="df-panel-header">
-            <div class="df-panel-title">لیست فرآیندها</div>
-            <div class="df-process-count">
-                {{ page_obj.paginator.count }} مورد
-            </div>
-        </div>
-
+        <div class="df-panel-header"><div class="df-panel-title">لیست فرآیندها</div><div class="df-process-count">{{ page_obj.paginator.count }} مورد</div></div>
         <div class="df-process-list">
             {% for instance in instances %}
                 <div class="df-process-row">
                     <div class="df-process-row-main">
-                        <div class="df-process-row-title">
-                            {{ instance.workflow.name }}
-                            <span>#{{ instance.pk }}</span>
-                        </div>
-
+                        <div class="df-process-row-title">{{ instance.workflow.name }} <span>#{{ instance.pk }}</span></div>
                         <div class="df-process-row-meta">
-                            {% if instance.current_step %}
-                                <span>مرحله: {{ instance.current_step.name }}</span>
-                            {% endif %}
-                            <span>·</span>
-                            <span>{{ instance.get_status_display }}</span>
-                            <span>·</span>
-                            <span>{{ instance.started_at|date:"Y/m/d - H:i" }}</span>
+                            {% if instance.current_step %}<span>مرحله: {{ instance.current_step.name }}</span>{% endif %}
+                            <span>·</span><span>{{ instance.get_status_display }}</span><span>·</span><span>{{ instance.started_at|date:"Y/m/d - H:i" }}</span>
                         </div>
                     </div>
-
-                    <a
-                        href="{% url 'operator_panel:workflow_instance' instance.pk %}"
-                        class="df-status df-status-success"
-                    >
-                        مشاهده
-                    </a>
+                    <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
                 </div>
             {% empty %}
-                <div class="df-empty-state">
-                    <div class="df-empty-state-title">فرآیندی پیدا نشد.</div>
-                    <div class="df-empty-state-meta">
-                        فیلترها یا عبارت جستجو را تغییر دهید.
-                    </div>
-                </div>
+                <div class="df-empty-state"><div class="df-empty-state-title">فرآیندی پیدا نشد.</div><div class="df-empty-state-meta">فیلترها یا عبارت جستجو را تغییر دهید.</div></div>
             {% endfor %}
         </div>
-
         {% if page_obj.paginator.num_pages > 1 %}
             <div class="df-pagination">
-                {% if page_obj.has_previous %}
-                    <a href="?q={{ search|urlencode }}&status={{ selected_status|urlencode }}&workflow={{ selected_workflow|urlencode }}&page={{ page_obj.previous_page_number }}">
-                        قبلی
-                    </a>
-                {% endif %}
-
-                <span>
-                    صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}
-                </span>
-
-                {% if page_obj.has_next %}
-                    <a href="?q={{ search|urlencode }}&status={{ selected_status|urlencode }}&workflow={{ selected_workflow|urlencode }}&page={{ page_obj.next_page_number }}">
-                        بعدی
-                    </a>
-                {% endif %}
+                {% if page_obj.has_previous %}<a href="?q={{ search|urlencode }}&status={{ selected_status|urlencode }}&workflow={{ selected_workflow|urlencode }}&page={{ page_obj.previous_page_number }}">قبلی</a>{% endif %}
+                <span>صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+                {% if page_obj.has_next %}<a href="?q={{ search|urlencode }}&status={{ selected_status|urlencode }}&workflow={{ selected_workflow|urlencode }}&page={{ page_obj.next_page_number }}">بعدی</a>{% endif %}
             </div>
         {% endif %}
     </div>
-
 </section>
 {% endblock %}
