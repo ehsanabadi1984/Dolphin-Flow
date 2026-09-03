@@ -1,1 +1,0 @@
-Implementation work in progress: four Dynamic Form fixes (NORMAL/DEVICE permission identity, POST-priority validation re-render, true empty state, and server-side can_delete enforcement). This marker will be removed when the implementation is committed.
