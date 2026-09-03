@@ -24,7 +24,7 @@
 
         body {
             margin: 0;
-            font-family: Tahoma, "Segoe UI", sans-serif;
+            font-family: Yekan, "Yekan Bakh", Tahoma, "Segoe UI", sans-serif;
             color: var(--text);
             background:
                 radial-gradient(circle at 12% 18%, rgba(23, 105, 224, 0.08), transparent 30%),
@@ -252,7 +252,7 @@
         <section class="brand-panel" aria-label="Dolphin Plus">
             <div class="plus-mark" aria-hidden="true"><span>+</span></div>
             <p class="brand-name"><strong>Dolphin</strong> <em>Plus</em></p>
-            <p class="brand-tagline">یک قدم فراتر برای سازمان</p>
+            <p class="brand-tagline">ساده‌تر، سریع‌تر، هوشمندتر</p>
         </section>
 
         <section class="form-panel">
@@ -268,15 +268,21 @@
                 <form method="post" novalidate>
                     {% csrf_token %}
 
-                    {% for field in form %}
-                        <div class="field">
-                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                            {{ field }}
-                            {% if field.errors %}
-                                {{ field.errors }}
-                            {% endif %}
-                        </div>
-                    {% endfor %}
+                    <div class="field">
+                        <label for="{{ form.username.id_for_label }}">نام کاربری</label>
+                        {{ form.username }}
+                        {% if form.username.errors %}
+                            {{ form.username.errors }}
+                        {% endif %}
+                    </div>
+
+                    <div class="field">
+                        <label for="{{ form.password.id_for_label }}">گذرواژه</label>
+                        {{ form.password }}
+                        {% if form.password.errors %}
+                            {{ form.password.errors }}
+                        {% endif %}
+                    </div>
 
                     <div class="actions">
                         <button type="submit">ورود به سامانه</button>
