@@ -1,0 +1,94 @@
+/* Theme overrides */
+
+html.theme-light {
+    --bg: #f4f6f8;
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --surface-3: #eef2f7;
+    --border: rgba(15, 23, 42, 0.10);
+
+    --text: #18202b;
+    --muted: #64748b;
+
+    --accent: #d6a900;
+    --accent-soft: rgba(214, 169, 0, 0.12);
+
+    --df-shadow-sm: 0 4px 12px rgba(15, 23, 42, 0.08);
+    --df-shadow-md: 0 12px 32px rgba(15, 23, 42, 0.12);
+    --df-shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.16);
+}
+
+html.theme-light .df-header {
+    background: rgba(255, 255, 255, 0.88);
+}
+
+html.theme-light .df-nav-label,
+html.theme-light .df-nav-link {
+    color: #64748b;
+}
+
+html.theme-light .df-nav-link:hover,
+html.theme-light .df-icon-button:hover,
+html.theme-light .df-user:hover,
+html.theme-light .df-user[aria-expanded="true"] {
+    background: rgba(15, 23, 42, 0.04);
+}
+
+html.theme-light .df-notification-menu-header,
+html.theme-light .df-notification-item.unread {
+    background: rgba(15, 23, 42, 0.02);
+}
+
+html.theme-light .df-notification-item {
+    border-bottom-color: rgba(15, 23, 42, 0.07);
+}
+
+html.theme-light .df-notification-item:hover {
+    background: rgba(15, 23, 42, 0.035);
+}
+
+html.theme-light .df-notification-item-time,
+html.theme-light .df-nav-label {
+    color: #64748b;
+}
+
+/* Theme switch */
+
+.df-theme-toggle {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .2s ease, color .2s ease, border-color .2s ease;
+}
+
+.df-theme-toggle:hover {
+    background: rgba(255, 255, 255, .04);
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.df-theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+html.theme-light .df-theme-toggle:hover {
+    background: rgba(15, 23, 42, .04);
+}
+
+html.theme-light .df-brand-mark {
+    color: #111;
+}
