@@ -1,0 +1,47 @@
+{% extends "operator_panel/base.html" %}
+
+{% block title %}پروفایل من | Dolphin Flow{% endblock %}
+
+{% block content %}
+<section class="df-page-section">
+    <div class="df-section-header">
+        <div>
+            <h1>پروفایل من</h1>
+            <p>اطلاعات حساب کاربری شما</p>
+        </div>
+    </div>
+
+    <div class="df-card">
+        <div class="df-form-grid">
+            <div class="df-form-field">
+                <label>نام کاربری</label>
+                <input type="text" value="{{ user.username }}" disabled>
+            </div>
+            <div class="df-form-field">
+                <label>نام</label>
+                <input type="text" value="{{ user.first_name|default:'—' }}" disabled>
+            </div>
+            <div class="df-form-field">
+                <label>نام خانوادگی</label>
+                <input type="text" value="{{ user.last_name|default:'—' }}" disabled>
+            </div>
+            <div class="df-form-field">
+                <label>ایمیل</label>
+                <input type="text" value="{{ user.email|default:'—' }}" disabled>
+            </div>
+            <div class="df-form-field">
+                <label>سمت</label>
+                <input type="text" value="{{ user.get_role_display|default:'—' }}" disabled>
+            </div>
+            <div class="df-form-field">
+                <label>شغل</label>
+                <input type="text" value="{{ user.job|default:'—' }}" disabled>
+            </div>
+        </div>
+
+        <div class="df-card-actions">
+            <a href="{% url 'password_change' %}" class="df-button">تغییر رمز عبور</a>
+        </div>
+    </div>
+</section>
+{% endblock %}
