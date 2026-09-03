@@ -1,17 +1,14 @@
 <header class="df-header">
 
     <div class="df-header-context">
-
         <div class="df-breadcrumb">
             <span>Dolphin Flow</span>
             <span class="df-breadcrumb-separator">/</span>
             <span>داشبورد</span>
         </div>
-
         <div class="df-page-title">
             داشبورد
         </div>
-
     </div>
 
     <div class="df-header-actions">
@@ -33,7 +30,7 @@
                 <path d="M2 12h2"></path>
                 <path d="M20 12h2"></path>
                 <path d="m6.34 17.66-1.41 1.41"></path>
-                <path d="m19.07 4.93-1.41 1.41"></path>
+                <path d="m19.07 4.93-1.41-1.41"></path>
             </svg>
             <svg class="df-theme-icon df-theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.6 6.6 0 0 0 21 12.8Z"></path>
@@ -42,7 +39,6 @@
 
         <!-- Notifications -->
         <div class="df-notification-wrapper">
-
             <button
                 type="button"
                 class="df-icon-button df-notification-button"
@@ -55,38 +51,22 @@
                     <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
                     <path d="M10 21h4"></path>
                 </svg>
-
-                <span
-                    class="df-notification-badge"
-                    id="df-notification-badge"
-                    hidden
-                >0</span>
+                <span class="df-notification-badge" id="df-notification-badge" hidden>0</span>
             </button>
 
-            <div
-                class="df-notification-menu"
-                id="df-notification-menu"
-                aria-hidden="true"
-            >
+            <div class="df-notification-menu" id="df-notification-menu" aria-hidden="true">
                 <div class="df-notification-menu-header">
                     <div class="df-notification-menu-title">اعلان‌ها</div>
-                    <div class="df-notification-menu-count" id="df-notification-menu-count">
-                        0 اعلان جدید
-                    </div>
+                    <div class="df-notification-menu-count" id="df-notification-menu-count">0 اعلان جدید</div>
                 </div>
-
                 <div class="df-notification-list" id="df-notification-list">
-                    <div class="df-notification-empty">
-                        در حال دریافت اعلان‌ها...
-                    </div>
+                    <div class="df-notification-empty">در حال دریافت اعلان‌ها...</div>
                 </div>
             </div>
-
         </div>
 
         <!-- User -->
         <div class="df-user-wrapper">
-
             <button
                 type="button"
                 class="df-user"
@@ -101,18 +81,15 @@
                         {{ request.user.get_role_display }}
                     </div>
                 </div>
-
                 <div class="df-user-avatar">
                     {{ request.user.first_name|first|default:request.user.username|first|upper }}
                 </div>
-
                 <svg class="df-user-chevron" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="m6 9 6 6 6-6"></path>
                 </svg>
             </button>
 
             <div class="df-user-menu" id="df-user-menu">
-
                 <div class="df-user-menu-header">
                     <div class="df-user-menu-avatar">
                         {{ request.user.first_name|first|default:request.user.username|first|upper }}
@@ -129,18 +106,44 @@
 
                 <div class="df-user-menu-divider"></div>
 
-                <a href="#" class="df-user-menu-item">
+                <a href="{% url 'accounts:profile' %}" class="df-user-menu-item">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="12" cy="8" r="3"></circle>
                         <path d="M5 21c.7-4 3-6 7-6s6.3 2 7 6"></path>
                     </svg>
-                    <span>حساب کاربری</span>
+                    <span>پروفایل من</span>
                 </a>
 
-                <a href="#" class="df-user-menu-item">
+                <a href="{% url 'password_change' %}" class="df-user-menu-item">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+                        <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+                        <path d="M12 14v2"></path>
+                    </svg>
+                    <span>تغییر رمز عبور</span>
+                </a>
+
+                <a href="{% url 'accounts:permissions' %}" class="df-user-menu-item">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 3 20 6v5c0 5-3.4 8.1-8 10-4.6-1.9-8-5-8-10V6l8-3Z"></path>
+                        <path d="m9 12 2 2 4-4"></path>
+                    </svg>
+                    <span>دسترسی‌های من</span>
+                </a>
+
+                <a href="{% url 'accounts:activity' %}" class="df-user-menu-item">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 19V5"></path>
+                        <path d="M4 17h16"></path>
+                        <path d="m7 14 3-4 3 2 4-6"></path>
+                    </svg>
+                    <span>فعالیت‌های من</span>
+                </a>
+
+                <a href="{% url 'accounts:settings' %}" class="df-user-menu-item">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9-0.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1V13.6h-.1a1.7 1.7 0 0 0-1.5 1.4Z"></path>
+                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9 0.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1V13.6h-.1a1.7 1.7 0 0 0-1.5 1.4Z"></path>
                     </svg>
                     <span>تنظیمات</span>
                 </a>
@@ -155,10 +158,7 @@
                     </svg>
                     <span>خروج از حساب</span>
                 </a>
-
             </div>
         </div>
-
     </div>
-
 </header>
