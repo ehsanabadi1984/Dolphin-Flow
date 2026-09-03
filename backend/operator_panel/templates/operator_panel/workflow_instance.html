@@ -163,7 +163,7 @@
                 {% else %}
 
                   <div class="df-form-value">
-                    {{ item.value|default:"—" }}
+                    {{ item.display_value|default:item.value|default:"—" }}
                   </div>
 
                 {% endif %}
@@ -568,7 +568,7 @@
                               {% else %}
 
                                 <div class="df-table-value">
-                                  {{ item_field.value|default:"—" }}
+                                  {{ item_field.display_value|default:item_field.value|default:"—" }}
                                 </div>
 
                               {% endif %}
@@ -849,7 +849,7 @@
                         {% else %}
 
                           <div class="df-form-value">
-                            {{ item_field.value|default:"—" }}
+                            {{ item_field.display_value|default:item_field.value|default:"—" }}
                           </div>
 
                         {% endif %}

@@ -289,13 +289,18 @@ class DynamicFormService:
         }
 
     @staticmethod
-    def _get_history_display_value(
+    def _get_display_value(
         *,
         field,
         value,
     ):
         """
         Resolve the human-readable representation of a field value.
+
+        SELECT fields map the stored value to its choice label
+        (STATIC, LOOKUP or MODEL choice sources). Unresolved values
+        fall back to the raw stored value instead of rendering blank.
+        Non-SELECT fields simply display their raw value.
         """
 
         if value in ("", None):
@@ -303,7 +308,7 @@ class DynamicFormService:
 
         if isinstance(value, list):
             return [
-                DynamicFormService._get_history_display_value(
+                DynamicFormService._get_display_value(
                     field=field,
                     value=item,
                 )
@@ -324,6 +329,21 @@ class DynamicFormService:
                 return choice["label"]
 
         return str(value)
+
+    @staticmethod
+    def _get_history_display_value(
+        *,
+        field,
+        value,
+    ):
+        """
+        Resolve the human-readable representation of a field value.
+        """
+
+        return DynamicFormService._get_display_value(
+            field=field,
+            value=value,
+        )
 
     @staticmethod
     def _build_normal_history_group(
@@ -821,6 +841,11 @@ class DynamicFormService:
                     else []
                 )
 
+                value = data.get(
+                    field.code,
+                    "",
+                )
+
                 fields.append(
                     {
                         "field": field,
@@ -829,9 +854,12 @@ class DynamicFormService:
                             permission_can_edit
                             and not is_submitted
                         ),
-                        "value": data.get(
-                            field.code,
-                            "",
+                        "value": value,
+                        "display_value": (
+                            DynamicFormService._get_display_value(
+                                field=field,
+                                value=value,
+                            )
                         ),
                         "choices": choices,
                     }
@@ -2064,6 +2092,11 @@ class DynamicFormService:
 
                             field = field_info["field"]
 
+                            value = raw_item.get(
+                                field.code,
+                                "",
+                            )
+
                             item_fields.append(
                                 {
                                     "field": field,
@@ -2077,9 +2110,12 @@ class DynamicFormService:
                                         "permission_can_edit",
                                         False,
                                     ),
-                                    "value": raw_item.get(
-                                        field.code,
-                                        "",
+                                    "value": value,
+                                    "display_value": (
+                                        DynamicFormService._get_display_value(
+                                            field=field,
+                                            value=value,
+                                        )
                                     ),
                                     "choices": (
                                         DynamicFormService._get_field_choices(field)
