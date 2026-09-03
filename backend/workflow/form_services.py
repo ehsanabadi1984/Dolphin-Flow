@@ -2772,15 +2772,28 @@ class DynamicFormService:
                                         status_code
                                     ]
 
-                                existing_device = (
-                                    DeviceService.get_device_by_identifier(
-                                        identifier_type=(
-                                            DeviceIdentifier
-                                            .IdentifierType.IMEI
-                                        ),
-                                        value=instance_device.draft_imei,
+                                # -------------------------------------------------
+                                # A blank draft IMEI identifies an
+                                # unidentified device and must never
+                                # resolve to an existing Device.
+                                # -------------------------------------------------
+
+                                existing_device = None
+
+                                if instance_device.draft_imei:
+                                    existing_device = (
+                                        DeviceService
+                                        .get_device_by_identifier(
+                                            identifier_type=(
+                                                DeviceIdentifier
+                                                .IdentifierType.IMEI
+                                            ),
+                                            value=(
+                                                instance_device
+                                                .draft_imei
+                                            ),
+                                        )
                                     )
-                                )
 
                                 if existing_device:
                                     if (
@@ -3137,16 +3150,13 @@ class DynamicFormService:
                                 "فیلد مدل دستگاه در فرم دستگاه تعریف نشده است."
                             )
 
-                        imei = item.get(
-                            imei_code,
-                        )
+                        imei = str(
+                            item.get(imei_code, "") or ""
+                        ).strip()
 
                         device_model_id = item.get(
                             device_model_code,
                         )
-
-                        if not imei:
-                            raise ValidationError("IMEI دستگاه الزامی است.")
 
                         if not device_model_id:
                             raise ValidationError("مدل دستگاه الزامی است.")
@@ -3158,10 +3168,27 @@ class DynamicFormService:
                             )
                         except DeviceModel.DoesNotExist:
                             raise ValidationError("مدل دستگاه معتبر نیست.")
-                        existing_device = DeviceService.get_device_by_identifier(
-                            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
-                            value=imei,
-                        )
+
+                        # -------------------------------------------------
+                        # Unidentified device:
+                        #
+                        # A blank IMEI means the device has no identifier.
+                        # It must never trigger an IMEI database lookup and
+                        # must never resolve to an existing Device.
+                        # -------------------------------------------------
+
+                        existing_device = None
+
+                        if imei:
+                            existing_device = (
+                                DeviceService.get_device_by_identifier(
+                                    identifier_type=(
+                                        DeviceIdentifier
+                                        .IdentifierType.IMEI
+                                    ),
+                                    value=imei,
+                                )
+                            )
 
                         if existing_device:
                             if existing_device.device_model_id != device_model.pk:
