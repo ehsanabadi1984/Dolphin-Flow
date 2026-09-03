@@ -22,6 +22,14 @@
     --df-shadow-lg: 0 20px 50px rgba(0,0,0,.35);
 }
 
+@font-face {
+    font-family: "Yekan";
+    src: url("../fonts/Yekan.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -35,7 +43,7 @@ body {
 body {
     background: var(--bg);
     color: var(--text);
-    font-family: Vazirmatn, Tahoma, sans-serif;
+    font-family: "Yekan", Tahoma, sans-serif;
     direction: rtl;
 }
 
