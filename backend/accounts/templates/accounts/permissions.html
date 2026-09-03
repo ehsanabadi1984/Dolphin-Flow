@@ -1,0 +1,36 @@
+{% extends "operator_panel/base.html" %}
+
+{% block title %}دسترسی‌های من | Dolphin Flow{% endblock %}
+
+{% block content %}
+<section class="df-page-section">
+    <div class="df-section-header">
+        <div>
+            <h1>دسترسی‌های من</h1>
+            <p>نقش‌ها و مجوزهای فعلی حساب شما</p>
+        </div>
+    </div>
+
+    <div class="df-card">
+        <h2>نقش‌ها</h2>
+        <div class="df-tag-list">
+            {% for group in groups %}
+                <span class="df-tag">{{ group.name }}</span>
+            {% empty %}
+                <span class="df-muted">نقشی برای حساب شما ثبت نشده است.</span>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="df-card">
+        <h2>مجوزها</h2>
+        <ul class="df-permission-list">
+            {% for permission in permissions %}
+                <li>{{ permission }}</li>
+            {% empty %}
+                <li class="df-muted">مجوز مستقیمی برای حساب شما ثبت نشده است.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</section>
+{% endblock %}
