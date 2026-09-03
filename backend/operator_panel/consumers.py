@@ -23,7 +23,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-
     async def disconnect(self, close_code):
 
         if hasattr(self, "group_name"):
@@ -32,12 +31,19 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 self.channel_name,
             )
 
-
     async def notification_message(self, event):
 
         await self.send(
             text_data=json.dumps(
                 event["notification"],
+                ensure_ascii=False,
+            )
+        )
+
+    async def workflow_update_message(self, event):
+        await self.send(
+            text_data=json.dumps(
+                event["event"],
                 ensure_ascii=False,
             )
         )
