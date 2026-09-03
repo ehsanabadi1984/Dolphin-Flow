@@ -10,6 +10,17 @@
     <title>{% block title %}Dolphin Flow{% endblock %}</title>
 
     <link rel="stylesheet" href="{% static 'operator_panel/css/app.css' %}">
+    <link rel="stylesheet" href="{% static 'operator_panel/css/theme.css' %}">
+
+    <script>
+        (function () {
+            const theme = localStorage.getItem("df-theme") || "dark";
+            document.documentElement.classList.toggle(
+                "theme-light",
+                theme === "light"
+            );
+        })();
+    </script>
 </head>
 
 {% if messages %}
@@ -80,13 +91,72 @@ document.addEventListener("DOMContentLoaded", function () {
         "df-success-modal-confirm"
     );
 
-    if (!modal || !confirmButton) {
-        return;
+    if (modal && confirmButton) {
+        confirmButton.addEventListener("click", function () {
+            modal.remove();
+        });
     }
 
-    confirmButton.addEventListener("click", function () {
-        modal.remove();
-    });
+    /* Theme switch */
+    const headerActions = document.querySelector(".df-header-actions");
+
+    if (headerActions && !document.getElementById("df-theme-toggle")) {
+        const themeButton = document.createElement("button");
+        themeButton.type = "button";
+        themeButton.className = "df-theme-toggle";
+        themeButton.id = "df-theme-toggle";
+        themeButton.setAttribute("aria-label", "تغییر تم");
+        themeButton.setAttribute("title", "تغییر تم");
+
+        themeButton.innerHTML = `
+            <svg class="df-theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2"></path>
+                <path d="M12 20v2"></path>
+                <path d="m4.93 4.93 1.41 1.41"></path>
+                <path d="m17.66 17.66 1.41 1.41"></path>
+                <path d="M2 12h2"></path>
+                <path d="M20 12h2"></path>
+                <path d="m6.34 17.66-1.41 1.41"></path>
+                <path d="m19.07 4.93-1.41 1.41"></path>
+            </svg>
+            <svg class="df-theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8Z"></path>
+            </svg>
+        `;
+
+        headerActions.prepend(themeButton);
+
+        function updateThemeButton() {
+            const isLight = document.documentElement.classList.contains(
+                "theme-light"
+            );
+
+            themeButton.setAttribute(
+                "aria-label",
+                isLight ? "تغییر به تم تاریک" : "تغییر به تم روشن"
+            );
+            themeButton.setAttribute(
+                "title",
+                isLight ? "تم تاریک" : "تم روشن"
+            );
+        }
+
+        themeButton.addEventListener("click", function () {
+            const isLight = document.documentElement.classList.toggle(
+                "theme-light"
+            );
+
+            localStorage.setItem(
+                "df-theme",
+                isLight ? "light" : "dark"
+            );
+
+            updateThemeButton();
+        });
+
+        updateThemeButton();
+    }
 
 });
 </script>
