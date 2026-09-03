@@ -1,7 +1,9 @@
+from django.db import transaction
 from django.utils import timezone
 
 from .sla_services import SLAService
 from .notification_services import NotificationService
+from .realtime_services import WorkflowRealtimeService
 
 from .models import (
     WorkflowStepExecution,
@@ -76,42 +78,76 @@ class SLAMonitorService:
                 sla_started_at__isnull=False,
                 sla_completed_at__isnull=True,
             )
-            .select_related("workflow_step")
+            .select_related(
+                "workflow_step",
+                "workflow_step__workflow",
+                "instance",
+            )
         )
 
         warning_count = 0
         breach_count = 0
 
         for execution in executions:
-            if SLAService.is_warning_due(
-                step_execution=execution,
-                now=now,
-            ):
-                SLAMonitorService.notify_workflow_members(
-                    step_execution=execution,
-                    notification_type=Notification.NotificationType.SLA_WARNING,
+            with transaction.atomic():
+                execution = (
+                    WorkflowStepExecution.objects
+                    .select_for_update()
+                    .select_related(
+                        "workflow_step",
+                        "workflow_step__workflow",
+                        "instance",
+                    )
+                    .get(pk=execution.pk)
                 )
 
-                SLAService.mark_warning_sent(
-                    step_execution=execution,
-                    sent_at=now,
-                )
+                if execution.sla_completed_at is not None:
+                    continue
 
-                warning_count += 1
-
-            if (
-                execution.sla_breached_at is None
-                and SLAService.check_breach(
+                if SLAService.is_warning_due(
                     step_execution=execution,
                     now=now,
-                )
-            ):
-                SLAMonitorService.notify_workflow_members(
-                    step_execution=execution,
-                    notification_type=Notification.NotificationType.SLA_BREACHED,
-                )
+                ):
+                    SLAMonitorService.notify_workflow_members(
+                        step_execution=execution,
+                        notification_type=Notification.NotificationType.SLA_WARNING,
+                    )
 
-                breach_count += 1
+                    SLAService.mark_warning_sent(
+                        step_execution=execution,
+                        sent_at=now,
+                    )
+
+                    warning_count += 1
+
+                    transaction.on_commit(
+                        lambda instance_id=execution.instance_id, workflow_id=execution.workflow_step.workflow_id: WorkflowRealtimeService.notify_instance_changed(
+                            instance_id=instance_id,
+                            workflow_id=workflow_id,
+                        )
+                    )
+
+                if (
+                    execution.sla_breached_at is None
+                    and SLAService.check_breach(
+                        step_execution=execution,
+                        now=now,
+                    )
+                ):
+                    SLAMonitorService.notify_workflow_members(
+                        step_execution=execution,
+                        notification_type=Notification.NotificationType.SLA_BREACHED,
+                    )
+
+                    breach_count += 1
+
+                    transaction.on_commit(
+                        lambda instance_id=execution.instance_id, workflow_id=execution.workflow_step.workflow_id: WorkflowRealtimeService.notify_instance_changed(
+                            instance_id=instance_id,
+                            workflow_id=workflow_id,
+                        )
+                    )
+
         return {
             "warning_count": warning_count,
             "breach_count": breach_count,
