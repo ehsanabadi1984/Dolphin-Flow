@@ -21,6 +21,12 @@
 .df-tracker-label { margin-top: 9px; max-width: 108px; font-size: 12px; line-height: 1.7; }
 .df-tracker-state { margin-top: 2px; font-size: 10px; opacity: .55; }
 .df-tracker-step.is-current .df-tracker-state { color: #d97706; opacity: 1; font-weight: 700; }
+.df-sla-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--df-border, #e5e7eb); font-size: 12px; }
+.df-sla-status { font-weight: 700; }
+.df-sla-on-track { color: #15803d; }
+.df-sla-warning { color: #d97706; }
+.df-sla-breached { color: #dc2626; }
+.df-sla-none { opacity: .55; }
 .df-dashboard-empty { padding: 24px 12px; text-align: center; opacity: .65; }
 </style>
 
@@ -36,6 +42,32 @@
         <div class="df-card df-kpi"><div class="df-kpi-label">در حال اجرا</div><div class="df-kpi-value">{{ summary.active }}</div><div class="df-kpi-meta">فرآیندهای فعال شما</div></div>
         <div class="df-card df-kpi"><div class="df-kpi-label">تکمیل شده</div><div class="df-kpi-value">{{ summary.completed }}</div><div class="df-kpi-meta">فرآیندهای تکمیل‌شده شما</div></div>
     </section>
+
+    {% if summary.sla_breached or summary.sla_warning %}
+    <section class="df-card df-panel">
+        <div class="df-panel-header"><div class="df-panel-title">هوشمندی SLA</div></div>
+        <div class="df-activity">
+            {% if summary.sla_breached %}
+            <div class="df-activity-item">
+                <div class="df-activity-dot"></div>
+                <div class="df-activity-main">
+                    <div class="df-activity-title">{{ summary.sla_breached }} فرآیند از SLA عبور کرده است</div>
+                    <div class="df-activity-meta">این موارد نیازمند پیگیری فوری هستند.</div>
+                </div>
+            </div>
+            {% endif %}
+            {% if summary.sla_warning %}
+            <div class="df-activity-item">
+                <div class="df-activity-dot"></div>
+                <div class="df-activity-main">
+                    <div class="df-activity-title">{{ summary.sla_warning }} فرآیند نزدیک به سررسید SLA است</div>
+                    <div class="df-activity-meta">برای جلوگیری از تأخیر، این موارد را بررسی کنید.</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
 
     <section class="df-grid">
         <div class="df-card df-panel">
@@ -119,6 +151,15 @@
                             {% endfor %}
                         </div>
                     </div>
+
+                    {% if instance.dashboard_sla.configured %}
+                    <div class="df-sla-row">
+                        <span class="df-sla-status {% if instance.dashboard_sla.status == 'breached' %}df-sla-breached{% elif instance.dashboard_sla.status == 'warning' %}df-sla-warning{% elif instance.dashboard_sla.status == 'on_track' %}df-sla-on-track{% else %}df-sla-none{% endif %}">
+                            {{ instance.dashboard_sla.label }}
+                        </span>
+                        <span>سررسید: {{ instance.dashboard_sla.due_at|date:"Y/m/d H:i" }}</span>
+                    </div>
+                    {% endif %}
                 </article>
             {% empty %}
                 <div class="df-dashboard-empty">در حال حاضر فرآیند فعالی که توسط شما شروع شده باشد وجود ندارد.</div>
@@ -151,6 +192,7 @@
                 <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.pending }} اقدام قابل انجام</div><div class="df-activity-meta">فرآیندهای قابل اقدام که به شما اختصاص مستقیم ندارند</div></div></div>
                 <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.tasks }} وظیفه اختصاص‌یافته</div><div class="df-activity-meta">مراحل فعلی که مستقیماً به شما اختصاص داده شده‌اند</div></div></div>
                 <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.completed }} فرآیند تکمیل‌شده</div><div class="df-activity-meta">سوابق تکمیل‌شده شما</div></div></div>
+                {% if summary.sla_breached %}<div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.sla_breached }} مورد نقض SLA</div><div class="df-activity-meta">از فرآیندهای فعال قابل مشاهده برای شما</div></div></div>{% endif %}
             </div>
         </div>
     </section>
