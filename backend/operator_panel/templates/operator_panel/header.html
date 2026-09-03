@@ -14,105 +14,77 @@
 
     </div>
 
-
     <div class="df-header-actions">
 
-        <!-- Notifications -->
-
-        <!-- Notifications -->
-
-<div class="df-notification-wrapper">
-
-    <button
-        type="button"
-        class="df-icon-button df-notification-button"
-        id="df-notification-toggle"
-        aria-label="اعلان‌ها"
-        aria-expanded="false"
-        data-notifications-url="{% url 'operator_panel:notifications' %}"
-    >
-
-        <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
+        <!-- Theme -->
+        <button
+            type="button"
+            class="df-theme-toggle"
+            id="df-theme-toggle"
+            aria-label="تغییر تم"
+            title="تغییر تم"
         >
-            <path
-                d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"
-            />
-
-            <path d="M10 21h4" />
-        </svg>
-
-        <span
-            class="df-notification-badge"
-            id="df-notification-badge"
-            hidden
-        >
-            0
-        </span>
-
-    </button>
-
-
-    <div
-        class="df-notification-menu"
-        id="df-notification-menu"
-        aria-hidden="true"
-    >
-
-        <div class="df-notification-menu-header">
-
-            <div class="df-notification-menu-title">
-                اعلان‌ها
-            </div>
-
-            <div
-                class="df-notification-menu-count"
-                id="df-notification-menu-count"
-            >
-                0 اعلان جدید
-            </div>
-
-        </div>
-
-
-        <div
-            class="df-notification-list"
-            id="df-notification-list"
-        >
-
-            <div class="df-notification-empty">
-                در حال دریافت اعلان‌ها...
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-            <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-            >
-                <path
-                    d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"
-                />
-
-                <path
-                    d="M10 21h4"
-                />
+            <svg class="df-theme-icon df-theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2"></path>
+                <path d="M12 20v2"></path>
+                <path d="m4.93 4.93 1.41 1.41"></path>
+                <path d="m17.66 17.66 1.41 1.41"></path>
+                <path d="M2 12h2"></path>
+                <path d="M20 12h2"></path>
+                <path d="m6.34 17.66-1.41 1.41"></path>
+                <path d="m19.07 4.93-1.41 1.41"></path>
             </svg>
-
-            <span class="df-notification-badge">
-                3
-            </span>
-
+            <svg class="df-theme-icon df-theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.6 6.6 0 0 0 21 12.8Z"></path>
+            </svg>
         </button>
 
+        <!-- Notifications -->
+        <div class="df-notification-wrapper">
+
+            <button
+                type="button"
+                class="df-icon-button df-notification-button"
+                id="df-notification-toggle"
+                aria-label="اعلان‌ها"
+                aria-expanded="false"
+                data-notifications-url="{% url 'operator_panel:notifications' %}"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
+                    <path d="M10 21h4"></path>
+                </svg>
+
+                <span
+                    class="df-notification-badge"
+                    id="df-notification-badge"
+                    hidden
+                >0</span>
+            </button>
+
+            <div
+                class="df-notification-menu"
+                id="df-notification-menu"
+                aria-hidden="true"
+            >
+                <div class="df-notification-menu-header">
+                    <div class="df-notification-menu-title">اعلان‌ها</div>
+                    <div class="df-notification-menu-count" id="df-notification-menu-count">
+                        0 اعلان جدید
+                    </div>
+                </div>
+
+                <div class="df-notification-list" id="df-notification-list">
+                    <div class="df-notification-empty">
+                        در حال دریافت اعلان‌ها...
+                    </div>
+                </div>
+            </div>
+
+        </div>
 
         <!-- User -->
-
         <div class="df-user-wrapper">
 
             <button
@@ -121,117 +93,70 @@
                 id="df-user-menu-toggle"
                 aria-expanded="false"
             >
-
                 <div class="df-user-info">
-
                     <div class="df-user-name">
                         {{ request.user.get_full_name|default:request.user.username }}
                     </div>
-
                     <div class="df-user-role">
                         {{ request.user.get_role_display }}
                     </div>
-
                 </div>
-
 
                 <div class="df-user-avatar">
                     {{ request.user.first_name|first|default:request.user.username|first|upper }}
                 </div>
 
-
-                <svg
-                    class="df-user-chevron"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                >
-                    <path d="m6 9 6 6 6-6" />
+                <svg class="df-user-chevron" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6"></path>
                 </svg>
-
             </button>
 
-
-            <!-- User Menu -->
-
-            <div
-                class="df-user-menu"
-                id="df-user-menu"
-            >
+            <div class="df-user-menu" id="df-user-menu">
 
                 <div class="df-user-menu-header">
-
                     <div class="df-user-menu-avatar">
                         {{ request.user.first_name|first|default:request.user.username|first|upper }}
                     </div>
-
                     <div>
-
                         <div class="df-user-menu-name">
                             {{ request.user.get_full_name|default:request.user.username }}
                         </div>
-
                         <div class="df-user-menu-role">
                             {{ request.user.get_role_display }}
                         </div>
-
                     </div>
-
                 </div>
-
 
                 <div class="df-user-menu-divider"></div>
 
-
                 <a href="#" class="df-user-menu-item">
-
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="12" cy="8" r="3"></circle>
                         <path d="M5 21c.7-4 3-6 7-6s6.3 2 7 6"></path>
                     </svg>
-
-                    <span>
-                        حساب کاربری
-                    </span>
-
+                    <span>حساب کاربری</span>
                 </a>
-
 
                 <a href="#" class="df-user-menu-item">
-
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1V13.6h-.1a1.7 1.7 0 0 0-1.5 1.4Z"></path>
+                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9-0.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1V13.6h-.1a1.7 1.7 0 0 0-1.5 1.4Z"></path>
                     </svg>
-
-                    <span>
-                        تنظیمات
-                    </span>
-
+                    <span>تنظیمات</span>
                 </a>
-
 
                 <div class="df-user-menu-divider"></div>
 
-
-                <a
-                    href="{% url 'logout' %}"
-                    class="df-user-menu-item df-user-menu-danger"
-                >
-
+                <a href="{% url 'logout' %}" class="df-user-menu-item df-user-menu-danger">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M10 17l5-5-5-5"></path>
                         <path d="M15 12H3"></path>
                         <path d="M21 3v18"></path>
                     </svg>
-
-                    <span>
-                        خروج از حساب
-                    </span>
-
+                    <span>خروج از حساب</span>
                 </a>
 
             </div>
-
         </div>
 
     </div>
