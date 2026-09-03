@@ -1,11 +1,15 @@
 {% load workflow_tags %}
+{% sidebar_counts as sidebar_counts %}
 
 <style>
-.df-nav-workflows { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; padding-left: 2px; }
+.df-nav-workflows { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; padding-left: 2px; scrollbar-width: thin; }
 .df-nav-workflow-form { margin: 0; }
 .df-nav-workflow-button { width: 100%; border: 0; text-align: right; cursor: pointer; background: transparent; font: inherit; }
 .df-nav-empty { padding: 8px 11px; color: #626a76; font-size: 10px; }
+.df-nav-badge { margin-right: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; line-height: 1; background: rgba(255,255,255,.10); }
+.df-nav-badge-warning { background: rgba(245,158,11,.18); color: #f59e0b; }
 .sidebar-collapsed .df-nav-workflow-button { justify-content: center; }
+.sidebar-collapsed .df-nav-badge { display: none; }
 .df-nav-logout-form { margin: 0; }
 .df-nav-logout-button { width: 100%; border: 0; text-align: right; cursor: pointer; background: transparent; font: inherit; }
 .sidebar-collapsed .df-nav-logout-button { justify-content: center; }
@@ -28,27 +32,21 @@
     <nav class="df-nav">
         <div class="df-nav-label">اصلی</div>
 
-        <a href="{% url 'operator_panel:dashboard' %}" class="df-nav-link active" data-tooltip="داشبورد">
+        <a href="{% url 'operator_panel:dashboard' %}" class="df-nav-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" data-tooltip="داشبورد">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path><path d="M9 21v-6h6v6"></path>
             </svg>
             <span>داشبورد</span>
         </a>
 
-        <a href="#" class="df-nav-link" data-tooltip="مشتریان">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="9" cy="8" r="3"></circle><path d="M3 21c.5-4 2.5-6 6-6s5.5 2 6 6"></path><path d="M16 4.5a3 3 0 0 1 0 7"></path><path d="M18 15c1.8.8 2.8 2.7 3 6"></path>
-            </svg>
-            <span>مشتریان</span>
-        </a>
-
         <div class="df-nav-label">فرآیندها</div>
 
-        <a href="{% url 'operator_panel:my_processes' %}" class="df-nav-link" data-tooltip="فرآیندهای من">
+        <a href="{% url 'operator_panel:my_processes' %}" class="df-nav-link{% if request.resolver_match.url_name == 'my_processes' %} active{% endif %}" data-tooltip="فرآیندهای من">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 4h14v16H5z"></path><path d="M8 9h8"></path><path d="M8 13h6"></path><path d="M8 17h4"></path>
             </svg>
             <span>فرآیندهای من</span>
+            {% if sidebar_counts.active %}<span class="df-nav-badge">{{ sidebar_counts.active }}</span>{% endif %}
         </a>
 
         <div class="df-nav-label df-nav-label-workflows">شروع فرآیند</div>
@@ -70,26 +68,28 @@
             {% endfor %}
         </div>
 
-        <a href="#" class="df-nav-link" data-tooltip="وظایف من">
+        <a href="{% url 'operator_panel:dashboard' %}#pending-actions" class="df-nav-link" data-tooltip="وظایف من">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 4h14v16H5z"></path><path d="m8 9 2 2 4-4"></path><path d="M8 15h8"></path>
             </svg>
             <span>وظایف من</span>
+            {% if sidebar_counts.tasks %}<span class="df-nav-badge df-nav-badge-warning">{{ sidebar_counts.tasks }}</span>{% endif %}
         </a>
 
-        <a href="#" class="df-nav-link" data-tooltip="در انتظار اقدام">
+        <a href="{% url 'operator_panel:dashboard' %}#pending-actions" class="df-nav-link" data-tooltip="در انتظار اقدام">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l2.5 2"></path>
             </svg>
             <span>در انتظار اقدام</span>
+            {% if sidebar_counts.pending %}<span class="df-nav-badge df-nav-badge-warning">{{ sidebar_counts.pending }}</span>{% endif %}
         </a>
     </nav>
 
     <div class="df-sidebar-footer">
-        <a href="#" class="df-nav-link" data-tooltip="تنظیمات">
+        <a href="{% url 'accounts:settings' %}" class="df-nav-link{% if request.resolver_match.app_name == 'accounts' and request.resolver_match.url_name == 'settings' %} active{% endif %}" data-tooltip="تنظیمات">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8-.1.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0-1.5 1.4Z"></path>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8-.1.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0-1.5 1.4Z"></path>
             </svg>
             <span>تنظیمات</span>
         </a>
