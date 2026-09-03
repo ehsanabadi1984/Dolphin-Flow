@@ -322,7 +322,11 @@ def workflow_instance(request, instance_id):
                     "instance": instance,
                     "transitions": transitions,
                     "dynamic_form": form_context,
-                    "error": str(exc),
+                    "error": (
+                        str(exc)
+                        if not validation_errors
+                        else ""
+                    ),
                     "edit_mode": edit_mode,
                     "validation_errors": validation_errors,
                 },
