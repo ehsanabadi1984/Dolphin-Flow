@@ -1,11 +1,9 @@
-from django.db.models import Prefetch
 from django.utils import timezone
 
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.models import (
     WorkflowInstance,
     WorkflowPermission,
-    WorkflowStep,
     WorkflowStepExecution,
     WorkflowTransitionExecution,
 )
@@ -40,8 +38,6 @@ class DashboardService:
 
         pending_instances = self._get_pending_instances()
 
-        recent_activity = self._get_recent_activity()
-
         return {
             "summary": {
                 "today": my_instances.filter(started_at__date=today).count(),
@@ -55,7 +51,7 @@ class DashboardService:
             },
             "active_processes": active_instances,
             "pending_actions": pending_instances,
-            "recent_activity": recent_activity,
+            "recent_activity": self._get_recent_activity(),
             "startable_workflows": (
                 WorkflowAuthorizationService
                 .get_startable_workflows(self.user)
@@ -134,9 +130,7 @@ class DashboardService:
                     f"به «{item.transition.to_step.name}» منتقل شد"
                 )
             else:
-                title = (
-                    f"فرآیند «{item.instance.workflow.name}» تکمیل شد"
-                )
+                title = f"فرآیند «{item.instance.workflow.name}» تکمیل شد"
 
             activities.append({
                 "title": title,
