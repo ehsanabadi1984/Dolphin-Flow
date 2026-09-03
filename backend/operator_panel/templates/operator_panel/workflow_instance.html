@@ -592,9 +592,9 @@
 
                           <td class="df-table-actions">
                             {% if item.row_id %}
-                              <input type="hidden" name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}__id" value="{{ item.row_id }}" />
+                              <input type="hidden" name="{{ group.group.code }}_{{ item_index }}__id" value="{{ item.row_id }}" />
                             {% endif %}
-                            {% if not dynamic_form.is_submitted and group.can_edit %}
+                            {% if not dynamic_form.is_submitted and group.can_delete %}
                               <button
                                 type="button"
                                 class="df-button df-button-danger df-repeatable-delete"
@@ -611,6 +611,76 @@
                       {% endfor %}
 
                     {% else %}
+
+                      {% if not dynamic_form.is_submitted and group.can_add %}
+                        <tr
+                          class="df-repeatable-item"
+                          data-repeatable-item
+                          data-repeatable-template
+                          style="display:none;"
+                        >
+                          {% for template_field in group.fields %}
+                            <td>
+                              {% if template_field.field.field_type == "TEXT" %}
+                                <input
+                                  type="text"
+                                  name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                  class="df-table-input"
+                                />
+
+                              {% elif template_field.field.field_type == "TEXTAREA" %}
+                                <textarea
+                                  name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                  class="df-table-input df-table-textarea"
+                                ></textarea>
+
+                              {% elif template_field.field.field_type == "NUMBER" %}
+                                <input
+                                  type="number"
+                                  name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                  class="df-table-input"
+                                />
+
+                              {% elif template_field.field.field_type == "DATE" %}
+                                <input
+                                  type="date"
+                                  name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                  class="df-table-input"
+                                />
+
+                              {% elif template_field.field.field_type == "DATETIME" %}
+                                <input
+                                  type="datetime-local"
+                                  name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                  class="df-table-input"
+                                />
+
+                              {% elif template_field.field.field_type == "BOOLEAN" %}
+                                <input
+                                  type="checkbox"
+                                  name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                  class="df-table-checkbox"
+                                />
+
+                              {% elif template_field.field.field_type == "SELECT" %}
+                                <select
+                                  name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                  class="df-table-input"
+                                >
+                                  <option value="">---------</option>
+                                  {% for choice in template_field.choices %}
+                                    <option value="{{ choice.value }}">
+                                      {{ choice.label }}
+                                    </option>
+                                  {% endfor %}
+                                </select>
+
+                              {% endif %}
+                            </td>
+                          {% endfor %}
+                          <td class="df-table-actions"></td>
+                        </tr>
+                      {% endif %}
 
                       <tr class="df-table-empty">
                         <td colspan="{{ group.fields|length|add:1 }}">
@@ -682,7 +752,7 @@
                     >
 
                     {% if item.row_id %}
-                      <input type="hidden" name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}__id" value="{{ item.row_id }}" />
+                      <input type="hidden" name="{{ group.group.code }}_{{ item_index }}__id" value="{{ item.row_id }}" />
                     {% endif %}
 
                     {% for item_field in item.fields %}
@@ -806,7 +876,7 @@
 
                     {% endfor %}
 
-                    {% if not dynamic_form.is_submitted and group.can_edit %}
+                    {% if not dynamic_form.is_submitted and group.can_delete %}
                       <div class="df-repeatable-item-actions">
                         <button
                           type="button"
@@ -825,6 +895,78 @@
                 {% endfor %}
 
               {% else %}
+
+                {% if not dynamic_form.is_submitted and group.can_add %}
+                  <div
+                    class="df-repeatable-item"
+                    data-repeatable-item
+                    data-repeatable-template
+                    style="display:none;"
+                  >
+                    {% for template_field in group.fields %}
+                      <div
+                        class="df-form-field"
+                        data-field-code="{{ template_field.field.code }}"
+                      >
+                        <label>
+                          {{ template_field.field.label }}
+                          {% if template_field.field.is_required %}
+                            <span>*</span>
+                          {% endif %}
+                        </label>
+
+                        {% if template_field.field.field_type == "TEXT" %}
+                          <input
+                            type="text"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          />
+
+                        {% elif template_field.field.field_type == "TEXTAREA" %}
+                          <textarea
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          ></textarea>
+
+                        {% elif template_field.field.field_type == "NUMBER" %}
+                          <input
+                            type="number"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          />
+
+                        {% elif template_field.field.field_type == "DATE" %}
+                          <input
+                            type="date"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          />
+
+                        {% elif template_field.field.field_type == "DATETIME" %}
+                          <input
+                            type="datetime-local"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          />
+
+                        {% elif template_field.field.field_type == "BOOLEAN" %}
+                          <input
+                            type="checkbox"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          />
+
+                        {% elif template_field.field.field_type == "SELECT" %}
+                          <select
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          >
+                            <option value="">---------</option>
+                            {% for choice in template_field.choices %}
+                              <option value="{{ choice.value }}">
+                                {{ choice.label }}
+                              </option>
+                            {% endfor %}
+                          </select>
+
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
 
                 <div class="df-empty-state">
                   هنوز اطلاعاتی برای این گروه ثبت نشده است.

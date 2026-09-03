@@ -861,6 +861,7 @@ class DynamicFormService:
                 group_can_view = False
                 group_can_edit = False
                 group_can_add = False
+                group_can_delete = False
 
                 user_rule = group_access_rules.filter(
                     user=user,
@@ -870,6 +871,7 @@ class DynamicFormService:
                     group_can_view = user_rule.can_view
                     group_can_edit = user_rule.can_edit
                     group_can_add = user_rule.can_add
+                    group_can_delete = user_rule.can_delete
 
                 else:
                     role_rules = group_access_rules.filter(
@@ -889,10 +891,15 @@ class DynamicFormService:
                         can_add=True,
                     ).exists()
 
+                    group_can_delete = role_rules.filter(
+                        can_delete=True,
+                    ).exists()
+
                 # Submitted step is always read-only.
                 if is_submitted:
                     group_can_edit = False
                     group_can_add = False
+                    group_can_delete = False
 
                 # User has no permission to see this group.
                 #----------Debug-----------
@@ -2009,21 +2016,41 @@ class DynamicFormService:
 
                                         
                 else:
-                    raw_items = data.get(
-                        group.code,
-                        [],
-                    )
+                    # -------------------------------------------------
+                    # POST-priority rendering
+                    #
+                    # When submitted_data is present (a validation
+                    # failure re-render), the submitted POST state is
+                    # authoritative: newly added rows stay visible,
+                    # deleted rows stay deleted, and entered values
+                    # are preserved. A plain GET renders the persisted
+                    # FormData.
+                    #
+                    # [] is the genuine empty state: no synthetic
+                    # blank row is ever fabricated here.
+                    # -------------------------------------------------
+
+                    if submitted_data is not None:
+                        raw_items = (
+                            DynamicFormService._parse_repeatable_data(
+                                submitted_data=submitted_data,
+                                group_code=group.code,
+                            )
+                        )
+                    else:
+                        raw_items = data.get(
+                            group.code,
+                            [],
+                        )
+
+                        if not isinstance(raw_items, list):
+                            raw_items = []
 
                     print("========== NORMAL REPEATABLE DEBUG ==========")
                     print("GROUP:", group.code)
                     print("FORM DATA:", repr(data))
                     print("RAW ITEMS:", repr(raw_items))
                     print("==============================================")
-                    if not isinstance(raw_items, list):
-                        raw_items = []
-
-                    if not raw_items:
-                        raw_items = [{}]                                   
                     items = []
 
                     for raw_item in raw_items:
@@ -2086,6 +2113,7 @@ class DynamicFormService:
                         "can_view": group_can_view,
                         "can_edit": group_can_edit,
                         "can_add": group_can_add,
+                        "can_delete": group_can_delete,
                     }
                 )
 
@@ -2548,22 +2576,30 @@ class DynamicFormService:
                     step=step,
                 )
 
+                group_can_view = False
                 group_can_edit = False
                 group_can_add = False
+                group_can_delete = False
 
                 user_rule = group_access_rules.filter(
                     user=user,
                 ).first()
 
                 if user_rule:
+                    group_can_view = user_rule.can_view
                     group_can_edit = user_rule.can_edit
                     group_can_add = user_rule.can_add
+                    group_can_delete = user_rule.can_delete
 
                 else:
                     role_rules = group_access_rules.filter(
                         role__in=roles,
                         user__isnull=True,
                     )
+
+                    group_can_view = role_rules.filter(
+                        can_view=True,
+                    ).exists()
 
                     group_can_edit = role_rules.filter(
                         can_edit=True,
@@ -2573,6 +2609,14 @@ class DynamicFormService:
                         can_add=True,
                     ).exists()
 
+                    group_can_delete = role_rules.filter(
+                        can_delete=True,
+                    ).exists()
+
+                # Hidden group does not participate in persistence.
+                if not group_can_view:
+                    continue
+
                 # -------------------------------------------------
                 # Verify submitted repeatable group
                 # -------------------------------------------------
@@ -2581,33 +2625,141 @@ class DynamicFormService:
                     group_code=group.code,
                 )
 
-                if not items:
-                    continue                
-
                 # -------------------------------------------------
-                # Existing items require can_edit
-                # New items require can_add
+                # Permission identity model
+                #
+                # NORMAL groups:   row identity = _id
+                #                  existing row = _id present in
+                #                  previously persisted rows
+                #                  new row      = no _id / unknown _id
+                #
+                # DEVICE groups:   row identity = instance_device_id
+                #                  (InstanceDevice.pk)
+                #
+                # Existing rows require can_edit.
+                # New rows require can_add.
+                # Persisted rows omitted from the replace-all POST
+                # are deletions and require can_delete.
                 # -------------------------------------------------
 
-                has_new_item = any(
-                    not item.get("instance_device_id")
-                    for item in items
-                )
+                if (
+                    group.group_type
+                    == FormRepeatableGroup.GroupType.DEVICE
+                ):
 
-                has_existing_item = any(
-                    item.get("instance_device_id")
-                    for item in items
-                )
+                    if not items:
+                        continue
 
-                if has_existing_item and not group_can_edit:
-                    raise ValidationError(
-                        f"شما اجازه ویرایش گروه «{group.name}» را ندارید."
+                    has_new_item = any(
+                        not item.get("instance_device_id")
+                        for item in items
                     )
 
-                if has_new_item and not group_can_add:
-                    raise ValidationError(
-                        f"شما اجازه افزودن به گروه «{group.name}» را ندارید."
+                    has_existing_item = any(
+                        item.get("instance_device_id")
+                        for item in items
                     )
+
+                    if has_existing_item and not group_can_edit:
+                        raise ValidationError(
+                            f"شما اجازه ویرایش گروه «{group.name}» را ندارید."
+                        )
+
+                    if has_new_item and not group_can_add:
+                        raise ValidationError(
+                            f"شما اجازه افزودن به گروه «{group.name}» را ندارید."
+                        )
+
+                else:
+
+                    # -------------------------------------------------
+                    # Read-only group for this user: the group is
+                    # rendered without inputs, so an empty/absent
+                    # submission is NOT a deletion.
+                    # -------------------------------------------------
+
+                    if not group_can_edit and not group_can_add:
+                        continue
+
+                    previous_items = current_data.get(
+                        group.code,
+                        [],
+                    )
+
+                    if not isinstance(previous_items, list):
+                        previous_items = []
+
+                    previous_by_id = {}
+
+                    for prev in previous_items:
+                        if (
+                            isinstance(prev, dict)
+                            and prev.get("_id")
+                        ):
+                            previous_by_id[prev["_id"]] = prev
+
+                    has_new_item = any(
+                        not (
+                            item.get("_id")
+                            and item.get("_id") in previous_by_id
+                        )
+                        for item in items
+                    )
+
+                    has_existing_item = any(
+                        item.get("_id")
+                        and item.get("_id") in previous_by_id
+                        for item in items
+                    )
+
+                    if has_existing_item and not group_can_edit:
+                        raise ValidationError(
+                            f"شما اجازه ویرایش گروه «{group.name}» را ندارید."
+                        )
+
+                    if has_new_item and not group_can_add:
+                        raise ValidationError(
+                            f"شما اجازه افزودن به گروه «{group.name}» را ندارید."
+                        )
+
+                    # -------------------------------------------------
+                    # Deletion detection
+                    #
+                    # A persisted row whose _id is omitted from the
+                    # replace-all POST payload is a deletion.
+                    # -------------------------------------------------
+
+                    if previous_by_id:
+                        submitted_ids = {
+                            item.get("_id", "").strip()
+                            for item in items
+                            if isinstance(item, dict)
+                        }
+
+                        deleted_ids = (
+                            set(previous_by_id)
+                            - submitted_ids
+                        )
+
+                        if deleted_ids and not group_can_delete:
+                            raise ValidationError(
+                                f"شما اجازه حذف ردیف از گروه «{group.name}» را ندارید."
+                            )
+
+                    if not items:
+                        # -------------------------------------------------
+                        # Genuine empty state.
+                        #
+                        # An untouched group stays empty; a group whose
+                        # rows were all removed (allowed by can_delete)
+                        # is persisted as [].
+                        # -------------------------------------------------
+
+                        if previous_items:
+                            current_data[group.code] = []
+
+                        continue
+
                 # -------------------------------------------------
                 # Process repeatable group
                 # -------------------------------------------------   

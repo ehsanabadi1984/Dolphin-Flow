@@ -685,6 +685,7 @@ class NormalRepeatableRowIdEdgeCaseTests(TestCase):
             can_view=True,
             can_edit=True,
             can_add=True,
+            can_delete=True,
         )
 
     def create_instance(self):

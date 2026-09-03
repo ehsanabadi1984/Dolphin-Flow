@@ -2102,7 +2102,7 @@ document.addEventListener("click", (event) => {
 
     const emptyState =
         itemsContainer.querySelector(
-            ".df-empty-state"
+            ".df-empty-state, .df-table-empty"
         );
 
     if (emptyState) {
