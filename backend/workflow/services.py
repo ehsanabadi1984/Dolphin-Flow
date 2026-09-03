@@ -5,6 +5,7 @@ from .notification_services import NotificationService
 
 from .authorization import WorkflowAuthorizationService
 from .sla_services import SLAService
+from .realtime_services import WorkflowRealtimeService
 from .models import (
     FormData,
     WorkflowInstance,
@@ -20,7 +21,6 @@ class WorkflowExecutionService:
 
     @staticmethod
     @transaction.atomic
-
     def start_workflow(
         *,
         workflow,
@@ -33,28 +33,16 @@ class WorkflowExecutionService:
         The instance starts at the first active workflow step.
         """
 
-        # ---------------------------------------------------------
-        # 1. Validate workflow
-        # ---------------------------------------------------------
-
         if not workflow.is_active:
             raise ValidationError(
                 "این Workflow فعال نیست."
             )
-
-        # ---------------------------------------------------------
-        # 2. Authorization
-        # ---------------------------------------------------------
 
         WorkflowAuthorizationService.require_permission(
             user=user,
             workflow=workflow,
             action=WorkflowPermission.Action.START,
         )
-
-        # ---------------------------------------------------------
-        # 3. Find the first active step
-        # ---------------------------------------------------------
 
         first_step = (
             workflow.steps
@@ -68,20 +56,12 @@ class WorkflowExecutionService:
                 "این Workflow هیچ مرحله فعالی ندارد."
             )
 
-        # ---------------------------------------------------------
-        # 4. Create workflow instance
-        # ---------------------------------------------------------
-
         instance = WorkflowInstance.objects.create(
             workflow=workflow,
             current_step=first_step,
             started_by=user,
             status=WorkflowInstance.Status.ACTIVE,
         )
-
-        # ---------------------------------------------------------
-        # 5. Create the first step execution (open)
-        # ---------------------------------------------------------
 
         step_execution = WorkflowStepExecution.objects.create(
             instance=instance,
@@ -91,6 +71,14 @@ class WorkflowExecutionService:
 
         SLAService.start_sla_if_configured(
             step_execution=step_execution,
+        )
+
+        transaction.on_commit(
+            lambda: WorkflowRealtimeService.notify_instance_changed(
+                instance_id=instance.pk,
+                workflow_id=workflow.pk,
+                actor_id=user.pk,
+            )
         )
 
         return instance
@@ -116,34 +104,21 @@ class WorkflowExecutionService:
         atomically.
         """
 
-        # Lock the instance to prevent concurrent transitions.
         instance = (
             WorkflowInstance.objects
             .select_for_update()
             .get(pk=instance.pk)
         )
 
-        # ---------------------------------------------------------
-        # 1. Validate instance status
-        # ---------------------------------------------------------
-
         if instance.status != WorkflowInstance.Status.ACTIVE:
             raise ValidationError(
                 "این نمونه از فرآیند فعال نیست."
             )
 
-        # ---------------------------------------------------------
-        # 2. Validate transition
-        # ---------------------------------------------------------
-
         if not transition.is_active:
             raise ValidationError(
                 "این Transition فعال نیست."
             )
-
-        # ---------------------------------------------------------
-        # 3. Validate workflow consistency
-        # ---------------------------------------------------------
 
         if transition.workflow_id != instance.workflow_id:
             raise ValidationError(
@@ -158,7 +133,6 @@ class WorkflowExecutionService:
                 "مرحله مبدأ متعلق به Workflow این Instance نیست."
             )
 
-        # Validate to_step workflow (only for normal transitions)
         is_finish = transition.to_step is None
 
         if (
@@ -170,18 +144,10 @@ class WorkflowExecutionService:
                 "مرحله مقصد متعلق به Workflow این Instance نیست."
             )
 
-        # ---------------------------------------------------------
-        # 4. Validate current step
-        # ---------------------------------------------------------
-
         if instance.current_step_id != transition.from_step_id:
             raise ValidationError(
                 "این Transition برای مرحله فعلی قابل اجرا نیست."
             )
-
-        # ---------------------------------------------------------
-        # 5. Validate current step execution
-        # ---------------------------------------------------------
 
         current_step_execution = (
             instance.step_executions
@@ -203,20 +169,12 @@ class WorkflowExecutionService:
                 "فرم این مرحله قبلاً ارسال شده است."
             )
 
-        # ---------------------------------------------------------
-        # 6. Authorization
-        # ---------------------------------------------------------
-
         WorkflowAuthorizationService.require_permission(
             user=user,
             workflow=instance.workflow,
             action=WorkflowPermission.Action.TRANSITION,
             transition=transition,
         )
-
-        # ---------------------------------------------------------
-        # 7. Validate saved form data (only if workflow has a form)
-        # ---------------------------------------------------------
 
         has_form_definition = hasattr(
             instance.workflow, 'form_definition'
@@ -234,7 +192,6 @@ class WorkflowExecutionService:
                     "اطلاعات فرم هنوز ذخیره نشده است."
                 )
 
-            # Check for saved data: normal form data or device data
             has_form_data = bool(form_data.data)
             has_device_data = (
                 instance.instance_devices
@@ -247,13 +204,6 @@ class WorkflowExecutionService:
                     "ابتدا اطلاعات فرم یا دستگاه را ذخیره کنید."
                 )
 
-        # ---------------------------------------------------------
-        # 8. Finalize current step
-        # ---------------------------------------------------------
-
-        # Preserve the form and device values as they exist at the
-        # moment this step is finalized. The timeline must later read
-        # this immutable snapshot, not current form or device data.
         from .form_services import DynamicFormService
 
         history_snapshot = DynamicFormService._build_history_snapshot(
@@ -277,17 +227,9 @@ class WorkflowExecutionService:
             ]
         )
 
-        # ---------------------------------------------------------
-        # 9. Complete SLA for current step
-        # ---------------------------------------------------------
-
         SLAService.complete_sla(
             step_execution=current_step_execution,
         )
-
-        # ---------------------------------------------------------
-        # 10. Create transition execution record
-        # ---------------------------------------------------------
 
         transition_execution = WorkflowTransitionExecution.objects.create(
             instance=instance,
@@ -297,12 +239,7 @@ class WorkflowExecutionService:
             data=data or {},
         )
 
-        # ---------------------------------------------------------
-        # 11. Handle Finish vs Normal transition
-        # ---------------------------------------------------------
-
         if is_finish:
-            # FINISH TRANSITION: Complete the workflow
             instance.status = WorkflowInstance.Status.COMPLETED
             instance.completed_at = now
             instance.current_step = None
@@ -315,7 +252,6 @@ class WorkflowExecutionService:
                 ]
             )
 
-            # Send workflow completed notification
             NotificationService.create(
                 recipient=user,
                 notification_type=(
@@ -331,9 +267,6 @@ class WorkflowExecutionService:
                 transition_execution=transition_execution,
             )
         else:
-            # NORMAL TRANSITION: Move to next step
-
-            # Create next step execution
             step_execution = WorkflowStepExecution.objects.create(
                 instance=instance,
                 workflow_step=transition.to_step,
@@ -344,7 +277,6 @@ class WorkflowExecutionService:
                 step_execution=step_execution,
             )
 
-            # Move instance to the destination step
             instance.current_step = transition.to_step
 
             instance.save(
@@ -353,7 +285,6 @@ class WorkflowExecutionService:
                 ]
             )
 
-            # Notify executors of the destination step
             recipient = transition.to_step.assigned_to
 
             if (
@@ -379,5 +310,13 @@ class WorkflowExecutionService:
                     workflow_step=transition.to_step,
                     transition_execution=transition_execution,
                 )
+
+        transaction.on_commit(
+            lambda: WorkflowRealtimeService.notify_instance_changed(
+                instance_id=instance.pk,
+                workflow_id=instance.workflow_id,
+                actor_id=user.pk,
+            )
+        )
 
         return transition_execution
