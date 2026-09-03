@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .dashboard_views import dashboard
+from .dashboard_views import dashboard, dashboard_realtime
 from .process_views import my_processes
 from .views import (
     execute_transition,
@@ -27,6 +27,12 @@ urlpatterns = [
         "",
         dashboard,
         name="dashboard",
+    ),
+
+    path(
+        "dashboard/realtime/",
+        dashboard_realtime,
+        name="dashboard_realtime",
     ),
 
     path(
