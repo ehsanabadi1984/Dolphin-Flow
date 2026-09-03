@@ -1,34 +1,47 @@
 {% extends "operator_panel/base.html" %}
-{% load workflow_tags %}
 
 {% block title %}داشبورد | Dolphin Flow{% endblock %}
 
 {% block content %}
 <style>
-.df-my-processes-scroll { max-height: 430px; overflow-y: auto; padding-left: 4px; scrollbar-width: thin; }
-.df-my-processes-scroll .df-activity-item { min-width: 0; }
+.df-dashboard-scroll { max-height: 520px; overflow-y: auto; padding-left: 4px; scrollbar-width: thin; }
+.df-process-card { padding: 18px; border: 1px solid var(--df-border, #e5e7eb); border-radius: 14px; background: var(--df-surface, #fff); }
+.df-process-card + .df-process-card { margin-top: 14px; }
+.df-process-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.df-process-card-title { font-weight: 700; }
+.df-process-card-meta { margin-top: 5px; font-size: 12px; opacity: .68; }
+.df-process-tracker-wrap { overflow-x: auto; padding: 6px 2px 10px; }
+.df-process-tracker { display: flex; align-items: flex-start; min-width: max-content; }
+.df-tracker-step { position: relative; display: flex; flex-direction: column; align-items: center; width: 116px; text-align: center; }
+.df-tracker-step:not(:last-child)::after { content: ""; position: absolute; top: 13px; right: calc(50% - 58px); width: 116px; height: 2px; background: var(--df-border, #e5e7eb); z-index: 0; }
+.df-tracker-step.is-completed:not(:last-child)::after { background: var(--df-primary, #2563eb); }
+.df-tracker-node { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--df-border, #d1d5db); background: var(--df-surface, #fff); font-size: 13px; font-weight: 700; }
+.df-tracker-step.is-completed .df-tracker-node { color: #fff; border-color: var(--df-primary, #2563eb); background: var(--df-primary, #2563eb); }
+.df-tracker-step.is-current .df-tracker-node { color: #fff; border-color: #f59e0b; background: #f59e0b; box-shadow: 0 0 0 5px rgba(245, 158, 11, .14); }
+.df-tracker-label { margin-top: 9px; max-width: 108px; font-size: 12px; line-height: 1.7; }
+.df-tracker-state { margin-top: 2px; font-size: 10px; opacity: .55; }
+.df-tracker-step.is-current .df-tracker-state { color: #d97706; opacity: 1; font-weight: 700; }
+.df-dashboard-empty { padding: 24px 12px; text-align: center; opacity: .65; }
 </style>
-
-{% now "H" as current_hour %}
 
 <section class="df-content">
     <div class="df-welcome">
-        <h1>{% if current_hour >= "05" and current_hour < "12" %}صبح بخیر{% elif current_hour >= "12" and current_hour < "18" %}روز بخیر{% else %}شب بخیر{% endif %}، {{ request.user.get_full_name|default:request.user.username }}</h1>
-        <p>وضعیت کلی فرآیندهای سازمان را از اینجا مشاهده کنید.</p>
+        <h1>سلام، {{ request.user.get_full_name|default:request.user.username }}</h1>
+        <p>این نمای زنده، وضعیت فرآیندهایی را که برای شما قابل مشاهده یا اقدام هستند نمایش می‌دهد.</p>
     </div>
 
     <section class="df-kpis">
-        <div class="df-card df-kpi"><div class="df-kpi-label">فرم‌های امروز</div><div class="df-kpi-value">24</div><div class="df-kpi-meta">+12٪ نسبت به دیروز</div></div>
-        <div class="df-card df-kpi"><div class="df-kpi-label">در انتظار اقدام</div><div class="df-kpi-value">08</div><div class="df-kpi-meta">نیازمند بررسی</div></div>
-        <div class="df-card df-kpi"><div class="df-kpi-label">در حال اجرا</div><div class="df-kpi-value">11</div><div class="df-kpi-meta">فعال</div></div>
-        <div class="df-card df-kpi"><div class="df-kpi-label">تکمیل شده</div><div class="df-kpi-value">05</div><div class="df-kpi-meta">آخرین وضعیت</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">فرآیندهای امروز</div><div class="df-kpi-value">{{ summary.today }}</div><div class="df-kpi-meta">شروع‌شده توسط شما</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">در انتظار اقدام</div><div class="df-kpi-value">{{ summary.pending }}</div><div class="df-kpi-meta">قابل اقدام برای شما</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">در حال اجرا</div><div class="df-kpi-value">{{ summary.active }}</div><div class="df-kpi-meta">فرآیندهای فعال شما</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">تکمیل شده</div><div class="df-kpi-value">{{ summary.completed }}</div><div class="df-kpi-meta">فرآیندهای تکمیل‌شده شما</div></div>
     </section>
 
     <section class="df-grid">
         <div class="df-card df-panel">
-            <div class="df-panel-header"><div class="df-panel-title">فرآیندهای قابل شروع</div><span class="df-panel-link">از منوی فرآیندها</span></div>
+            <div class="df-panel-header"><div class="df-panel-title">فرآیندهای قابل شروع</div></div>
             <div class="df-activity">
-                {% for workflow in workflows %}
+                {% for workflow in startable_workflows %}
                     <div class="df-activity-item">
                         <div class="df-activity-dot"></div>
                         <div class="df-activity-main">
@@ -40,54 +53,85 @@
                         </form>
                     </div>
                 {% empty %}
-                    <div class="df-activity-item"><div class="df-activity-main"><div class="df-activity-title">فرآیند فعالی برای شما وجود ندارد.</div><div class="df-activity-meta">شما عضو هیچ Workflow فعالی نیستید.</div></div></div>
+                    <div class="df-dashboard-empty">در حال حاضر فرآیندی برای شروع در دسترس شما نیست.</div>
                 {% endfor %}
             </div>
         </div>
 
         <div class="df-card df-panel">
-            <div class="df-panel-header">
-                <div class="df-panel-title">فرآیندهای من</div>
-                <a href="{% url 'operator_panel:my_processes' %}" class="df-panel-link">مشاهده همه</a>
-            </div>
-
-            {% recent_processes request.user as recent_instances %}
-            <div class="df-activity df-my-processes-scroll">
-                {% for instance in recent_instances %}
+            <div class="df-panel-header"><div class="df-panel-title">در انتظار اقدام</div><span class="df-panel-link">{{ summary.pending }} مورد</span></div>
+            <div class="df-activity df-dashboard-scroll">
+                {% for instance in pending_actions %}
                     <div class="df-activity-item">
                         <div class="df-activity-dot"></div>
                         <div class="df-activity-main">
                             <div class="df-activity-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
-                            <div class="df-activity-meta">
-                                {% if instance.current_step %}مرحله: {{ instance.current_step.name }}{% else %}بدون مرحله فعلی{% endif %}
-                                · {{ instance.get_status_display }}
-                            </div>
+                            <div class="df-activity-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }}{% endif %}</div>
                         </div>
-                        <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
+                        <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-warning">اقدام</a>
                     </div>
                 {% empty %}
-                    <div class="df-activity-item"><div class="df-activity-main"><div class="df-activity-title">هنوز فرآیندی برای شما ایجاد نشده است.</div></div></div>
+                    <div class="df-dashboard-empty">موردی برای اقدام فوری وجود ندارد.</div>
                 {% endfor %}
             </div>
         </div>
     </section>
 
+    <section class="df-card df-panel">
+        <div class="df-panel-header"><div class="df-panel-title">فرآیندهای در حال اجرا</div><a href="{% url 'operator_panel:my_processes' %}" class="df-panel-link">مشاهده همه</a></div>
+        <div class="df-dashboard-scroll">
+            {% for instance in active_processes %}
+                <article class="df-process-card">
+                    <div class="df-process-card-header">
+                        <div>
+                            <div class="df-process-card-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
+                            <div class="df-process-card-meta">{% if instance.current_step %}مرحله فعلی: {{ instance.current_step.name }} · {% endif %}شروع {{ instance.started_at|timesince }} قبل</div>
+                        </div>
+                        <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
+                    </div>
+
+                    <div class="df-process-tracker-wrap">
+                        <div class="df-process-tracker">
+                            {% for item in instance.dashboard_tracker %}
+                                <div class="df-tracker-step {% if item.state == 'completed' %}is-completed{% elif item.state == 'current' %}is-current{% endif %}">
+                                    <div class="df-tracker-node">{% if item.state == 'completed' %}✓{% elif item.state == 'current' %}●{% else %}○{% endif %}</div>
+                                    <div class="df-tracker-label">{{ item.step.name }}</div>
+                                    <div class="df-tracker-state">{% if item.state == 'completed' %}تکمیل شده{% elif item.state == 'current' %}مرحله فعلی{% else %}در انتظار{% endif %}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </article>
+            {% empty %}
+                <div class="df-dashboard-empty">در حال حاضر فرآیند فعالی که توسط شما شروع شده باشد وجود ندارد.</div>
+            {% endfor %}
+        </div>
+    </section>
+
     <section class="df-grid">
         <div class="df-card df-panel">
-            <div class="df-panel-header"><div class="df-panel-title">آخرین فرم‌های تعمیر</div><a href="#" class="df-panel-link">مشاهده همه</a></div>
+            <div class="df-panel-header"><div class="df-panel-title">فعالیت اخیر</div></div>
             <div class="df-activity">
-                <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">RF-1024 — شرکت نمونه</div><div class="df-activity-meta">2 دستگاه · امروز، 09:42</div></div><span class="df-status df-status-info">پشتیبانی</span></div>
-                <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">RF-1023 — علی احمدی</div><div class="df-activity-meta">1 دستگاه · امروز، 09:18</div></div><span class="df-status df-status-warning">تعمیرات</span></div>
-                <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">RF-1022 — سازمان نمونه</div><div class="df-activity-meta">3 دستگاه · امروز، 08:51</div></div><span class="df-status df-status-success">آماده تحویل</span></div>
+                {% for activity in recent_activity %}
+                    <div class="df-activity-item">
+                        <div class="df-activity-dot"></div>
+                        <div class="df-activity-main">
+                            <div class="df-activity-title">{{ activity.title }}</div>
+                            <div class="df-activity-meta">{{ activity.meta }} · {{ activity.performed_at|timesince }} قبل</div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="df-dashboard-empty">هنوز فعالیتی برای نمایش ثبت نشده است.</div>
+                {% endfor %}
             </div>
         </div>
 
         <div class="df-card df-panel">
-            <div class="df-panel-header"><div class="df-panel-title">فعالیت اخیر</div></div>
+            <div class="df-panel-header"><div class="df-panel-title">خلاصه وضعیت</div></div>
             <div class="df-activity">
-                <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">فرم جدید ثبت شد</div><div class="df-activity-meta">5 دقیقه پیش</div></div></div>
-                <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">دستگاه وارد مرحله تعمیر شد</div><div class="df-activity-meta">18 دقیقه پیش</div></div></div>
-                <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">پرداخت تأیید شد</div><div class="df-activity-meta">32 دقیقه پیش</div></div></div>
+                <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.active }} فرآیند فعال</div><div class="df-activity-meta">وضعیت فعلی فرآیندهای شما</div></div></div>
+                <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.pending }} اقدام در انتظار</div><div class="df-activity-meta">فرآیندهایی که اکنون امکان اقدام دارند</div></div></div>
+                <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.completed }} فرآیند تکمیل‌شده</div><div class="df-activity-meta">سوابق تکمیل‌شده شما</div></div></div>
             </div>
         </div>
     </section>
