@@ -36,8 +36,8 @@ class DashboardService:
             instance.dashboard_tracker = self.build_tracker(instance)
             instance.dashboard_can_execute = self.can_take_action(instance)
 
-        pending_instances = self._get_pending_instances()
         my_tasks = self._get_pending_instances(assigned_only=True)
+        pending_instances = self._get_pending_instances(exclude_assigned=True)
 
         return {
             "summary": {
@@ -60,6 +60,26 @@ class DashboardService:
                 .get_startable_workflows(self.user)
                 .order_by("name")
             ),
+        }
+
+    def get_sidebar_counts(self):
+        active_instances = self._get_accessible_active_instances()
+        tasks = 0
+        pending = 0
+
+        for instance in active_instances:
+            if not instance.current_step:
+                continue
+
+            if instance.current_step.assigned_to_id == self.user.pk:
+                tasks += 1
+            elif self.can_take_action(instance):
+                pending += 1
+
+        return {
+            "tasks": tasks,
+            "pending": pending,
+            "active": len(active_instances),
         }
 
     def can_take_action(self, instance):
@@ -85,7 +105,7 @@ class DashboardService:
             )
         )
 
-    def _get_pending_instances(self, assigned_only=False):
+    def _get_accessible_active_instances(self, limit=None):
         queryset = (
             WorkflowInstance.objects
             .filter(
@@ -95,15 +115,34 @@ class DashboardService:
             )
             .select_related("workflow", "current_step")
             .distinct()
-            .order_by("-started_at")[:50]
+            .order_by("-started_at")
         )
+
+        if limit:
+            queryset = queryset[:limit]
+
+        return list(queryset)
+
+    def _get_pending_instances(
+        self,
+        assigned_only=False,
+        exclude_assigned=False,
+    ):
+        queryset = self._get_accessible_active_instances(limit=50)
 
         pending = []
         for instance in queryset:
-            if assigned_only and (
-                not instance.current_step
-                or instance.current_step.assigned_to_id != self.user.pk
-            ):
+            if not instance.current_step:
+                continue
+
+            is_assigned = (
+                instance.current_step.assigned_to_id == self.user.pk
+            )
+
+            if assigned_only and not is_assigned:
+                continue
+
+            if exclude_assigned and is_assigned:
                 continue
 
             if self.can_take_action(instance):
