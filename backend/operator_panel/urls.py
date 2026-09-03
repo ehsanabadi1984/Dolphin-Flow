@@ -1,8 +1,8 @@
 from django.urls import path
 from . import views
+from .dashboard_views import dashboard
 from .process_views import my_processes
 from .views import (
-    dashboard,
     execute_transition,
     start_workflow,
     workflow_instance,
