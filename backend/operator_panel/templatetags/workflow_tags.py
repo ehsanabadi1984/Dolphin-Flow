@@ -6,6 +6,7 @@ from workflow.models import (
     FormData,
     InstanceDevice,
     WorkflowInstance,
+    WorkflowPermission,
     WorkflowStep,
     WorkflowTransitionExecution,
 )
@@ -70,6 +71,66 @@ def startable_workflows(context):
         .get_startable_workflows(request.user)
         .order_by("name")
     )
+
+
+@register.simple_tag(takes_context=True)
+def sidebar_counts(context):
+    """Return live counts used by the operator sidebar."""
+    request = context.get("request")
+    if not request or not request.user.is_authenticated:
+        return {
+            "tasks": 0,
+            "pending": 0,
+            "active": 0,
+        }
+
+    user = request.user
+
+    active_instances = (
+        WorkflowInstance.objects
+        .filter(status=WorkflowInstance.Status.ACTIVE)
+        .select_related("workflow", "current_step")
+        .filter(
+            workflow__memberships__user=user,
+            workflow__memberships__is_active=True,
+        )
+        .distinct()
+    )
+
+    tasks = 0
+    pending = 0
+
+    for instance in active_instances:
+        step = instance.current_step
+        if not step:
+            continue
+
+        if step.assigned_to_id == user.pk:
+            tasks += 1
+
+        can_execute = WorkflowAuthorizationService.has_permission(
+            user=user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.EXECUTE,
+            step=step,
+            instance=instance,
+        )
+        can_transition = bool(
+            WorkflowAuthorizationService.get_allowed_transitions(
+                user=user,
+                workflow=instance.workflow,
+                from_step=step,
+            )
+        )
+
+        if can_execute or can_transition:
+            pending += 1
+
+    return {
+        "tasks": tasks,
+        "pending": pending,
+        "active": active_instances.count(),
+    }
 
 
 @register.simple_tag
