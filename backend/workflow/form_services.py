@@ -447,7 +447,10 @@ class DynamicFormService:
                             .draft_device_model
                             .device_type
                             if instance_device.draft_device_model
-                            else None
+                            else (
+                                instance_device
+                                .draft_device_type
+                            )
                         )
 
                     if device_type:
@@ -979,8 +982,20 @@ class DynamicFormService:
 
                     group_fields.append(field_data)
 #------------------------Debug-----------------------
-# --------------------End-Debug----------------------                    
-                if not group_fields:
+# --------------------End-Debug----------------------
+                # -------------------------------------------------
+                # A DEVICE group is a valid workflow component even
+                # when it has no visible FormFields: its rows come
+                # from InstanceDevice and its semantics come from
+                # group_type=DEVICE. Only NORMAL groups require at
+                # least one visible field to be rendered.
+                # -------------------------------------------------
+
+                if (
+                    not group_fields
+                    and group.group_type
+                    != FormRepeatableGroup.GroupType.DEVICE
+                ):
                     continue
 
                 # Saved repeatable items.
@@ -1169,12 +1184,20 @@ class DynamicFormService:
                             }
                         )
 
-                    if not group_fields:
-                        continue
+                    # -------------------------------------------------
+                    # A DEVICE group remains renderable without fields.
+                    # -------------------------------------------------
 
-                    group_has_editable_fields = any(
-                        field_info["can_edit"]
-                        for field_info in group_fields
+                    group_has_editable_fields = (
+                        any(
+                            field_info["can_edit"]
+                            for field_info in group_fields
+                        )
+                        or (
+                            group.group_type
+                            == FormRepeatableGroup.GroupType.DEVICE
+                            and group_can_add
+                        )
                     )
 
                     # =========================================================
@@ -1639,7 +1662,10 @@ class DynamicFormService:
                                 draft_type = (
                                     draft_model.device_type
                                     if draft_model
-                                    else None
+                                    else (
+                                        instance_device
+                                        .draft_device_type
+                                    )
                                 )
 
                                 imei = (
@@ -2736,6 +2762,65 @@ class DynamicFormService:
 
                                     instance_device.draft_device_model = draft_model
 
+                                # ---------------------------------------------
+                                # Device Type
+                                #
+                                # Only persisted when the DeviceModel does
+                                # not already determine the type (Type-only
+                                # unidentified devices).
+                                # ---------------------------------------------
+
+                                if (
+                                    device_type_code
+                                    and FormField.SystemKey.DEVICE_TYPE
+                                    in editable_system_keys
+                                    and device_type_code in item
+                                ):
+
+                                    submitted_type_id = item[
+                                        device_type_code
+                                    ]
+
+                                    if submitted_type_id:
+
+                                        try:
+                                            draft_type = DeviceType.objects.get(
+                                                pk=submitted_type_id,
+                                                is_active=True,
+                                            )
+                                        except DeviceType.DoesNotExist:
+                                            raise ValidationError(
+                                                "نوع دستگاه معتبر نیست."
+                                            )
+
+                                        if (
+                                            instance_device
+                                            .draft_device_model_id
+                                            and draft_type.pk
+                                            != instance_device
+                                            .draft_device_model
+                                            .device_type_id
+                                        ):
+                                            raise ValidationError(
+                                                "مدل انتخاب‌شده متعلق به نوع دستگاه انتخاب‌شده نیست."
+                                            )
+
+                                        instance_device.draft_device_type = (
+                                            draft_type
+                                        )
+
+                                    else:
+
+                                        if (
+                                            instance_device
+                                            .draft_device_model_id
+                                        ):
+                                            raise ValidationError(
+                                                "نوع دستگاه الزامی است."
+                                            )
+
+                                        instance_device.draft_device_type = None
+
                                 if (
                                     reported_problem_code
                                     and FormField.SystemKey.REPORTED_PROBLEM in editable_system_keys
@@ -2821,6 +2906,7 @@ class DynamicFormService:
                                     instance_device.device = existing_device
                                     instance_device.draft_imei = ""
                                     instance_device.draft_device_model = None
+                                    instance_device.draft_device_type = None
 
                                 instance_device.save()
 
@@ -3127,47 +3213,96 @@ class DynamicFormService:
                                 "شما اجازه افزودن مورد جدید به این گروه را ندارید."
                             )
 
-                        if FormField.SystemKey.IMEI not in editable_system_keys:
+                        # -------------------------------------------------
+                        # IMEI / DEVICE_MODEL permission gates apply only
+                        # when the corresponding field is configured in the
+                        # form AND a value was actually submitted: a blank
+                        # IMEI or a missing model field describes an
+                        # unidentified device, which is a valid state.
+                        # -------------------------------------------------
+
+                        if (
+                            imei_code
+                            and FormField.SystemKey.IMEI
+                            not in editable_system_keys
+                            and imei_code in item
+                            and str(
+                                item.get(imei_code, "") or ""
+                            ).strip()
+                        ):
                             raise ValidationError(
                                 "شما اجازه ثبت IMEI دستگاه را ندارید."
                             )
 
                         if (
-                            FormField.SystemKey.DEVICE_MODEL
+                            device_model_code
+                            and FormField.SystemKey.DEVICE_MODEL
                             not in editable_system_keys
+                            and device_model_code in item
+                            and item.get(device_model_code)
                         ):
                             raise ValidationError(
                                 "شما اجازه ثبت مدل دستگاه را ندارید."
                             )
 
-                        if not imei_code:
-                            raise ValidationError(
-                                "فیلد IMEI در فرم دستگاه تعریف نشده است."
-                            )
-
-                        if not device_model_code:
-                            raise ValidationError(
-                                "فیلد مدل دستگاه در فرم دستگاه تعریف نشده است."
-                            )
-
-                        imei = str(
-                            item.get(imei_code, "") or ""
-                        ).strip()
+                        imei = (
+                            str(
+                                item.get(imei_code, "") or ""
+                            ).strip()
+                            if imei_code
+                            else ""
+                        )
 
                         device_model_id = item.get(
                             device_model_code,
-                        )
+                        ) if device_model_code else None
 
-                        if not device_model_id:
-                            raise ValidationError("مدل دستگاه الزامی است.")
+                        device_model = None
 
-                        try:
-                            device_model = DeviceModel.objects.get(
-                                pk=device_model_id,
-                                is_active=True,
-                            )
-                        except DeviceModel.DoesNotExist:
-                            raise ValidationError("مدل دستگاه معتبر نیست.")
+                        if device_model_id:
+                            try:
+                                device_model = DeviceModel.objects.get(
+                                    pk=device_model_id,
+                                    is_active=True,
+                                )
+                            except DeviceModel.DoesNotExist:
+                                raise ValidationError(
+                                    "مدل دستگاه معتبر نیست."
+                                )
+
+                        # -------------------------------------------------
+                        # Device Type
+                        #
+                        # The selected DeviceType is preserved for
+                        # unidentified devices (Type-only drafts) through
+                        # InstanceDevice.draft_device_type.
+                        # -------------------------------------------------
+
+                        draft_device_type = None
+
+                        if (
+                            device_type_code
+                            and device_type_code in item
+                            and item.get(device_type_code)
+                        ):
+                            try:
+                                draft_device_type = DeviceType.objects.get(
+                                    pk=item[device_type_code],
+                                    is_active=True,
+                                )
+                            except DeviceType.DoesNotExist:
+                                raise ValidationError(
+                                    "نوع دستگاه معتبر نیست."
+                                )
+
+                            if (
+                                device_model
+                                and draft_device_type.pk
+                                != device_model.device_type_id
+                            ):
+                                raise ValidationError(
+                                    "مدل انتخاب‌شده متعلق به نوع دستگاه انتخاب‌شده نیست."
+                                )
 
                         # -------------------------------------------------
                         # Unidentified device:
@@ -3191,7 +3326,11 @@ class DynamicFormService:
                             )
 
                         if existing_device:
-                            if existing_device.device_model_id != device_model.pk:
+                            if (
+                                device_model
+                                and existing_device.device_model_id
+                                != device_model.pk
+                            ):
                                 raise ValidationError(
                                     "این IMEI قبلاً برای مدل دیگری ثبت شده است."
                                 )
@@ -3217,14 +3356,20 @@ class DynamicFormService:
                             instance_device.is_active = True
                             instance_device.draft_imei = ""
                             instance_device.draft_device_model = None
+                            instance_device.draft_device_type = None
                         else:
                             # A new IMEI remains a draft until the workflow
                             # lifecycle commits it to a persistent Device.
+                            #
+                            # A Type-only unidentified device carries
+                            # device=None, draft_imei="" and only
+                            # draft_device_type.
                             instance_device = InstanceDevice(
                                 instance=instance,
                                 device=None,
                                 draft_imei=imei,
                                 draft_device_model=device_model,
+                                draft_device_type=draft_device_type,
                             )
 
                         instance_device.reported_problem = (

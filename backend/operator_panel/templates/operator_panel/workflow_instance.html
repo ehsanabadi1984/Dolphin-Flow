@@ -255,14 +255,6 @@
 
                                         <td>
 
-                                            {% if forloop.first %}
-                                                <input
-                                                    type="hidden"
-                                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_instance_device_id"
-                                                    value="{{ item.instance_device_id }}"
-                                                >
-                                            {% endif %}
-
                                             <span class="df-device-display">
                                                 {{ item_field.display_value|default:item_field.value|default:"—" }}
                                             </span>
@@ -363,6 +355,12 @@
                                     {% endfor %}
 
                                     <td class="df-device-actions">
+
+                                        <input
+                                            type="hidden"
+                                            name="{{ group.group.code }}_{{ forloop.counter0 }}_instance_device_id"
+                                            value="{{ item.instance_device_id }}"
+                                        >
 
                                         {% if item.device_id %}
                                             <a

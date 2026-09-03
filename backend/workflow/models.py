@@ -409,6 +409,14 @@ class InstanceDevice(models.Model):
         related_name="draft_instance_devices",
     )
 
+    draft_device_type = models.ForeignKey(
+        DeviceType,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="draft_instance_devices",
+    )
+
     reported_problem = models.TextField(
         blank=True,
     )

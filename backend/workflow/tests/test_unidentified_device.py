@@ -445,21 +445,36 @@ class UnidentifiedDeviceTests(TestCase):
         )
 
     # -------------------------------------------------
-    # DeviceModel remains required for the unidentified path
+    # An unidentified device with only a DeviceType (no IMEI,
+    # no DeviceModel) is accepted and the type is preserved.
     # -------------------------------------------------
 
-    def test_device_model_required_for_unidentified_device(self):
+    def test_unidentified_device_with_only_type_is_accepted(self):
         instance = self.create_instance()
 
-        with self.assertRaises(ValidationError):
-            DynamicFormService.save_form_for_step(
-                instance=instance,
-                user=self.user,
-                submitted_data={
-                    "devices_0_imei": "",
-                    "devices_0_device_model_id": "",
-                },
-            )
+        DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data={
+                "devices_0_imei": "",
+                "devices_0_device_model_id": "",
+                "devices_0_device_type": str(self.device_type.pk),
+            },
+        )
+
+        instance_device = InstanceDevice.objects.get(instance=instance)
+
+        self.assertIsNone(instance_device.device)
+        self.assertEqual(instance_device.draft_imei, "")
+        self.assertIsNone(instance_device.draft_device_model)
+        self.assertEqual(
+            instance_device.draft_device_type_id,
+            self.device_type.pk,
+        )
+
+        # No persistent Device / identifier is created.
+        self.assertEqual(Device.objects.count(), 0)
+        self.assertEqual(DeviceIdentifier.objects.count(), 0)
 
     # -------------------------------------------------
     # 7. DeviceType/DeviceModel rendering data remains
