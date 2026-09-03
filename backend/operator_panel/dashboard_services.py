@@ -37,11 +37,13 @@ class DashboardService:
             instance.dashboard_can_execute = self.can_take_action(instance)
 
         pending_instances = self._get_pending_instances()
+        my_tasks = self._get_pending_instances(assigned_only=True)
 
         return {
             "summary": {
                 "today": my_instances.filter(started_at__date=today).count(),
                 "pending": len(pending_instances),
+                "tasks": len(my_tasks),
                 "active": my_instances.filter(
                     status=WorkflowInstance.Status.ACTIVE,
                 ).count(),
@@ -51,6 +53,7 @@ class DashboardService:
             },
             "active_processes": active_instances,
             "pending_actions": pending_instances,
+            "my_tasks": my_tasks,
             "recent_activity": self._get_recent_activity(),
             "startable_workflows": (
                 WorkflowAuthorizationService
@@ -82,7 +85,7 @@ class DashboardService:
             )
         )
 
-    def _get_pending_instances(self):
+    def _get_pending_instances(self, assigned_only=False):
         queryset = (
             WorkflowInstance.objects
             .filter(
@@ -97,6 +100,12 @@ class DashboardService:
 
         pending = []
         for instance in queryset:
+            if assigned_only and (
+                not instance.current_step
+                or instance.current_step.assigned_to_id != self.user.pk
+            ):
+                continue
+
             if self.can_take_action(instance):
                 instance.dashboard_tracker = self.build_tracker(instance)
                 pending.append(instance)
