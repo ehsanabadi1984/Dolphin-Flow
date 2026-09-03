@@ -150,14 +150,17 @@
 
                 <div class="df-user-menu-divider"></div>
 
-                <a href="{% url 'accounts:logout' %}" class="df-user-menu-item df-user-menu-danger">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M10 17l5-5-5-5"></path>
-                        <path d="M15 12H3"></path>
-                        <path d="M21 3v18"></path>
-                    </svg>
-                    <span>خروج از حساب</span>
-                </a>
+                <form method="post" action="{% url 'accounts:logout' %}" class="df-user-menu-logout-form">
+                    {% csrf_token %}
+                    <button type="submit" class="df-user-menu-item df-user-menu-danger df-user-menu-logout-button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M10 17l5-5-5-5"></path>
+                            <path d="M15 12H3"></path>
+                            <path d="M21 3v18"></path>
+                        </svg>
+                        <span>خروج از حساب</span>
+                    </button>
+                </form>
             </div>
         </div>
     </div>
