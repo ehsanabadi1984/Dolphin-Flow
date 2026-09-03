@@ -77,6 +77,24 @@
         </div>
     </section>
 
+    <section class="df-card df-panel" id="my-tasks">
+        <div class="df-panel-header"><div class="df-panel-title">وظایف من</div><span class="df-panel-link">{{ summary.tasks }} مورد</span></div>
+        <div class="df-activity df-dashboard-scroll">
+            {% for instance in my_tasks %}
+                <div class="df-activity-item">
+                    <div class="df-activity-dot"></div>
+                    <div class="df-activity-main">
+                        <div class="df-activity-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
+                        <div class="df-activity-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }}{% endif %} · اختصاص‌یافته به شما</div>
+                    </div>
+                    <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-warning">انجام</a>
+                </div>
+            {% empty %}
+                <div class="df-dashboard-empty">در حال حاضر وظیفه‌ای به شما اختصاص داده نشده است.</div>
+            {% endfor %}
+        </div>
+    </section>
+
     <section class="df-card df-panel">
         <div class="df-panel-header"><div class="df-panel-title">فرآیندهای در حال اجرا</div><a href="{% url 'operator_panel:my_processes' %}" class="df-panel-link">مشاهده همه</a></div>
         <div class="df-dashboard-scroll">
@@ -131,6 +149,7 @@
             <div class="df-activity">
                 <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.active }} فرآیند فعال</div><div class="df-activity-meta">وضعیت فعلی فرآیندهای شما</div></div></div>
                 <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.pending }} اقدام در انتظار</div><div class="df-activity-meta">فرآیندهایی که اکنون امکان اقدام دارند</div></div></div>
+                <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.tasks }} وظیفه اختصاص‌یافته</div><div class="df-activity-meta">مراحل فعلی که مستقیماً به شما اختصاص داده شده‌اند</div></div></div>
                 <div class="df-activity-item"><div class="df-activity-dot"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.completed }} فرآیند تکمیل‌شده</div><div class="df-activity-meta">سوابق تکمیل‌شده شما</div></div></div>
             </div>
         </div>
