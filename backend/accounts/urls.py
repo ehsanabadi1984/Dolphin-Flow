@@ -4,6 +4,9 @@ from django.urls import path
 from .views import activity, permissions, profile, settings
 
 
+app_name = "accounts"
+
+
 urlpatterns = [
     path(
         "login/",
