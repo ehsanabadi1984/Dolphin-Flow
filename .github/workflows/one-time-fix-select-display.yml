@@ -1,0 +1,76 @@
+name: One-time select display fix
+
+on:
+  push:
+    branches:
+      - feature/unidentified-device-without-identifier
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor == 'ehsanabadi1984'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch readonly SELECT rendering
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("backend/operator_panel/templates/operator_panel/workflow_instance.html")
+          text = path.read_text(encoding="utf-8")
+
+          old_table = '''                                <div class="df-table-value">
+                                  {{ item_field.value|default:"—" }}
+                                </div>'''
+          new_table = '''                                <div class="df-table-value">
+                                  {% if item_field.field.field_type == "SELECT" %}
+                                    {% for choice in item_field.choices %}
+                                      {% if item_field.value|stringformat:"s" == choice.value|stringformat:"s" %}
+                                        {{ choice.label }}
+                                      {% endif %}
+                                    {% endfor %}
+                                  {% else %}
+                                    {{ item_field.value|default:"—" }}
+                                  {% endif %}
+                                </div>'''
+
+          old_form = '''                          <div class="df-form-value">
+                            {{ item_field.value|default:"—" }}
+                          </div>'''
+          new_form = '''                          <div class="df-form-value">
+                            {% if item_field.field.field_type == "SELECT" %}
+                              {% for choice in item_field.choices %}
+                                {% if item_field.value|stringformat:"s" == choice.value|stringformat:"s" %}
+                                  {{ choice.label }}
+                                {% endif %}
+                              {% endfor %}
+                            {% else %}
+                              {{ item_field.value|default:"—" }}
+                            {% endif %}
+                          </div>'''
+
+          table_count = text.count(old_table)
+          form_count = text.count(old_form)
+
+          if table_count != 1:
+              raise SystemExit(f"Expected exactly 1 table readonly block, found {table_count}")
+          if form_count != 1:
+              raise SystemExit(f"Expected exactly 1 form readonly block, found {form_count}")
+
+          text = text.replace(old_table, new_table, 1)
+          text = text.replace(old_form, new_form, 1)
+          path.write_text(text, encoding="utf-8")
+
+      - name: Commit and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/operator_panel/templates/operator_panel/workflow_instance.html
+          git rm .github/workflows/one-time-fix-select-display.yml
+          git commit -m "Fix readonly select label display"
+          git push origin HEAD:feature/unidentified-device-without-identifier
