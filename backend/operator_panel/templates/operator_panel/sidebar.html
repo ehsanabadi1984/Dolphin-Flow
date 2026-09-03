@@ -46,7 +46,7 @@
                 <path d="M5 4h14v16H5z"></path><path d="M8 9h8"></path><path d="M8 13h6"></path><path d="M8 17h4"></path>
             </svg>
             <span>فرآیندهای من</span>
-            {% if sidebar_counts.active %}<span class="df-nav-badge">{{ sidebar_counts.active }}</span>{% endif %}
+            <span class="df-nav-badge" id="df-sidebar-active-count"{% if not sidebar_counts.active %} hidden{% endif %}>{{ sidebar_counts.active }}</span>
         </a>
 
         <div class="df-nav-label df-nav-label-workflows">شروع فرآیند</div>
@@ -68,20 +68,20 @@
             {% endfor %}
         </div>
 
-        <a href="{% url 'operator_panel:dashboard' %}#my-tasks" class="df-nav-link" data-tooltip="وظایف من">
+        <a href="{% url 'operator_panel:dashboard' %}#my-tasks" class="df-nav-link" data-tooltip="وظایف اختصاص‌یافته">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 4h14v16H5z"></path><path d="m8 9 2 2 4-4"></path><path d="M8 15h8"></path>
             </svg>
-            <span>وظایف من</span>
-            {% if sidebar_counts.tasks %}<span class="df-nav-badge df-nav-badge-warning">{{ sidebar_counts.tasks }}</span>{% endif %}
+            <span>وظایف اختصاص‌یافته</span>
+            <span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-task-count"{% if not sidebar_counts.tasks %} hidden{% endif %}>{{ sidebar_counts.tasks }}</span>
         </a>
 
-        <a href="{% url 'operator_panel:dashboard' %}#pending-actions" class="df-nav-link" data-tooltip="در انتظار اقدام">
+        <a href="{% url 'operator_panel:dashboard' %}#pending-actions" class="df-nav-link" data-tooltip="اقدام‌های قابل انجام">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l2.5 2"></path>
             </svg>
-            <span>در انتظار اقدام</span>
-            {% if sidebar_counts.pending %}<span class="df-nav-badge df-nav-badge-warning">{{ sidebar_counts.pending }}</span>{% endif %}
+            <span>اقدام‌های قابل انجام</span>
+            <span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-pending-count"{% if not sidebar_counts.pending %} hidden{% endif %}>{{ sidebar_counts.pending }}</span>
         </a>
     </nav>
 
@@ -89,7 +89,7 @@
         <a href="{% url 'accounts:settings' %}" class="df-nav-link{% if request.resolver_match.app_name == 'accounts' and request.resolver_match.url_name == 'settings' %} active{% endif %}" data-tooltip="تنظیمات">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8-.1.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0-1.5 1.4Z"></path>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8-.1.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1.4Z"></path>
             </svg>
             <span>تنظیمات</span>
         </a>
