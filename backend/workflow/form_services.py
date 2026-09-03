@@ -3214,11 +3214,12 @@ class DynamicFormService:
                             )
 
                         # -------------------------------------------------
-                        # IMEI / DEVICE_MODEL permission gates apply only
-                        # when the corresponding field is configured in the
-                        # form AND a value was actually submitted: a blank
-                        # IMEI or a missing model field describes an
-                        # unidentified device, which is a valid state.
+                        # IMEI / DEVICE_MODEL / DEVICE_TYPE permission
+                        # gates apply only when the corresponding field is
+                        # configured in the form AND a value was actually
+                        # submitted: a blank IMEI, a missing model field or
+                        # a missing type field describes an unidentified
+                        # device, which is a valid state.
                         # -------------------------------------------------
 
                         if (
@@ -3243,6 +3244,17 @@ class DynamicFormService:
                         ):
                             raise ValidationError(
                                 "شما اجازه ثبت مدل دستگاه را ندارید."
+                            )
+
+                        if (
+                            device_type_code
+                            and FormField.SystemKey.DEVICE_TYPE
+                            not in editable_system_keys
+                            and device_type_code in item
+                            and item.get(device_type_code)
+                        ):
+                            raise ValidationError(
+                                "شما اجازه ثبت نوع دستگاه را ندارید."
                             )
 
                         imei = (

@@ -578,6 +578,81 @@ class DeviceGroupConfigurationTests(TestCase):
                 self.device_type.pk,
             )
 
+    def test_device_type_permission_enforced_on_new_device(self):
+        """
+        A submitted DeviceType value must not bypass the DEVICE_TYPE
+        field edit permission.
+        """
+        workflow, step, _, group = self._build_workflow(
+            "CFG3",
+            system_keys=(FormField.SystemKey.DEVICE_TYPE,),
+        )
+
+        # Revoke the user's edit permission on the DEVICE_TYPE field.
+        field = group.fields.get(
+            system_key=FormField.SystemKey.DEVICE_TYPE
+        )
+
+        access = FieldAccess.objects.get(
+            field=field,
+            step=step,
+            user=self.user,
+        )
+
+        access.can_edit = False
+        access.save()
+
+        instance = self._create_instance(workflow, step)
+
+        with self.assertRaises(ValidationError):
+            DynamicFormService.save_form_for_step(
+                instance=instance,
+                user=self.user,
+                submitted_data={
+                    "devices_0_device_type": str(
+                        self.device_type.pk
+                    ),
+                },
+            )
+
+    def test_device_type_permission_not_required_when_blank(self):
+        """
+        A DEVICE_TYPE field the user cannot edit only blocks submitted
+        values; a blank submission (unidentified device) stays valid.
+        """
+        workflow, step, _, group = self._build_workflow(
+            "CFG3",
+            system_keys=(FormField.SystemKey.DEVICE_TYPE,),
+        )
+
+        field = group.fields.get(
+            system_key=FormField.SystemKey.DEVICE_TYPE
+        )
+
+        access = FieldAccess.objects.get(
+            field=field,
+            step=step,
+            user=self.user,
+        )
+
+        access.can_edit = False
+        access.save()
+
+        instance = self._create_instance(workflow, step)
+
+        DynamicFormService.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data={
+                "devices_0_instance_device_id": "",
+            },
+        )
+
+        instance_device = InstanceDevice.objects.get(instance=instance)
+
+        self.assertIsNone(instance_device.device)
+        self.assertIsNone(instance_device.draft_device_type)
+
     def test_field_less_group_blank_row_persisted(self):
         """
         A DEVICE group without FormFields can still persist rows
