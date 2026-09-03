@@ -9,9 +9,11 @@
 .df-my-processes-scroll .df-activity-item { min-width: 0; }
 </style>
 
+{% now "H" as current_hour %}
+
 <section class="df-content">
     <div class="df-welcome">
-        <h1>صبح بخیر، {{ request.user.get_full_name|default:request.user.username }}</h1>
+        <h1>{% if current_hour >= "05" and current_hour < "12" %}صبح بخیر{% elif current_hour >= "12" and current_hour < "18" %}روز بخیر{% else %}شب بخیر{% endif %}، {{ request.user.get_full_name|default:request.user.username }}</h1>
         <p>وضعیت کلی فرآیندهای سازمان را از اینجا مشاهده کنید.</p>
     </div>
 
