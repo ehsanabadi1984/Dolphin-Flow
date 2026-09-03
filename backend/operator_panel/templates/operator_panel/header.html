@@ -114,7 +114,7 @@
                     <span>پروفایل من</span>
                 </a>
 
-                <a href="{% url 'password_change' %}" class="df-user-menu-item">
+                <a href="{% url 'accounts:password_change' %}" class="df-user-menu-item">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <rect x="5" y="10" width="14" height="10" rx="2"></rect>
                         <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
@@ -143,14 +143,14 @@
                 <a href="{% url 'accounts:settings' %}" class="df-user-menu-item">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9 0.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1V13.6h-.1a1.7 1.7 0 0 0-1.5 1.4Z"></path>
+                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9 0.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1V13.6h-.1a1.7 1.7 0 0 0-1.5 1.4Z"></path>
                     </svg>
                     <span>تنظیمات</span>
                 </a>
 
                 <div class="df-user-menu-divider"></div>
 
-                <a href="{% url 'logout' %}" class="df-user-menu-item df-user-menu-danger">
+                <a href="{% url 'accounts:logout' %}" class="df-user-menu-item df-user-menu-danger">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M10 17l5-5-5-5"></path>
                         <path d="M15 12H3"></path>
