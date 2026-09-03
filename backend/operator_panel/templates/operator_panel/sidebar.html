@@ -6,6 +6,9 @@
 .df-nav-workflow-button { width: 100%; border: 0; text-align: right; cursor: pointer; background: transparent; font: inherit; }
 .df-nav-empty { padding: 8px 11px; color: #626a76; font-size: 10px; }
 .sidebar-collapsed .df-nav-workflow-button { justify-content: center; }
+.df-nav-logout-form { margin: 0; }
+.df-nav-logout-button { width: 100%; border: 0; text-align: right; cursor: pointer; background: transparent; font: inherit; }
+.sidebar-collapsed .df-nav-logout-button { justify-content: center; }
 </style>
 
 <aside class="df-sidebar">
@@ -86,16 +89,19 @@
         <a href="#" class="df-nav-link" data-tooltip="تنظیمات">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0-1.5 1.4Z"></path>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8-.1.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0-1.5 1.4Z"></path>
             </svg>
             <span>تنظیمات</span>
         </a>
 
-        <a href="{% url 'logout' %}" class="df-nav-link df-nav-logout" data-tooltip="خروج">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path><path d="M21 3v18"></path>
-            </svg>
-            <span>خروج</span>
-        </a>
+        <form method="post" action="{% url 'accounts:logout' %}" class="df-nav-logout-form">
+            {% csrf_token %}
+            <button type="submit" class="df-nav-link df-nav-logout df-nav-logout-button" data-tooltip="خروج">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path><path d="M21 3v18"></path>
+                </svg>
+                <span>خروج</span>
+            </button>
+        </form>
     </div>
 </aside>
