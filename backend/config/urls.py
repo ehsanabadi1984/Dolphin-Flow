@@ -3,6 +3,7 @@ URL configuration for config project.
 """
 
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from workflow.admin import (
     workflow_dynamic_steps,
@@ -14,6 +15,19 @@ from workflow.admin import (
 
 
 urlpatterns = [
+    # ---------------------------------------------------------
+    # Root
+    # ---------------------------------------------------------
+
+    path(
+        "",
+        RedirectView.as_view(
+            pattern_name="accounts:login",
+            permanent=False,
+        ),
+        name="root",
+    ),
+
     # ---------------------------------------------------------
     # Workflow Dynamic Select Endpoints
     # ---------------------------------------------------------
