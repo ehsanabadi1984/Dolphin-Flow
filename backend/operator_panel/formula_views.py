@@ -161,6 +161,7 @@ def formula_definitions(request, instance_id):
 
     visible_fields = []
     visible_field_ids = set()
+    normal_dom_index = 0
 
     for field in (
         FormField.objects
@@ -184,19 +185,26 @@ def formula_definitions(request, instance_id):
         }:
             continue
 
+        field_payload = {
+            "id": field.pk,
+            "code": field.code,
+            "label": field.label,
+            "group_code": (
+                field.repeatable_group.code
+                if field.repeatable_group_id
+                else None
+            ),
+        }
+
+        # Normal fields are rendered as the sequence of `.df-form-field`
+        # containers in the main form. Record the exact visible DOM index
+        # so Formula JS never has to guess by code or label.
+        if field.repeatable_group_id is None:
+            field_payload["dom_index"] = normal_dom_index
+            normal_dom_index += 1
+
         visible_field_ids.add(field.pk)
-        visible_fields.append(
-            {
-                "id": field.pk,
-                "code": field.code,
-                "label": field.label,
-                "group_code": (
-                    field.repeatable_group.code
-                    if field.repeatable_group_id
-                    else None
-                ),
-            }
-        )
+        visible_fields.append(field_payload)
 
     formulas = []
     all_formula_fields = (
@@ -231,18 +239,30 @@ def formula_definitions(request, instance_id):
             scope = "FORM"
             group_code = None
 
-        formulas.append(
-            {
-                "field_id": field.pk,
-                "code": field.code,
-                "label": field.label,
-                "group_code": group_code,
-                "scope": scope,
-                "decimal_places": config.get("decimal_places", 2),
-                "tokens": config.get("tokens", []),
-                "visible_columns": visible_columns,
-            }
-        )
+        formula_payload = {
+            "field_id": field.pk,
+            "code": field.code,
+            "label": field.label,
+            "group_code": group_code,
+            "scope": scope,
+            "decimal_places": config.get("decimal_places", 2),
+            "tokens": config.get("tokens", []),
+            "visible_columns": visible_columns,
+        }
+
+        if field.repeatable_group_id is None:
+            normal_field = next(
+                (
+                    item
+                    for item in visible_fields
+                    if item["id"] == field.pk
+                ),
+                None,
+            )
+            if normal_field is not None:
+                formula_payload["dom_index"] = normal_field.get("dom_index")
+
+        formulas.append(formula_payload)
 
     return JsonResponse(
         {
