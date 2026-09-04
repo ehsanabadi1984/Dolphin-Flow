@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import json
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import (
+    Decimal,
+    InvalidOperation,
+    ROUND_CEILING,
+    ROUND_FLOOR,
+    ROUND_HALF_UP,
+)
 from typing import Callable
 
 from django.core.exceptions import ValidationError
@@ -22,10 +28,12 @@ class FormulaService:
     is executed from a user-supplied formula.
     """
 
-    VERSION = 1
+    VERSION = 2
+    SUPPORTED_VERSIONS = {1, 2}
     FIELD_TYPE = "FORMULA"
     MAX_TOKENS = 100
     MAX_DECIMAL_PLACES = 6
+    MAX_FUNCTION_ARGUMENTS = 20
 
     OPERATORS = {
         "+": {"precedence": 1, "associativity": "left"},
@@ -33,6 +41,28 @@ class FormulaService:
         "*": {"precedence": 2, "associativity": "left"},
         "/": {"precedence": 2, "associativity": "left"},
         "%": {"precedence": 2, "associativity": "left"},
+    }
+
+    FUNCTIONS = {
+        "SUM": {"min_args": 1, "max_args": MAX_FUNCTION_ARGUMENTS},
+        "ABS": {"min_args": 1, "max_args": 1},
+        "MIN": {"min_args": 1, "max_args": MAX_FUNCTION_ARGUMENTS},
+        "MAX": {"min_args": 1, "max_args": MAX_FUNCTION_ARGUMENTS},
+        "AVG": {"min_args": 1, "max_args": MAX_FUNCTION_ARGUMENTS},
+        "ROUND": {"min_args": 1, "max_args": 2},
+        "FLOOR": {"min_args": 1, "max_args": 1},
+        "CEIL": {"min_args": 1, "max_args": 1},
+    }
+
+    FUNCTION_LABELS = {
+        "SUM": "جمع",
+        "ABS": "قدر مطلق",
+        "MIN": "کمینه",
+        "MAX": "بیشینه",
+        "AVG": "میانگین",
+        "ROUND": "گرد کردن",
+        "FLOOR": "کف",
+        "CEIL": "سقف",
     }
 
     @classmethod
@@ -54,28 +84,43 @@ class FormulaService:
         if not isinstance(raw, dict):
             return {}
 
-        if raw.get("version") != cls.VERSION:
+        if raw.get("version") not in cls.SUPPORTED_VERSIONS:
             return {}
 
         tokens = raw.get("tokens")
         if not isinstance(tokens, list):
             return {}
 
+        try:
+            decimal_places = int(raw.get("decimal_places", 2) or 0)
+        except (TypeError, ValueError):
+            decimal_places = 2
+
         return {
-            "version": cls.VERSION,
+            "version": int(raw.get("version")),
             "tokens": tokens,
-            "decimal_places": int(raw.get("decimal_places", 2) or 0),
+            "decimal_places": decimal_places,
         }
 
     @classmethod
     def referenced_field_ids(cls, config: dict) -> set[int]:
-        ids = set()
-        for token in config.get("tokens", []):
-            if token.get("type") == "field":
-                try:
-                    ids.add(int(token["field_id"]))
-                except (KeyError, TypeError, ValueError):
+        ids: set[int] = set()
+
+        def visit(tokens):
+            for token in tokens or []:
+                if not isinstance(token, dict):
                     continue
+                if token.get("type") == "field":
+                    try:
+                        ids.add(int(token["field_id"]))
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                elif token.get("type") == "function":
+                    nested = token.get("tokens")
+                    if isinstance(nested, list):
+                        visit(nested)
+
+        visit(config.get("tokens", []))
         return ids
 
     @classmethod
@@ -100,74 +145,180 @@ class FormulaService:
             if getattr(item, "pk", None) is not None
         }
 
-        expect_operand = True
-        paren_depth = 0
+        ast = cls._parse_tokens(tokens)
+        cls._validate_ast(field=field, node=ast, available=available)
 
-        for token in tokens:
-            if not isinstance(token, dict):
-                raise FormulaError("ساختار یکی از اجزای فرمول نامعتبر است.")
+    @classmethod
+    def _parse_tokens(cls, tokens):
+        class Parser:
+            def __init__(self, owner, items):
+                self.owner = owner
+                self.items = items
+                self.pos = 0
 
-            token_type = token.get("type")
+            def current(self):
+                if self.pos >= len(self.items):
+                    return None
+                return self.items[self.pos]
 
-            if expect_operand:
+            def advance(self):
+                token = self.current()
+                self.pos += 1
+                return token
+
+            def match(self, token_type, value=None):
+                token = self.current()
+                if not isinstance(token, dict) or token.get("type") != token_type:
+                    return False
+                if value is not None and token.get("value") != value:
+                    return False
+                return True
+
+            def parse(self):
+                node = self.parse_expression()
+                if self.current() is not None:
+                    raise FormulaError("ساختار فرمول نامعتبر است.")
+                return node
+
+            def parse_expression(self):
+                node = self.parse_term()
+                while self.match("operator", "+") or self.match("operator", "-"):
+                    operator = self.advance()["value"]
+                    right = self.parse_term()
+                    node = ("binary", operator, node, right)
+                return node
+
+            def parse_term(self):
+                node = self.parse_factor()
+                while (
+                    self.match("operator", "*")
+                    or self.match("operator", "/")
+                    or self.match("operator", "%")
+                ):
+                    operator = self.advance()["value"]
+                    right = self.parse_factor()
+                    node = ("binary", operator, node, right)
+                return node
+
+            def parse_factor(self):
+                token = self.current()
+                if not isinstance(token, dict):
+                    raise FormulaError("فرمول باید با عدد، فیلد، تابع یا پرانتز شروع شود.")
+
+                token_type = token.get("type")
                 if token_type == "number":
-                    cls._parse_number(token.get("value"))
-                    expect_operand = False
+                    self.advance()
+                    value = self.owner._parse_number(token.get("value"))
+                    return ("number", value)
 
-                elif token_type == "field":
-                    field_id = cls._token_field_id(token)
-                    if field_id not in available:
-                        raise FormulaError("یکی از فیلدهای مورد استفاده در فرمول معتبر نیست.")
+                if token_type == "field":
+                    self.advance()
+                    return ("field", self.owner._token_field_id(token))
 
-                    referenced = available[field_id]
-                    if referenced.field_type not in {
-                        FormField.FieldType.NUMBER,
-                        cls.FIELD_TYPE,
-                    }:
-                        raise FormulaError(
-                            f"فیلد «{referenced.label}» باید عددی یا محاسباتی باشد."
-                        )
-
-                    if field.repeatable_group_id:
-                        if referenced.repeatable_group_id != field.repeatable_group_id:
-                            raise FormulaError(
-                                "فرمول یک ردیف جدول فقط می‌تواند به فیلدهای همان جدول ارجاع دهد."
-                            )
-                    else:
-                        if referenced.repeatable_group_id is not None:
-                            raise FormulaError(
-                                "فرمول یک فیلد عادی نمی‌تواند مستقیماً به فیلد داخل جدول ارجاع دهد."
-                            )
-
-                    if referenced.pk == field.pk:
-                        raise FormulaError("یک فیلد محاسباتی نمی‌تواند به خودش ارجاع دهد.")
-
-                    expect_operand = False
-
-                elif token_type == "paren" and token.get("value") == "(":
-                    paren_depth += 1
-                    expect_operand = True
-
-                else:
-                    raise FormulaError("فرمول باید با یک عدد، فیلد یا پرانتز باز شروع شود.")
-
-            else:
-                if token_type == "operator" and token.get("value") in cls.OPERATORS:
-                    expect_operand = True
-
-                elif token_type == "paren" and token.get("value") == ")":
-                    paren_depth -= 1
-                    if paren_depth < 0:
+                if token_type == "paren" and token.get("value") == "(":
+                    self.advance()
+                    node = self.parse_expression()
+                    if not self.match("paren", ")"):
                         raise FormulaError("تعداد پرانتزهای فرمول نامتعادل است.")
+                    self.advance()
+                    return node
 
-                else:
-                    raise FormulaError("ساختار عملگرهای فرمول نامعتبر است.")
+                if token_type == "function":
+                    self.advance()
+                    name = str(token.get("value", "")).upper()
+                    if name not in self.owner.FUNCTIONS:
+                        raise FormulaError(f"تابع «{name}» پشتیبانی نمی‌شود.")
+                    if not self.match("paren", "("):
+                        raise FormulaError(f"تابع «{name}» باید با پرانتز باز همراه باشد.")
+                    self.advance()
 
-        if expect_operand:
-            raise FormulaError("فرمول نمی‌تواند با عملگر یا پرانتز باز پایان یابد.")
+                    args = []
+                    if not self.match("paren", ")"):
+                        while True:
+                            args.append(self.parse_expression())
+                            if len(args) > self.owner.MAX_FUNCTION_ARGUMENTS:
+                                raise FormulaError(
+                                    f"تعداد ورودی‌های تابع «{name}» بیش از حد مجاز است."
+                                )
+                            if self.match("comma"):
+                                self.advance()
+                                if self.match("paren", ")"):
+                                    raise FormulaError("بعد از ویرگول باید یک مقدار قرار گیرد.")
+                                continue
+                            break
 
-        if paren_depth:
-            raise FormulaError("تعداد پرانتزهای فرمول نامتعادل است.")
+                    if not self.match("paren", ")"):
+                        raise FormulaError(
+                            f"پرانتزهای تابع «{name}» کامل نشده است."
+                        )
+                    self.advance()
+                    return ("function", name, args)
+
+                if token_type in {"operator", "comma"}:
+                    raise FormulaError("جای یکی از اجزای فرمول نامعتبر است.")
+
+                if token_type == "paren" and token.get("value") == ")":
+                    raise FormulaError("تعداد پرانتزهای فرمول نامتعادل است.")
+
+                raise FormulaError("نوع توکن فرمول پشتیبانی نمی‌شود.")
+
+        return Parser(cls, tokens).parse()
+
+    @classmethod
+    def _validate_ast(cls, *, field, node, available):
+        node_type = node[0]
+
+        if node_type == "number":
+            return
+
+        if node_type == "field":
+            field_id = node[1]
+            if field_id not in available:
+                raise FormulaError("یکی از فیلدهای مورد استفاده در فرمول معتبر نیست.")
+
+            referenced = available[field_id]
+            if referenced.field_type not in {
+                FormField.FieldType.NUMBER,
+                cls.FIELD_TYPE,
+            }:
+                raise FormulaError(
+                    f"فیلد «{referenced.label}» باید عددی یا محاسباتی باشد."
+                )
+
+            if field.repeatable_group_id:
+                if referenced.repeatable_group_id != field.repeatable_group_id:
+                    raise FormulaError(
+                        "فرمول یک ردیف جدول فقط می‌تواند به فیلدهای همان جدول ارجاع دهد."
+                    )
+            elif referenced.repeatable_group_id is not None:
+                raise FormulaError(
+                    "فرمول یک فیلد عادی نمی‌تواند مستقیماً به فیلد داخل جدول ارجاع دهد."
+                )
+
+            if referenced.pk == field.pk:
+                raise FormulaError("یک فیلد محاسباتی نمی‌تواند به خودش ارجاع دهد.")
+            return
+
+        if node_type == "binary":
+            cls._validate_ast(field=field, node=node[2], available=available)
+            cls._validate_ast(field=field, node=node[3], available=available)
+            return
+
+        if node_type == "function":
+            name = node[1]
+            args = node[2]
+            meta = cls.FUNCTIONS.get(name)
+            if not meta:
+                raise FormulaError(f"تابع «{name}» پشتیبانی نمی‌شود.")
+            if not meta["min_args"] <= len(args) <= meta["max_args"]:
+                raise FormulaError(
+                    f"تابع «{name}» باید بین {meta['min_args']} تا {meta['max_args']} ورودی داشته باشد."
+                )
+            for arg in args:
+                cls._validate_ast(field=field, node=arg, available=available)
+            return
+
+        raise FormulaError("ساختار فرمول نامعتبر است.")
 
     @classmethod
     def _token_field_id(cls, token: dict) -> int:
@@ -197,106 +348,85 @@ class FormulaService:
             raise FormulaError(f"مقدار «{value}» قابل محاسبه نیست.")
 
     @classmethod
-    def _to_rpn(cls, tokens):
-        output = []
-        operators = []
-
-        for token in tokens:
-            token_type = token["type"]
-            if token_type in {"number", "field"}:
-                output.append(token)
-                continue
-
-            if token_type == "operator":
-                current = token["value"]
-                current_meta = cls.OPERATORS[current]
-                while operators and operators[-1]["type"] == "operator":
-                    top = operators[-1]["value"]
-                    top_meta = cls.OPERATORS[top]
-                    should_pop = (
-                        top_meta["precedence"] > current_meta["precedence"]
-                        or (
-                            top_meta["precedence"] == current_meta["precedence"]
-                            and current_meta["associativity"] == "left"
-                        )
-                    )
-                    if not should_pop:
-                        break
-                    output.append(operators.pop())
-                operators.append(token)
-                continue
-
-            if token_type == "paren":
-                if token["value"] == "(":
-                    operators.append(token)
-                else:
-                    while operators and operators[-1].get("value") != "(":
-                        output.append(operators.pop())
-                    if not operators:
-                        raise FormulaError("تعداد پرانتزهای فرمول نامتعادل است.")
-                    operators.pop()
-                continue
-
-            raise FormulaError("نوع توکن فرمول پشتیبانی نمی‌شود.")
-
-        while operators:
-            if operators[-1].get("value") == "(":
-                raise FormulaError("تعداد پرانتزهای فرمول نامتعادل است.")
-            output.append(operators.pop())
-
-        return output
-
-    @classmethod
     def evaluate_tokens(
         cls,
         *,
         tokens,
         field_resolver: Callable[[int], Decimal],
     ) -> Decimal:
-        rpn = cls._to_rpn(tokens)
-        stack: list[Decimal] = []
+        ast = cls._parse_tokens(tokens)
+        return cls._evaluate_ast(ast, field_resolver)
 
-        for token in rpn:
-            token_type = token["type"]
+    @classmethod
+    def _evaluate_ast(cls, node, field_resolver):
+        node_type = node[0]
+        if node_type == "number":
+            return node[1]
 
-            if token_type == "number":
-                stack.append(cls._parse_number(token["value"]))
-                continue
+        if node_type == "field":
+            return cls._to_decimal(field_resolver(node[1]))
 
-            if token_type == "field":
-                stack.append(field_resolver(cls._token_field_id(token)))
-                continue
-
-            if token_type != "operator" or len(stack) < 2:
-                raise FormulaError("فرمول از نظر ساختاری قابل محاسبه نیست.")
-
-            right = stack.pop()
-            left = stack.pop()
-            operator = token["value"]
-
+        if node_type == "binary":
+            operator = node[1]
+            left = cls._evaluate_ast(node[2], field_resolver)
+            right = cls._evaluate_ast(node[3], field_resolver)
             if operator == "+":
-                result = left + right
-            elif operator == "-":
-                result = left - right
-            elif operator == "*":
-                result = left * right
-            elif operator == "/":
+                return left + right
+            if operator == "-":
+                return left - right
+            if operator == "*":
+                return left * right
+            if operator == "/":
                 if right == 0:
                     raise FormulaError("تقسیم بر صفر در فرمول مجاز نیست.")
-                result = left / right
-            elif operator == "%":
+                return left / right
+            if operator == "%":
                 if right == 0:
                     raise FormulaError("باقیمانده بر صفر در فرمول مجاز نیست.")
-                result = left % right
-            else:
-                raise FormulaError("عملگر فرمول پشتیبانی نمی‌شود.")
+                return left % right
+            raise FormulaError("عملگر فرمول پشتیبانی نمی‌شود.")
 
-            stack.append(result)
+        if node_type == "function":
+            name = node[1]
+            args = [cls._evaluate_ast(arg, field_resolver) for arg in node[2]]
+            return cls._evaluate_function(name, args)
 
-        if len(stack) != 1:
-            raise FormulaError("فرمول نتیجه یکتایی تولید نکرد.")
+        raise FormulaError("ساختار فرمول نامعتبر است.")
 
-        return stack[0]
+    @classmethod
+    def _evaluate_function(cls, name: str, args: list[Decimal]) -> Decimal:
+        if name == "SUM":
+            return sum(args, Decimal("0"))
+        if name == "ABS":
+            return abs(args[0])
+        if name == "MIN":
+            return min(args)
+        if name == "MAX":
+            return max(args)
+        if name == "AVG":
+            return sum(args, Decimal("0")) / Decimal(len(args))
+        if name == "ROUND":
+            places = 0
+            if len(args) == 2:
+                places = cls._function_decimal_places(args[1])
+            quantum = Decimal("1") if places == 0 else Decimal("1") / (Decimal("10") ** places)
+            return args[0].quantize(quantum, rounding=ROUND_HALF_UP)
+        if name == "FLOOR":
+            return args[0].to_integral_value(rounding=ROUND_FLOOR)
+        if name == "CEIL":
+            return args[0].to_integral_value(rounding=ROUND_CEILING)
+        raise FormulaError(f"تابع «{name}» پشتیبانی نمی‌شود.")
+
+    @classmethod
+    def _function_decimal_places(cls, value: Decimal) -> int:
+        if value != value.to_integral_value():
+            raise FormulaError("تعداد اعشار تابع ROUND باید عدد صحیح باشد.")
+        places = int(value)
+        if places < 0 or places > cls.MAX_DECIMAL_PLACES:
+            raise FormulaError(
+                f"تعداد اعشار تابع ROUND باید بین ۰ و {cls.MAX_DECIMAL_PLACES} باشد."
+            )
+        return places
 
     @classmethod
     def format_result(cls, value: Decimal, decimal_places: int) -> str:
@@ -401,12 +531,14 @@ class FormulaService:
                 if field.pk in calculating:
                     raise FormulaError("بین فیلدهای محاسباتی وابستگی دوری وجود دارد.")
                 calculating.add(field.pk)
-                config = cls.get_config(field)
-                value = cls.evaluate_tokens(
-                    tokens=config["tokens"],
-                    field_resolver=resolve_normal,
-                )
-                calculating.remove(field.pk)
+                try:
+                    config = cls.get_config(field)
+                    value = cls.evaluate_tokens(
+                        tokens=config["tokens"],
+                        field_resolver=resolve_normal,
+                    )
+                finally:
+                    calculating.remove(field.pk)
                 formula_cache[field.pk] = value
                 return value
 
@@ -420,7 +552,6 @@ class FormulaService:
                 config.get("decimal_places", 2),
             )
 
-        normal_groups = {}
         for group in FormRepeatableGroup.objects.filter(
             section__form=form,
             group_type=FormRepeatableGroup.GroupType.NORMAL,
@@ -436,7 +567,6 @@ class FormulaService:
                 if cls.is_formula(field)
                 and field.repeatable_group_id == group.pk
             ]
-
             if not group_formula_fields:
                 continue
 
@@ -460,14 +590,18 @@ class FormulaService:
                         if field.pk in row_cache:
                             return row_cache[field.pk]
                         if field.pk in row_calculating:
-                            raise FormulaError("بین فیلدهای محاسباتی جدول وابستگی دوری وجود دارد.")
+                            raise FormulaError(
+                                "بین فیلدهای محاسباتی جدول وابستگی دوری وجود دارد."
+                            )
                         row_calculating.add(field.pk)
-                        cfg = cls.get_config(field)
-                        val = cls.evaluate_tokens(
-                            tokens=cfg["tokens"],
-                            field_resolver=resolve_row,
-                        )
-                        row_calculating.remove(field.pk)
+                        try:
+                            cfg = cls.get_config(field)
+                            val = cls.evaluate_tokens(
+                                tokens=cfg["tokens"],
+                                field_resolver=resolve_row,
+                            )
+                        finally:
+                            row_calculating.remove(field.pk)
                         row_cache[field.pk] = val
                         return val
                     return cls._to_decimal(row.get(field.code))
@@ -482,6 +616,5 @@ class FormulaService:
                 group_result.append(row)
 
             result[group.code] = group_result
-            normal_groups[group.code] = group_result
 
         return result
