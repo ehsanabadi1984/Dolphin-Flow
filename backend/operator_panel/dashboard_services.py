@@ -423,13 +423,54 @@ class DashboardService:
         act on (any starter, active membership required by the
         authorization predicates), annotated with the full actionability
         state.
+
+        A freshly started instance is intentionally excluded while it
+        is still an abandoned start: active + first step + no form data
+        + no active device + no transition execution. Clicking
+        "Start Workflow" alone must not create an "action required"
+        count before the operator has actually entered any process data.
         """
+        first_step_id = Subquery(
+            WorkflowStep.objects
+            .filter(
+                workflow_id=OuterRef("workflow_id"),
+                is_active=True,
+            )
+            .order_by("order")
+            .values("pk")[:1]
+        )
+
+        has_form_data = Exists(
+            FormData.objects.filter(instance_id=OuterRef("pk"))
+        )
+        has_active_device = Exists(
+            InstanceDevice.objects.filter(
+                instance_id=OuterRef("pk"),
+                is_active=True,
+            )
+        )
+        has_transition = Exists(
+            WorkflowTransitionExecution.objects.filter(
+                instance_id=OuterRef("pk"),
+            )
+        )
+
+        abandoned_start = (
+            Q(
+                current_step_id=first_step_id,
+            )
+            & ~has_form_data
+            & ~has_active_device
+            & ~has_transition
+        )
+
         return (
             WorkflowInstance.objects
             .filter(
                 status=WorkflowInstance.Status.ACTIVE,
                 workflow__is_active=True,
             )
+            .exclude(abandoned_start)
             .annotate(**_actionability_annotations(self.user))
             .select_related("workflow", "current_step")
             .order_by("-started_at")
