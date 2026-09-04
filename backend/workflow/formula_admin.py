@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 
 from .formula_services import FormulaService
-from .models import FormField, FormRepeatableGroup
+from .models import FormField, FormRepeatableGroup, FormSection
 
 
 class FormulaBuilderField(forms.CharField):
@@ -93,10 +93,16 @@ class FormulaFieldAdminForm(forms.ModelForm):
         if not section_id:
             return FormField.objects.none()
 
-        section = self.instance.section if self.instance and self.instance.pk else None
+        section = None
+        if self.instance and self.instance.pk and self.instance.section_id == section_id:
+            section = self.instance.section
         if section is None:
-            from .models import FormSection
-            section = FormSection.objects.select_related("form").filter(pk=section_id).first()
+            section = (
+                FormSection.objects
+                .select_related("form")
+                .filter(pk=section_id)
+                .first()
+            )
         if section is None:
             return FormField.objects.none()
 
@@ -129,7 +135,8 @@ class FormulaFieldAdminForm(forms.ModelForm):
                 "id": field.pk,
                 "code": field.code,
                 "label": field.label,
-                "section_label": field.section.name,
+                "section_order": field.section.order,
+                "section_id": field.section_id,
             }
             for field in self._available_formula_fields()
         ]
