@@ -8,6 +8,7 @@ class WorkflowConfig(AppConfig):
         from .models import FormField
         from .form_file_models import FormFile  # noqa: F401
         from .formula_bootstrap import bootstrap_formula_system
+        from . import signals  # noqa: F401
         from django.core.signals import request_started
 
         model_field = FormField._meta.get_field("field_type")
