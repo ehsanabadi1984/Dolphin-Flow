@@ -24,8 +24,9 @@
     </script>
 </head>
 
+<body>
 {% if messages %}
-    {% for message in messages %}
+    {% with message=messages|last %}
         {% if message.tags == "success" %}
             <div class="df-success-modal" id="df-success-modal">
                 <div class="df-success-modal-backdrop"></div>
@@ -47,10 +48,9 @@
                 </div>
             </div>
         {% endif %}
-    {% endfor %}
+    {% endwith %}
 {% endif %}
 
-<body>
 <div class="df-layout">
     {% include "operator_panel/sidebar.html" %}
 
