@@ -11,25 +11,26 @@
 .df-process-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .df-process-card-title { font-weight: 700; }
 .df-process-card-meta { margin-top: 5px; font-size: 12px; opacity: .68; }
-.df-process-tracker-wrap { overflow-x: auto; padding: 6px 2px 10px; }
+.df-process-tracker-wrap { overflow-x: auto; padding: 6px 2px 84px; }
 .df-process-tracker { display: flex; align-items: flex-start; min-width: max-content; }
 .df-tracker-step { position: relative; display: flex; flex-direction: column; align-items: center; width: 116px; text-align: center; }
 .df-tracker-step:not(:last-child)::after { content: ""; position: absolute; top: 13px; right: calc(50% - 58px); width: 116px; height: 2px; background: var(--df-border, #e5e7eb); z-index: 0; }
 .df-tracker-step.is-completed:not(:last-child)::after { background: var(--df-primary, #2563eb); }
-.df-tracker-node { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--df-border, #d1d5db); background: var(--df-surface, #fff); font-size: 13px; font-weight: 700; }
+.df-tracker-node { position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--df-border, #d1d5db); background: var(--df-surface, #fff); font-size: 13px; font-weight: 700; }
 .df-tracker-step.is-completed .df-tracker-node { color: #fff; border-color: var(--df-primary, #2563eb); background: var(--df-primary, #2563eb); }
 .df-tracker-step.is-current .df-tracker-node { color: #fff; border-color: #f59e0b; background: #f59e0b; box-shadow: 0 0 0 5px rgba(245, 158, 11, .14); }
 .df-tracker-label { margin-top: 9px; max-width: 108px; font-size: 12px; line-height: 1.7; }
 .df-tracker-state { margin-top: 2px; font-size: 10px; opacity: .55; }
 .df-tracker-step.is-current .df-tracker-state { color: #d97706; opacity: 1; font-weight: 700; }
 
-/* Keep the first output on the existing horizontal line. Only later outputs are drawn as side branches. */
-.df-tracker-step.has-extra-branches { padding-bottom: 48px; }
-.df-tracker-extra-branches { position: absolute; top: 39px; left: 50%; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 150px; transform: translateX(-50%); }
-.df-tracker-extra-branch { position: relative; display: flex; align-items: center; gap: 5px; width: 100%; min-height: 20px; font-size: 10px; line-height: 1.4; color: var(--df-text-muted, #64748b); }
-.df-tracker-extra-branch::before { content: ""; position: absolute; top: -10px; left: 10px; width: 28px; height: 1px; background: var(--df-border, #d1d5db); transform: translateX(-100%); }
-.df-tracker-extra-branch-node { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: 0 0 20px; border: 2px solid var(--df-border, #cbd5e1); border-radius: 50%; background: var(--df-surface, #fff); font-size: 9px; font-weight: 700; }
-.df-tracker-extra-branch-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Extra outputs: the first output stays on the normal horizontal timeline. Only additional outputs branch downward from the same node. */
+.df-tracker-step.has-extra-branches { padding-bottom: 74px; }
+.df-tracker-extra-branches { position: absolute; top: 39px; left: 50%; width: 230px; padding-top: 18px; transform: translateX(-50%); }
+.df-tracker-extra-branches::before { content: ""; position: absolute; top: 0; bottom: 10px; left: 50%; width: 2px; transform: translateX(-50%); background: var(--df-border, #d1d5db); }
+.df-tracker-extra-branch { position: relative; display: flex; align-items: center; gap: 8px; min-height: 26px; margin-bottom: 8px; padding-left: 34px; font-size: 10px; line-height: 1.45; color: var(--df-text-muted, #64748b); }
+.df-tracker-extra-branch::before { content: ""; position: absolute; top: 50%; left: 50%; width: 32px; height: 2px; transform: translateY(-50%); background: var(--df-border, #d1d5db); }
+.df-tracker-extra-branch-node { position: relative; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: 0 0 20px; border: 2px solid var(--df-border, #cbd5e1); border-radius: 50%; background: var(--df-surface, #fff); font-size: 9px; font-weight: 700; }
+.df-tracker-extra-branch-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
 .df-tracker-extra-branch.is-finish { color: #dc2626; font-weight: 700; }
 .df-tracker-extra-branch.is-finish .df-tracker-extra-branch-node { border-color: #dc2626; color: #dc2626; }
 
