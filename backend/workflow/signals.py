@@ -1,4 +1,4 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import pre_save
 from django.dispatch import receiver
 
 from .formula_services import FormulaError, FormulaService
@@ -6,18 +6,22 @@ from .models import FormData, FormDefinition
 
 
 @receiver(
-    post_save,
+    pre_save,
     sender=FormData,
     dispatch_uid="workflow.persist_calculated_formulas",
 )
 def persist_calculated_formulas(sender, instance, **kwargs):
     """
-    Persist calculated Formula field values after FormData is saved.
+    Calculate Formula fields before FormData is written.
 
-    Formula values are derived from the saved input data on the server so
-    client-side values can never become the source of truth.
+    FormData is assembled by the dynamic form service before save, so
+    calculating here guarantees that the persisted snapshot contains
+    server-derived formula values. Unlike the previous post_save handler,
+    this does not issue a second FormData.save() and therefore avoids a
+    recursive signal invocation.
     """
-    workflow = getattr(instance.instance, "workflow", None)
+    workflow_instance = getattr(instance, "instance", None)
+    workflow = getattr(workflow_instance, "workflow", None)
     if workflow is None:
         return
 
@@ -33,19 +37,12 @@ def persist_calculated_formulas(sender, instance, **kwargs):
         return
 
     try:
-        calculated_data = FormulaService.calculate_context_data(
+        instance.data = FormulaService.calculate_context_data(
             form=form,
             data=instance.data or {},
         )
     except FormulaError:
-        # Formula configuration errors are handled by the formula admin
-        # validation path. They must not turn an otherwise valid form save
-        # into a 500 response here.
+        # Formula configuration errors must not turn an otherwise valid
+        # FormData save into a 500 response. Admin-side formula validation
+        # remains responsible for reporting invalid formula definitions.
         return
-
-    current_data = instance.data or {}
-    if calculated_data == current_data:
-        return
-
-    instance.data = calculated_data
-    instance.save(update_fields=["data", "updated_at"])
