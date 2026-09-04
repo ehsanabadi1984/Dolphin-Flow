@@ -143,11 +143,32 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function normalizeLabel(value) {
+        return String(value || "")
+            .replace(/\s+/g, " ")
+            .replace(/\s*\*\s*$/, "")
+            .trim();
+    }
+
     function getNormalFormulaContainer(formula) {
         const fields = form.querySelectorAll(".df-form-field[data-field-code]");
+
+        // The formula must be rendered into its own field container.
+        // Field codes are only guaranteed to be unique inside a section,
+        // so matching by code alone can target the neighboring field when
+        // two sections happen to reuse the same code.
+        for (const field of fields) {
+            const label = field.querySelector("label");
+            if (normalizeLabel(label?.textContent) === normalizeLabel(formula.label)) {
+                return field;
+            }
+        }
+
+        // Backward-compatible fallback for forms whose label is unavailable.
         for (const field of fields) {
             if (field.dataset.fieldCode === formula.code) return field;
         }
+
         return null;
     }
 
