@@ -61,7 +61,10 @@ def _formula_source_fields(*, section_id, group_id, exclude_id=None):
     if not section_id:
         return FormField.objects.none()
 
-    section = get_object_or_404(FormSection.objects.select_related("form"), pk=section_id)
+    section = get_object_or_404(
+        FormSection.objects.select_related("form"),
+        pk=section_id,
+    )
 
     queryset = (
         FormField.objects
@@ -73,8 +76,8 @@ def _formula_source_fields(*, section_id, group_id, exclude_id=None):
                 FormulaService.FIELD_TYPE,
             ],
         )
-        .select_related("repeatable_group")
-        .order_by("repeatable_group_id", "order", "id")
+        .select_related("repeatable_group", "section")
+        .order_by("section__order", "repeatable_group_id", "order", "id")
     )
 
     if exclude_id:
@@ -89,6 +92,9 @@ def _formula_source_fields(*, section_id, group_id, exclude_id=None):
         )
         queryset = queryset.filter(repeatable_group=group)
     else:
+        # Normal Formula fields may reference numeric/calculated fields from
+        # every section of the same form. Table/row formulas remain isolated
+        # to their own repeatable group.
         queryset = queryset.filter(repeatable_group__isnull=True)
 
     return queryset
@@ -116,6 +122,8 @@ def formula_field_options(request):
             "id": field.pk,
             "code": field.code,
             "label": field.label,
+            "section_order": field.section.order,
+            "section_id": field.section_id,
         }
         for field in _formula_source_fields(
             section_id=section_id,
@@ -185,9 +193,6 @@ def formula_definitions(request, instance_id):
         if not _field_access(field, user=request.user, step=instance.current_step):
             continue
 
-        # For TABLE repeatable groups, keep the exact order of every visible
-        # column, not just NUMBER/FORMULA fields. The operator template renders
-        # one <td> per visible field, so Formula JS must use the same column map.
         if field.repeatable_group_id:
             group_visible_columns.setdefault(field.repeatable_group_id, []).append(
                 field.code
