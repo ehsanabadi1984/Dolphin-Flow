@@ -19,7 +19,7 @@ class FormulaFieldAdminForm(forms.ModelForm):
         required=False,
         label="فرمول",
         help_text=(
-            "اجزای فرمول را با انتخاب فیلدها و عملگرها بسازید. "
+            "اجزای فرمول را با انتخاب فیلدها و توابع بسازید. "
             "فیلد محاسباتی در پنل اپراتور همیشه فقط‌خواندنی است."
         ),
         widget=forms.Textarea(
@@ -93,18 +93,25 @@ class FormulaFieldAdminForm(forms.ModelForm):
         if not section_id:
             return FormField.objects.none()
 
+        section = self.instance.section if self.instance and self.instance.pk else None
+        if section is None:
+            from .models import FormSection
+            section = FormSection.objects.select_related("form").filter(pk=section_id).first()
+        if section is None:
+            return FormField.objects.none()
+
         queryset = (
             FormField.objects
             .filter(
-                section__form__sections__id=section_id,
+                section__form=section.form,
                 is_active=True,
                 field_type__in=[
                     FormField.FieldType.NUMBER,
                     FormulaService.FIELD_TYPE,
                 ],
             )
-            .select_related("repeatable_group")
-            .order_by("repeatable_group_id", "order", "id")
+            .select_related("repeatable_group", "section")
+            .order_by("section__order", "repeatable_group_id", "order", "id")
         )
 
         current_id = self.instance.pk if self.instance and self.instance.pk else None
@@ -122,6 +129,7 @@ class FormulaFieldAdminForm(forms.ModelForm):
                 "id": field.pk,
                 "code": field.code,
                 "label": field.label,
+                "section_label": field.section.name,
             }
             for field in self._available_formula_fields()
         ]
