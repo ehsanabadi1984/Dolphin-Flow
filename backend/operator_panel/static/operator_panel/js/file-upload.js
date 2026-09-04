@@ -85,6 +85,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return Array.from(group.querySelectorAll("[data-repeatable-item]"));
     }
 
+    function getRowId(groupCode, row, rowIndex) {
+        const idInput = row.querySelector(
+            `input[type="hidden"][name="${cssEscape(groupCode)}_${rowIndex}__id"]`
+        );
+        return idInput ? String(idInput.value || "") : "";
+    }
+
     async function loadDefinitions() {
         try {
             const response = await fetch(
@@ -107,9 +114,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 );
 
                 rows.forEach((row, rowIndex) => {
-                    const rowId = row.dataset.rowId || "";
+                    const rowId = getRowId(group.code, row, rowIndex);
                     for (const field of group.fields || []) {
-                        const columnIndex = Number(field.column_index);
                         const fieldFile = (group.files || []).find(
                             item => item.row_id === rowId && item.field_code === field.code
                         );
@@ -118,9 +124,12 @@ document.addEventListener("DOMContentLoaded", () => {
                             input_name: `${group.code}_${rowIndex}_${field.code}`,
                         };
 
-                        if (Number.isInteger(columnIndex)) {
-                            const cell = row.children[columnIndex];
-                            if (cell) addFileControl(cell, rowField, fieldFile || null);
+                        if (group.is_table) {
+                            const columnIndex = Number(field.column_index);
+                            if (Number.isInteger(columnIndex)) {
+                                const cell = row.children[columnIndex];
+                                if (cell) addFileControl(cell, rowField, fieldFile || null);
+                            }
                         } else {
                             const container = row.querySelector(
                                 `.df-form-field[data-field-code="${cssEscape(field.code)}"]`
