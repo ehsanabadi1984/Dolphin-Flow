@@ -11,6 +11,7 @@ from .views import (
     notifications,
     mark_notification_as_read,
 )
+from workflow.form_file_services import open_form_file
 
 
 app_name = "operator_panel"
@@ -94,6 +95,12 @@ urlpatterns = [
         "formula-field-options/",
         formula_field_options,
         name="formula_field_options",
+    ),
+
+    path(
+        "workflow-file/<int:file_id>/download/",
+        open_form_file,
+        name="download_form_file",
     ),
 
     path(
