@@ -1,0 +1,28 @@
+.df-formula-value {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 11px;
+    border: 1px solid var(--df-border, #e5e7eb);
+    border-radius: 7px;
+    background: var(--df-surface-soft, #f8fafc);
+    font-weight: 600;
+    direction: ltr;
+    text-align: left;
+}
+
+.df-table-value.df-formula-value {
+    width: auto;
+    min-width: 80px;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.df-formula-value::before {
+    content: "ƒ";
+    margin-right: 7px;
+    opacity: 0.55;
+    font-weight: 700;
+}
