@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -18,6 +17,9 @@ from workflow.models import (
 
 
 def _field_access(field, *, user, step):
+    if user.is_superuser:
+        return True
+
     roles = set(
         field.section.form.workflow.memberships
         .filter(user=user, is_active=True)
@@ -35,6 +37,9 @@ def _field_access(field, *, user, step):
 
 
 def _group_access(group, *, user, step):
+    if user.is_superuser:
+        return True
+
     roles = set(
         group.section.form.workflow.memberships
         .filter(user=user, is_active=True)
@@ -75,7 +80,13 @@ def formula_definitions(request, instance_id):
         .first()
     )
     if form is None or instance.current_step_id is None:
-        return JsonResponse({"form_id": form.pk if form else None, "fields": [], "formulas": []})
+        return JsonResponse(
+            {
+                "form_id": form.pk if form else None,
+                "fields": [],
+                "formulas": [],
+            }
+        )
 
     visible_fields = []
     visible_field_ids = set()
@@ -119,7 +130,11 @@ def formula_definitions(request, instance_id):
     formulas = []
     all_formula_fields = (
         FormField.objects
-        .filter(section__form=form, field_type=FormulaService.FIELD_TYPE, is_active=True)
+        .filter(
+            section__form=form,
+            field_type=FormulaService.FIELD_TYPE,
+            is_active=True,
+        )
         .select_related("repeatable_group")
     )
 
