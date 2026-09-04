@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from .dashboard_views import dashboard, dashboard_realtime
 from .process_views import my_processes
-from .formula_views import formula_definitions
+from .formula_views import formula_definitions, formula_field_options
 from .views import (
     execute_transition,
     start_workflow,
@@ -88,6 +88,12 @@ urlpatterns = [
         "workflow-instance/<int:instance_id>/formula-definitions/",
         formula_definitions,
         name="formula_definitions",
+    ),
+
+    path(
+        "formula-field-options/",
+        formula_field_options,
+        name="formula_field_options",
     ),
 
     path(
