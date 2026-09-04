@@ -117,7 +117,13 @@ class FormulaFieldAdminForm(forms.ModelForm):
                 ],
             )
             .select_related("repeatable_group", "section")
-            .order_by("section__order", "repeatable_group_id", "order", "id")
+            .order_by(
+                "section__order",
+                "repeatable_group__order",
+                "repeatable_group_id",
+                "order",
+                "id",
+            )
         )
 
         current_id = self.instance.pk if self.instance and self.instance.pk else None
@@ -127,7 +133,7 @@ class FormulaFieldAdminForm(forms.ModelForm):
         if group_id:
             return queryset.filter(repeatable_group_id=group_id)
 
-        return queryset.filter(repeatable_group__isnull=True)
+        return queryset
 
     def _refresh_field_options(self):
         options = [
@@ -137,6 +143,10 @@ class FormulaFieldAdminForm(forms.ModelForm):
                 "label": field.label,
                 "section_order": field.section.order,
                 "section_id": field.section_id,
+                "section_label": field.section.name,
+                "group_code": field.repeatable_group.code if field.repeatable_group_id else None,
+                "group_label": field.repeatable_group.name if field.repeatable_group_id else None,
+                "is_group_field": field.repeatable_group_id is not None,
             }
             for field in self._available_formula_fields()
         ]
