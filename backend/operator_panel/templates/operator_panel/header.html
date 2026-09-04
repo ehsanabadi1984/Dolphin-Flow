@@ -4,10 +4,10 @@
         <div class="df-breadcrumb">
             <span>Dolphin Flow</span>
             <span class="df-breadcrumb-separator">/</span>
-            <span>داشبورد</span>
+            <span>{{ page_breadcrumb|default:"داشبورد" }}</span>
         </div>
         <div class="df-page-title">
-            داشبورد
+            {{ page_title|default:"داشبورد" }}
         </div>
     </div>
 
@@ -77,9 +77,11 @@
                     <div class="df-user-name">
                         {{ request.user.get_full_name|default:request.user.username }}
                     </div>
+                    {% if request.user.job %}
                     <div class="df-user-role">
-                        {{ request.user.get_role_display }}
+                        {{ request.user.job.name }}
                     </div>
+                    {% endif %}
                 </div>
                 <div class="df-user-avatar">
                     {{ request.user.first_name|first|default:request.user.username|first|upper }}
@@ -98,9 +100,11 @@
                         <div class="df-user-menu-name">
                             {{ request.user.get_full_name|default:request.user.username }}
                         </div>
+                        {% if request.user.job %}
                         <div class="df-user-menu-role">
-                            {{ request.user.get_role_display }}
+                            {{ request.user.job.name }}
                         </div>
+                        {% endif %}
                     </div>
                 </div>
 

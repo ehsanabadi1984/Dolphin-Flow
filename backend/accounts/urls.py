@@ -30,13 +30,21 @@ urlpatterns = [
         auth_views.PasswordChangeView.as_view(
             template_name="accounts/password_change.html",
             success_url="/accounts/password/change/done/",
+            extra_context={
+                "page_title": "تغییر رمز عبور",
+                "page_breadcrumb": "تغییر رمز عبور",
+            },
         ),
         name="password_change",
     ),
     path(
         "password/change/done/",
         auth_views.PasswordChangeDoneView.as_view(
-            template_name="accounts/password_change_done.html"
+            template_name="accounts/password_change_done.html",
+            extra_context={
+                "page_title": "تغییر رمز عبور",
+                "page_breadcrumb": "تغییر رمز عبور",
+            },
         ),
         name="password_change_done",
     ),

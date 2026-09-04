@@ -51,7 +51,21 @@
 
         <div class="df-nav-label df-nav-label-workflows">شروع فرآیند</div>
 
-        <div class="df-nav-workflows">
+        <button
+            type="button"
+            class="df-nav-link df-nav-workflow-trigger"
+            id="df-nav-workflow-trigger"
+            aria-expanded="false"
+            aria-controls="df-nav-workflows"
+            data-tooltip="شروع فرآیند"
+        >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14"></path><path d="M5 12h14"></path>
+            </svg>
+            <span>شروع فرآیند</span>
+        </button>
+
+        <div class="df-nav-workflows" id="df-nav-workflows">
             {% startable_workflows as sidebar_workflows %}
             {% for workflow in sidebar_workflows %}
                 <form method="post" action="{% url 'operator_panel:start_workflow' workflow.pk %}" class="df-nav-workflow-form">

@@ -32,6 +32,59 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    /*
+     * Mobile workflow-start flyout.
+     *
+     * On small screens the sidebar is an icon rail and workflow names
+     * are hidden, so the start buttons would be indistinguishable. The
+     * trigger opens a labeled flyout that works with touch (tap to open,
+     * tap outside or Escape to close).
+     */
+
+    const workflowTrigger = document.getElementById(
+        "df-nav-workflow-trigger"
+    );
+
+    const workflowList = document.getElementById(
+        "df-nav-workflows"
+    );
+
+    if (workflowTrigger && workflowList) {
+
+        workflowTrigger.addEventListener("click", (event) => {
+            event.stopPropagation();
+
+            const isOpen =
+                workflowTrigger.getAttribute("aria-expanded") === "true";
+
+            workflowTrigger.setAttribute(
+                "aria-expanded",
+                String(!isOpen)
+            );
+        });
+
+        document.addEventListener("click", (event) => {
+            if (
+                !workflowTrigger.contains(event.target) &&
+                !workflowList.contains(event.target)
+            ) {
+                workflowTrigger.setAttribute(
+                    "aria-expanded",
+                    "false"
+                );
+            }
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                workflowTrigger.setAttribute(
+                    "aria-expanded",
+                    "false"
+                );
+            }
+        });
+    }
+
 
     /*
      * ---------------------------------------------------------
@@ -1624,6 +1677,7 @@ document.addEventListener("click", (event) => {
                     <div
                         class="df-notification-item"
                         data-notification-id="${notification.id}"
+                        data-workflow-instance-url="${notification.workflow_instance_url ? escapeHtml(notification.workflow_instance_url) : ""}"
                         role="button"
                         tabindex="0"
                     >
@@ -1787,10 +1841,50 @@ document.addEventListener("click", (event) => {
                 return;
             }
 
+            const instanceUrl =
+                notificationItem.dataset.workflowInstanceUrl;
+
             await markNotificationAsRead(
                 notificationItem
             );
 
+            /*
+             * Notifications tied to a workflow instance navigate to it
+             * after being marked as read. The URL is server-generated
+             * and the destination view re-enforces authorization.
+             */
+
+            if (instanceUrl) {
+                window.location.href = instanceUrl;
+            }
+        }
+    );
+
+    /*
+     * Keyboard activation for notification items
+     * (role="button", tabindex="0").
+     */
+
+    notificationList.addEventListener(
+        "keydown",
+        (event) => {
+
+            if (event.key !== "Enter" && event.key !== " ") {
+                return;
+            }
+
+            const notificationItem =
+                event.target.closest(
+                    ".df-notification-item"
+                );
+
+            if (!notificationItem) {
+                return;
+            }
+
+            event.preventDefault();
+
+            notificationItem.click();
         }
     );
 

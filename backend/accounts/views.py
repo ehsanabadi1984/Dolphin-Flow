@@ -15,7 +15,11 @@ def profile(request):
     return render(
         request,
         "accounts/profile.html",
-        {"user": request.user},
+        {
+            "user": request.user,
+            "page_title": "پروفایل من",
+            "page_breadcrumb": "پروفایل من",
+        },
     )
 
 
@@ -27,6 +31,8 @@ def permissions(request):
         {
             "groups": request.user.groups.all(),
             "permissions": request.user.get_all_permissions(),
+            "page_title": "دسترسی‌های من",
+            "page_breadcrumb": "دسترسی‌های من",
         },
     )
 
@@ -36,6 +42,10 @@ def activity(request):
     return render(
         request,
         "accounts/activity.html",
+        {
+            "page_title": "فعالیت‌های من",
+            "page_breadcrumb": "فعالیت‌های من",
+        },
     )
 
 
@@ -44,4 +54,8 @@ def settings(request):
     return render(
         request,
         "accounts/settings.html",
+        {
+            "page_title": "تنظیمات",
+            "page_breadcrumb": "تنظیمات",
+        },
     )

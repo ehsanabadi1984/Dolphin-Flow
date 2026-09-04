@@ -1,12 +1,10 @@
 from django import template
-from django.db.models import Exists, OuterRef, Q, Subquery
 
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.models import (
     FormData,
     InstanceDevice,
     WorkflowInstance,
-    WorkflowTransitionExecution,
     WorkflowStep,
 )
 from operator_panel.dashboard_services import DashboardService
@@ -61,10 +59,19 @@ def is_abandoned_start(instance):
 
 @register.simple_tag(takes_context=True)
 def startable_workflows(context):
-    """Return workflows the current user is authorized to start."""
+    """
+    Return workflows the current user is authorized to start.
+
+    On the dashboard the queryset is already part of the view context, so
+    it is reused instead of being recomputed for the sidebar.
+    """
     request = context.get("request")
     if not request or not request.user.is_authenticated:
         return []
+
+    existing = context.get("startable_workflows")
+    if existing is not None:
+        return existing
 
     return (
         WorkflowAuthorizationService
@@ -75,7 +82,13 @@ def startable_workflows(context):
 
 @register.simple_tag(takes_context=True)
 def sidebar_counts(context):
-    """Return workflow counts using the dashboard's shared semantics."""
+    """
+    Return workflow counts using the dashboard's shared semantics.
+
+    On the dashboard the counters are part of the view context (computed
+    once by DashboardService.get_context), so they are reused instead of
+    being recomputed for the sidebar.
+    """
     request = context.get("request")
     if not request or not request.user.is_authenticated:
         return {
@@ -83,6 +96,10 @@ def sidebar_counts(context):
             "pending": 0,
             "active": 0,
         }
+
+    existing = context.get("sidebar_counts")
+    if existing is not None:
+        return existing
 
     return DashboardService(request.user).get_sidebar_counts()
 
@@ -93,46 +110,6 @@ def recent_processes(user, limit=10):
     if not user or not user.is_authenticated:
         return []
 
-    first_step_id = Subquery(
-        WorkflowStep.objects
-        .filter(
-            workflow_id=OuterRef("workflow_id"),
-            is_active=True,
-        )
-        .order_by("order")
-        .values("pk")[:1]
-    )
-
-    has_form_data = Exists(
-        FormData.objects.filter(instance_id=OuterRef("pk"))
-    )
-    has_active_device = Exists(
-        InstanceDevice.objects.filter(
-            instance_id=OuterRef("pk"),
-            is_active=True,
-        )
-    )
-    has_transition = Exists(
-        WorkflowTransitionExecution.objects.filter(
-            instance_id=OuterRef("pk")
-        )
-    )
-
-    abandoned_start = (
-        Q(
-            status=WorkflowInstance.Status.ACTIVE,
-            current_step_id=first_step_id,
-        )
-        & ~has_form_data
-        & ~has_active_device
-        & ~has_transition
-    )
-
     return list(
-        WorkflowInstance.objects
-        .filter(started_by=user)
-        .exclude(status=WorkflowInstance.Status.DRAFT)
-        .exclude(abandoned_start)
-        .select_related("workflow", "current_step")
-        .order_by("-started_at")[:limit]
+        DashboardService.meaningful_instance_queryset(user)[:limit]
     )

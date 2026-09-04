@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.http import JsonResponse
 from django.contrib.contenttypes.models import ContentType
+from django.urls import reverse
 from workflow.device_services import DeviceService
 
 
@@ -397,6 +398,8 @@ def workflow_instance(request, instance_id):
                     ),
                     "edit_mode": edit_mode,
                     "validation_errors": validation_errors,
+                    "page_title": instance.workflow.name,
+                    "page_breadcrumb": instance.workflow.name,
                 },
                 status=400,
             )
@@ -546,6 +549,8 @@ def workflow_instance(request, instance_id):
             "edit_mode": edit_mode,
             "current_step_execution": current_step_execution,
             "has_saved_data": has_saved_data,
+            "page_title": instance.workflow.name,
+            "page_breadcrumb": instance.workflow.name,
         },
     )
 
@@ -649,7 +654,13 @@ def device_history(request, instance_id, device_id):
     return render(
         request,
         "operator_panel/device_history.html",
-        {"instance": instance, "device": device, "histories": histories},
+        {
+            "instance": instance,
+            "device": device,
+            "histories": histories,
+            "page_title": "سوابق دستگاه",
+            "page_breadcrumb": "سوابق دستگاه",
+        },
     )
 
 @login_required
@@ -710,6 +721,8 @@ def execute_transition(request, instance_id, transition_id):
                     )
                 ),
                 "error": str(exc),
+                "page_title": instance.workflow.name,
+                "page_breadcrumb": instance.workflow.name,
             },
             status=400,
         )
@@ -747,9 +760,6 @@ def start_workflow(request, workflow_id):
     )
 
     try:
-        print("START WORKFLOW REQUEST USER:", request.user, request.user.pk)
-        print("START WORKFLOW:", workflow, workflow.pk)
-
         instance = WorkflowExecutionService.start_workflow(
             workflow=workflow,
             user=request.user,
@@ -759,14 +769,12 @@ def start_workflow(request, workflow_id):
         raise
 
     except ValidationError as exc:
-        return render(
-            request,
-            "operator_panel/dashboard.html",
-            {
-                "user": request.user,
-                "error": str(exc),
-            },
-            status=400,
+        # Surface the failure through the normal dashboard flow instead
+        # of rendering an incomplete dashboard template that hides the
+        # error and drops all of its context.
+        messages.error(request, str(exc))
+        return redirect(
+            "operator_panel:dashboard",
         )
 
     return redirect(
@@ -847,6 +855,14 @@ def notifications(request):
                 "created_at": notification.created_at.isoformat(),
                 "workflow_instance_id": (
                     notification.workflow_instance_id
+                ),
+                "workflow_instance_url": (
+                    reverse(
+                        "operator_panel:workflow_instance",
+                        args=[notification.workflow_instance_id],
+                    )
+                    if notification.workflow_instance_id
+                    else None
                 ),
             }
         )

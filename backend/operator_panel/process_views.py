@@ -1,66 +1,37 @@
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Exists, OuterRef, Q, Subquery
+from django.db.models import Q
 from django.shortcuts import render
 
-from workflow.models import (
-    FormData,
-    InstanceDevice,
-    WorkflowInstance,
-    WorkflowStep,
-    WorkflowTransitionExecution,
-)
+from workflow.models import WorkflowInstance
+
+from .dashboard_services import DashboardService
 
 
 @login_required
 def my_processes(request):
-    """List the authenticated user's meaningful workflow instances."""
+    """
+    List the authenticated user's meaningful workflow instances.
+
+    The canonical population (meaningful instances started by the user
+    in an active workflow that the user can still open) is shared with
+    the sidebar "فرآیندهای من" badge and the dashboard active panels, so
+    the badge always equals the ACTIVE rows of this page and every row
+    is reachable under the authorization the instance view enforces.
+    """
     search = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
     workflow_id = request.GET.get("workflow", "").strip()
 
-    first_step_id = Subquery(
-        WorkflowStep.objects
-        .filter(
-            workflow_id=OuterRef("workflow_id"),
-            is_active=True,
-        )
-        .order_by("order")
-        .values("pk")[:1]
-    )
+    instances = DashboardService(request.user).my_processes_queryset()
 
-    has_form_data = Exists(
-        FormData.objects.filter(instance_id=OuterRef("pk"))
-    )
-    has_active_device = Exists(
-        InstanceDevice.objects.filter(
-            instance_id=OuterRef("pk"),
-            is_active=True,
-        )
-    )
-    has_transition = Exists(
-        WorkflowTransitionExecution.objects.filter(
-            instance_id=OuterRef("pk")
-        )
-    )
-
-    abandoned_start = (
-        Q(
-            status=WorkflowInstance.Status.ACTIVE,
-            current_step_id=first_step_id,
-        )
-        & ~has_form_data
-        & ~has_active_device
-        & ~has_transition
-    )
-
-    instances = (
-        WorkflowInstance.objects
-        .filter(started_by=request.user)
-        .exclude(status=WorkflowInstance.Status.DRAFT)
-        .exclude(abandoned_start)
-        .select_related("workflow", "current_step")
-        .order_by("-started_at")
+    # Workflow filter options come from the full canonical population
+    # (not the active search/status filters).
+    workflows = (
+        instances
+        .values("workflow_id", "workflow__name")
+        .distinct()
+        .order_by("workflow__name")
     )
 
     if search:
@@ -79,15 +50,6 @@ def my_processes(request):
     if workflow_id.isdigit():
         instances = instances.filter(workflow_id=int(workflow_id))
 
-    workflows = (
-        WorkflowInstance.objects
-        .filter(started_by=request.user)
-        .exclude(status=WorkflowInstance.Status.DRAFT)
-        .values("workflow_id", "workflow__name")
-        .distinct()
-        .order_by("workflow__name")
-    )
-
     paginator = Paginator(instances, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
 
@@ -102,5 +64,7 @@ def my_processes(request):
             "search": search,
             "selected_status": status,
             "selected_workflow": workflow_id,
+            "page_title": "فرآیندهای من",
+            "page_breadcrumb": "فرآیندهای من",
         },
     )

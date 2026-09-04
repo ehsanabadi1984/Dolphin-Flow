@@ -36,6 +36,16 @@
                     <button type="button" class="df-button" id="df-success-modal-confirm">تأیید</button>
                 </div>
             </div>
+        {% elif message.tags == "error" %}
+            <div class="df-error-modal" id="df-error-modal">
+                <div class="df-error-modal-backdrop"></div>
+                <div class="df-error-modal-card">
+                    <div class="df-error-modal-icon">!</div>
+                    <h2>عملیات ناموفق بود</h2>
+                    <p>{{ message }}</p>
+                    <button type="button" class="df-button" id="df-error-modal-confirm">تأیید</button>
+                </div>
+            </div>
         {% endif %}
     {% endfor %}
 {% endif %}
@@ -63,6 +73,15 @@ document.addEventListener("DOMContentLoaded", function () {
     if (modal && confirmButton) {
         confirmButton.addEventListener("click", function () {
             modal.remove();
+        });
+    }
+
+    const errorModal = document.getElementById("df-error-modal");
+    const errorConfirmButton = document.getElementById("df-error-modal-confirm");
+
+    if (errorModal && errorConfirmButton) {
+        errorConfirmButton.addEventListener("click", function () {
+            errorModal.remove();
         });
     }
 

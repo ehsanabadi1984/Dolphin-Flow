@@ -2,6 +2,7 @@
     --bg: #0b0d10;
     --surface: #111419;
     --surface-2: #171a20;
+    --surface-3: #1b1f27;
     --border: rgba(255, 255, 255, 0.07);
 
     --text: #f5f7fa;
@@ -710,6 +711,13 @@ a {
     display: none;
 }
 
+/* Sidebar counters must respect the HTML hidden attribute even
+   though .df-nav-badge sets display:inline-flex. */
+
+.df-nav-badge[hidden] {
+    display: none;
+}
+
 
 /* User */
 
@@ -1269,6 +1277,85 @@ a {
 }
 
 .df-success-modal-card .df-button {
+    min-width: 120px;
+}
+
+/* Error modal (mirrors the success modal pattern) */
+
+.df-error-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 24px;
+}
+
+.df-error-modal-backdrop {
+    position: absolute;
+    inset: 0;
+
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(6px);
+}
+
+.df-error-modal-card {
+    position: relative;
+    z-index: 1;
+
+    width: min(460px, 100%);
+
+    padding: 36px;
+
+    text-align: center;
+
+    background: #171a20;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+
+    box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.df-error-modal-icon {
+    width: 64px;
+    height: 64px;
+
+    margin: 0 auto 20px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+
+    color: #ef4444;
+
+    font-size: 32px;
+    font-weight: 700;
+}
+
+.df-error-modal-card h2 {
+    margin: 0 0 12px;
+
+    font-size: 22px;
+}
+
+.df-error-modal-card p {
+    margin: 0 0 28px;
+
+    line-height: 1.9;
+
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.df-error-modal-card .df-button {
     min-width: 120px;
 }
 
@@ -1913,4 +2000,62 @@ body.df-modal-open {
     opacity: 0.35;
     cursor: not-allowed;
     pointer-events: none;
+}
+
+/* ---------------------------------------------------------
+   Mobile workflow-start flyout
+
+   On screens where the sidebar becomes a 68px icon rail the workflow
+   names are hidden, so the start buttons would be indistinguishable.
+   A dedicated trigger opens a labeled flyout that works on touch.
+   The flyout is anchored to the sidebar (position:fixed) and keeps the
+   rail compact; ID selectors are used so the rules win over the inline
+   sidebar styles that set display:flex on .df-nav-workflows.
+   --------------------------------------------------------- */
+
+.df-nav-workflow-trigger {
+    display: none;
+}
+
+@media (max-width: 760px) {
+
+    .df-nav-workflow-trigger {
+        display: flex;
+    }
+
+    #df-nav-workflows {
+        position: absolute;
+        right: 56px;
+        min-width: 210px;
+        max-width: 240px;
+        max-height: 320px;
+        overflow-y: auto;
+
+        margin: 0;
+        padding: 6px;
+
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--df-shadow-md);
+
+        z-index: 230;
+
+        display: none;
+    }
+
+    .df-nav-workflow-trigger[aria-expanded="true"] + #df-nav-workflows {
+        display: flex;
+    }
+
+    /* Keep the workflow names readable inside the flyout even though
+       labels are hidden for the compact rail links. */
+    #df-nav-workflows .df-nav-link span {
+        display: inline;
+    }
+
+    #df-nav-workflows .df-nav-empty {
+        display: block;
+        padding: 12px;
+    }
 }

@@ -35,14 +35,38 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    /*
+     * Dashboard reloads are debounced so a burst of workflow.updated
+     * events (or unrelated events arriving close together) coalesce
+     * into a single reload instead of reloading the page per event.
+     * Sidebar counters still refresh immediately on every event.
+     */
+
+    const DASHBOARD_RELOAD_DELAY = 1500;
+
+    let dashboardReloadTimer = null;
+
+    function scheduleDashboardReload() {
+        if (!document.querySelector("[data-dashboard-page='true']")) {
+            return;
+        }
+
+        if (dashboardReloadTimer) {
+            clearTimeout(dashboardReloadTimer);
+        }
+
+        dashboardReloadTimer = setTimeout(() => {
+            dashboardReloadTimer = null;
+            window.location.reload();
+        }, DASHBOARD_RELOAD_DELAY);
+    }
+
     function handleWorkflowUpdate(event) {
         if (!event || event.type !== "workflow.updated") return;
 
         refreshSidebarCounts();
 
-        if (document.querySelector("[data-dashboard-page='true']")) {
-            window.location.reload();
-        }
+        scheduleDashboardReload();
     }
 
     window.addEventListener("workflow.updated", (event) => {
