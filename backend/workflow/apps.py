@@ -6,6 +6,7 @@ class WorkflowConfig(AppConfig):
 
     def ready(self):
         from .models import FormField
+        from .form_file_models import FormFile  # noqa: F401
         from .formula_bootstrap import bootstrap_formula_system
         from django.core.signals import request_started
 
@@ -13,7 +14,9 @@ class WorkflowConfig(AppConfig):
         choices = list(model_field.choices or [])
         if not any(value == "FORMULA" for value, _ in choices):
             choices.append(("FORMULA", "فرمول"))
-            model_field.choices = choices
+        if not any(value == "FILE" for value, _ in choices):
+            choices.append(("FILE", "بارگذاری فایل"))
+        model_field.choices = choices
 
         request_started.connect(
             lambda sender, **kwargs: bootstrap_formula_system(),
