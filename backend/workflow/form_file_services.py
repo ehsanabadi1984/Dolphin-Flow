@@ -36,6 +36,7 @@ def _current_form(instance):
 
 
 def prepare_submitted_data_for_files(*, instance, submitted_data, submitted_files):
+    """Make FILE-only repeatable rows visible to the normal form parser."""
     post_data = submitted_data.copy()
     form = _current_form(instance)
     if form is None:
@@ -138,6 +139,7 @@ def _group_can_view(group, *, user, step):
 
 
 def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
+    """Validate FILE fields before DynamicFormService persists normal form data."""
     if instance.current_step_id is None:
         return
 
@@ -371,14 +373,16 @@ def file_field_definitions(request, instance_id):
             if not _group_can_view(group, user=request.user, step=step):
                 continue
 
-            all_fields = list(group.fields.filter(is_active=True))
+            visible_fields = [
+                field
+                for field in group.fields.filter(is_active=True)
+                if _field_can_view(field, user=request.user, step=step)
+            ]
             group_fields = []
             field_ids = set()
 
-            for column_index, field in enumerate(all_fields):
+            for column_index, field in enumerate(visible_fields):
                 if field.field_type != "FILE":
-                    continue
-                if not _field_can_view(field, user=request.user, step=step):
                     continue
                 field_ids.add(field.pk)
                 group_fields.append({
@@ -397,6 +401,12 @@ def file_field_definitions(request, instance_id):
                 continue
 
             file_payloads = []
+            rows = form_data.data.get(group.code, []) if form_data and isinstance(form_data.data, dict) else []
+            row_indexes = {
+                str(row.get("_id", "") or ""): index
+                for index, row in enumerate(rows)
+                if isinstance(row, dict) and row.get("_id")
+            }
             for (field_id, row_id), payload in existing.items():
                 if field_id in field_ids:
                     field_code = next(
@@ -405,6 +415,7 @@ def file_field_definitions(request, instance_id):
                     file_payloads.append({
                         "field_code": field_code,
                         "row_id": row_id,
+                        "row_index": row_indexes.get(str(row_id), -1),
                         **payload,
                     })
 
@@ -412,6 +423,7 @@ def file_field_definitions(request, instance_id):
                 "code": group.code,
                 "fields": group_fields,
                 "files": file_payloads,
+                "is_table": group.display_type == "TABLE",
             })
 
     return JsonResponse({"fields": fields, "groups": groups})
