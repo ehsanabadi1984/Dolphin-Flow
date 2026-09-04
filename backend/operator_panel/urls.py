@@ -11,7 +11,12 @@ from .views import (
     notifications,
     mark_notification_as_read,
 )
-from workflow.form_file_services import open_form_file
+from workflow.form_file_services import (
+    clear_form_data_with_files,
+    file_field_definitions,
+    open_form_file,
+    workflow_instance_with_files,
+)
 
 
 app_name = "operator_panel"
@@ -21,7 +26,7 @@ urlpatterns = [
 
     path(
         "workflow-instance/<int:instance_id>/clear/",
-        clear_form_data,
+        clear_form_data_with_files,
         name="clear_form_data",
     ),
 
@@ -51,7 +56,7 @@ urlpatterns = [
 
     path(
         "workflow-instance/<int:instance_id>/",
-        workflow_instance,
+        workflow_instance_with_files,
         name="workflow_instance",
     ),
 
@@ -95,6 +100,12 @@ urlpatterns = [
         "formula-field-options/",
         formula_field_options,
         name="formula_field_options",
+    ),
+
+    path(
+        "workflow-instance/<int:instance_id>/file-field-definitions/",
+        file_field_definitions,
+        name="file_field_definitions",
     ),
 
     path(
