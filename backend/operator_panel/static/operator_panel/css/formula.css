@@ -19,10 +19,3 @@
     justify-content: center;
     white-space: nowrap;
 }
-
-.df-formula-value::before {
-    content: "ƒ";
-    margin-right: 7px;
-    opacity: 0.55;
-    font-weight: 700;
-}
