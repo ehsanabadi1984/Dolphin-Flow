@@ -2430,11 +2430,6 @@ class DynamicFormService:
                         if not isinstance(raw_items, list):
                             raw_items = []
 
-                    print("========== NORMAL REPEATABLE DEBUG ==========")
-                    print("GROUP:", group.code)
-                    print("FORM DATA:", repr(data))
-                    print("RAW ITEMS:", repr(raw_items))
-                    print("==============================================")
                     items = []
 
                     for raw_item in raw_items:
