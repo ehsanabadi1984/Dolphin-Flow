@@ -11,6 +11,17 @@ document.addEventListener("DOMContentLoaded", () => {
         loading: false,
     };
 
+    const FUNCTIONS = new Set([
+        "SUM",
+        "ABS",
+        "MIN",
+        "MAX",
+        "AVG",
+        "ROUND",
+        "FLOOR",
+        "CEIL",
+    ]);
+
     function toNumber(value) {
         if (value === null || value === undefined || value === "") return 0;
         if (typeof value === "string") value = value.trim().replace(/,/g, "");
@@ -32,6 +43,135 @@ document.addEventListener("DOMContentLoaded", () => {
         return null;
     }
 
+    class TokenParser {
+        constructor(tokens, valueResolver) {
+            this.tokens = tokens;
+            this.valueResolver = valueResolver;
+            this.index = 0;
+        }
+
+        current() {
+            return this.tokens[this.index] || null;
+        }
+
+        advance() {
+            return this.tokens[this.index++] || null;
+        }
+
+        match(type, value = undefined) {
+            const token = this.current();
+            if (!token || token.type !== type) return false;
+            return value === undefined || token.value === value;
+        }
+
+        parse() {
+            const value = this.parseExpression();
+            return this.index === this.tokens.length ? value : 0;
+        }
+
+        parseExpression() {
+            let value = this.parseTerm();
+            while (this.match("operator", "+") || this.match("operator", "-")) {
+                const operator = this.advance().value;
+                const right = this.parseTerm();
+                value = operator === "+" ? value + right : value - right;
+            }
+            return value;
+        }
+
+        parseTerm() {
+            let value = this.parseFactor();
+            while (
+                this.match("operator", "*") ||
+                this.match("operator", "/") ||
+                this.match("operator", "%")
+            ) {
+                const operator = this.advance().value;
+                const right = this.parseFactor();
+                if (operator === "*") value *= right;
+                else if (operator === "/") value = right === 0 ? 0 : value / right;
+                else value = right === 0 ? 0 : value % right;
+            }
+            return value;
+        }
+
+        parseFactor() {
+            const token = this.current();
+            if (!token) return 0;
+
+            if (token.type === "number") {
+                this.advance();
+                return toNumber(token.value);
+            }
+
+            if (token.type === "field") {
+                this.advance();
+                return this.valueResolver(Number(token.field_id));
+            }
+
+            if (this.match("paren", "(")) {
+                this.advance();
+                const value = this.parseExpression();
+                if (this.match("paren", ")")) this.advance();
+                return value;
+            }
+
+            if (token.type === "function") {
+                this.advance();
+                const name = String(token.value || "").toUpperCase();
+                if (!FUNCTIONS.has(name) || !this.match("paren", "(")) return 0;
+                this.advance();
+
+                const args = [];
+                if (!this.match("paren", ")")) {
+                    while (true) {
+                        args.push(this.parseExpression());
+                        if (this.match("comma")) {
+                            this.advance();
+                            if (this.match("paren", ")")) return 0;
+                            continue;
+                        }
+                        break;
+                    }
+                }
+
+                if (!this.match("paren", ")")) return 0;
+                this.advance();
+                return evaluateFunction(name, args);
+            }
+
+            return 0;
+        }
+    }
+
+    function roundHalfUp(value, places) {
+        const factor = 10 ** places;
+        const scaled = value * factor;
+        const rounded = scaled >= 0
+            ? Math.floor(scaled + 0.5)
+            : Math.ceil(scaled - 0.5);
+        return rounded / factor;
+    }
+
+    function evaluateFunction(name, args) {
+        if (!args.length) return 0;
+        if (name === "SUM") return args.reduce((sum, value) => sum + value, 0);
+        if (name === "ABS") return Math.abs(args[0]);
+        if (name === "MIN") return Math.min(...args);
+        if (name === "MAX") return Math.max(...args);
+        if (name === "AVG") {
+            return args.reduce((sum, value) => sum + value, 0) / args.length;
+        }
+        if (name === "ROUND") {
+            const places = args.length > 1 ? Math.trunc(args[1]) : 0;
+            if (places < 0 || places > 6) return 0;
+            return roundHalfUp(args[0], places);
+        }
+        if (name === "FLOOR") return Math.floor(args[0]);
+        if (name === "CEIL") return Math.ceil(args[0]);
+        return 0;
+    }
+
     function evaluateFormula(formula, rowRoot = null, rowIndex = null, stack = new Set()) {
         if (!formula || !Array.isArray(formula.tokens)) return 0;
 
@@ -39,79 +179,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (stack.has(key)) return 0;
         stack.add(key);
 
-        const output = [];
-        const operators = [];
-        const precedence = { "+": 1, "-": 1, "*": 2, "/": 2, "%": 2 };
-
-        for (const token of formula.tokens) {
-            if (token.type === "number") {
-                output.push({ type: "value", value: toNumber(token.value) });
-                continue;
-            }
-
-            if (token.type === "field") {
-                const field = state.fieldsById.get(Number(token.field_id));
-                const value = field
-                    ? evaluateField(field, formula, rowRoot, rowIndex, stack)
-                    : 0;
-                output.push({ type: "value", value });
-                continue;
-            }
-
-            if (token.type === "operator") {
-                const current = token.value;
-                while (operators.length) {
-                    const top = operators[operators.length - 1];
-                    if (top.type !== "operator") break;
-                    if (precedence[top.value] < precedence[current]) break;
-                    output.push(operators.pop());
-                }
-                operators.push(token);
-                continue;
-            }
-
-            if (token.type === "paren") {
-                if (token.value === "(") {
-                    operators.push(token);
-                } else {
-                    while (operators.length && operators[operators.length - 1].value !== "(") {
-                        output.push(operators.pop());
-                    }
-                    if (operators.length) operators.pop();
-                }
-            }
+        try {
+            const parser = new TokenParser(
+                formula.tokens,
+                (fieldId) => {
+                    const field = state.fieldsById.get(Number(fieldId));
+                    return field
+                        ? evaluateField(field, formula, rowRoot, rowIndex, stack)
+                        : 0;
+                },
+            );
+            return parser.parse();
+        } finally {
+            stack.delete(key);
         }
-
-        while (operators.length) output.push(operators.pop());
-
-        const values = [];
-        for (const token of output) {
-            if (token.type === "value") {
-                values.push(token.value);
-                continue;
-            }
-
-            if (values.length < 2) {
-                stack.delete(key);
-                return 0;
-            }
-
-            const right = values.pop();
-            const left = values.pop();
-            let value = 0;
-
-            if (token.value === "+") value = left + right;
-            else if (token.value === "-") value = left - right;
-            else if (token.value === "*") value = left * right;
-            else if (token.value === "/") value = right === 0 ? 0 : left / right;
-            else if (token.value === "%") value = right === 0 ? 0 : left % right;
-
-            values.push(value);
-        }
-
-        const result = values.length === 1 ? values[0] : 0;
-        stack.delete(key);
-        return result;
     }
 
     function evaluateField(field, ownerFormula, rowRoot, rowIndex, stack) {
@@ -123,6 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const dependency = state.formulasById.get(Number(field.id));
         if (dependency) {
+            if (ownerIsRow && dependency.scope !== "ROW") return 0;
             return evaluateFormula(dependency, rowRoot, rowIndex, stack);
         }
 
@@ -151,15 +233,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const containers = getNormalFieldContainers();
         const expectedIndex = Number(formula.dom_index);
 
-        // The API supplies the exact index among visible normal-field
-        // containers. This is the authoritative target; do not infer
-        // it from labels or codes.
         if (Number.isInteger(expectedIndex) && expectedIndex >= 0) {
             const exact = containers[expectedIndex];
             if (exact) return exact;
         }
 
-        // Safety fallback for older API payloads.
         for (const field of containers) {
             if (field.dataset.fieldCode === formula.code) return field;
         }
