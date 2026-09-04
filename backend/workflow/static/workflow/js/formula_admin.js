@@ -13,14 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let initialized = false;
 
     const functionNames = [
-        "SUM",
-        "ABS",
-        "MIN",
-        "MAX",
-        "AVG",
-        "ROUND",
-        "FLOOR",
-        "CEIL",
+        "SUM", "ABS", "MIN", "MAX", "AVG", "ROUND", "FLOOR", "CEIL",
     ];
 
     try {
@@ -74,7 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="df-formula-expression" aria-live="polite"></div>
         <div class="df-formula-preview"></div>
         <div class="df-formula-help">
-            نمونه: SUM(فیلد۱, فیلد۲, 10) یا ABS(فیلد۱). برای ROUND می‌توانید رقم اعشار را به‌عنوان ورودی دوم بدهید.
+            فیلدهای داخل گروه معمولی از طریق SUM، MIN، MAX و AVG به‌صورت تجمیعی قابل استفاده‌اند.
         </div>
     `;
 
@@ -90,7 +83,10 @@ document.addEventListener("DOMContentLoaded", () => {
         fieldOptions.forEach((field) => {
             const option = document.createElement("option");
             option.value = field.id;
-            option.textContent = `${field.label} (${field.code})`;
+            const scope = field.is_group_field
+                ? `${field.section_label} / ${field.group_label || field.group_code}`
+                : field.section_label || "فرم";
+            option.textContent = `${field.label} (${scope})`;
             fieldSelect.appendChild(option);
         });
     }
@@ -115,7 +111,6 @@ document.addEventListener("DOMContentLoaded", () => {
             chip.className = `df-formula-token df-formula-token-${token.type}`;
             chip.textContent = tokenText(token);
             chip.title = "حذف";
-            chip.dataset.index = index;
             chip.addEventListener("click", () => {
                 tokens.splice(index, 1);
                 render();
@@ -124,17 +119,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         const text = tokens.map(tokenText).join(" ");
-        preview.textContent = text
-            ? `فرمول: ${text}`
-            : "هنوز فرمولی ساخته نشده است.";
+        preview.textContent = text ? `فرمول: ${text}` : "هنوز فرمولی ساخته نشده است.";
 
         sourceField.value = JSON.stringify({
             version: 2,
             tokens,
-            decimal_places: Math.max(
-                0,
-                Math.min(Number(decimalField.value || 0), 6)
-            ),
+            decimal_places: Math.max(0, Math.min(Number(decimalField.value || 0), 6)),
         });
     }
 
@@ -158,13 +148,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const payload = await response.json();
             fieldOptions = Array.isArray(payload.fields) ? payload.fields : [];
             rebuildFieldSelect();
-
-            const validIds = new Set(fieldOptions.map((field) => Number(field.id)));
-            tokens = tokens.filter(
-                (token) =>
-                    token.type !== "field" ||
-                    validIds.has(Number(token.field_id))
-            );
             render();
         } catch (error) {
             console.warn("Formula field options could not be loaded:", error);
@@ -214,16 +197,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const controlledIds = [
-        "id_choice_source",
-        "id_choice_model",
-        "id_choice_static_set",
-        "id_choice_lookup_list",
-        "id_choice_label_field",
-        "id_choice_value_field",
-        "id_choice_parent_field",
-        "id_choice_filter_field",
-        "id_system_key",
-        "id_is_required",
+        "id_choice_source", "id_choice_model", "id_choice_static_set",
+        "id_choice_lookup_list", "id_choice_label_field", "id_choice_value_field",
+        "id_choice_parent_field", "id_choice_filter_field", "id_system_key", "id_is_required",
     ];
 
     function setRowVisible(id, visible) {
@@ -235,9 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const isFormula = typeField.value === "FORMULA";
         builderRow.style.display = isFormula ? "" : "none";
         setRowVisible("id_formula_decimal_places", isFormula);
-
         controlledIds.forEach((id) => setRowVisible(id, !isFormula));
-
         if (isFormula) {
             const required = document.getElementById("id_is_required");
             if (required) required.checked = false;
@@ -263,8 +237,5 @@ document.addEventListener("DOMContentLoaded", () => {
     render();
     syncVisibility();
     initialized = true;
-
-    if (typeField.value === "FORMULA") {
-        loadFieldOptions();
-    }
+    if (typeField.value === "FORMULA") loadFieldOptions();
 });
