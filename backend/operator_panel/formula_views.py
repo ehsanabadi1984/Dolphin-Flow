@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 
@@ -162,6 +161,7 @@ def formula_definitions(request, instance_id):
     visible_fields = []
     visible_field_ids = set()
     normal_dom_index = 0
+    group_visible_columns = {}
 
     for field in (
         FormField.objects
@@ -176,23 +176,24 @@ def formula_definitions(request, instance_id):
             if not _group_access(group, user=request.user, step=instance.current_step):
                 continue
         else:
-            # The main template renders every visible top-level field as
-            # one `.df-form-field` container, regardless of field type.
-            # Count those containers before filtering the API payload to
-            # numeric/formula fields.
             if _field_access(field, user=request.user, step=instance.current_step):
                 field_dom_index = normal_dom_index
                 normal_dom_index += 1
             else:
                 continue
 
-        if not field.repeatable_group_id:
-            if field.field_type not in {
-                FormField.FieldType.NUMBER,
-                FormulaService.FIELD_TYPE,
-            }:
-                continue
-        elif field.field_type not in {
+        if not _field_access(field, user=request.user, step=instance.current_step):
+            continue
+
+        # For TABLE repeatable groups, keep the exact order of every visible
+        # column, not just NUMBER/FORMULA fields. The operator template renders
+        # one <td> per visible field, so Formula JS must use the same column map.
+        if field.repeatable_group_id:
+            group_visible_columns.setdefault(field.repeatable_group_id, []).append(
+                field.code
+            )
+
+        if field.field_type not in {
             FormField.FieldType.NUMBER,
             FormulaService.FIELD_TYPE,
         }:
@@ -236,11 +237,7 @@ def formula_definitions(request, instance_id):
 
         if field.repeatable_group_id:
             group = field.repeatable_group
-            visible_columns = [
-                item["code"]
-                for item in visible_fields
-                if item["group_code"] == group.code
-            ]
+            visible_columns = group_visible_columns.get(group.pk, [])
             scope = "ROW"
             group_code = group.code
         else:
@@ -258,18 +255,6 @@ def formula_definitions(request, instance_id):
             "tokens": config.get("tokens", []),
             "visible_columns": visible_columns,
         }
-
-        if field.repeatable_group_id is None:
-            normal_field = next(
-                (
-                    item
-                    for item in visible_fields
-                    if item["id"] == field.pk
-                ),
-                None,
-            )
-            if normal_field is not None:
-                formula_payload["dom_index"] = normal_field.get("dom_index")
 
         formulas.append(formula_payload)
 
