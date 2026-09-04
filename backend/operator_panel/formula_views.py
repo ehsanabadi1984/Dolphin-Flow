@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
@@ -11,6 +12,7 @@ from workflow.models import (
     FormDefinition,
     FormField,
     FormRepeatableGroup,
+    FormSection,
     WorkflowInstance,
     WorkflowPermission,
 )
@@ -54,6 +56,75 @@ def _group_access(group, *, user, step):
         user__isnull=True,
         can_view=True,
     ).exists()
+
+
+def _formula_source_fields(*, section_id, group_id, exclude_id=None):
+    if not section_id:
+        return FormField.objects.none()
+
+    section = get_object_or_404(FormSection.objects.select_related("form"), pk=section_id)
+
+    queryset = (
+        FormField.objects
+        .filter(
+            section__form=section.form,
+            is_active=True,
+            field_type__in=[
+                FormField.FieldType.NUMBER,
+                FormulaService.FIELD_TYPE,
+            ],
+        )
+        .select_related("repeatable_group")
+        .order_by("repeatable_group_id", "order", "id")
+    )
+
+    if exclude_id:
+        queryset = queryset.exclude(pk=exclude_id)
+
+    if group_id:
+        group = get_object_or_404(
+            FormRepeatableGroup,
+            pk=group_id,
+            section__form=section.form,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+        )
+        queryset = queryset.filter(repeatable_group=group)
+    else:
+        queryset = queryset.filter(repeatable_group__isnull=True)
+
+    return queryset
+
+
+@staff_member_required
+def formula_field_options(request):
+    try:
+        section_id = int(request.GET.get("section_id", ""))
+    except (TypeError, ValueError):
+        section_id = None
+
+    try:
+        group_id = int(request.GET.get("group_id", "")) if request.GET.get("group_id") else None
+    except (TypeError, ValueError):
+        group_id = None
+
+    try:
+        exclude_id = int(request.GET.get("exclude_id", "")) if request.GET.get("exclude_id") else None
+    except (TypeError, ValueError):
+        exclude_id = None
+
+    fields = [
+        {
+            "id": field.pk,
+            "code": field.code,
+            "label": field.label,
+        }
+        for field in _formula_source_fields(
+            section_id=section_id,
+            group_id=group_id,
+            exclude_id=exclude_id,
+        )
+    ]
+    return JsonResponse({"fields": fields})
 
 
 @login_required
