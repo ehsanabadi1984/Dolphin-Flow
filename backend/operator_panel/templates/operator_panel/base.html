@@ -27,29 +27,31 @@
 
 <body>
 {% if messages %}
-    {% with message=messages|last %}
-        {% if message.tags == "success" %}
-            <div class="df-success-modal" id="df-success-modal">
-                <div class="df-success-modal-backdrop"></div>
-                <div class="df-success-modal-card">
-                    <div class="df-success-modal-icon">✓</div>
-                    <h2>عملیات با موفقیت انجام شد</h2>
-                    <p>{{ message }}</p>
-                    <button type="button" class="df-button" id="df-success-modal-confirm">تأیید</button>
+    {% for message in messages %}
+        {% if forloop.last %}
+            {% if message.tags == "success" %}
+                <div class="df-success-modal" id="df-success-modal">
+                    <div class="df-success-modal-backdrop"></div>
+                    <div class="df-success-modal-card">
+                        <div class="df-success-modal-icon">✓</div>
+                        <h2>عملیات با موفقیت انجام شد</h2>
+                        <p>{{ message }}</p>
+                        <button type="button" class="df-button" id="df-success-modal-confirm">تأیید</button>
+                    </div>
                 </div>
-            </div>
-        {% elif message.tags == "error" %}
-            <div class="df-error-modal" id="df-error-modal">
-                <div class="df-error-modal-backdrop"></div>
-                <div class="df-error-modal-card">
-                    <div class="df-error-modal-icon">!</div>
-                    <h2>عملیات ناموفق بود</h2>
-                    <p>{{ message }}</p>
-                    <button type="button" class="df-button" id="df-error-modal-confirm">تأیید</button>
+            {% elif message.tags == "error" %}
+                <div class="df-error-modal" id="df-error-modal">
+                    <div class="df-error-modal-backdrop"></div>
+                    <div class="df-error-modal-card">
+                        <div class="df-error-modal-icon">!</div>
+                        <h2>عملیات ناموفق بود</h2>
+                        <p>{{ message }}</p>
+                        <button type="button" class="df-button" id="df-error-modal-confirm">تأیید</button>
+                    </div>
                 </div>
-            </div>
+            {% endif %}
         {% endif %}
-    {% endwith %}
+    {% endfor %}
 {% endif %}
 
 <div class="df-layout">
