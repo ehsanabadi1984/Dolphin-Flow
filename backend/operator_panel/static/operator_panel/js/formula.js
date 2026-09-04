@@ -11,17 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loading: false,
     };
 
-    const FUNCTIONS = new Set([
-        "SUM",
-        "ABS",
-        "MIN",
-        "MAX",
-        "AVG",
-        "ROUND",
-        "FLOOR",
-        "CEIL",
-    ]);
-
+    const FUNCTIONS = new Set(["SUM", "ABS", "MIN", "MAX", "AVG", "ROUND", "FLOOR", "CEIL"]);
     const AGGREGATE_FUNCTIONS = new Set(["SUM", "MIN", "MAX", "AVG"]);
 
     function toNumber(value) {
@@ -46,16 +36,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function getGroupRows(groupCode) {
-        const group = form.querySelector(
-            `[data-repeatable-group="${CSS.escape(groupCode)}"]`
-        );
+        const group = form.querySelector(`[data-repeatable-group="${CSS.escape(groupCode)}"]`);
         if (!group) return [];
-
-        return Array.from(
-            group.querySelectorAll(
-                "[data-repeatable-item]:not([data-repeatable-template])"
-            )
-        );
+        return Array.from(group.querySelectorAll("[data-repeatable-item]:not([data-repeatable-template])"));
     }
 
     function readGroupFieldValue(field, row, groupCode, rowIndex) {
@@ -65,26 +48,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function aggregateGroupField(field, functionName) {
         if (!field || !field.group_code) return 0;
-
         const rows = getGroupRows(field.group_code);
         const dependency = state.formulasById.get(Number(field.id));
-
         const values = rows.map((row, index) => {
             if (dependency && dependency.scope === "ROW") {
                 return evaluateFormula(dependency, row, index, new Set());
             }
             return readGroupFieldValue(field, row, field.group_code, index);
         });
-
-        if (functionName === "SUM") {
-            return values.reduce((sum, value) => sum + value, 0);
-        }
+        if (functionName === "SUM") return values.reduce((sum, value) => sum + value, 0);
         if (!values.length) return 0;
         if (functionName === "MIN") return Math.min(...values);
         if (functionName === "MAX") return Math.max(...values);
-        if (functionName === "AVG") {
-            return values.reduce((sum, value) => sum + value, 0) / values.length;
-        }
+        if (functionName === "AVG") return values.reduce((sum, value) => sum + value, 0) / values.length;
         return 0;
     }
 
@@ -95,26 +71,17 @@ document.addEventListener("DOMContentLoaded", () => {
             this.aggregateResolver = aggregateResolver;
             this.index = 0;
         }
-
-        current() {
-            return this.tokens[this.index] || null;
-        }
-
-        advance() {
-            return this.tokens[this.index++] || null;
-        }
-
+        current() { return this.tokens[this.index] || null; }
+        advance() { return this.tokens[this.index++] || null; }
         match(type, value = undefined) {
             const token = this.current();
             if (!token || token.type !== type) return false;
             return value === undefined || token.value === value;
         }
-
         parse() {
             const value = this.parseExpression();
             return this.index === this.tokens.length ? value : 0;
         }
-
         parseExpression() {
             let value = this.parseTerm();
             while (this.match("operator", "+") || this.match("operator", "-")) {
@@ -124,14 +91,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             return value;
         }
-
         parseTerm() {
             let value = this.parseFactor();
-            while (
-                this.match("operator", "*") ||
-                this.match("operator", "/") ||
-                this.match("operator", "%")
-            ) {
+            while (this.match("operator", "*") || this.match("operator", "/") || this.match("operator", "%")) {
                 const operator = this.advance().value;
                 const right = this.parseFactor();
                 if (operator === "*") value *= right;
@@ -140,48 +102,37 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             return value;
         }
-
         parseFactor() {
             const token = this.current();
             if (!token) return 0;
-
             if (token.type === "number") {
                 this.advance();
                 return toNumber(token.value);
             }
-
             if (token.type === "field") {
                 this.advance();
                 return this.valueResolver(Number(token.field_id));
             }
-
             if (this.match("paren", "(")) {
                 this.advance();
                 const value = this.parseExpression();
                 if (this.match("paren", ")")) this.advance();
                 return value;
             }
-
             if (token.type === "function") {
                 this.advance();
                 const name = String(token.value || "").toUpperCase();
                 if (!FUNCTIONS.has(name) || !this.match("paren", "(")) return 0;
                 this.advance();
-
                 const args = [];
                 if (!this.match("paren", ")")) {
                     while (true) {
-                        if (
-                            this.aggregateResolver &&
-                            AGGREGATE_FUNCTIONS.has(name) &&
-                            this.match("field")
-                        ) {
+                        if (this.aggregateResolver && AGGREGATE_FUNCTIONS.has(name) && this.match("field")) {
                             const fieldId = Number(this.advance().field_id);
                             args.push(this.aggregateResolver(fieldId, name));
                         } else {
                             args.push(this.parseExpression());
                         }
-
                         if (this.match("comma")) {
                             this.advance();
                             if (this.match("paren", ")")) return 0;
@@ -190,12 +141,10 @@ document.addEventListener("DOMContentLoaded", () => {
                         break;
                     }
                 }
-
                 if (!this.match("paren", ")")) return 0;
                 this.advance();
                 return evaluateFunction(name, args);
             }
-
             return 0;
         }
     }
@@ -203,9 +152,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function roundHalfUp(value, places) {
         const factor = 10 ** places;
         const scaled = value * factor;
-        const rounded = scaled >= 0
-            ? Math.floor(scaled + 0.5)
-            : Math.ceil(scaled - 0.5);
+        const rounded = scaled >= 0 ? Math.floor(scaled + 0.5) : Math.ceil(scaled - 0.5);
         return rounded / factor;
     }
 
@@ -215,9 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (name === "ABS") return Math.abs(args[0]);
         if (name === "MIN") return Math.min(...args);
         if (name === "MAX") return Math.max(...args);
-        if (name === "AVG") {
-            return args.reduce((sum, value) => sum + value, 0) / args.length;
-        }
+        if (name === "AVG") return args.reduce((sum, value) => sum + value, 0) / args.length;
         if (name === "ROUND") {
             const places = args.length > 1 ? Math.trunc(args[1]) : 0;
             if (places < 0 || places > 6) return 0;
@@ -230,25 +175,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function evaluateFormula(formula, rowRoot = null, rowIndex = null, stack = new Set()) {
         if (!formula || !Array.isArray(formula.tokens)) return 0;
-
         const key = `${formula.field_id}:${rowIndex === null ? "form" : rowIndex}`;
         if (stack.has(key)) return 0;
         stack.add(key);
-
         try {
             const parser = new TokenParser(
                 formula.tokens,
                 (fieldId) => {
                     const field = state.fieldsById.get(Number(fieldId));
-                    return field
-                        ? evaluateField(field, formula, rowRoot, rowIndex, stack)
-                        : 0;
+                    return field ? evaluateField(field, formula, rowRoot, rowIndex, stack) : 0;
                 },
                 (fieldId, functionName) => {
                     const field = state.fieldsById.get(Number(fieldId));
-                    return field
-                        ? aggregateGroupField(field, functionName)
-                        : 0;
+                    return field ? aggregateGroupField(field, functionName) : 0;
                 },
             );
             return parser.parse();
@@ -259,36 +198,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function evaluateField(field, ownerFormula, rowRoot, rowIndex, stack) {
         const ownerIsRow = ownerFormula.scope === "ROW";
-
-        if (ownerIsRow && field.group_code !== ownerFormula.group_code) {
-            return 0;
-        }
-
+        if (ownerIsRow && field.group_code !== ownerFormula.group_code) return 0;
         const dependency = state.formulasById.get(Number(field.id));
         if (dependency) {
             if (ownerIsRow && dependency.scope !== "ROW") return 0;
             return evaluateFormula(dependency, rowRoot, rowIndex, stack);
         }
-
-        if (!ownerIsRow && field.group_code) {
-            return 0;
-        }
-
-        const name = ownerIsRow
-            ? `${ownerFormula.group_code}_${rowIndex}_${field.code}`
-            : field.code;
-
+        if (!ownerIsRow && field.group_code) return 0;
+        const name = ownerIsRow ? `${ownerFormula.group_code}_${rowIndex}_${field.code}` : field.code;
         return readInput(findNamedElement(name, rowRoot || document));
     }
 
     function formatNumber(value, decimalPlaces) {
         const places = Math.max(0, Math.min(Number(decimalPlaces) || 0, 6));
         if (!Number.isFinite(value)) return "";
-        return value.toLocaleString("en-US", {
-            minimumFractionDigits: places,
-            maximumFractionDigits: places,
-            useGrouping: false,
-        });
+        return value.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places, useGrouping: false });
     }
 
     function getNormalFieldContainers() {
@@ -298,23 +222,19 @@ document.addEventListener("DOMContentLoaded", () => {
     function getNormalFormulaContainer(formula) {
         const containers = getNormalFieldContainers();
         const expectedIndex = Number(formula.dom_index);
-
         if (Number.isInteger(expectedIndex) && expectedIndex >= 0) {
             const exact = containers[expectedIndex];
             if (exact) return exact;
         }
-
         for (const field of containers) {
             if (field.dataset.fieldCode === formula.code) return field;
         }
-
         return null;
     }
 
     function setNormalFormulaValue(formula, value) {
         const container = getNormalFormulaContainer(formula);
         if (!container) return;
-
         let output = container.querySelector(".df-formula-value");
         if (!output) {
             output = document.createElement("div");
@@ -330,10 +250,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const columns = formula.visible_columns || [];
         const columnIndex = columns.indexOf(formula.code);
         if (columnIndex < 0) return;
-
         const cell = row.children[columnIndex];
         if (!cell) return;
-
         let output = cell.querySelector(".df-formula-value");
         if (!output) {
             output = document.createElement("div");
@@ -343,44 +261,29 @@ document.addEventListener("DOMContentLoaded", () => {
         output.textContent = formatNumber(value, formula.decimal_places);
     }
 
-    function hasEditableControls() {
-        return Boolean(
-            form.querySelector(
-                "input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])"
-            )
-        );
+    function isEditMode() {
+        // The server deliberately renders hidden device editors even while
+        // the saved form is read-only. Therefore DOM input existence cannot
+        // be used to detect edit mode.
+        return Boolean(form.querySelector(".df-form-actions"));
     }
 
     function recalculate() {
-        // In the saved/read-only state the server-rendered values come from
-        // persisted FormData.data. There are no editable controls to read,
-        // so recalculating from the DOM would turn formula values into zero.
-        if (!hasEditableControls()) return;
-
+        if (!isEditMode()) return;
         for (const formula of state.formulasById.values()) {
             if (formula.scope === "FORM") {
                 setNormalFormulaValue(formula, evaluateFormula(formula));
                 continue;
             }
-
-            const group = form.querySelector(
-                `[data-repeatable-group="${CSS.escape(formula.group_code)}"]`
-            );
+            const group = form.querySelector(`[data-repeatable-group="${CSS.escape(formula.group_code)}"]`);
             if (!group) continue;
-
-            const rows = group.querySelectorAll(
-                "[data-repeatable-item]:not([data-repeatable-template])"
-            );
-
+            const rows = group.querySelectorAll("[data-repeatable-item]:not([data-repeatable-template])");
             rows.forEach((row, index) => {
                 const value = evaluateFormula(formula, row, index, new Set());
-
                 if (group.classList.contains("df-table-group")) {
                     setRowFormulaValue(formula, row, value);
                 } else {
-                    let output = row.querySelector(
-                        `.df-formula-value[data-formula-id="${formula.field_id}"]`
-                    );
+                    let output = row.querySelector(`.df-formula-value[data-formula-id="${formula.field_id}"]`);
                     if (!output) {
                         output = document.createElement("div");
                         output.className = "df-form-value df-formula-value";
@@ -396,28 +299,16 @@ document.addEventListener("DOMContentLoaded", () => {
     async function loadDefinitions() {
         if (state.loading) return;
         state.loading = true;
-
         try {
-            const response = await fetch(
-                `${endpoint}?instance_id=${encodeURIComponent(instanceId)}`,
-                {
-                    headers: { "X-Requested-With": "XMLHttpRequest" },
-                }
-            );
+            const response = await fetch(`${endpoint}?instance_id=${encodeURIComponent(instanceId)}`, {
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
             if (!response.ok) return;
-
             const payload = await response.json();
             state.fieldsById.clear();
             state.formulasById.clear();
-
-            for (const field of payload.fields || []) {
-                state.fieldsById.set(Number(field.id), field);
-            }
-
-            for (const formula of payload.formulas || []) {
-                state.formulasById.set(Number(formula.field_id), formula);
-            }
-
+            for (const field of payload.fields || []) state.fieldsById.set(Number(field.id), field);
+            for (const formula of payload.formulas || []) state.formulasById.set(Number(formula.field_id), formula);
             recalculate();
         } catch (error) {
             console.warn("Formula definitions could not be loaded:", error);
