@@ -4,9 +4,10 @@ import json
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 
 from .formula_services import FormulaService
-from .models import FormField, FormRepeatableGroup, FormSection
+from .models import FormField, FormRepeatableGroup
 
 
 class FormulaBuilderField(forms.CharField):
@@ -63,18 +64,10 @@ class FormulaFieldAdminForm(forms.ModelForm):
                 2,
             )
 
-        available_fields = self._available_formula_fields()
-        self.fields["formula_builder"].widget.attrs["data-field-options"] = json.dumps(
-            [
-                {
-                    "id": field.pk,
-                    "code": field.code,
-                    "label": field.label,
-                }
-                for field in available_fields
-            ],
-            ensure_ascii=False,
+        self.fields["formula_builder"].widget.attrs["data-options-url"] = reverse(
+            "operator_panel:formula_field_options"
         )
+        self._refresh_field_options()
 
     def _section_id(self):
         if self.instance and self.instance.pk:
@@ -105,7 +98,10 @@ class FormulaFieldAdminForm(forms.ModelForm):
             .filter(
                 section__form__sections__id=section_id,
                 is_active=True,
-                field_type__in=[FormField.FieldType.NUMBER, FormulaService.FIELD_TYPE],
+                field_type__in=[
+                    FormField.FieldType.NUMBER,
+                    FormulaService.FIELD_TYPE,
+                ],
             )
             .select_related("repeatable_group")
             .order_by("repeatable_group_id", "order", "id")
@@ -120,6 +116,20 @@ class FormulaFieldAdminForm(forms.ModelForm):
 
         return queryset.filter(repeatable_group__isnull=True)
 
+    def _refresh_field_options(self):
+        options = [
+            {
+                "id": field.pk,
+                "code": field.code,
+                "label": field.label,
+            }
+            for field in self._available_formula_fields()
+        ]
+        self.fields["formula_builder"].widget.attrs["data-field-options"] = json.dumps(
+            options,
+            ensure_ascii=False,
+        )
+
     def clean(self):
         cleaned = super().clean()
         field_type = cleaned.get("field_type")
@@ -130,11 +140,11 @@ class FormulaFieldAdminForm(forms.ModelForm):
         group = cleaned.get("repeatable_group")
         if group and group.group_type == FormRepeatableGroup.GroupType.DEVICE:
             raise ValidationError(
-                {"field_type": "فیلدهای فرمولی داخل گروه دستگاه‌ها پشتیبانی نمی‌شوند."}
+                {
+                    "field_type": "فیلدهای فرمولی داخل گروه دستگاه‌ها پشتیبانی نمی‌شوند."
+                }
             )
 
-        # Formula fields are never operator-editable inputs and therefore
-        # cannot be required source fields themselves.
         cleaned["is_required"] = False
         cleaned["system_key"] = FormField.SystemKey.NONE
         cleaned["choice_source"] = FormField.ChoiceSource.NONE
@@ -166,15 +176,15 @@ class FormulaFieldAdminForm(forms.ModelForm):
         if decimals is None:
             decimals = 2
 
+        draft = self.instance
+        draft.field_type = FormulaService.FIELD_TYPE
+        draft.repeatable_group = group
+
         try:
-            FormFieldDraft = self.instance
-            FormFieldDraft.field_type = FormulaService.FIELD_TYPE
-            FormFieldDraft.repeatable_group = group
-            available = list(self._available_formula_fields())
             FormulaService.validate_tokens(
-                field=FormFieldDraft,
+                field=draft,
                 tokens=tokens,
-                available_fields=available,
+                available_fields=list(self._available_formula_fields()),
             )
         except ValidationError as exc:
             raise ValidationError({"formula_builder": exc.messages})
