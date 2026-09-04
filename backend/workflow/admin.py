@@ -321,6 +321,11 @@ ADMIN_SECTIONS = {
             "icon": "🛠",
             "order": 10,
         },
+        "backups": {
+            "label": "پشتیبان‌گیری",
+            "icon": "💾",
+            "order": 20,
+        },
     },
 }
 

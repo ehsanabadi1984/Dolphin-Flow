@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "repairs",
     "operator_panel",
     "workflow",  
+    "backup",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -131,6 +132,24 @@ USE_TZ = True
 STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+
+# Backup (Phase 1: local storage only)
+# ------------------------------------------------------------
+# Backups are stored OUTSIDE MEDIA_ROOT and are never exposed through a
+# public URL; downloads happen through the permission-protected admin view.
+BACKUP_ROOT = Path(
+    env("BACKUP_ROOT", default=str(BASE_DIR / "backups"))
+)
+
+# Include the MEDIA_ROOT archive in each backup.
+BACKUP_INCLUDE_MEDIA = env.bool(
+    "BACKUP_INCLUDE_MEDIA",
+    default=True,
+)
+
+# pg_dump binary; override with an absolute path when it is not on PATH.
+PG_DUMP_PATH = env("PG_DUMP_PATH", default="pg_dump")
 
 
 # Email

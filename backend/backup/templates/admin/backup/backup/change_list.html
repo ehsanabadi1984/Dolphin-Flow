@@ -1,0 +1,346 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+
+<style>
+
+.df-backup-page {
+    direction: rtl;
+    text-align: right;
+    padding: 20px;
+    max-width: 1100px;
+}
+
+.df-backup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.df-backup-header h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.df-backup-create {
+    display: inline-block;
+    padding: 10px 18px;
+    background: #417690;
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.df-backup-create:hover {
+    background: #205067;
+    color: #fff;
+}
+
+.df-backup-create[disabled] {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.df-backup-summary {
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+}
+
+.df-backup-summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.df-backup-summary-label {
+    color: #666;
+    font-size: 13px;
+}
+
+.df-backup-summary-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #222;
+}
+
+.df-backup-table-wrap {
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    overflow-x: auto;
+}
+
+.df-backup-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px;
+}
+
+.df-backup-table th,
+.df-backup-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 14px;
+    text-align: right;
+    vertical-align: middle;
+}
+
+.df-backup-table th {
+    background: #f7f7f7;
+    color: #444;
+    font-weight: 600;
+}
+
+.df-backup-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.df-backup-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.df-backup-badge-queued {
+    background: #ececec;
+    color: #555;
+}
+
+.df-backup-badge-running {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.df-backup-badge-success {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.df-backup-badge-failed {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.df-backup-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.df-backup-action {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+}
+
+.df-backup-action-download {
+    background: #e8f4ec;
+    color: #1e7e34;
+}
+
+.df-backup-action-download:hover {
+    background: #d4ecdc;
+}
+
+.df-backup-action-delete {
+    background: #fdecec;
+    color: #b02a2a;
+}
+
+.df-backup-action-delete:hover {
+    background: #fadcdc;
+}
+
+.df-backup-empty {
+    padding: 28px;
+    text-align: center;
+    color: #888;
+}
+
+.df-backup-note {
+    margin-top: 14px;
+    color: #888;
+    font-size: 13px;
+}
+
+</style>
+
+
+<div class="df-backup-page">
+
+    <div class="df-backup-header">
+
+        <h1>پشتیبان‌گیری</h1>
+
+        {% if can_create_backup %}
+            <form
+                method="post"
+                action="{% url 'admin:backup_backup_create' %}"
+            >
+                {% csrf_token %}
+                <button
+                    type="submit"
+                    class="df-backup-create"
+                    {% if has_active_backup %}disabled{% endif %}
+                >
+                    ایجاد پشتیبان
+                </button>
+            </form>
+        {% endif %}
+
+    </div>
+
+
+    <div class="df-backup-summary">
+
+        <div class="df-backup-summary-item">
+            <span class="df-backup-summary-label">آخرین پشتیبان موفق</span>
+            <span class="df-backup-summary-value">
+                {% if latest_success %}
+                    {{ latest_success.created_at|date:"Y/m/d H:i" }}
+                {% else %}
+                    هنوز پشتیبان موفقی ایجاد نشده است.
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="df-backup-summary-item">
+            <span class="df-backup-summary-label">حجم</span>
+            <span class="df-backup-summary-value">
+                {{ latest_success.size|filesizeformat|default:"—" }}
+            </span>
+        </div>
+
+        <div class="df-backup-summary-item">
+            <span class="df-backup-summary-label">وضعیت</span>
+            <span class="df-backup-summary-value">
+                {% if latest_success %}
+                    موفق
+                {% else %}
+                    —
+                {% endif %}
+            </span>
+        </div>
+
+    </div>
+
+
+    <div class="df-backup-table-wrap">
+
+        <table class="df-backup-table">
+
+            <thead>
+                <tr>
+                    <th>تاریخ</th>
+                    <th>وضعیت</th>
+                    <th>حجم</th>
+                    <th>مدت</th>
+                    <th>ایجادکننده</th>
+                    <th>عملیات</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+            {% for backup in backups %}
+
+                <tr>
+                    <td>
+                        {{ backup.created_at|date:"Y/m/d H:i" }}
+                        <div style="color:#999;font-size:12px;">
+                            {{ backup.filename }}
+                        </div>
+                    </td>
+
+                    <td>
+                        <span class="df-backup-badge df-backup-badge-{{ backup.status|lower }}">
+                            {{ backup.get_status_display }}
+                        </span>
+                    </td>
+
+                    <td>{{ backup.size|filesizeformat|default:"—" }}</td>
+
+                    <td>{{ backup.duration_display }}</td>
+
+                    <td>{{ backup.created_by|default:"—" }}</td>
+
+                    <td>
+                        <div class="df-backup-actions">
+
+                            {% if backup.status == "SUCCESS" and can_download_backup %}
+                                <a
+                                    href="{% url 'admin:backup_backup_download' backup.pk %}"
+                                    class="df-backup-action df-backup-action-download"
+                                >
+                                    دانلود
+                                </a>
+                            {% endif %}
+
+                            {% if can_delete_backup %}
+                                <a
+                                    href="{% url 'admin:backup_backup_delete' backup.pk %}"
+                                    class="df-backup-action df-backup-action-delete"
+                                >
+                                    حذف
+                                </a>
+                            {% endif %}
+
+                        </div>
+                    </td>
+                </tr>
+
+            {% empty %}
+
+                <tr>
+                    <td colspan="6" class="df-backup-empty">
+                        هنوز پشتیبانی ایجاد نشده است.
+                    </td>
+                </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+    {% if has_active_backup %}
+        <p class="df-backup-note">
+            یک پشتیبان‌گیری در حال اجراست؛ صفحه به‌صورت خودکار به‌روزرسانی می‌شود.
+        </p>
+    {% endif %}
+
+</div>
+
+
+{% if has_active_backup %}
+<script>
+(function () {
+    setTimeout(function () {
+        window.location.reload();
+    }, 5000);
+})();
+</script>
+{% endif %}
+
+{% endblock %}

@@ -13,6 +13,9 @@ env/
 db.sqlite3
 media/
 
+# Backup archives (never commit backup files)
+backend/backups/
+
 # Environment Variables
 .env
 .env.*
