@@ -78,6 +78,12 @@ urlpatterns = [
     ),
 
     path(
+        "dependent-field-options/",
+        views.dependent_field_options,
+        name="dependent_field_options",
+    ),
+
+    path(
         "notifications/",
         notifications,
         name="notifications",

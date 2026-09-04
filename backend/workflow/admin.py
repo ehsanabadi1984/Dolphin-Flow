@@ -2107,6 +2107,7 @@ class RepeatableGroupAccessInline(admin.TabularInline):
         "can_view",
         "can_edit",
         "can_add",
+        "can_delete",
     )
 
     autocomplete_fields = (

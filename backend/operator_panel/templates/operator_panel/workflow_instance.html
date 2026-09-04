@@ -143,6 +143,12 @@
                     <select
                       id="field-{{ item.field.code }}"
                       name="{{ item.field.code }}"
+                      data-field-id="{{ item.field.pk }}"
+                      data-field-code="{{ item.field.code }}"
+                      {% if item.parent_code %}
+                      data-depends-on="{{ item.parent_code }}"
+                      data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                      {% endif %}
                   >
                       <option value="">---------</option>
 
@@ -551,6 +557,12 @@
                                   <select
                                     name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
                                     class="df-table-input"
+                                    data-field-id="{{ item_field.field.pk }}"
+                                    data-field-code="{{ item_field.field.code }}"
+                                    {% if item_field.parent_code %}
+                                    data-depends-on="{{ item_field.parent_code }}"
+                                    data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                                    {% endif %}
                                   >
                                     <option value="">---------</option>
                                     {% for choice in item_field.choices %}
@@ -666,6 +678,12 @@
                                 <select
                                   name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                   class="df-table-input"
+                                  data-field-id="{{ template_field.field.pk }}"
+                                  data-field-code="{{ template_field.field.code }}"
+                                  {% if template_field.parent_code %}
+                                  data-depends-on="{{ template_field.parent_code }}"
+                                  data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                                  {% endif %}
                                 >
                                   <option value="">---------</option>
                                   {% for choice in template_field.choices %}
@@ -826,6 +844,12 @@
                             <select
                               id="field-{{ item_field.field.code }}"
                               name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              data-field-id="{{ item_field.field.pk }}"
+                              data-field-code="{{ item_field.field.code }}"
+                              {% if item_field.parent_code %}
+                              data-depends-on="{{ item_field.parent_code }}"
+                              data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                              {% endif %}
                             >
                               <option value="">---------</option>
 
@@ -953,6 +977,12 @@
                         {% elif template_field.field.field_type == "SELECT" %}
                           <select
                             name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                            data-field-id="{{ template_field.field.pk }}"
+                            data-field-code="{{ template_field.field.code }}"
+                            {% if template_field.parent_code %}
+                            data-depends-on="{{ template_field.parent_code }}"
+                            data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                            {% endif %}
                           >
                             <option value="">---------</option>
                             {% for choice in template_field.choices %}

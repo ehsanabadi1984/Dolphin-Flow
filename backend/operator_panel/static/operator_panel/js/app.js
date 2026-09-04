@@ -1155,6 +1155,174 @@ document.addEventListener(
     }
 );
 /*
+ * Dependent SELECT options
+ *
+ * When a parent SELECT changes, every child SELECT that depends on it
+ * (data-depends-on) is re-populated from the server with the options
+ * valid for the new parent value. A previously selected child value
+ * that is no longer valid is cleared so the submitted POST always
+ * carries a consistent parent/child pair. Nested dependencies are
+ * refreshed recursively through the bubbled change event.
+ */
+
+const refreshDependentChild = async (childSelect, parentValue) => {
+
+    const optionsUrl =
+        childSelect.dataset.optionsUrl;
+
+    const fieldId =
+        childSelect.dataset.fieldId;
+
+    if (!optionsUrl || !fieldId) {
+        return;
+    }
+
+    try {
+
+        const response =
+            await fetch(
+                `${optionsUrl}?field_id=${encodeURIComponent(fieldId)}&parent_value=${encodeURIComponent(parentValue)}`,
+                {
+                    method: "GET",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                }
+            );
+
+        if (!response.ok) {
+            throw new Error(
+                "Dependent options request failed."
+            );
+        }
+
+        const data =
+            await response.json();
+
+        const options =
+            Array.isArray(data.options)
+                ? data.options
+                : [];
+
+        const previousValue =
+            childSelect.value;
+
+        childSelect.innerHTML = "";
+
+        const blankOption =
+            document.createElement("option");
+
+        blankOption.value = "";
+        blankOption.textContent = "---------";
+
+        childSelect.appendChild(
+            blankOption
+        );
+
+        options.forEach((option) => {
+            const element =
+                document.createElement("option");
+
+            element.value = option.value;
+            element.textContent = option.label;
+
+            childSelect.appendChild(
+                element
+            );
+        });
+
+        /*
+         * Preserve the current selection only when the value is
+         * still valid for the new parent; otherwise clear it so an
+         * invalid child is never submitted.
+         */
+
+        const stillValid =
+            previousValue &&
+            Array.from(childSelect.options)
+                .some(
+                    (option) =>
+                        option.value === previousValue
+                );
+
+        childSelect.value =
+            stillValid
+                ? previousValue
+                : "";
+
+        /*
+         * Propagate to nested dependent selects (grandchildren).
+         */
+
+        childSelect.dispatchEvent(
+            new Event("change", {
+                bubbles: true,
+            })
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Unable to refresh dependent options:",
+            error
+        );
+    }
+};
+
+document.addEventListener("change", (event) => {
+
+    const changedSelect =
+        event.target.closest(
+            "select[data-field-code]"
+        );
+
+    if (!changedSelect) {
+        return;
+    }
+
+    const parentCode =
+        changedSelect.dataset.fieldCode;
+
+    if (!parentCode) {
+        return;
+    }
+
+    /*
+     * Scope:
+     *
+     * - a repeatable row ([data-repeatable-item]) when the changed
+     *   SELECT lives inside one, so only that row's child refreshes;
+     * - otherwise the whole form section, which lets a top-level
+     *   parent drive children in every repeatable row of the section.
+     */
+
+    const scope =
+        changedSelect.closest(
+            "[data-repeatable-item]"
+        ) ||
+        changedSelect.closest(
+            "section.df-form-section"
+        ) ||
+        changedSelect.form;
+
+    if (!scope) {
+        return;
+    }
+
+    const children =
+        scope.querySelectorAll(
+            `select[data-depends-on="${CSS.escape(parentCode)}"]`
+        );
+
+    children.forEach((child) => {
+        refreshDependentChild(
+            child,
+            changedSelect.value
+        );
+    });
+});
+
+/*
  * Close when clicking outside
  */
 
@@ -2055,6 +2223,34 @@ document.addEventListener("click", (event) => {
         ) {
 
             field.selectedIndex = 0;
+
+            /*
+             * A dependent child SELECT in a fresh row starts with no
+             * options: its parent was reset above, so the option set
+             * cloned from the source row no longer applies.
+             */
+
+            if (
+                field.hasAttribute(
+                    "data-depends-on"
+                )
+            ) {
+
+                const blankOption =
+                    document.createElement(
+                        "option"
+                    );
+
+                blankOption.value = "";
+                blankOption.textContent =
+                    "---------";
+
+                field.innerHTML = "";
+
+                field.appendChild(
+                    blankOption
+                );
+            }
 
         } else {
 

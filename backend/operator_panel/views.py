@@ -14,6 +14,7 @@ from workflow.models import (
     Device,
     DeviceIdentifier,
     FormData,
+    FormField,
     FormRepeatableGroup,
     InstanceDevice,
     RepeatableGroupAccess,
@@ -96,6 +97,73 @@ def lookup_device_by_imei(request):
         "device_id": device.pk,
         "device_type_id": device_model.device_type_id,
         "device_model_id": device_model.pk,
+    })
+
+@login_required
+def dependent_field_options(request):
+    """
+    Return the option list of a dependent SELECT FormField for the
+    given parent value.
+
+    The operator UI calls this whenever the parent SELECT changes so
+    the child options can be refreshed without a full page reload.
+    """
+    if request.method != "GET":
+        return JsonResponse(
+            {"error": "روش درخواست نامعتبر است."},
+            status=405,
+        )
+
+    field_id = request.GET.get("field_id", "").strip()
+    parent_value = request.GET.get("parent_value", "")
+
+    if not field_id:
+        return JsonResponse({"options": []})
+
+    try:
+        field = (
+            FormField.objects
+            .select_related(
+                "section",
+                "section__form",
+                "section__form__workflow",
+                "choice_parent_field",
+            )
+            .get(
+                pk=field_id,
+                is_active=True,
+                field_type=FormField.FieldType.SELECT,
+                choice_parent_field__isnull=False,
+            )
+        )
+    except FormField.DoesNotExist:
+        return JsonResponse({"options": []})
+
+    workflow = field.section.form.workflow
+
+    # The operator must be an active member of the workflow (or a
+    # superuser) to receive option data for its form fields.
+    is_member = (
+        workflow.memberships
+        .filter(
+            user=request.user,
+            is_active=True,
+        )
+        .exists()
+    )
+
+    if not is_member and not request.user.is_superuser:
+        raise PermissionDenied(
+            "کاربر اجازه دسترسی به گزینه‌های این فرم را ندارد."
+        )
+
+    options = DynamicFormService._dependent_choices(
+        field,
+        parent_value,
+    )
+
+    return JsonResponse({
+        "options": options,
     })
 
 @login_required

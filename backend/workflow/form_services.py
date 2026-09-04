@@ -696,6 +696,314 @@ class DynamicFormService:
         return []
 
     @staticmethod
+    def _dependent_choices(field, parent_value):
+        """
+        Build the option list for a SELECT FormField whose options
+        depend on the currently selected value of its parent field
+        (``field.choice_parent_field``).
+
+        * No dependency configured  -> full option list (existing
+          behavior, also used for the parent fields themselves).
+        * Parent value empty/blank  -> [] (nothing valid to choose
+          until the operator selects a parent).
+        * LOOKUP -> LOOKUP          -> items of the same LookupList
+          whose ``parent.value`` equals the selected parent value.
+        * MODEL  -> MODEL           -> rows of the child model whose
+          ``choice_filter_field`` row matches the parent row selected
+          by ``parent_value`` (joined through the parent field's
+          ``choice_value_field``).
+
+        An unexpected or misconfigured dependency degrades to []
+        instead of raising, so the form can never 500 because of a
+        dependency definition.
+        """
+
+        if field.field_type != field.FieldType.SELECT:
+            return []
+
+        parent_field = field.choice_parent_field
+
+        if parent_field is None:
+
+            # --------------------------------------------------
+            # No dependency configured.
+            #
+            # A LOOKUP field that acts as a parent of another field
+            # only offers root items (items without a parent): the
+            # hierarchy levels start at the roots. Flat lists have
+            # no parented items, so every item is a root and the
+            # list is unchanged.
+            # --------------------------------------------------
+
+            if (
+                field.choice_source == field.ChoiceSource.LOOKUP
+                and field.choice_lookup_list_id
+                and field.dependent_choice_fields
+                .filter(is_active=True)
+                .exists()
+            ):
+                return [
+                    {
+                        "value": item.value,
+                        "label": item.label,
+                    }
+                    for item in (
+                        LookupItem.objects
+                        .filter(
+                            lookup_list_id=(
+                                field.choice_lookup_list_id
+                            ),
+                            parent__isnull=True,
+                            is_active=True,
+                        )
+                        .order_by("order", "id")
+                    )
+                ]
+
+            return DynamicFormService._get_field_choices(field)
+
+        if parent_value in (None, ""):
+            return []
+
+        # --------------------------------------------------
+        # LOOKUP -> LOOKUP
+        #
+        # Both fields share one LookupList; the child items
+        # carry a ``parent`` Link back into the same list.
+        # --------------------------------------------------
+
+        if field.choice_source == field.ChoiceSource.LOOKUP:
+
+            if (
+                not field.choice_lookup_list_id
+                or not parent_field.choice_lookup_list_id
+            ):
+                return []
+
+            return [
+                {
+                    "value": item.value,
+                    "label": item.label,
+                }
+                for item in (
+                    LookupItem.objects
+                    .filter(
+                        lookup_list_id=(
+                            field.choice_lookup_list_id
+                        ),
+                        parent__value=str(parent_value),
+                        is_active=True,
+                    )
+                    .order_by("order", "id")
+                )
+            ]
+
+        # --------------------------------------------------
+        # MODEL -> MODEL
+        #
+        # Child rows are filtered through choice_filter_field,
+        # which is expected to reference the parent model.
+        # --------------------------------------------------
+
+        if field.choice_source == field.ChoiceSource.MODEL:
+
+            if (
+                not field.choice_model_id
+                or not field.choice_filter_field
+                or not parent_field.choice_model_id
+            ):
+                return []
+
+            model_class = field.choice_model.model_class()
+
+            if not model_class:
+                return []
+
+            try:
+                queryset = model_class.objects.filter(
+                    **{
+                        f"{field.choice_filter_field}__"
+                        f"{parent_field.choice_value_field or 'id'}": (
+                            parent_value
+                        )
+                    }
+                )
+
+                rows = list(queryset)
+
+            except Exception:
+                # A misconfigured dependency (e.g. the filter field
+                # is not a relation to the parent model) must never
+                # break the form.
+                return []
+
+            choices = []
+
+            for obj in rows:
+                value = getattr(
+                    obj,
+                    field.choice_value_field,
+                    "",
+                )
+
+                label = getattr(
+                    obj,
+                    field.choice_label_field,
+                    "",
+                )
+
+                choices.append(
+                    {
+                        "value": str(value),
+                        "label": str(label),
+                    }
+                )
+
+            return choices
+
+        return []
+
+    @staticmethod
+    def _parent_value_for_field(
+        field,
+        *,
+        form_data=None,
+        submitted_data=None,
+        raw_item=None,
+    ):
+        """
+        Resolve the current value of ``field.choice_parent_field``.
+
+        Dependency semantics are context-dependent:
+
+        * Parent and child are top-level fields (no repeatable group)
+          -> the parent value is the single top-level form value.
+        * Parent and child belong to the same repeatable group
+          -> the parent value is the value inside the same row
+          (``raw_item``).
+        * Parent is a top-level field while the child lives in a
+          repeatable group -> every row shares the top-level value.
+        * Any other combination (parent inside a different group) is
+          not representable and returns ``(False, "")`` so callers
+          fall back to the full option list and skip validation.
+
+        Returns ``(coherent, parent_value)``.
+        """
+
+        parent_field = field.choice_parent_field
+
+        if parent_field is None:
+            return False, ""
+
+        child_group_id = field.repeatable_group_id
+        parent_group_id = parent_field.repeatable_group_id
+
+        if child_group_id and parent_group_id:
+
+            if child_group_id != parent_group_id:
+                # Parent in a different group is not representable.
+                return False, ""
+
+            if raw_item is None or not isinstance(raw_item, dict):
+                return True, ""
+
+            return True, str(
+                raw_item.get(parent_field.code, "") or ""
+            )
+
+        if child_group_id and not parent_group_id:
+            # Top-level parent shared by every row.
+            return True, DynamicFormService._top_level_value(
+                parent_field.code,
+                form_data=form_data,
+                submitted_data=submitted_data,
+            )
+
+        if not child_group_id and parent_group_id:
+            # A single top-level value cannot depend on one row.
+            return False, ""
+
+        return True, DynamicFormService._top_level_value(
+            parent_field.code,
+            form_data=form_data,
+            submitted_data=submitted_data,
+        )
+
+    @staticmethod
+    def _top_level_value(code, *, form_data=None, submitted_data=None):
+        """
+        Value of a top-level (non repeatable) field.
+
+        On a validation-failure re-render the submitted POST state is
+        authoritative; otherwise the persisted FormData is used.
+        """
+
+        if submitted_data is not None and code in submitted_data:
+            return str(submitted_data.get(code, "") or "")
+
+        if form_data and code in form_data:
+            return str(form_data.get(code, "") or "")
+
+        return ""
+
+    @staticmethod
+    def _dependency_error(
+        field,
+        *,
+        parent_value,
+        child_value,
+    ):
+        """
+        Validate a submitted child SELECT value against the value of
+        its parent field.
+
+        Returns a message string when the combination is invalid and
+        None when it is acceptable:
+
+        * blank child            -> acceptable (requiredness is
+          validated separately).
+        * blank parent + value   -> invalid (nothing to hang the
+          child value on).
+        * child not among the
+          options of the parent  -> invalid.
+        """
+
+        if child_value is None:
+            child_value = ""
+
+        if isinstance(child_value, str):
+            child_value = child_value.strip()
+
+        if child_value in ("", None):
+            return None
+
+        parent_field = field.choice_parent_field
+
+        if parent_value in (None, ""):
+            return (
+                f"ابتدا گزینه فیلد «{parent_field.label}» را "
+                "انتخاب کنید."
+            )
+
+        allowed = DynamicFormService._dependent_choices(
+            field,
+            str(parent_value),
+        )
+
+        allowed_values = {
+            str(choice["value"])
+            for choice in allowed
+        }
+
+        if str(child_value) not in allowed_values:
+            return (
+                f"گزینه انتخاب‌شده برای فیلد «{field.label}» "
+                "با فیلد والد سازگار نیست."
+            )
+
+        return None
+
+    @staticmethod
     def get_form_for_step(
         *,
         instance,
@@ -835,16 +1143,51 @@ class DynamicFormService:
                     and not is_submitted
                 )
 
-                choices = (
-                    DynamicFormService._get_field_choices(field)
-                    if field.field_type == field.FieldType.SELECT
-                    else []
-                )
-
                 value = data.get(
                     field.code,
                     "",
                 )
+
+                choices = []
+
+                if field.field_type == field.FieldType.SELECT:
+
+                    if field.choice_parent_field_id:
+
+                        coherent, parent_value = (
+                            DynamicFormService
+                            ._parent_value_for_field(
+                                field,
+                                form_data=data,
+                                submitted_data=submitted_data,
+                            )
+                        )
+
+                        if coherent:
+                            choices = (
+                                DynamicFormService
+                                ._dependent_choices(
+                                    field,
+                                    parent_value,
+                                )
+                            )
+                        else:
+                            # Unrepresentable parent/child placement:
+                            # never lock the operator out of a choice.
+                            choices = (
+                                DynamicFormService
+                                ._get_field_choices(field)
+                            )
+
+                    else:
+
+                        choices = (
+                            DynamicFormService
+                            ._dependent_choices(
+                                field,
+                                "",
+                            )
+                        )
 
                 fields.append(
                     {
@@ -862,6 +1205,11 @@ class DynamicFormService:
                             )
                         ),
                         "choices": choices,
+                        "parent_code": (
+                            field.choice_parent_field.code
+                            if field.choice_parent_field_id
+                            else None
+                        ),
                     }
                 )
 
@@ -995,7 +1343,10 @@ class DynamicFormService:
                         "field": field,
                         "can_edit": effective_can_edit,
                         "choices": (
-                            DynamicFormService._get_field_choices(field)
+                            DynamicFormService._dependent_choices(
+                                field,
+                                "",
+                            )
                             if field.field_type == field.FieldType.SELECT
                             else []
                         ),
@@ -1012,7 +1363,12 @@ class DynamicFormService:
                             )
                             if field.system_key == FormField.SystemKey.DEVICE_MODEL
                             else []
-                        ),    
+                        ),
+                        "parent_code": (
+                            field.choice_parent_field.code
+                            if field.choice_parent_field_id
+                            else None
+                        ),
                     }
 
                     group_fields.append(field_data)
@@ -2097,6 +2453,49 @@ class DynamicFormService:
                                 "",
                             )
 
+                            choices = []
+
+                            if field.field_type == field.FieldType.SELECT:
+
+                                if field.choice_parent_field_id:
+
+                                    coherent, parent_value = (
+                                        DynamicFormService
+                                        ._parent_value_for_field(
+                                            field,
+                                            form_data=data,
+                                            submitted_data=submitted_data,
+                                            raw_item=raw_item,
+                                        )
+                                    )
+
+                                    if coherent:
+                                        choices = (
+                                            DynamicFormService
+                                            ._dependent_choices(
+                                                field,
+                                                parent_value,
+                                            )
+                                        )
+                                    else:
+                                        # Unrepresentable parent/child
+                                        # placement: never lock the
+                                        # operator out of a choice.
+                                        choices = (
+                                            DynamicFormService
+                                            ._get_field_choices(field)
+                                        )
+
+                                else:
+
+                                    choices = (
+                                        DynamicFormService
+                                        ._dependent_choices(
+                                            field,
+                                            "",
+                                        )
+                                    )
+
                             item_fields.append(
                                 {
                                     "field": field,
@@ -2117,10 +2516,11 @@ class DynamicFormService:
                                             value=value,
                                         )
                                     ),
-                                    "choices": (
-                                        DynamicFormService._get_field_choices(field)
-                                        if field.field_type == field.FieldType.SELECT
-                                        else []
+                                    "choices": choices,
+                                    "parent_code": (
+                                        field.choice_parent_field.code
+                                        if field.choice_parent_field_id
+                                        else None
                                     ),
                                 }
                             )
@@ -2354,6 +2754,85 @@ class DynamicFormService:
                     )
 
         # -------------------------------------------------
+        # 2.0 Validate dependent SELECT combinations
+        #     (normal / non-repeatable fields)
+        # -------------------------------------------------
+
+        existing_form_data = None
+
+        for section in form.sections.filter(
+            is_active=True,
+        ):
+            for field in section.fields.filter(
+                is_active=True,
+                repeatable_group__isnull=True,
+                choice_parent_field__isnull=False,
+            ):
+
+                # Only SELECT fields can be dependent, but keep the
+                # guard explicit for robustness.
+                if field.field_type != field.FieldType.SELECT:
+                    continue
+
+                # Only fields the user is allowed to edit
+                # participate in Save validation.
+                if field.code not in editable_codes:
+                    continue
+
+                parent_field = field.choice_parent_field
+
+                # A single top-level value cannot depend on one row
+                # of a repeatable group: not representable, and the
+                # render path treats it the same way.
+                if parent_field.repeatable_group_id:
+                    continue
+
+                if parent_field.code in editable_codes:
+                    parent_value = submitted_data.get(
+                        parent_field.code,
+                        "",
+                    )
+                else:
+                    # A parent the user cannot edit keeps its
+                    # persisted value; validate against that.
+                    if existing_form_data is None:
+                        existing_form_data = (
+                            FormData.objects
+                            .filter(instance=instance)
+                            .first()
+                        )
+
+                    parent_value = (
+                        existing_form_data.data.get(
+                            parent_field.code,
+                            "",
+                        )
+                        if existing_form_data
+                        else ""
+                    )
+
+                error_message = (
+                    DynamicFormService._dependency_error(
+                        field,
+                        parent_value=parent_value,
+                        child_value=submitted_data.get(
+                            field.code,
+                            "",
+                        ),
+                    )
+                )
+
+                if error_message:
+                    required_errors.append(
+                        {
+                            "type": "field",
+                            "code": field.code,
+                            "label": field.label,
+                            "message": error_message,
+                        }
+                    )
+
+        # -------------------------------------------------
         # 2.1 Validate required repeatable groups
         # -------------------------------------------------
 
@@ -2558,7 +3037,198 @@ class DynamicFormService:
                                         "الزامی است."
                                     ),
                                 }
-                            )        
+                            )
+
+                # -------------------------------------------------
+                # Validate dependent SELECT combinations inside each
+                # repeatable row.  DEVICE groups already continued
+                # above, so this block only sees NORMAL groups.
+                # -------------------------------------------------
+
+                for item_index, item in enumerate(items):
+
+                    if not isinstance(item, dict):
+                        continue
+
+                    for field in group.fields.filter(
+                        is_active=True,
+                        choice_parent_field__isnull=False,
+                    ):
+
+                        # Only SELECT fields can be dependent, but keep
+                        # the guard explicit for robustness.
+                        if field.field_type != field.FieldType.SELECT:
+                            continue
+
+                        access_rules = field.access_rules.filter(
+                            step=step,
+                        )
+
+                        user_rule = access_rules.filter(
+                            user=user,
+                        ).first()
+
+                        if user_rule:
+                            field_can_view = user_rule.can_view
+                            field_can_edit = user_rule.can_edit
+                        else:
+                            role_rules = access_rules.filter(
+                                role__in=roles,
+                                user__isnull=True,
+                            )
+
+                            field_can_view = role_rules.filter(
+                                can_view=True,
+                            ).exists()
+
+                            field_can_edit = role_rules.filter(
+                                can_edit=True,
+                            ).exists()
+
+                        # Hidden / read-only fields are not validated.
+                        if not field_can_view:
+                            continue
+
+                        if not field_can_edit:
+                            continue
+
+                        parent_field = field.choice_parent_field
+                        parent_group_id = (
+                            parent_field.repeatable_group_id
+                        )
+
+                        if parent_group_id == group.pk:
+
+                            # -------------------------------------------
+                            # Row-local parent inside the same group.
+                            # -------------------------------------------
+
+                            parent_access_rules = (
+                                parent_field.access_rules.filter(
+                                    step=step,
+                                )
+                            )
+
+                            p_user_rule = (
+                                parent_access_rules
+                                .filter(user=user)
+                                .first()
+                            )
+
+                            if p_user_rule:
+                                parent_can_edit = (
+                                    p_user_rule.can_edit
+                                )
+                            else:
+                                parent_can_edit = (
+                                    parent_access_rules
+                                    .filter(
+                                        role__in=roles,
+                                        user__isnull=True,
+                                        can_edit=True,
+                                    )
+                                    .exists()
+                                )
+
+                            if parent_can_edit:
+                                parent_value = item.get(
+                                    parent_field.code,
+                                    "",
+                                )
+                            else:
+                                # A non-editable parent keeps the value
+                                # of the matching persisted row.
+                                parent_value = ""
+
+                                row_id = str(
+                                    item.get("_id", "") or ""
+                                )
+
+                                if existing_form_data is None:
+                                    existing_form_data = (
+                                        FormData.objects
+                                        .filter(instance=instance)
+                                        .first()
+                                    )
+
+                                persisted_rows = (
+                                    existing_form_data.data.get(
+                                        group.code,
+                                        [],
+                                    )
+                                    if existing_form_data
+                                    else []
+                                )
+
+                                for prev_row in persisted_rows:
+                                    if (
+                                        isinstance(prev_row, dict)
+                                        and prev_row.get("_id")
+                                        == row_id
+                                    ):
+                                        parent_value = prev_row.get(
+                                            parent_field.code,
+                                            "",
+                                        )
+                                        break
+
+                        elif parent_group_id is None:
+
+                            # -------------------------------------------
+                            # Top-level parent shared by every row.
+                            # -------------------------------------------
+
+                            if parent_field.code in editable_codes:
+                                parent_value = submitted_data.get(
+                                    parent_field.code,
+                                    "",
+                                )
+                            else:
+                                if existing_form_data is None:
+                                    existing_form_data = (
+                                        FormData.objects
+                                        .filter(instance=instance)
+                                        .first()
+                                    )
+
+                                parent_value = (
+                                    existing_form_data.data.get(
+                                        parent_field.code,
+                                        "",
+                                    )
+                                    if existing_form_data
+                                    else ""
+                                )
+
+                        else:
+                            # Parent inside another repeatable group is
+                            # not representable; the render path shows
+                            # the full option list for this field.
+                            continue
+
+                        error_message = (
+                            DynamicFormService._dependency_error(
+                                field,
+                                parent_value=parent_value,
+                                child_value=item.get(
+                                    field.code,
+                                    "",
+                                ),
+                            )
+                        )
+
+                        if error_message:
+                            required_errors.append(
+                                {
+                                    "type": "repeatable_field",
+                                    "group_code": group.code,
+                                    "group_label": group.name,
+                                    "field_code": field.code,
+                                    "field_label": field.label,
+                                    "item_index": item_index,
+                                    "message": error_message,
+                                }
+                            )
         # -------------------------------------------------
         # Stop immediately if validation failed
         # -------------------------------------------------
