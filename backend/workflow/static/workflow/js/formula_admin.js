@@ -12,6 +12,17 @@ document.addEventListener("DOMContentLoaded", () => {
     let tokens = [];
     let initialized = false;
 
+    const functionNames = [
+        "SUM",
+        "ABS",
+        "MIN",
+        "MAX",
+        "AVG",
+        "ROUND",
+        "FLOOR",
+        "CEIL",
+    ];
+
     try {
         const initial = JSON.parse(sourceField.value || "{}");
         if (Array.isArray(initial.tokens)) tokens = initial.tokens;
@@ -54,10 +65,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 <button type="button" data-operator="%">%</button>
                 <button type="button" data-paren="(">(</button>
                 <button type="button" data-paren=")">)</button>
+                <button type="button" data-comma=",">,</button>
+            </div>
+            <div class="df-formula-operators" aria-label="توابع فرمول">
+                ${functionNames.map((name) => `<button type="button" data-function="${name}">${name}</button>`).join("")}
             </div>
         </div>
         <div class="df-formula-expression" aria-live="polite"></div>
         <div class="df-formula-preview"></div>
+        <div class="df-formula-help">
+            نمونه: SUM(فیلد۱, فیلد۲, 10) یا ABS(فیلد۱). برای ROUND می‌توانید رقم اعشار را به‌عنوان ورودی دوم بدهید.
+        </div>
     `;
 
     sourceField.parentElement.appendChild(panel);
@@ -85,6 +103,8 @@ document.addEventListener("DOMContentLoaded", () => {
             return field ? field.label : `#${token.field_id}`;
         }
         if (token.type === "number") return token.value;
+        if (token.type === "function") return token.value;
+        if (token.type === "comma") return ",";
         return token.value || "";
     }
 
@@ -109,7 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
             : "هنوز فرمولی ساخته نشده است.";
 
         sourceField.value = JSON.stringify({
-            version: 1,
+            version: 2,
             tokens,
             decimal_places: Math.max(
                 0,
@@ -176,6 +196,19 @@ document.addEventListener("DOMContentLoaded", () => {
     panel.querySelectorAll("[data-paren]").forEach((button) => {
         button.addEventListener("click", () => {
             tokens.push({ type: "paren", value: button.dataset.paren });
+            render();
+        });
+    });
+
+    panel.querySelector("[data-comma]").addEventListener("click", () => {
+        tokens.push({ type: "comma", value: "," });
+        render();
+    });
+
+    panel.querySelectorAll("[data-function]").forEach((button) => {
+        button.addEventListener("click", () => {
+            tokens.push({ type: "function", value: button.dataset.function });
+            tokens.push({ type: "paren", value: "(" });
             render();
         });
     });
