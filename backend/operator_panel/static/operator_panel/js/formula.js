@@ -143,29 +143,24 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    function normalizeLabel(value) {
-        return String(value || "")
-            .replace(/\s+/g, " ")
-            .replace(/\s*\*\s*$/, "")
-            .trim();
+    function getNormalFieldContainers() {
+        return Array.from(form.querySelectorAll(".df-form-field[data-field-code]"));
     }
 
     function getNormalFormulaContainer(formula) {
-        const fields = form.querySelectorAll(".df-form-field[data-field-code]");
+        const containers = getNormalFieldContainers();
+        const expectedIndex = Number(formula.dom_index);
 
-        // The formula must be rendered into its own field container.
-        // Field codes are only guaranteed to be unique inside a section,
-        // so matching by code alone can target the neighboring field when
-        // two sections happen to reuse the same code.
-        for (const field of fields) {
-            const label = field.querySelector("label");
-            if (normalizeLabel(label?.textContent) === normalizeLabel(formula.label)) {
-                return field;
-            }
+        // The API supplies the exact index among visible normal-field
+        // containers. This is the authoritative target; do not infer
+        // it from labels or codes.
+        if (Number.isInteger(expectedIndex) && expectedIndex >= 0) {
+            const exact = containers[expectedIndex];
+            if (exact) return exact;
         }
 
-        // Backward-compatible fallback for forms whose label is unavailable.
-        for (const field of fields) {
+        // Safety fallback for older API payloads.
+        for (const field of containers) {
             if (field.dataset.fieldCode === formula.code) return field;
         }
 
