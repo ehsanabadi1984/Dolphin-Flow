@@ -1,0 +1,211 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+
+<style>
+
+.df-restore-history-page {
+    direction: rtl;
+    text-align: right;
+    padding: 20px;
+    max-width: 1100px;
+}
+
+.df-restore-history-header {
+    margin-bottom: 20px;
+}
+
+.df-restore-history-header h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.df-restore-history-table-wrap {
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    overflow-x: auto;
+}
+
+.df-restore-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 760px;
+}
+
+.df-restore-history-table th,
+.df-restore-history-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 14px;
+    text-align: right;
+    vertical-align: middle;
+}
+
+.df-restore-history-table th {
+    background: #f7f7f7;
+    color: #444;
+    font-weight: 600;
+}
+
+.df-restore-history-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.df-restore-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.df-restore-badge-queued {
+    background: #ececec;
+    color: #555;
+}
+
+.df-restore-badge-restoring {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.df-restore-badge-success {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.df-restore-badge-failed {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.df-restore-empty {
+    padding: 28px;
+    text-align: center;
+    color: #888;
+}
+
+.df-restore-note {
+    margin-top: 14px;
+    color: #888;
+    font-size: 13px;
+}
+
+.df-restore-error {
+    color: #b91c1c;
+    font-size: 13px;
+    max-width: 420px;
+}
+
+</style>
+
+
+<div class="df-restore-history-page">
+
+    <div class="df-restore-history-header">
+        <h1>تاریخچه بازیابی</h1>
+    </div>
+
+    <div class="df-restore-history-table-wrap">
+
+        <table class="df-restore-history-table">
+
+            <thead>
+                <tr>
+                    <th>تاریخ درخواست</th>
+                    <th>فایل بایگانی</th>
+                    <th>وضعیت</th>
+                    <th>شامل رسانه</th>
+                    <th>مدت</th>
+                    <th>درخواست‌کننده</th>
+                    <th>پیام</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+            {% for restore in restores %}
+
+                <tr>
+                    <td>
+                        {{ restore.created_at|date:"Y/m/d H:i" }}
+                    </td>
+
+                    <td>
+                        <div style="color:#222;font-weight:600;">
+                            {{ restore.archive_filename|default:"—" }}
+                        </div>
+                        {% if restore.pre_restore_backup_filename %}
+                            <div style="color:#999;font-size:12px;">
+                                پشتیبان امنیتی:
+                                {{ restore.pre_restore_backup_filename }}
+                            </div>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <span class="df-restore-badge df-restore-badge-{{ restore.status|lower }}">
+                            {{ restore.get_status_display }}
+                        </span>
+                    </td>
+
+                    <td>
+                        {% if restore.includes_media %}
+                            بله
+                        {% else %}
+                            خیر
+                        {% endif %}
+                    </td>
+
+                    <td>{{ restore.duration_display }}</td>
+
+                    <td>{{ restore.requested_by_username|default:"—" }}</td>
+
+                    <td>
+                        {% if restore.error_message %}
+                            <div class="df-restore-error">
+                                {{ restore.error_message }}
+                            </div>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+
+            {% empty %}
+
+                <tr>
+                    <td colspan="7" class="df-restore-empty">
+                        هنوز بازیابی‌ای انجام نشده است.
+                    </td>
+                </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+    {% if has_active_restore %}
+        <p class="df-restore-note">
+            یک بازیابی در حال اجراست؛ صفحه به‌صورت خودکار به‌روزرسانی می‌شود.
+        </p>
+    {% endif %}
+
+</div>
+
+
+{% if has_active_restore %}
+<script>
+(function () {
+    setTimeout(function () {
+        window.location.reload();
+    }, 5000);
+})();
+</script>
+{% endif %}
+
+{% endblock %}

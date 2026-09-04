@@ -2,8 +2,8 @@ from unittest import mock
 
 from django.test import TestCase
 
-from backup.models import Backup
-from backup.tasks import run_backup
+from backup.models import Backup, Restore
+from backup.tasks import run_backup, run_restore
 
 
 class BackupTaskTests(TestCase):
@@ -28,3 +28,27 @@ class BackupTaskTests(TestCase):
 
         mocked_run.assert_called_once_with()
         self.assertEqual(result["status"], Backup.Status.SUCCESS)
+
+    def test_missing_restore_returns_missing_status(self):
+        result = run_restore(999_999)
+        self.assertEqual(
+            result,
+            {"status": "missing", "restore_id": 999_999},
+        )
+
+    def test_runs_restore_service(self):
+        restore = Restore.objects.create(
+            archive_filename="DolphinFlow_Backup_x.dfbak"
+        )
+
+        with mock.patch(
+            "backup.tasks.RestoreService.run",
+            return_value={
+                "status": Restore.Status.SUCCESS,
+                "restore_id": restore.pk,
+            },
+        ) as mocked_run:
+            result = run_restore(restore.pk)
+
+        mocked_run.assert_called_once_with()
+        self.assertEqual(result["status"], Restore.Status.SUCCESS)

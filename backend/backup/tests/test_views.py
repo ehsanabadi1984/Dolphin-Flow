@@ -8,13 +8,14 @@ from django.contrib.auth.models import Permission
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from backup.models import Backup
+from backup.models import Backup, Restore
 from backup.services import BackupService
 
 from .test_service import _make_fake_pg_dump
 
 CHANGELIST_URL = reverse("admin:backup_backup_changelist")
 CREATE_URL = reverse("admin:backup_backup_create")
+RESTORE_HISTORY_URL = reverse("admin:backup_restore_changelist")
 
 
 class BackupViewTestCase(TestCase):
@@ -188,6 +189,29 @@ class BackupViewTestCase(TestCase):
             "در حال اجراست",
         )
 
+    def test_create_propagates_backup_include_media_setting(self):
+        self.client.force_login(self.superuser)
+
+        with mock.patch(
+            "backup.admin.run_backup.delay"
+        ), override_settings(BACKUP_INCLUDE_MEDIA=False):
+            self.client.post(CREATE_URL)
+
+        backup = Backup.objects.get()
+        self.assertFalse(backup.includes_media)
+
+        # Clear the QUEUED record so the active-backup guard does not block
+        # the next create.
+        Backup.objects.all().delete()
+
+        with mock.patch(
+            "backup.admin.run_backup.delay"
+        ), override_settings(BACKUP_INCLUDE_MEDIA=True):
+            self.client.post(CREATE_URL)
+
+        latest = Backup.objects.get()
+        self.assertTrue(latest.includes_media)
+
     # ----------------------------------------------------------
     # Download
     # ----------------------------------------------------------
@@ -327,3 +351,194 @@ class BackupViewTestCase(TestCase):
         self.client.force_login(self.superuser)
         response = self.client.get(media_url)
         self.assertEqual(response.status_code, 404)
+
+    # ----------------------------------------------------------
+    # Restore (confirm page + async initiation)
+    # ----------------------------------------------------------
+
+    def restore_url(self, backup):
+        return reverse(
+            "admin:backup_backup_restore",
+            args=[backup.pk],
+        )
+
+    def test_restore_requires_restore_permission(self):
+        backup = self.make_success_backup(user=self.superuser)
+        user = self.make_staff("view_backup", "download_backup")
+        self.client.force_login(user)
+
+        response = self.client.get(self.restore_url(backup))
+        self.assertEqual(response.status_code, 403)
+
+        response = self.client.post(
+            self.restore_url(backup),
+            {"confirm": "1"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Restore.objects.count(), 0)
+
+    def test_restore_confirm_page_renders_manifest_preview(self):
+        backup = self.make_success_backup(user=self.superuser)
+        self.client.force_login(self.superuser)
+
+        response = self.client.get(self.restore_url(backup))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "بازیابی از پشتیبان")
+        self.assertContains(response, backup.filename)
+        self.assertContains(response, "name=\"confirm\"")
+        self.assertContains(response, "postgresql")
+
+    def test_restore_confirm_page_refuses_unsuccessful_backup(self):
+        queued = Backup.objects.create(
+            status=Backup.Status.QUEUED,
+            filename="pending.dfbak",
+        )
+        self.client.force_login(self.superuser)
+
+        response = self.client.get(self.restore_url(queued))
+        self.assertIn(response.status_code, (301, 302))
+        self.assertEqual(Restore.objects.count(), 0)
+
+    def test_restore_post_requires_confirmation_flag(self):
+        backup = self.make_success_backup(user=self.superuser)
+        self.client.force_login(self.superuser)
+
+        with mock.patch(
+            "backup.admin.run_restore.delay"
+        ) as mocked_delay:
+            response = self.client.post(
+                self.restore_url(backup),
+                {},
+                follow=True,
+            )
+
+        self.assertEqual(Restore.objects.count(), 0)
+        mocked_delay.assert_not_called()
+        self.assertContains(response, "تأیید صریح")
+
+    def test_restore_post_queues_restore_and_task(self):
+        backup = self.make_success_backup(user=self.superuser)
+        self.client.force_login(self.superuser)
+
+        with mock.patch(
+            "backup.admin.run_restore.delay"
+        ) as mocked_delay:
+            response = self.client.post(
+                self.restore_url(backup),
+                {"confirm": "1"},
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Restore.objects.count(), 1)
+
+        restore = Restore.objects.get()
+        self.assertEqual(restore.status, Restore.Status.QUEUED)
+        self.assertEqual(restore.backup_id, backup.pk)
+        self.assertEqual(restore.archive_filename, backup.filename)
+        self.assertEqual(restore.requested_by, self.superuser)
+        self.assertEqual(
+            restore.requested_by_username,
+            self.superuser.get_username(),
+        )
+        self.assertTrue(restore.includes_media)
+        self.assertEqual(restore.product_version, "1.0.0")
+
+        mocked_delay.assert_called_once_with(restore.pk)
+
+        self.assertContains(
+            response,
+            "در صف اجرا قرار گرفت",
+        )
+
+    def test_restore_post_blocked_while_backup_active(self):
+        backup = self.make_success_backup(user=self.superuser)
+        Backup.objects.create(status=Backup.Status.RUNNING)
+        self.client.force_login(self.superuser)
+
+        with mock.patch(
+            "backup.admin.run_restore.delay"
+        ) as mocked_delay:
+            response = self.client.post(
+                self.restore_url(backup),
+                {"confirm": "1"},
+                follow=True,
+            )
+
+        self.assertEqual(Restore.objects.count(), 0)
+        mocked_delay.assert_not_called()
+        self.assertContains(response, "در حال اجراست")
+
+    def test_restore_post_blocked_while_restore_active(self):
+        backup = self.make_success_backup(user=self.superuser)
+        Restore.objects.create(
+            status=Restore.Status.RESTORING,
+            archive_filename="running-restore.dfbak",
+        )
+        self.client.force_login(self.superuser)
+
+        with mock.patch(
+            "backup.admin.run_restore.delay"
+        ) as mocked_delay:
+            response = self.client.post(
+                self.restore_url(backup),
+                {"confirm": "1"},
+                follow=True,
+            )
+
+        self.assertEqual(Restore.objects.count(), 1)
+        mocked_delay.assert_not_called()
+        self.assertContains(response, "در حال اجراست")
+
+    def test_changelist_hides_restore_button_without_permission(self):
+        self.make_success_backup(user=self.superuser)
+        user = self.make_staff("view_backup", "download_backup")
+        self.client.force_login(user)
+
+        response = self.client.get(CHANGELIST_URL)
+        self.assertNotContains(response, "بازیابی")
+
+    def test_changelist_shows_restore_button_with_permission(self):
+        self.make_success_backup(user=self.superuser)
+        user = self.make_staff(
+            "view_backup",
+            "download_backup",
+            "restore_backup",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(CHANGELIST_URL)
+        self.assertContains(response, "بازیابی")
+
+    # ----------------------------------------------------------
+    # Restore history page
+    # ----------------------------------------------------------
+
+    def test_restore_history_requires_view_permission(self):
+        user = self.make_staff("view_backup")
+        self.client.force_login(user)
+        response = self.client.get(RESTORE_HISTORY_URL)
+        self.assertEqual(response.status_code, 403)
+
+    def test_restore_history_renders_for_superuser(self):
+        self.client.force_login(self.superuser)
+        response = self.client.get(RESTORE_HISTORY_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "تاریخچه بازیابی")
+        self.assertContains(response, "هنوز بازیابی‌ای انجام نشده است.")
+
+    def test_restore_history_lists_rows(self):
+        Restore.objects.create(
+            archive_filename="history.dfbak",
+            status=Restore.Status.FAILED,
+            error_message="یک خطای آزمایشی",
+            requested_by_username="root",
+        )
+        self.client.force_login(self.superuser)
+
+        response = self.client.get(RESTORE_HISTORY_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "history.dfbak")
+        self.assertContains(response, "یک خطای آزمایشی")
+        self.assertContains(response, "root")

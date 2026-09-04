@@ -33,7 +33,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Backup
+from .models import Backup, Restore
 from .storage import BackupStorageError, LocalBackupStorage
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,28 @@ class BackupError(Exception):
     """A failure in the backup pipeline with a user-safe message."""
 
 
+def sanitize_message(message):
+    """Remove known database connection details from any surfaced text."""
+    if not message:
+        return message
+
+    database = settings.DATABASES["default"]
+    secrets = [
+        database.get("PASSWORD"),
+        database.get("USER"),
+        database.get("NAME"),
+        database.get("HOST"),
+    ]
+
+    sanitized = str(message)
+
+    for secret in secrets:
+        if secret:
+            sanitized = sanitized.replace(str(secret), "***")
+
+    return sanitized
+
+
 class BackupService:
     def __init__(self, backup, storage=None):
         self.backup = backup
@@ -63,16 +85,24 @@ class BackupService:
 
     def run(self):
         """Execute the full backup pipeline for ``self.backup``."""
-        if self.backup.status in (
-            Backup.Status.SUCCESS,
-            Backup.Status.FAILED,
-        ):
-            return {"status": self.backup.status, "backup_id": self.backup.pk}
+        # Only a QUEUED backup is claimable below; RUNNING/SUCCESS/FAILED
+        # must never restart the pipeline.
+        if self.backup.status != Backup.Status.QUEUED:
+            return {
+                "status": self.backup.status,
+                "backup_id": self.backup.pk,
+            }
 
         try:
-            self._acquire_execution_slot()
+            claimed = self._acquire_execution_slot()
         except BackupError as exc:
             self._mark_failed(str(exc))
+            return {"status": self.backup.status, "backup_id": self.backup.pk}
+
+        if not claimed:
+            # Another invocation claimed this backup (it is already RUNNING
+            # in the database); do not start a second pipeline.
+            self.backup.refresh_from_db()
             return {"status": self.backup.status, "backup_id": self.backup.pk}
 
         tmp_dir = None
@@ -81,25 +111,34 @@ class BackupService:
             tmp_dir = self._make_temp_dir()
 
             database_path = tmp_dir / DATABASE_FILENAME
+            self._dump_database(database_path)
+
+            include_media = self.backup.includes_media
             media_path = tmp_dir / MEDIA_FILENAME
 
-            self._dump_database(database_path)
-            self._create_media_archive(media_path)
+            if include_media:
+                self._create_media_archive(media_path)
+                media_size = media_path.stat().st_size
+            else:
+                media_size = 0
 
             manifest_path = tmp_dir / MANIFEST_FILENAME
             self._write_manifest(
                 manifest_path,
                 database_size=database_path.stat().st_size,
-                media_size=media_path.stat().st_size,
+                media_size=media_size,
             )
 
-            archive_path = tmp_dir / "backup.dfbak"
-            self._build_archive(
-                archive_path,
+            members = [
                 (manifest_path, MANIFEST_FILENAME),
                 (database_path, DATABASE_FILENAME),
-                (media_path, MEDIA_FILENAME),
-            )
+            ]
+
+            if include_media:
+                members.append((media_path, MEDIA_FILENAME))
+
+            archive_path = tmp_dir / "backup.dfbak"
+            self._build_archive(archive_path, *members)
 
             checksum = self._calculate_checksum(archive_path)
             self._validate_archive(archive_path)
@@ -113,7 +152,7 @@ class BackupService:
                 final_path=final_path,
                 checksum=checksum,
                 database_size=database_path.stat().st_size,
-                media_size=media_path.stat().st_size,
+                media_size=media_size,
             )
 
         except BackupError as exc:
@@ -146,11 +185,16 @@ class BackupService:
     # ----------------------------------------------------------
 
     def _acquire_execution_slot(self):
-        """Claim the single execution slot or fail with a safe message.
+        """Claim the single execution slot.
+
+        Returns ``True`` when this invocation claimed the slot (transitioned
+        the backup QUEUED -> RUNNING), or ``False`` when the backup is already
+        RUNNING (duplicate task delivery or a concurrent worker claimed it) and
+        must not be restarted. Raises ``BackupError`` when a different backup
+        currently holds the slot.
 
         Uses a ``SELECT ... FOR UPDATE`` over queued/running backups so that
-        concurrent workers serialize: the second worker observes the first
-        one's RUNNING row after it commits and refuses to run.
+        concurrent workers serialize on the database row.
         """
         with transaction.atomic():
             active = list(
@@ -163,6 +207,20 @@ class BackupService:
                 )
                 .order_by("pk")
             )
+
+            self_row = next(
+                (
+                    row
+                    for row in active
+                    if row.pk == self.backup.pk
+                ),
+                None,
+            )
+
+            if self_row is None or self_row.status == Backup.Status.RUNNING:
+                # Already claimed by this or another invocation (or moved to a
+                # terminal state) while we waited for the lock. Never restart.
+                return False
 
             others = [row for row in active if row.pk != self.backup.pk]
 
@@ -189,6 +247,23 @@ class BackupService:
                     updated_at=now,
                 )
 
+            # Never snapshot the database while a Restore is rewriting it.
+            # The only backup allowed to run during a Restore is that
+            # Restore's own automatic pre-restore safety snapshot. Plain
+            # (non-locking) read on purpose: the Restore slot locks Restore
+            # rows and then Backup rows, so locking Restore rows here could
+            # deadlock.
+            if (
+                not self.backup.is_pre_restore_backup
+                and Restore.objects.filter(
+                    status=Restore.Status.RESTORING
+                ).exists()
+            ):
+                raise BackupError(
+                    "بازیابی (Restore) در حال اجراست؛ "
+                    "ایجاد پشتیبان هم‌زمان ممکن نیست."
+                )
+
             self.backup.status = Backup.Status.RUNNING
             self.backup.started_at = timezone.now()
             self.backup.save(
@@ -198,6 +273,8 @@ class BackupService:
                     "updated_at",
                 ]
             )
+
+            return True
 
     # ----------------------------------------------------------
     # Pipeline steps
@@ -374,14 +451,18 @@ class BackupService:
             with tarfile.open(archive_path, "r") as archive:
                 names = set(archive.getnames())
 
-                for required in (
+                required = [
                     MANIFEST_FILENAME,
                     DATABASE_FILENAME,
-                    MEDIA_FILENAME,
-                ):
-                    if required not in names:
+                ]
+
+                if self.backup.includes_media:
+                    required.append(MEDIA_FILENAME)
+
+                for required_name in required:
+                    if required_name not in names:
                         raise BackupError(
-                            f"بایگانی نهایی فاقد {required} است."
+                            f"بایگانی نهایی فاقد {required_name} است."
                         )
 
                 try:
@@ -399,10 +480,20 @@ class BackupService:
                         "فرمت بایگانی نهایی ناشناخته است."
                     )
 
-                for member_name in (
-                    DATABASE_FILENAME,
-                    MEDIA_FILENAME,
+                if (
+                    manifest.get("includes_media")
+                    != self.backup.includes_media
                 ):
+                    raise BackupError(
+                        "manifest شامل وضعیت ناسازگار رسانه است."
+                    )
+
+                members_to_check = [DATABASE_FILENAME]
+
+                if self.backup.includes_media:
+                    members_to_check.append(MEDIA_FILENAME)
+
+                for member_name in members_to_check:
                     member = archive.getmember(member_name)
                     if member.size <= 0:
                         raise BackupError(
@@ -472,22 +563,4 @@ class BackupService:
     # ----------------------------------------------------------
 
     def _sanitize_message(self, message):
-        """Remove known connection details from any surfaced error text."""
-        if not message:
-            return message
-
-        database = settings.DATABASES["default"]
-        secrets = [
-            database.get("PASSWORD"),
-            database.get("USER"),
-            database.get("NAME"),
-            database.get("HOST"),
-        ]
-
-        sanitized = str(message)
-
-        for secret in secrets:
-            if secret:
-                sanitized = sanitized.replace(str(secret), "***")
-
-        return sanitized
+        return sanitize_message(message)

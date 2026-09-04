@@ -100,11 +100,15 @@ class LocalBackupStorage(BackupStorage):
                 f"temporary archive does not exist: {tmp_path}"
             )
 
-        # Atomic rename on the same filesystem; replace a stale file with the
-        # same name if one exists.
+        # Never destroy an existing backup: filenames are timestamp-based and a
+        # collision would otherwise silently overwrite a successful archive.
+        # Refuse instead; the new backup fails visibly and the old one survives.
         if final_path.exists():
-            final_path.unlink()
+            raise BackupStorageError(
+                f"a backup file already exists: {filename!r}"
+            )
 
+        # Atomic rename on the same filesystem.
         tmp_path.replace(final_path)
 
         return final_path

@@ -151,6 +151,9 @@ BACKUP_INCLUDE_MEDIA = env.bool(
 # pg_dump binary; override with an absolute path when it is not on PATH.
 PG_DUMP_PATH = env("PG_DUMP_PATH", default="pg_dump")
 
+# pg_restore binary; override with an absolute path when it is not on PATH.
+PG_RESTORE_PATH = env("PG_RESTORE_PATH", default="pg_restore")
+
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration

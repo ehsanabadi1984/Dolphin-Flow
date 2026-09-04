@@ -170,6 +170,15 @@
     background: #fadcdc;
 }
 
+.df-backup-action-restore {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.df-backup-action-restore:hover {
+    background: #fde68a;
+}
+
 .df-backup-empty {
     padding: 28px;
     text-align: center;
@@ -295,6 +304,15 @@
                                 </a>
                             {% endif %}
 
+                            {% if backup.status == "SUCCESS" and can_restore_backup and not has_active_backup and not has_active_restore %}
+                                <a
+                                    href="{% url 'admin:backup_backup_restore' backup.pk %}"
+                                    class="df-backup-action df-backup-action-restore"
+                                >
+                                    بازیابی
+                                </a>
+                            {% endif %}
+
                             {% if can_delete_backup %}
                                 <a
                                     href="{% url 'admin:backup_backup_delete' backup.pk %}"
@@ -330,10 +348,16 @@
         </p>
     {% endif %}
 
+    {% if has_active_restore %}
+        <p class="df-backup-note">
+            یک بازیابی در حال اجراست؛ صفحه به‌صورت خودکار به‌روزرسانی می‌شود.
+        </p>
+    {% endif %}
+
 </div>
 
 
-{% if has_active_backup %}
+{% if has_active_backup or has_active_restore %}
 <script>
 (function () {
     setTimeout(function () {

@@ -1,0 +1,223 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+
+<style>
+
+.df-restore-page {
+    direction: rtl;
+    text-align: right;
+    padding: 20px;
+    max-width: 860px;
+}
+
+.df-restore-page h1 {
+    margin: 0 0 20px;
+    font-size: 24px;
+}
+
+.df-restore-card {
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+}
+
+.df-restore-card h2 {
+    font-size: 16px;
+    margin: 0 0 12px;
+    color: #444;
+}
+
+.df-restore-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px 24px;
+}
+
+.df-restore-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.df-restore-info-label {
+    color: #666;
+    font-size: 13px;
+}
+
+.df-restore-info-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: #222;
+}
+
+.df-restore-warning {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    line-height: 1.9;
+}
+
+.df-restore-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.df-restore-submit {
+    padding: 10px 22px;
+    background: #b91c1c;
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.df-restore-submit:hover {
+    background: #991b1b;
+}
+
+.df-restore-cancel {
+    display: inline-block;
+    padding: 10px 18px;
+    background: #f3f4f6;
+    color: #374151;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.df-restore-cancel:hover {
+    background: #e5e7eb;
+    color: #111827;
+}
+
+.df-restore-note {
+    margin-top: 16px;
+    color: #888;
+    font-size: 13px;
+    line-height: 1.9;
+}
+
+</style>
+
+
+<div class="df-restore-page">
+
+    <h1>بازیابی از پشتیبان</h1>
+
+    {% if manifest_error %}
+
+        <div class="df-restore-warning">
+            بایگانی قابل بررسی نیست: {{ manifest_error }}
+        </div>
+
+        <div class="df-restore-actions">
+            <a
+                href="{% url 'admin:backup_backup_changelist' %}"
+                class="df-restore-cancel"
+            >
+                بازگشت به فهرست پشتیبان‌ها
+            </a>
+        </div>
+
+    {% else %}
+
+        <div class="df-restore-card">
+            <h2>مشخصات بایگانی</h2>
+            <div class="df-restore-info">
+                <div class="df-restore-info-item">
+                    <span class="df-restore-info-label">نام فایل</span>
+                    <span class="df-restore-info-value">{{ backup.filename }}</span>
+                </div>
+                <div class="df-restore-info-item">
+                    <span class="df-restore-info-label">تاریخ ایجاد بایگانی</span>
+                    <span class="df-restore-info-value">
+                        {{ manifest.created_at|default:"—" }}
+                    </span>
+                </div>
+                <div class="df-restore-info-item">
+                    <span class="df-restore-info-label">نسخه محصول</span>
+                    <span class="df-restore-info-value">
+                        {{ manifest.product_version|default:"—" }}
+                    </span>
+                </div>
+                <div class="df-restore-info-item">
+                    <span class="df-restore-info-label">موتور پایگاه داده</span>
+                    <span class="df-restore-info-value">
+                        {{ manifest.database_engine|default:"—" }}
+                    </span>
+                </div>
+                <div class="df-restore-info-item">
+                    <span class="df-restore-info-label">فرمت dump</span>
+                    <span class="df-restore-info-value">
+                        {{ manifest.database_backup_format|default:"—" }}
+                    </span>
+                </div>
+                <div class="df-restore-info-item">
+                    <span class="df-restore-info-label">شامل فایل‌های رسانه</span>
+                    <span class="df-restore-info-value">
+                        {% if manifest.includes_media %}
+                            بله
+                        {% else %}
+                            خیر
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="df-restore-info-item">
+                    <span class="df-restore-info-label">حجم پایگاه داده</span>
+                    <span class="df-restore-info-value">
+                        {{ manifest.database_size|filesizeformat|default:"—" }}
+                    </span>
+                </div>
+                <div class="df-restore-info-item">
+                    <span class="df-restore-info-label">حجم رسانه</span>
+                    <span class="df-restore-info-value">
+                        {{ manifest.media_size|filesizeformat|default:"—" }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="df-restore-warning">
+            <strong>هشدار!</strong>
+            با تأیید این عملیات، پایگاه داده و فایل‌های رسانه فعلی با محتوای
+            بایگانی جایگزین می‌شوند. پیش از بازیابی، یک پشتیبان امنیتی خودکار
+            از وضعیت فعلی تهیه می‌شود؛ اما این عملیات قابل بازگشت نیست.
+        </div>
+
+        <div class="df-restore-actions">
+            <form method="post" action="{% url 'admin:backup_backup_restore' backup.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="confirm" value="1">
+                <button type="submit" class="df-restore-submit">
+                    بله، بازیابی را شروع کن
+                </button>
+            </form>
+            <a
+                href="{% url 'admin:backup_backup_changelist' %}"
+                class="df-restore-cancel"
+            >
+                انصراف
+            </a>
+        </div>
+
+        <p class="df-restore-note">
+            بازیابی به‌صورت غیرهمزمان اجرا می‌شود؛ پس از تأیید، وضعیت آن در
+            صفحه «تاریخچه بازیابی» قابل پیگیری است.
+        </p>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

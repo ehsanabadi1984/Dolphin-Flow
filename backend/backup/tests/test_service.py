@@ -429,6 +429,123 @@ class BackupServiceTestCase(TestCase):
         backup.refresh_from_db()
         self.assertNotIn(password, backup.error_message)
 
+    # ----------------------------------------------------------
+    # BACKUP_INCLUDE_MEDIA / includes_media
+    # ----------------------------------------------------------
+
+    def test_media_excluded_when_includes_media_false(self):
+        self.write_media("photo.jpg")
+        backup = self.make_backup(includes_media=False)
+
+        with _make_fake_pg_dump():
+            BackupService(backup).run()
+
+        backup.refresh_from_db()
+        self.assertEqual(backup.status, Backup.Status.SUCCESS)
+        self.assertEqual(backup.media_size, 0)
+
+        with self.open_archive(backup) as archive:
+            self.assertEqual(
+                set(archive.getnames()),
+                {"manifest.json", "database.dump"},
+            )
+
+            manifest = json.loads(
+                archive.extractfile("manifest.json").read()
+            )
+            self.assertFalse(manifest["includes_media"])
+            self.assertEqual(manifest["media_size"], 0)
+
+    def test_media_included_when_includes_media_true(self):
+        self.write_media("photo.jpg")
+        backup = self.make_backup(includes_media=True)
+
+        with _make_fake_pg_dump():
+            BackupService(backup).run()
+
+        backup.refresh_from_db()
+        self.assertEqual(backup.status, Backup.Status.SUCCESS)
+        self.assertGreater(backup.media_size, 0)
+
+        with self.open_archive(backup) as archive:
+            self.assertIn("media.tar.gz", archive.getnames())
+            manifest = json.loads(
+                archive.extractfile("manifest.json").read()
+            )
+            self.assertTrue(manifest["includes_media"])
+
+    # ----------------------------------------------------------
+    # RUNNING backups must never restart
+    # ----------------------------------------------------------
+
+    def test_running_backup_is_not_rerun(self):
+        backup = self.make_backup(status=Backup.Status.RUNNING)
+
+        with mock.patch(
+            "backup.services.subprocess.run",
+            side_effect=AssertionError("must not re-execute"),
+        ):
+            result = BackupService(backup).run()
+
+        self.assertEqual(result["status"], Backup.Status.RUNNING)
+        backup.refresh_from_db()
+        self.assertEqual(backup.status, Backup.Status.RUNNING)
+        self.assertFalse(
+            (self.backup_root / backup.filename).exists()
+        )
+
+    def test_stale_queued_invocation_does_not_restart_running_backup(self):
+        """A worker that read QUEUED before another claimed it must not run."""
+        backup = self.make_backup()
+        stale = Backup.objects.get(pk=backup.pk)
+
+        # Another worker claimed the slot after `stale` was fetched.
+        Backup.objects.filter(pk=backup.pk).update(
+            status=Backup.Status.RUNNING,
+        )
+
+        with mock.patch(
+            "backup.services.subprocess.run",
+            side_effect=AssertionError("must not re-execute"),
+        ):
+            result = BackupService(stale).run()
+
+        self.assertEqual(result["status"], Backup.Status.RUNNING)
+        backup.refresh_from_db()
+        self.assertEqual(backup.status, Backup.Status.RUNNING)
+
+    # ----------------------------------------------------------
+    # Filename collisions must not destroy existing backups
+    # ----------------------------------------------------------
+
+    def test_filename_collision_fails_new_backup_and_keeps_old_file(self):
+        first = self.make_backup()
+
+        with _make_fake_pg_dump():
+            BackupService(first).run()
+
+        first.refresh_from_db()
+        self.assertEqual(first.status, Backup.Status.SUCCESS)
+
+        final_path = self.backup_root / first.storage_path
+        original_bytes = final_path.read_bytes()
+
+        # A second backup (e.g. same-second create) receives the same filename.
+        second = self.make_backup(filename=first.filename)
+
+        with _make_fake_pg_dump():
+            BackupService(second).run()
+
+        second.refresh_from_db()
+        self.assertEqual(second.status, Backup.Status.FAILED)
+        self.assertIn("already exists", second.error_message)
+
+        # The original successful backup file is untouched.
+        self.assertEqual(final_path.read_bytes(), original_bytes)
+        first.refresh_from_db()
+        self.assertEqual(first.status, Backup.Status.SUCCESS)
+        self.assertEqual(first.checksum, hashlib.sha256(original_bytes).hexdigest())
+
 
 class LocalBackupStorageTests(TestCase):
     def setUp(self):
@@ -484,3 +601,21 @@ class LocalBackupStorageTests(TestCase):
         victim.write_bytes(b"x")
         self.storage.delete("a.dfbak")
         self.assertFalse(victim.exists())
+
+    def test_finalize_refuses_to_overwrite_existing_file(self):
+        self.storage.ensure_root()
+
+        existing = (
+            self.root / "DolphinFlow_Backup_2026-09-04_020000.dfbak"
+        )
+        existing.write_bytes(b"OLD-BACKUP")
+
+        tmp_file = self.tmp / "new.dfbak"
+        tmp_file.write_bytes(b"NEW-BACKUP")
+
+        with self.assertRaises(BackupStorageError):
+            self.storage.finalize(tmp_file, existing.name)
+
+        # The existing backup survives and the temporary file is untouched.
+        self.assertEqual(existing.read_bytes(), b"OLD-BACKUP")
+        self.assertEqual(tmp_file.read_bytes(), b"NEW-BACKUP")
