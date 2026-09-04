@@ -33,7 +33,12 @@ def _build_context_data(*, instance, submitted_data):
     if submitted_data is None:
         return data
 
-    form = instance.workflow.form_definition.filter(is_active=True).first()
+    from .models import FormDefinition
+    form = (
+        FormDefinition.objects
+        .filter(workflow=instance.workflow, is_active=True)
+        .first()
+    )
     if form is None:
         return data
 
@@ -247,7 +252,12 @@ def bootstrap_formula_system():
             user,
             submitted_data,
         ):
-            form = instance.workflow.form_definition.filter(is_active=True).first()
+            from .models import FormDefinition
+            form = (
+                FormDefinition.objects
+                .filter(workflow=instance.workflow, is_active=True)
+                .first()
+            )
             formula_fields = []
             if form is not None:
                 formula_fields = list(
