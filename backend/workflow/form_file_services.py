@@ -2,32 +2,25 @@ import os
 from pathlib import Path
 
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import Http404, ValidationError
+from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.http import FileResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.http import FileResponse, Http404, JsonResponse
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 
+from .authorization import WorkflowAuthorizationService
 from .form_file_models import FormFile
 from .form_services import DynamicFormService
 from .models import (
-    FieldAccess,
     FormData,
     FormDefinition,
     FormField,
     FormRepeatableGroup,
-    RepeatableGroupAccess,
     WorkflowInstance,
     WorkflowPermission,
 )
-from .authorization import WorkflowAuthorizationService
-
 
 MAX_FILE_SIZE = 10 * 1024 * 1024
-
-
-def is_file_field(field):
-    return field.field_type == "FILE"
 
 
 def _current_form(instance):
@@ -43,7 +36,6 @@ def _current_form(instance):
 
 
 def prepare_submitted_data_for_files(*, instance, submitted_data, submitted_files):
-    """Make FILE-only repeatable rows visible to the normal form parser."""
     post_data = submitted_data.copy()
     form = _current_form(instance)
     if form is None:
@@ -66,7 +58,6 @@ def prepare_submitted_data_for_files(*, instance, submitted_data, submitted_file
         for key in submitted_files.keys():
             if key.startswith(prefix) and key.endswith(suffix) and key not in post_data:
                 post_data[key] = ""
-
     return post_data
 
 
@@ -78,9 +69,16 @@ def _validate_upload(upload, field):
     if not _upload_present(upload):
         return None
     if upload.size > MAX_FILE_SIZE:
-        size_mb = MAX_FILE_SIZE // (1024 * 1024)
-        return f"حجم فایل «{field.label}» نباید بیشتر از {size_mb} مگابایت باشد."
+        return f"حجم فایل «{field.label}» نباید بیشتر از {MAX_FILE_SIZE // (1024 * 1024)} مگابایت باشد."
     return None
+
+
+def _roles_for_workflow(workflow, user):
+    return set(
+        workflow.memberships
+        .filter(user=user, is_active=True)
+        .values_list("role", flat=True)
+    )
 
 
 def _field_can_edit(field, *, user, step):
@@ -88,14 +86,8 @@ def _field_can_edit(field, *, user, step):
     user_rule = rules.filter(user=user).first()
     if user_rule:
         return bool(user_rule.can_edit)
-
-    roles = set(
-        field.section.form.workflow.memberships
-        .filter(user=user, is_active=True)
-        .values_list("role", flat=True)
-    )
     return rules.filter(
-        role__in=roles,
+        role__in=_roles_for_workflow(field.section.form.workflow, user),
         user__isnull=True,
         can_edit=True,
     ).exists()
@@ -110,14 +102,8 @@ def _field_can_view(field, *, user, step):
     user_rule = rules.filter(user=user).first()
     if user_rule:
         return bool(user_rule.can_view)
-
-    roles = set(
-        field.section.form.workflow.memberships
-        .filter(user=user, is_active=True)
-        .values_list("role", flat=True)
-    )
     return rules.filter(
-        role__in=roles,
+        role__in=_roles_for_workflow(field.section.form.workflow, user),
         user__isnull=True,
         can_view=True,
     ).exists()
@@ -128,14 +114,8 @@ def _group_can_edit(group, *, user, step):
     user_rule = rules.filter(user=user).first()
     if user_rule:
         return bool(user_rule.can_edit)
-
-    roles = set(
-        group.section.form.workflow.memberships
-        .filter(user=user, is_active=True)
-        .values_list("role", flat=True)
-    )
     return rules.filter(
-        role__in=roles,
+        role__in=_roles_for_workflow(group.section.form.workflow, user),
         user__isnull=True,
         can_edit=True,
     ).exists()
@@ -150,21 +130,14 @@ def _group_can_view(group, *, user, step):
     user_rule = rules.filter(user=user).first()
     if user_rule:
         return bool(user_rule.can_view)
-
-    roles = set(
-        group.section.form.workflow.memberships
-        .filter(user=user, is_active=True)
-        .values_list("role", flat=True)
-    )
     return rules.filter(
-        role__in=roles,
+        role__in=_roles_for_workflow(group.section.form.workflow, user),
         user__isnull=True,
         can_view=True,
     ).exists()
 
 
 def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
-    """Validate FILE fields before the normal form save occurs."""
     if instance.current_step_id is None:
         return
 
@@ -175,8 +148,10 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
     form_data = FormData.objects.filter(instance=instance).first()
     existing = {}
     if form_data:
-        for item in FormFile.objects.filter(form_data=form_data):
-            existing[(item.field_id, item.row_id)] = item
+        existing = {
+            (item.field_id, item.row_id): item
+            for item in FormFile.objects.filter(form_data=form_data)
+        }
 
     step = instance.current_step
     errors = []
@@ -189,7 +164,6 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
         ):
             if not _field_can_edit(field, user=user, step=step):
                 continue
-
             upload = submitted_files.get(field.code)
             error = _validate_upload(upload, field)
             if error:
@@ -199,13 +173,7 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
                     "label": field.label,
                     "message": error,
                 })
-                continue
-
-            if (
-                field.is_required
-                and not _upload_present(upload)
-                and (field.pk, "") not in existing
-            ):
+            elif field.is_required and not _upload_present(upload) and (field.pk, "") not in existing:
                 errors.append({
                     "type": "field",
                     "code": field.code,
@@ -219,19 +187,16 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
         ):
             if not _group_can_edit(group, user=user, step=step):
                 continue
-
             rows = DynamicFormService._parse_repeatable_data(
                 submitted_data=submitted_data,
                 group_code=group.code,
             )
             file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
-
             for index, row in enumerate(rows):
                 row_id = str(row.get("_id", "") or "")
                 for field in file_fields:
                     if not _field_can_edit(field, user=user, step=step):
                         continue
-
                     key = f"{group.code}_{index}_{field.code}"
                     upload = submitted_files.get(key)
                     error = _validate_upload(upload, field)
@@ -243,13 +208,7 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
                             "item_index": index,
                             "message": error,
                         })
-                        continue
-
-                    if (
-                        field.is_required
-                        and not _upload_present(upload)
-                        and (field.pk, row_id) not in existing
-                    ):
+                    elif field.is_required and not _upload_present(upload) and (field.pk, row_id) not in existing:
                         errors.append({
                             "type": "repeatable_field",
                             "group_code": group.code,
@@ -329,11 +288,9 @@ def save_uploaded_form_files(*, instance, user, submitted_files):
             file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
             if not file_fields:
                 continue
-
             rows = form_data.data.get(group.code, []) if isinstance(form_data.data, dict) else []
             if not isinstance(rows, list):
                 continue
-
             for index, row in enumerate(rows):
                 if not isinstance(row, dict):
                     continue
@@ -379,27 +336,29 @@ def file_field_definitions(request, instance_id):
     form_data = FormData.objects.filter(instance=instance).first()
     existing = {}
     if form_data:
-        for item in FormFile.objects.filter(form_data=form_data):
-            existing[(item.field_id, item.row_id)] = _file_payload(item)
+        existing = {
+            (item.field_id, item.row_id): _file_payload(item)
+            for item in FormFile.objects.filter(form_data=form_data)
+        }
 
     fields = []
     groups = []
+    step = instance.current_step
 
     for section in form.sections.filter(is_active=True):
-        normal_fields = list(section.fields.filter(
+        for field in section.fields.filter(
             is_active=True,
             repeatable_group__isnull=True,
             field_type="FILE",
-        ))
-        for field in normal_fields:
-            if not _field_can_view(field, user=request.user, step=instance.current_step):
+        ):
+            if not _field_can_view(field, user=request.user, step=step):
                 continue
             fields.append({
                 "field_id": field.pk,
                 "code": field.code,
                 "label": field.label,
                 "scope": "FORM",
-                "editable": _field_can_edit(field, user=request.user, step=instance.current_step),
+                "editable": _field_can_edit(field, user=request.user, step=step),
                 "required": bool(field.is_required),
                 "input_name": field.code,
                 "file": existing.get((field.pk, "")),
@@ -409,59 +368,63 @@ def file_field_definitions(request, instance_id):
             is_active=True,
             group_type=FormRepeatableGroup.GroupType.NORMAL,
         ):
-            if not _group_can_view(group, user=request.user, step=instance.current_step):
+            if not _group_can_view(group, user=request.user, step=step):
                 continue
 
             all_fields = list(group.fields.filter(is_active=True))
-            file_fields = []
+            group_fields = []
+            field_ids = set()
+
             for column_index, field in enumerate(all_fields):
                 if field.field_type != "FILE":
                     continue
-                if not _field_can_view(field, user=request.user, step=instance.current_step):
+                if not _field_can_view(field, user=request.user, step=step):
                     continue
-                file_fields.append({
+                field_ids.add(field.pk)
+                group_fields.append({
                     "field_id": field.pk,
                     "code": field.code,
                     "label": field.label,
-                    "editable": _field_can_edit(field, user=request.user, step=instance.current_step) and _group_can_edit(group, user=request.user, step=instance.current_step),
+                    "editable": (
+                        _field_can_edit(field, user=request.user, step=step)
+                        and _group_can_edit(group, user=request.user, step=step)
+                    ),
                     "required": bool(field.is_required),
                     "column_index": column_index,
                 })
 
-            if file_fields:
-                file_payloads = []
-                for (field_id, row_id), payload in existing.items():
-                    if field_id in {item["field_id"] for item in file_fields}:
-                        field_code = next(item["code"] for item in file_fields if item["field_id"] == field_id)
-                        file_payloads.append({
-                            "field_code": field_code,
-                            "row_id": row_id,
-                            **payload,
-                        })
-                groups.append({
-                    "code": group.code,
-                    "fields": file_fields,
-                    "files": file_payloads,
-                })
+            if not group_fields:
+                continue
+
+            file_payloads = []
+            for (field_id, row_id), payload in existing.items():
+                if field_id in field_ids:
+                    field_code = next(
+                        item["code"] for item in group_fields if item["field_id"] == field_id
+                    )
+                    file_payloads.append({
+                        "field_code": field_code,
+                        "row_id": row_id,
+                        **payload,
+                    })
+
+            groups.append({
+                "code": group.code,
+                "fields": group_fields,
+                "files": file_payloads,
+            })
 
     return JsonResponse({"fields": fields, "groups": groups})
 
 
 @login_required
 def workflow_instance_with_files(request, instance_id):
-    """Bridge the existing workflow view with multipart FILE handling."""
     from operator_panel import views
 
     if request.method != "POST":
         return views.workflow_instance(request, instance_id)
 
-    submitted_data = prepare_submitted_data_for_files(
-        instance=views.get_object_or_404(WorkflowInstance.objects.select_related("workflow", "current_step"), pk=instance_id),
-        submitted_data=request.POST,
-        submitted_files=request.FILES,
-    )
-
-    instance = views.get_object_or_404(
+    instance = get_object_or_404(
         WorkflowInstance.objects.select_related("workflow", "current_step"),
         pk=instance_id,
     )
@@ -473,6 +436,11 @@ def workflow_instance_with_files(request, instance_id):
         instance=instance,
     )
 
+    submitted_data = prepare_submitted_data_for_files(
+        instance=instance,
+        submitted_data=request.POST,
+        submitted_files=request.FILES,
+    )
     validate_uploaded_files(
         instance=instance,
         user=request.user,
@@ -539,8 +507,10 @@ def open_form_file(request, file_id):
         step=instance.current_step,
         instance=instance,
     )
+
     if not _field_can_view(form_file.field, user=request.user, step=instance.current_step):
         raise Http404
+
     if form_file.field.repeatable_group_id and not _group_can_view(
         form_file.field.repeatable_group,
         user=request.user,
@@ -554,7 +524,11 @@ def open_form_file(request, file_id):
         raise Http404
 
     filename = form_file.original_name or Path(form_file.file.name).name
-    response = FileResponse(form_file.file, as_attachment=True, filename=filename)
+    response = FileResponse(
+        form_file.file,
+        as_attachment=True,
+        filename=filename,
+    )
     if form_file.content_type:
         response["Content-Type"] = form_file.content_type
     return response
