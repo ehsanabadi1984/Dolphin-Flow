@@ -22,6 +22,11 @@
 .df-tracker-label { margin-top: 9px; max-width: 108px; font-size: 12px; line-height: 1.7; }
 .df-tracker-state { margin-top: 2px; font-size: 10px; opacity: .55; }
 .df-tracker-step.is-current .df-tracker-state { color: #d97706; opacity: 1; font-weight: 700; }
+.df-tracker-branches { width: 100%; margin-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.df-tracker-branch { width: 170px; max-width: calc(100vw - 56px); padding: 5px 8px; border: 1px solid var(--df-border, #e5e7eb); border-radius: 8px; background: color-mix(in srgb, var(--df-surface, #fff) 88%, var(--df-primary, #2563eb)); font-size: 10px; line-height: 1.5; }
+.df-tracker-branch-label { font-weight: 700; }
+.df-tracker-branch-target { margin-top: 2px; opacity: .68; }
+.df-tracker-branch.is-finish { background: color-mix(in srgb, var(--df-surface, #fff) 92%, #dc2626); }
 .df-sla-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--df-border, #e5e7eb); font-size: 12px; }
 .df-sla-status { font-weight: 700; }
 .df-sla-on-track { color: #15803d; }
@@ -148,6 +153,27 @@
                                     <div class="df-tracker-node">{% if item.state == 'completed' %}✓{% elif item.state == 'current' %}●{% else %}○{% endif %}</div>
                                     <div class="df-tracker-label">{{ item.step.name }}</div>
                                     <div class="df-tracker-state">{% if item.state == 'completed' %}تکمیل شده{% elif item.state == 'current' %}مرحله فعلی{% else %}در انتظار{% endif %}</div>
+
+                                    {% if item.state == 'current' %}
+                                        {% with outgoing=item.step.outgoing_transitions.all %}
+                                            {% if outgoing|length > 1 %}
+                                                <div class="df-tracker-branches">
+                                                    {% for transition in outgoing %}
+                                                        <div class="df-tracker-branch {% if not transition.to_step %}is-finish{% endif %}">
+                                                            <div class="df-tracker-branch-label">{{ transition.name }}</div>
+                                                            <div class="df-tracker-branch-target">
+                                                                {% if transition.to_step %}
+                                                                    → {{ transition.to_step.name }}
+                                                                {% else %}
+                                                                    → پایان فرآیند
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% endif %}
                                 </div>
                             {% endfor %}
                         </div>
