@@ -262,10 +262,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function isEditMode() {
-        // The server deliberately renders hidden device editors even while
-        // the saved form is read-only. Therefore DOM input existence cannot
-        // be used to detect edit mode.
-        return Boolean(form.querySelector(".df-form-actions"));
+        // Edit mode is signalled by the server on the <form> element.
+        // DOM heuristics cannot be used: the read-only page intentionally
+        // still renders a .df-form-actions bar (ویرایش / پاک کردن actions)
+        // as well as hidden device editors, so neither their presence nor
+        // input existence distinguishes edit from read-only state.
+        // Recalculating outside edit mode would read missing inputs as 0
+        // and overwrite the server-rendered formula values with zeros.
+        return form.dataset.editMode === "1";
     }
 
     function recalculate() {

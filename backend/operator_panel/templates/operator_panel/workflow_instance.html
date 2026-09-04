@@ -24,6 +24,7 @@
     method="post"
     action="{% url 'operator_panel:workflow_instance' instance.pk %}"
     data-instance-id="{{ instance.pk }}"
+    data-edit-mode="{{ edit_mode|yesno:'1,0' }}"
   >
 
     {% csrf_token %}
