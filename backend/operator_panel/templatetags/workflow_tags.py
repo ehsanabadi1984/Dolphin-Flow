@@ -106,10 +106,10 @@ def sidebar_counts(context):
 
 @register.simple_tag
 def recent_processes(user, limit=10):
-    """Return the user's newest meaningful workflow instances."""
+    """Return the user's newest meaningful, viewable workflow instances."""
     if not user or not user.is_authenticated:
         return []
 
     return list(
-        DashboardService.meaningful_instance_queryset(user)[:limit]
+        DashboardService(user).my_processes_queryset()[:limit]
     )
