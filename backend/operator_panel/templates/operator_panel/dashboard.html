@@ -158,7 +158,9 @@
                                     <div class="df-tracker-step {% if item.state == 'completed' %}is-completed{% elif item.state == 'current' %}is-current{% endif %}{% if outgoing|length > 1 %} has-extra-branches{% endif %}">
                                         <div class="df-tracker-node">{% if item.state == 'completed' %}✓{% elif item.state == 'current' %}●{% else %}○{% endif %}</div>
                                         <div class="df-tracker-label">{{ item.step.name }}</div>
-                                        <div class="df-tracker-state">{% if item.state == 'completed' %}تکمیل شده{% elif item.state == 'current' %}مرحله فعلی{% else %}در انتظار{% endif %}</div>
+                                        {% if not forloop.last %}
+                                            <div class="df-tracker-state">{% if item.state == 'completed' %}تکمیل شده{% elif item.state == 'current' %}مرحله فعلی{% else %}در انتظار{% endif %}</div>
+                                        {% endif %}
 
                                         {% if outgoing|length > 1 %}
                                             <div class="df-tracker-extra-branches">
