@@ -88,9 +88,10 @@ def _inject_formula_context(*, context, calculated_data):
                 continue
 
             formula_codes = {
-                field.code
-                for field in group.get("fields", [])
-                if FormulaService.is_formula(field.get("field"))
+                field_info["field"].code
+                for field_info in group.get("fields", [])
+                if field_info.get("field")
+                and FormulaService.is_formula(field_info["field"])
             }
             if formula_codes:
                 for field_info in group.get("fields", []):
