@@ -175,11 +175,24 @@ def formula_definitions(request, instance_id):
                 continue
             if not _group_access(group, user=request.user, step=instance.current_step):
                 continue
+        else:
+            # The main template renders every visible top-level field as
+            # one `.df-form-field` container, regardless of field type.
+            # Count those containers before filtering the API payload to
+            # numeric/formula fields.
+            if _field_access(field, user=request.user, step=instance.current_step):
+                field_dom_index = normal_dom_index
+                normal_dom_index += 1
+            else:
+                continue
 
-        if not _field_access(field, user=request.user, step=instance.current_step):
-            continue
-
-        if field.field_type not in {
+        if not field.repeatable_group_id:
+            if field.field_type not in {
+                FormField.FieldType.NUMBER,
+                FormulaService.FIELD_TYPE,
+            }:
+                continue
+        elif field.field_type not in {
             FormField.FieldType.NUMBER,
             FormulaService.FIELD_TYPE,
         }:
@@ -196,12 +209,8 @@ def formula_definitions(request, instance_id):
             ),
         }
 
-        # Normal fields are rendered as the sequence of `.df-form-field`
-        # containers in the main form. Record the exact visible DOM index
-        # so Formula JS never has to guess by code or label.
         if field.repeatable_group_id is None:
-            field_payload["dom_index"] = normal_dom_index
-            normal_dom_index += 1
+            field_payload["dom_index"] = field_dom_index
 
         visible_field_ids.add(field.pk)
         visible_fields.append(field_payload)
