@@ -2,19 +2,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const typeField = document.getElementById("id_field_type");
     const sourceField = document.getElementById("id_formula_builder");
     const decimalField = document.getElementById("id_formula_decimal_places");
+    const sectionField = document.getElementById("id_section");
+    const groupField = document.getElementById("id_repeatable_group");
 
     if (!typeField || !sourceField || !decimalField) return;
 
-    const fieldOptions = (() => {
-        try {
-            return JSON.parse(sourceField.dataset.fieldOptions || "[]");
-        } catch (error) {
-            console.warn("Invalid formula field options:", error);
-            return [];
-        }
-    })();
-
+    const optionsUrl = sourceField.dataset.optionsUrl || "";
+    let fieldOptions = [];
     let tokens = [];
+    let initialized = false;
 
     try {
         const initial = JSON.parse(sourceField.value || "{}");
@@ -71,16 +67,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const expression = panel.querySelector(".df-formula-expression");
     const preview = panel.querySelector(".df-formula-preview");
 
-    fieldOptions.forEach((field) => {
-        const option = document.createElement("option");
-        option.value = field.id;
-        option.textContent = `${field.label} (${field.code})`;
-        fieldSelect.appendChild(option);
-    });
+    function rebuildFieldSelect() {
+        fieldSelect.innerHTML = '<option value="">انتخاب فیلد...</option>';
+        fieldOptions.forEach((field) => {
+            const option = document.createElement("option");
+            option.value = field.id;
+            option.textContent = `${field.label} (${field.code})`;
+            fieldSelect.appendChild(option);
+        });
+    }
 
     function tokenText(token) {
         if (token.type === "field") {
-            const field = fieldOptions.find((item) => Number(item.id) === Number(token.field_id));
+            const field = fieldOptions.find(
+                (item) => Number(item.id) === Number(token.field_id)
+            );
             return field ? field.label : `#${token.field_id}`;
         }
         if (token.type === "number") return token.value;
@@ -110,8 +111,44 @@ document.addEventListener("DOMContentLoaded", () => {
         sourceField.value = JSON.stringify({
             version: 1,
             tokens,
-            decimal_places: Math.max(0, Math.min(Number(decimalField.value || 0), 6)),
+            decimal_places: Math.max(
+                0,
+                Math.min(Number(decimalField.value || 0), 6)
+            ),
         });
+    }
+
+    async function loadFieldOptions() {
+        if (!optionsUrl) return;
+
+        const sectionId = sectionField?.value || "";
+        const groupId = groupField?.value || "";
+        const params = new URLSearchParams({
+            section_id: sectionId,
+            group_id: groupId,
+            exclude_id: document.getElementById("id_id")?.value || "",
+        });
+
+        try {
+            const response = await fetch(`${optionsUrl}?${params.toString()}`, {
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            if (!response.ok) return;
+
+            const payload = await response.json();
+            fieldOptions = Array.isArray(payload.fields) ? payload.fields : [];
+            rebuildFieldSelect();
+
+            const validIds = new Set(fieldOptions.map((field) => Number(field.id)));
+            tokens = tokens.filter(
+                (token) =>
+                    token.type !== "field" ||
+                    validIds.has(Number(token.field_id))
+            );
+            render();
+        } catch (error) {
+            console.warn("Formula field options could not be loaded:", error);
+        }
     }
 
     panel.querySelector("[data-add-field]").addEventListener("click", () => {
@@ -174,9 +211,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    typeField.addEventListener("change", syncVisibility);
-    decimalField.addEventListener("input", render);
+    function scopeChanged() {
+        if (!initialized || typeField.value !== "FORMULA") return;
+        tokens = [];
+        render();
+        loadFieldOptions();
+    }
 
+    typeField.addEventListener("change", () => {
+        syncVisibility();
+        if (typeField.value === "FORMULA") loadFieldOptions();
+    });
+    decimalField.addEventListener("input", render);
+    sectionField?.addEventListener("change", scopeChanged);
+    groupField?.addEventListener("change", scopeChanged);
+
+    rebuildFieldSelect();
     render();
     syncVisibility();
+    initialized = true;
+
+    if (typeField.value === "FORMULA") {
+        loadFieldOptions();
+    }
 });
