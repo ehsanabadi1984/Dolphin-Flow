@@ -21,6 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "FLOOR",
         "CEIL",
     ]);
+    const AGGREGATE_FUNCTIONS = new Set(["SUM", "MIN", "MAX", "AVG"]);
 
     function toNumber(value) {
         if (value === null || value === undefined || value === "") return 0;
@@ -65,29 +66,29 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         parse() {
-            const value = this.parseExpression();
+            const value = this.parseExpression(null);
             return this.index === this.tokens.length ? value : 0;
         }
 
-        parseExpression() {
-            let value = this.parseTerm();
+        parseExpression(context) {
+            let value = this.parseTerm(context);
             while (this.match("operator", "+") || this.match("operator", "-")) {
                 const operator = this.advance().value;
-                const right = this.parseTerm();
+                const right = this.parseTerm(context);
                 value = operator === "+" ? value + right : value - right;
             }
             return value;
         }
 
-        parseTerm() {
-            let value = this.parseFactor();
+        parseTerm(context) {
+            let value = this.parseFactor(context);
             while (
                 this.match("operator", "*") ||
                 this.match("operator", "/") ||
                 this.match("operator", "%")
             ) {
                 const operator = this.advance().value;
-                const right = this.parseFactor();
+                const right = this.parseFactor(context);
                 if (operator === "*") value *= right;
                 else if (operator === "/") value = right === 0 ? 0 : value / right;
                 else value = right === 0 ? 0 : value % right;
@@ -95,7 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return value;
         }
 
-        parseFactor() {
+        parseFactor(context) {
             const token = this.current();
             if (!token) return 0;
 
@@ -106,12 +107,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (token.type === "field") {
                 this.advance();
-                return this.valueResolver(Number(token.field_id));
+                return this.valueResolver(Number(token.field_id), context);
             }
 
             if (this.match("paren", "(")) {
                 this.advance();
-                const value = this.parseExpression();
+                const value = this.parseExpression(context);
                 if (this.match("paren", ")")) this.advance();
                 return value;
             }
@@ -125,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const args = [];
                 if (!this.match("paren", ")")) {
                     while (true) {
-                        args.push(this.parseExpression());
+                        args.push(this.parseExpression(name));
                         if (this.match("comma")) {
                             this.advance();
                             if (this.match("paren", ")")) return 0;
@@ -159,9 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (name === "ABS") return Math.abs(args[0]);
         if (name === "MIN") return Math.min(...args);
         if (name === "MAX") return Math.max(...args);
-        if (name === "AVG") {
-            return args.reduce((sum, value) => sum + value, 0) / args.length;
-        }
+        if (name === "AVG") return args.reduce((sum, value) => sum + value, 0) / args.length;
         if (name === "ROUND") {
             const places = args.length > 1 ? Math.trunc(args[1]) : 0;
             if (places < 0 || places > 6) return 0;
@@ -170,6 +169,36 @@ document.addEventListener("DOMContentLoaded", () => {
         if (name === "FLOOR") return Math.floor(args[0]);
         if (name === "CEIL") return Math.ceil(args[0]);
         return 0;
+    }
+
+    function aggregateGroupField(field, functionName, stack) {
+        if (!field?.group_code || !AGGREGATE_FUNCTIONS.has(functionName)) return 0;
+
+        const group = form.querySelector(`[data-repeatable-group="${field.group_code}"]`);
+        if (!group) return 0;
+
+        const rows = group.querySelectorAll(
+            "[data-repeatable-item]:not([data-repeatable-template])"
+        );
+        const values = [];
+
+        rows.forEach((row, index) => {
+            const dependency = state.formulasById.get(Number(field.id));
+            if (dependency) {
+                if (dependency.scope !== "ROW") return;
+                values.push(evaluateFormula(dependency, row, index, stack));
+                return;
+            }
+
+            const name = `${field.group_code}_${index}_${field.code}`;
+            values.push(readInput(findNamedElement(name, row)));
+        });
+
+        if (functionName === "SUM") return values.reduce((sum, value) => sum + value, 0);
+        if (!values.length) return 0;
+        if (functionName === "MIN") return Math.min(...values);
+        if (functionName === "MAX") return Math.max(...values);
+        return values.reduce((sum, value) => sum + value, 0) / values.length;
     }
 
     function evaluateFormula(formula, rowRoot = null, rowIndex = null, stack = new Set()) {
@@ -182,11 +211,19 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const parser = new TokenParser(
                 formula.tokens,
-                (fieldId) => {
+                (fieldId, functionContext) => {
                     const field = state.fieldsById.get(Number(fieldId));
-                    return field
-                        ? evaluateField(field, formula, rowRoot, rowIndex, stack)
-                        : 0;
+                    if (!field) return 0;
+
+                    if (
+                        formula.scope === "FORM" &&
+                        field.is_group_field &&
+                        AGGREGATE_FUNCTIONS.has(functionContext)
+                    ) {
+                        return aggregateGroupField(field, functionContext, stack);
+                    }
+
+                    return evaluateField(field, formula, rowRoot, rowIndex, stack);
                 },
             );
             return parser.parse();
@@ -198,13 +235,13 @@ document.addEventListener("DOMContentLoaded", () => {
     function evaluateField(field, ownerFormula, rowRoot, rowIndex, stack) {
         const ownerIsRow = ownerFormula.scope === "ROW";
 
-        if (ownerIsRow && field.group_code !== ownerFormula.group_code) {
-            return 0;
-        }
+        if (ownerIsRow && field.group_code !== ownerFormula.group_code) return 0;
+        if (!ownerIsRow && field.group_code) return 0;
 
         const dependency = state.formulasById.get(Number(field.id));
         if (dependency) {
             if (ownerIsRow && dependency.scope !== "ROW") return 0;
+            if (!ownerIsRow && dependency.scope !== "FORM") return 0;
             return evaluateFormula(dependency, rowRoot, rowIndex, stack);
         }
 
@@ -232,23 +269,19 @@ document.addEventListener("DOMContentLoaded", () => {
     function getNormalFormulaContainer(formula) {
         const containers = getNormalFieldContainers();
         const expectedIndex = Number(formula.dom_index);
-
         if (Number.isInteger(expectedIndex) && expectedIndex >= 0) {
             const exact = containers[expectedIndex];
             if (exact) return exact;
         }
-
         for (const field of containers) {
             if (field.dataset.fieldCode === formula.code) return field;
         }
-
         return null;
     }
 
     function setNormalFormulaValue(formula, value) {
         const container = getNormalFormulaContainer(formula);
         if (!container) return;
-
         let output = container.querySelector(".df-formula-value");
         if (!output) {
             output = document.createElement("div");
@@ -264,10 +297,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const columns = formula.visible_columns || [];
         const columnIndex = columns.indexOf(formula.code);
         if (columnIndex < 0) return;
-
         const cell = row.children[columnIndex];
         if (!cell) return;
-
         let output = cell.querySelector(".df-formula-value");
         if (!output) {
             output = document.createElement("div");
@@ -284,18 +315,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 continue;
             }
 
-            const group = form.querySelector(
-                `[data-repeatable-group="${formula.group_code}"]`
-            );
+            const group = form.querySelector(`[data-repeatable-group="${formula.group_code}"]`);
             if (!group) continue;
 
             const rows = group.querySelectorAll(
                 "[data-repeatable-item]:not([data-repeatable-template])"
             );
-
             rows.forEach((row, index) => {
                 const value = evaluateFormula(formula, row, index, new Set());
-
                 if (group.classList.contains("df-table-group")) {
                     setRowFormulaValue(formula, row, value);
                 } else {
@@ -317,28 +344,18 @@ document.addEventListener("DOMContentLoaded", () => {
     async function loadDefinitions() {
         if (state.loading) return;
         state.loading = true;
-
         try {
             const response = await fetch(
                 `${endpoint}?instance_id=${encodeURIComponent(instanceId)}`,
-                {
-                    headers: { "X-Requested-With": "XMLHttpRequest" },
-                }
+                { headers: { "X-Requested-With": "XMLHttpRequest" } }
             );
             if (!response.ok) return;
 
             const payload = await response.json();
             state.fieldsById.clear();
             state.formulasById.clear();
-
-            for (const field of payload.fields || []) {
-                state.fieldsById.set(Number(field.id), field);
-            }
-
-            for (const formula of payload.formulas || []) {
-                state.formulasById.set(Number(formula.field_id), formula);
-            }
-
+            for (const field of payload.fields || []) state.fieldsById.set(Number(field.id), field);
+            for (const formula of payload.formulas || []) state.formulasById.set(Number(formula.field_id), formula);
             recalculate();
         } catch (error) {
             console.warn("Formula definitions could not be loaded:", error);
@@ -355,9 +372,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     form.addEventListener("input", scheduleRecalculate);
     form.addEventListener("change", scheduleRecalculate);
-
     const observer = new MutationObserver(scheduleRecalculate);
     observer.observe(form, { childList: true, subtree: true });
-
     loadDefinitions();
 });
