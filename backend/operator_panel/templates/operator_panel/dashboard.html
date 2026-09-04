@@ -5,6 +5,7 @@
 {% block content %}
 <style>
 .df-dashboard-scroll { max-height: 520px; overflow-y: auto; padding-left: 4px; scrollbar-width: thin; }
+.df-pending-actions-scroll { max-height: 360px; }
 .df-process-card { padding: 18px; border: 1px solid var(--df-border, #e5e7eb); border-radius: 14px; background: var(--df-surface, #fff); }
 .df-process-card + .df-process-card { margin-top: 14px; }
 .df-process-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
@@ -92,7 +93,7 @@
 
         <div class="df-card df-panel" id="pending-actions">
             <div class="df-panel-header"><div class="df-panel-title">اقدام‌های قابل انجام</div><span class="df-panel-link">{{ summary.pending }} مورد</span></div>
-            <div class="df-activity df-dashboard-scroll">
+            <div class="df-activity df-dashboard-scroll df-pending-actions-scroll">
                 {% for instance in pending_actions %}
                     <div class="df-activity-item">
                         <div class="df-activity-dot"></div>
