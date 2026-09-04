@@ -67,9 +67,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!field || !field.group_code) return 0;
 
         const rows = getGroupRows(field.group_code);
-        const values = rows.map((row, index) =>
-            readGroupFieldValue(field, row, field.group_code, index)
-        );
+        const dependency = state.formulasById.get(Number(field.id));
+
+        const values = rows.map((row, index) => {
+            if (dependency && dependency.scope === "ROW") {
+                return evaluateFormula(dependency, row, index, new Set());
+            }
+            return readGroupFieldValue(field, row, field.group_code, index);
+        });
 
         if (functionName === "SUM") {
             return values.reduce((sum, value) => sum + value, 0);
