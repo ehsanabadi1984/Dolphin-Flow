@@ -77,12 +77,22 @@ def _formula_source_fields(*, section_id, group_id, exclude_id=None):
             ],
         )
         .select_related("repeatable_group", "section")
-        .order_by("section__order", "repeatable_group_id", "order", "id")
+        .order_by(
+            "section__order",
+            "repeatable_group__order",
+            "repeatable_group_id",
+            "order",
+            "id",
+        )
     )
 
     if exclude_id:
         queryset = queryset.exclude(pk=exclude_id)
 
+    # A Formula inside a NORMAL repeatable group is evaluated per row and may
+    # only consume fields from that same group. A top-level Formula can consume
+    # ordinary fields from the whole form and NORMAL-group fields through
+    # aggregate functions such as SUM/MIN/MAX/AVG.
     if group_id:
         group = get_object_or_404(
             FormRepeatableGroup,
@@ -90,12 +100,7 @@ def _formula_source_fields(*, section_id, group_id, exclude_id=None):
             section__form=section.form,
             group_type=FormRepeatableGroup.GroupType.NORMAL,
         )
-        queryset = queryset.filter(repeatable_group=group)
-    else:
-        # Normal Formula fields may reference numeric/calculated fields from
-        # every section of the same form. Table/row formulas remain isolated
-        # to their own repeatable group.
-        queryset = queryset.filter(repeatable_group__isnull=True)
+        return queryset.filter(repeatable_group=group)
 
     return queryset
 
@@ -124,6 +129,10 @@ def formula_field_options(request):
             "label": field.label,
             "section_order": field.section.order,
             "section_id": field.section_id,
+            "section_label": field.section.name,
+            "group_code": field.repeatable_group.code if field.repeatable_group_id else None,
+            "group_label": field.repeatable_group.name if field.repeatable_group_id else None,
+            "is_group_field": field.repeatable_group_id is not None,
         }
         for field in _formula_source_fields(
             section_id=section_id,
@@ -194,9 +203,7 @@ def formula_definitions(request, instance_id):
             continue
 
         if field.repeatable_group_id:
-            group_visible_columns.setdefault(field.repeatable_group_id, []).append(
-                field.code
-            )
+            group_visible_columns.setdefault(field.repeatable_group_id, []).append(field.code)
 
         if field.field_type not in {
             FormField.FieldType.NUMBER,
