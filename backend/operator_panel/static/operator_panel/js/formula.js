@@ -343,7 +343,20 @@ document.addEventListener("DOMContentLoaded", () => {
         output.textContent = formatNumber(value, formula.decimal_places);
     }
 
+    function hasEditableControls() {
+        return Boolean(
+            form.querySelector(
+                "input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])"
+            )
+        );
+    }
+
     function recalculate() {
+        // In the saved/read-only state the server-rendered values come from
+        // persisted FormData.data. There are no editable controls to read,
+        // so recalculating from the DOM would turn formula values into zero.
+        if (!hasEditableControls()) return;
+
         for (const formula of state.formulasById.values()) {
             if (formula.scope === "FORM") {
                 setNormalFormulaValue(formula, evaluateFormula(formula));
