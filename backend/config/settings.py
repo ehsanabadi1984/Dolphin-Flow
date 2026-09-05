@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     "customers",
     "repairs",
     "operator_panel",
-    "workflow",  
+    "workflow",
     "backup",
     'django.contrib.admin',
     'django.contrib.auth',
@@ -57,6 +57,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.UserSessionTimeoutMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
