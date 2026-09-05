@@ -13,6 +13,20 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='backup',
             name='source_type',
-            field=models.CharField(choices=[('LOCAL_CREATED', 'ایجاد محلی'), ('IMPORTED', 'وارد شده')], default='LOCAL_CREATED', help_text='منبع ایجاد این پشتیبان.', max_length=20),
+            field=models.CharField(
+                choices=[('LOCAL_CREATED', 'ایجاد محلی'), ('IMPORTED', 'وارد شده')],
+                default='LOCAL_CREATED',
+                help_text='منبع ایجاد این پشتیبان.',
+                max_length=20,
+            ),
+        ),
+        migrations.RunSQL(
+            sql=[
+                "ALTER TABLE backup_backup ALTER COLUMN source_type SET DEFAULT 'LOCAL_CREATED';",
+                "UPDATE backup_backup SET source_type = 'LOCAL_CREATED' WHERE source_type IS NULL;",
+            ],
+            reverse_sql=[
+                "ALTER TABLE backup_backup ALTER COLUMN source_type DROP DEFAULT;",
+            ],
         ),
     ]
