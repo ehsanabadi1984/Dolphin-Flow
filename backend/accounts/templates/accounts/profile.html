@@ -43,5 +43,27 @@
             <a href="{% url 'accounts:password_change' %}" class="df-button">تغییر رمز عبور</a>
         </div>
     </div>
+
+    <div class="df-card">
+        <h2>زمان انقضای نشست</h2>
+        <p class="df-muted">اگر برای این مدت فعالیتی نداشته باشید، برای ادامه کار باید دوباره وارد سامانه شوید.</p>
+
+        <form method="post" class="df-form">
+            {% csrf_token %}
+            <div class="df-form-grid">
+                <div class="df-form-field">
+                    {{ session_timeout_form.session_timeout.label_tag }}
+                    {{ session_timeout_form.session_timeout }}
+                    {% for error in session_timeout_form.session_timeout.errors %}
+                        <div class="df-form-error">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="df-card-actions">
+                <button type="submit" class="df-button">ذخیره تنظیمات</button>
+            </div>
+        </form>
+    </div>
 </section>
 {% endblock %}
