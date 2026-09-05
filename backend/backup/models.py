@@ -108,6 +108,21 @@ class Backup(models.Model):
         help_text="پشتیبان امنیتی خودکار پیش از بازیابی.",
     )
 
+    # How this backup came to exist in the system. Distinguishes locally
+    # created backups from imported external .dfbak files so the UI can show
+    # the appropriate provenance and the restore pipeline can reconstruct the
+    # record appropriately.
+    class SourceType(models.TextChoices):
+        LOCAL_CREATED = "LOCAL_CREATED", "ایجاد محلی"
+        IMPORTED = "IMPORTED", "وارد شده"
+
+    source_type = models.CharField(
+        max_length=20,
+        choices=SourceType.choices,
+        default=SourceType.LOCAL_CREATED,
+        help_text="منبع ایجاد این پشتیبان.",
+    )
+
     error_message = models.TextField(
         blank=True,
     )

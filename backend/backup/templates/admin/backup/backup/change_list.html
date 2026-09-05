@@ -200,21 +200,76 @@
 
         <h1>پشتیبان‌گیری</h1>
 
-        {% if can_create_backup %}
-            <form
-                method="post"
-                action="{% url 'admin:backup_backup_create' %}"
-            >
-                {% csrf_token %}
-                <button
-                    type="submit"
-                    class="df-backup-create"
-                    {% if has_active_backup %}disabled{% endif %}
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+
+            {% if can_create_backup %}
+                <form
+                    method="post"
+                    action="{% url 'admin:backup_backup_create' %}"
                 >
-                    ایجاد پشتیبان
-                </button>
-            </form>
-        {% endif %}
+                    {% csrf_token %}
+                    <button
+                        type="submit"
+                        class="df-backup-create"
+                        {% if has_active_backup %}disabled{% endif %}
+                    >
+                        ایجاد پشتیبان
+                    </button>
+                </form>
+            {% endif %}
+
+            {% if can_restore_backup %}
+                <form
+                    method="post"
+                    action="{% url 'admin:backup_backup_import' %}"
+                    enctype="multipart/form-data"
+                    id="import-form"
+                >
+                    {% csrf_token %}
+                    <input
+                        type="file"
+                        name="backup_file"
+                        accept=".dfbak"
+                        style="display: none;"
+                        id="import-file-input"
+                    >
+                    <button
+                        type="button"
+                        class="df-backup-create"
+                        style="background: #7c3aed;"
+                        id="import-file-btn"
+                        {% if has_active_backup or has_active_restore %}disabled{% endif %}
+                    >
+                        بازیابی از فایل
+                    </button>
+                </form>
+
+                <script>
+                (function () {
+                    var input = document.getElementById('import-file-input');
+                    var form = document.getElementById('import-form');
+                    var btn = document.getElementById('import-file-btn');
+
+                    if (!input || !form || !btn) {
+                        return;
+                    }
+
+                    btn.addEventListener('click', function () {
+                        input.click();
+                    });
+
+                    input.addEventListener('change', function () {
+                        if (input.files.length > 0) {
+                            btn.disabled = true;
+                            btn.textContent = 'در حال بررسی فایل...';
+                            form.submit();
+                        }
+                    });
+                })();
+                </script>
+            {% endif %}
+
+        </div>
 
     </div>
 

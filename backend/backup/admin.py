@@ -17,8 +17,9 @@ from workflow.admin import dolphin_admin_site
 
 from .models import Backup, Restore, generate_backup_filename
 from .restore_services import RestoreError, read_manifest
-from .storage import BackupStorageError, LocalBackupStorage
+from .storage import BackupImportError, BackupStorageError, LocalBackupStorage
 from .tasks import run_backup, run_restore
+from .import_service import BackupImportService
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,20 @@ class BackupAdmin(ModelAdmin):
                     self.create_backup_view
                 ),
                 name="backup_backup_create",
+            ),
+            path(
+                "import/",
+                self.admin_site.admin_view(
+                    self.import_backup_view
+                ),
+                name="backup_backup_import",
+            ),
+            path(
+                "import/confirm/",
+                self.admin_site.admin_view(
+                    self.import_confirm_view
+                ),
+                name="backup_backup_import_confirm",
             ),
             path(
                 "<path:object_id>/download/",
@@ -396,6 +411,175 @@ class BackupAdmin(ModelAdmin):
         return TemplateResponse(
             request,
             "admin/backup/backup/restore_confirm.html",
+            context,
+        )
+
+    # ----------------------------------------------------------
+    # Import Backup from File (upload + validation + confirmation)
+    # ----------------------------------------------------------
+
+    def import_backup_view(self, request):
+        """Handle file upload for import (POST) or show upload form (GET)."""
+        if not self._has_perm(request, "restore_backup"):
+            raise PermissionDenied
+
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+
+        busy = self._active_operation_message()
+        if busy:
+            messages.warning(request, busy)
+            return redirect("admin:backup_backup_changelist")
+
+        uploaded_file = request.FILES.get("backup_file")
+        if not uploaded_file:
+            messages.error(
+                request,
+                "فایل پشتیبان انتخاب نشد.",
+            )
+            return redirect("admin:backup_backup_changelist")
+
+        # Validate file extension server-side.
+        original_name = uploaded_file.name or ""
+        if not original_name.lower().endswith(".dfbak"):
+            messages.error(
+                request,
+                "فایل باید با پسوند .dfbak باشد.",
+            )
+            return redirect("admin:backup_backup_changelist")
+
+        import_service = BackupImportService()
+
+        try:
+            result = import_service.import_backup(
+                uploaded_file,
+                original_name,
+                user=request.user,
+            )
+        except BackupImportError as exc:
+            messages.error(
+                request,
+                f"مشکلی در خواندن فایل پشتیبان به وجود آمد: {exc}",
+            )
+            logger.warning(
+                "Import failed for file %s: %s",
+                original_name,
+                exc,
+            )
+            return redirect("admin:backup_backup_changelist")
+
+        # Store the imported backup ID and manifest in session for confirmation.
+        request.session["pending_import_backup_id"] = result["backup"].pk
+        request.session["pending_import_manifest"] = result["manifest"]
+        request.session["pending_import_filename"] = result["filename"]
+
+        return redirect("admin:backup_backup_import_confirm")
+
+    def import_confirm_view(self, request):
+        """Show confirmation page for the imported backup, then create Restore."""
+        if not self._has_perm(request, "restore_backup"):
+            raise PermissionDenied
+
+        backup_id = request.session.get("pending_import_backup_id")
+        if not backup_id:
+            messages.warning(
+                request,
+                "صفحه‌ای برای تأیید پیدا نشد. لطفاً مجدداً آپلود کنید.",
+            )
+            return redirect("admin:backup_backup_changelist")
+
+        try:
+            backup = Backup.objects.get(pk=backup_id)
+        except Backup.DoesNotExist:
+            messages.error(
+                request,
+                "پشتیبان وارد شده یافت نشد.",
+            )
+            return redirect("admin:backup_backup_changelist")
+
+        # Clean up session data early (before POST) to prevent replay.
+        if request.method == "POST":
+            del request.session["pending_import_backup_id"]
+            del request.session["pending_import_manifest"]
+            del request.session["pending_import_filename"]
+
+        if request.method != "POST":
+            return self._render_import_confirm(request, backup)
+
+        if request.POST.get("confirm") != "1":
+            messages.error(
+                request,
+                "برای شروع بازیابی باید تأیید صریح انجام دهید.",
+            )
+            return redirect("admin:backup_backup_changelist")
+
+        busy = self._active_operation_message()
+        if busy:
+            messages.warning(request, busy)
+            return redirect("admin:backup_backup_changelist")
+
+        # Build Restore record from the imported backup.
+        manifest_data = request.session.get("pending_import_manifest", {})
+
+        restore = Restore.objects.create(
+            backup=backup,
+            archive_filename=backup.filename,
+            status=Restore.Status.QUEUED,
+            requested_by=(
+                request.user if request.user.is_authenticated else None
+            ),
+            requested_by_username=(
+                request.user.get_username()
+                if request.user.is_authenticated
+                else ""
+            ),
+            product_version=str(
+                manifest_data.get("product_version", "") or ""
+            ),
+            database_engine=str(
+                manifest_data.get("database_engine", "") or ""
+            ),
+            database_backup_format=str(
+                manifest_data.get("database_backup_format", "") or ""
+            ),
+            includes_media=bool(manifest_data.get("includes_media")),
+        )
+
+        run_restore.delay(restore.pk)
+
+        messages.success(
+            request,
+            f"بازیابی از «{backup.filename}» در صف اجرا قرار گرفت.",
+        )
+
+        return redirect("admin:backup_restore_changelist")
+
+    def _render_import_confirm(self, request, backup):
+        """Render the import confirmation page."""
+        manifest = request.session.get("pending_import_manifest", {})
+
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "backup": backup,
+            "manifest": {
+                "product_version": manifest.get("product_version"),
+                "created_at": manifest.get("created_at"),
+                "database_engine": manifest.get("database_engine"),
+                "database_backup_format": manifest.get(
+                    "database_backup_format"
+                ),
+                "includes_media": manifest.get("includes_media"),
+                "database_size": manifest.get("database_size"),
+                "media_size": manifest.get("media_size"),
+                "checksum": backup.checksum,
+            },
+            "title": f"بازیابی از فایل {backup.filename}",
+        }
+
+        return TemplateResponse(
+            request,
+            "admin/backup/backup/import_confirm.html",
             context,
         )
 
