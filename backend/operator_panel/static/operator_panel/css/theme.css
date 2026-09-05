@@ -52,6 +52,63 @@ html.theme-light .df-nav-label {
     color: #64748b;
 }
 
+/* Workflow device modal */
+
+html.theme-light .df-device-modal-card {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--text);
+    box-shadow: var(--df-shadow-lg);
+}
+
+html.theme-light .df-device-modal-header,
+html.theme-light .df-device-modal-footer {
+    border-color: var(--border);
+}
+
+html.theme-light .df-device-modal-close {
+    background: var(--surface-3);
+    color: var(--text);
+}
+
+html.theme-light .df-device-modal-close:hover {
+    background: rgba(15, 23, 42, .08);
+}
+
+html.theme-light .df-device-modal-field input,
+html.theme-light .df-device-modal-field select,
+html.theme-light .df-device-modal-field textarea {
+    background: var(--surface-2);
+    border-color: var(--border);
+    color: var(--text);
+}
+
+html.theme-light .df-device-modal-field input::placeholder,
+html.theme-light .df-device-modal-field textarea::placeholder {
+    color: var(--muted);
+}
+
+/* Global success/error modals */
+
+html.theme-light .df-success-modal-card,
+html.theme-light .df-error-modal-card {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--text);
+    box-shadow: var(--df-shadow-lg);
+}
+
+html.theme-light .df-success-modal-card p,
+html.theme-light .df-error-modal-card p {
+    color: var(--muted);
+}
+
+html.theme-light .df-success-modal-backdrop,
+html.theme-light .df-error-modal-backdrop,
+html.theme-light .df-device-modal-backdrop {
+    background: rgba(15, 23, 42, 0.42);
+}
+
 /* Theme switch */
 
 .df-theme-toggle {
