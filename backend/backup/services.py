@@ -35,6 +35,7 @@ from django.utils import timezone
 
 from .models import Backup, Restore
 from .storage import BackupStorageError, LocalBackupStorage
+from .version_detection import detect_pg_dump_version, extract_major_version
 
 logger = logging.getLogger(__name__)
 
@@ -386,6 +387,10 @@ class BackupService:
                 )
 
     def _write_manifest(self, path, *, database_size, media_size):
+        pg_dump_binary = self._pg_dump_binary()
+        pg_dump_version = detect_pg_dump_version(pg_dump_binary)
+        pg_dump_major = extract_major_version(pg_dump_version)
+
         manifest = {
             "format": BACKUP_FORMAT,
             "format_version": BACKUP_FORMAT_VERSION,
@@ -405,6 +410,9 @@ class BackupService:
             "includes_media": self.backup.includes_media,
             "database_size": database_size,
             "media_size": media_size,
+            # PostgreSQL client version (if detectable)
+            "pg_dump_version": pg_dump_version,
+            "pg_dump_major_version": pg_dump_major,
         }
 
         path.write_text(

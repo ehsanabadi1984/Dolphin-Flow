@@ -53,6 +53,11 @@ from .services import (
     sanitize_message,
 )
 from .storage import BackupStorageError, LocalBackupStorage
+from .version_detection import (
+    detect_pg_restore_version,
+    extract_major_version,
+    pg_restore_supports_version_flag,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +202,10 @@ class RestoreService:
             archive = self._resolve_archive_path()
             self._verify_checksum(archive)
             self._manifest = self._validate_archive(archive)
+
+            # Check pg_restore and archive client compatibility BEFORE any
+            # destructive operation (including safety backup).
+            self._check_version_compatibility()
 
             safety_backup = self._create_safety_backup(self._manifest)
             self._safety_backup_pk = safety_backup.pk
@@ -535,13 +544,37 @@ class RestoreService:
 
         return shutil.which("pg_restore") or "pg_restore"
 
+    def _check_version_compatibility(self):
+        """Check pg_restore/ archive client compatibility before any destructive operation.
+
+        This must run before the safety backup so we reject incompatible
+        archives early.
+        """
+        pg_restore_binary = self._pg_restore_binary()
+        pg_restore_version = detect_pg_restore_version(pg_restore_binary)
+        pg_restore_major = extract_major_version(pg_restore_version)
+
+        # Check pg_restore and archive client compatibility.
+        manifest = self._manifest
+        archive_pg_dump_major = manifest.get("pg_dump_major_version")
+
+        if pg_restore_major is not None and archive_pg_dump_major is not None:
+            if archive_pg_dump_major > pg_restore_major:
+                raise RestoreError(
+                    "این بایگانی با pg_dump نسخه بالاتر از pg_restore فعلی شما "
+                    "ساخته شده است. برای بازیابی، نیاز به نصب نسخه جدیدتر "
+                    "PostgreSQL دارید."
+                )
+
     def _validate_dump_file(self, dump_path):
         """Validate the custom-format dump using ``pg_restore --list``.
 
         ``--list`` only reads the archive; it does not connect to a database.
         """
+        pg_restore_binary = self._pg_restore_binary()
+
         command = [
-            self._pg_restore_binary(),
+            pg_restore_binary,
             "--list",
             str(dump_path),
         ]
@@ -561,6 +594,15 @@ class RestoreService:
 
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or "").strip()
+
+            # Translate specific pg_restore version errors to clear Persian messages.
+            if "unsupported version" in detail.lower() and "in file header" in detail.lower():
+                raise RestoreError(
+                    "نسخه بایگانی پایگاه داده با pg_restore فعلی شما سازگار نیست. "
+                    "بایگانی با نسخه جدیدتر PostgreSQL ساخته شده و با ابزار فعلی شما خوانده نمی‌شود. "
+                    "لطفاً pg_restore جدیدتر نصب کنید."
+                )
+
             raise RestoreError(
                 "بایگانی پایگاه داده معتبر نیست؛ "
                 "pg_restore قادر به خواندن آن نیست. "
