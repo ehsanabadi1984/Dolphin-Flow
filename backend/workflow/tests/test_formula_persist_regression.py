@@ -222,6 +222,7 @@ class FormulaPersistenceTestCase(TestCase):
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload(rows, note=note),
+            edit_mode=True,
         )
         return instance
 
@@ -275,6 +276,7 @@ class FormulaPersistenceTestCase(TestCase):
                 ],
                 include_formula_values=False,
             ),
+            edit_mode=True,
         )
         rows = self.persisted_rows(instance)["cunspartTable"]
         self.assertEqual([r["TotalPrice"] for r in rows], ["8000", "200"])
@@ -295,6 +297,7 @@ class FormulaPersistenceTestCase(TestCase):
                     {"quantity": "50", "UnitPrice": "50", "TotalPrice": "2500"},
                 ],
             ),
+            edit_mode=True,
         )
         rows = self.persisted_rows(instance)["cunspartTable"]
         row_ids = [r["_id"] for r in rows]
@@ -308,6 +311,7 @@ class FormulaPersistenceTestCase(TestCase):
                 {"_id": row_ids[0], "quantity": "20", "UnitPrice": "500", "TotalPrice": "10000"},
                 {"_id": row_ids[1], "quantity": "50", "UnitPrice": "60", "TotalPrice": "3000"},
             ]),
+            edit_mode=True,
         )
         data = self.persisted_rows(instance)
         self.assertEqual(data["cunspartTable"][0]["_id"], row_ids[0])
@@ -326,6 +330,7 @@ class FormulaPersistenceTestCase(TestCase):
                     {"quantity": "3", "UnitPrice": "200", "TotalPrice": "600"},
                 ],
             ),
+            edit_mode=True,
         )
         ids = [r["_id"] for r in self.persisted_rows(instance)["cunspartTable"]]
         # Change only the quantity of the first row.
@@ -336,6 +341,7 @@ class FormulaPersistenceTestCase(TestCase):
                 {"_id": ids[0], "quantity": "7", "UnitPrice": "500", "TotalPrice": "3500"},
                 {"_id": ids[1], "quantity": "3", "UnitPrice": "200", "TotalPrice": "600"},
             ]),
+            edit_mode=True,
         )
         data = self.persisted_rows(instance)
         rows = data["cunspartTable"]
@@ -356,6 +362,7 @@ class FormulaPersistenceTestCase(TestCase):
                     {"quantity": "3", "UnitPrice": "200", "TotalPrice": "600"},
                 ],
             ),
+            edit_mode=True,
         )
         ids = [r["_id"] for r in self.persisted_rows(instance)["cunspartTable"]]
         # Change only the unit price of the second row.
@@ -366,6 +373,7 @@ class FormulaPersistenceTestCase(TestCase):
                 {"_id": ids[0], "quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
                 {"_id": ids[1], "quantity": "3", "UnitPrice": "150", "TotalPrice": "450"},
             ]),
+            edit_mode=True,
         )
         data = self.persisted_rows(instance)
         rows = data["cunspartTable"]
@@ -382,6 +390,7 @@ class FormulaPersistenceTestCase(TestCase):
             submitted_data=self.post_payload(
                 [{"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"}],
             ),
+            edit_mode=True,
         )
         existing_id = self.persisted_rows(instance)["cunspartTable"][0]["_id"]
 
@@ -393,6 +402,7 @@ class FormulaPersistenceTestCase(TestCase):
                 {"_id": existing_id, "quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
                 {"quantity": "3", "UnitPrice": "200", "TotalPrice": "600"},
             ]),
+            edit_mode=True,
         )
         data = self.persisted_rows(instance)
         rows = data["cunspartTable"]
@@ -411,6 +421,7 @@ class FormulaPersistenceTestCase(TestCase):
                 {"quantity": "50", "UnitPrice": "50", "TotalPrice": "2500"},
                 {"quantity": "10", "UnitPrice": "1000", "TotalPrice": "10000"},
             ]),
+            edit_mode=True,
         )
         ids = [r["_id"] for r in self.persisted_rows(instance)["cunspartTable"]]
 
@@ -422,6 +433,7 @@ class FormulaPersistenceTestCase(TestCase):
                 {"_id": ids[0], "quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
                 {"_id": ids[2], "quantity": "10", "UnitPrice": "1000", "TotalPrice": "10000"},
             ]),
+            edit_mode=True,
         )
         data = self.persisted_rows(instance)
         self.assertEqual(len(data["cunspartTable"]), 2)
@@ -435,6 +447,7 @@ class FormulaPersistenceTestCase(TestCase):
             instance=instance,
             user=self.user,
             submitted_data={"note": "x", "FinalPriceRepair": "0.00"},
+            edit_mode=True,
         )
         data = self.persisted_rows(instance)
         self.assertEqual(data["cunspartTable"], [])
@@ -472,6 +485,7 @@ class FormulaPersistenceTestCase(TestCase):
             submitted_data=self.post_payload([
                 {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
             ]),
+            edit_mode=True,
         )
         data = self.persisted_rows(instance)
         row = data["cunspartTable"][0]
@@ -527,6 +541,8 @@ class FormulaPersistenceTestCase(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance, user=self.user,
             submitted_data={"city": "Tehran"},
+            edit_mode=True,
+
         )
         self.assertEqual(
             self.persisted_rows(instance),
@@ -545,6 +561,7 @@ class FormulaPersistenceTestCase(TestCase):
                 "cunspartTable_0_TotalPrice": "5000",
                 "FinalPriceRepair": "5000.00",
             },
+            edit_mode=True,
         )
         data = self.persisted_rows(instance)
         self.assertEqual(data["note"], "hello")

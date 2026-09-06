@@ -251,6 +251,7 @@ def bootstrap_formula_system():
             instance,
             user,
             submitted_data,
+            edit_mode=False,
         ):
             from .models import FormDefinition
             form = (
@@ -289,6 +290,7 @@ def bootstrap_formula_system():
                     instance=instance,
                     user=user,
                     submitted_data=submitted_data,
+                    edit_mode=edit_mode,
                 )
 
                 if form is None or not formula_fields:

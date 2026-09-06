@@ -283,6 +283,7 @@ class DynamicFormServiceTests(TestCase):
             instance=instance,
             user=self.user,
             submitted_data=submitted_data,
+            edit_mode=True,
         )
 
         self.assertEqual(

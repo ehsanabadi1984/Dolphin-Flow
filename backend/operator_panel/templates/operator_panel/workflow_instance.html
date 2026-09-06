@@ -22,7 +22,7 @@
 
   <form
     method="post"
-    action="{% url 'operator_panel:workflow_instance' instance.pk %}"
+    action="{% url 'operator_panel:workflow_instance' instance.pk %}{% if edit_mode %}?edit=1{% endif %}"
     data-instance-id="{{ instance.pk }}"
     data-edit-mode="{{ edit_mode|yesno:'1,0' }}"
   >
@@ -211,7 +211,7 @@
                     </div>
 
 
-                    {% if not dynamic_form.is_submitted and group.can_add %}
+                    {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
                         <button
                             type="button"
                             class="df-button df-button-secondary df-device-add"
@@ -266,7 +266,7 @@
                                                 {{ item_field.display_value|default:item_field.value|default:"—" }}
                                             </span>
 
-                                            {% if not dynamic_form.is_submitted and item_field.can_edit %}
+                                            {% if edit_mode and not dynamic_form.is_submitted and item_field.can_edit %}
 
                                                 <span class="df-device-editor" hidden>
 
@@ -378,7 +378,9 @@
                                             </a>
                                         {% endif %}
 
-                                        {% if not dynamic_form.is_submitted and group.can_edit %}
+                                        {% if edit_mode and not dynamic_form.is_submitted %}
+
+                                          {% if group.can_edit %}
 
                                             <button
                                                 type="button"
@@ -402,20 +404,14 @@
                                             >
                                                 ذخیره
                                             </button>
+                                          {% endif %}
 
-                                            {% if item.instance_device_id %}
+                                            {% if item.instance_device_id and group.can_delete %}
                                                 <button
                                                     type="submit"
                                                     class="df-button df-button-danger df-device-delete"
-                                                    formaction="{% url 'operator_panel:delete_device' instance.pk group.group.code item.instance_device_id %}"
+                                                    formaction="{% url 'operator_panel:delete_device' instance.pk group.group.code item.instance_device_id %}{% if edit_mode %}?edit=1{% endif %}"
                                                     formmethod="post"
-                                                >
-                                                    حذف
-                                                </button>
-                                            {% else %}
-                                                <button
-                                                    type="button"
-                                                    class="df-button df-button-danger df-device-delete"
                                                 >
                                                     حذف
                                                 </button>
@@ -460,7 +456,7 @@
                   {% endif %}
                 </div>
 
-                {% if not dynamic_form.is_submitted and group.can_add %}
+                {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
                   <button
                     type="button"
                     class="df-button df-button-secondary df-repeatable-add"
@@ -506,7 +502,7 @@
 
                           {% for item_field in item.fields %}
                             <td>
-                              {% if not dynamic_form.is_submitted and item_field.can_edit %}
+                              {% if edit_mode and not dynamic_form.is_submitted and item_field.can_edit %}
 
                                 {% if item_field.field.field_type == "TEXT" %}
                                   <input
@@ -607,7 +603,7 @@
                             {% if item.row_id %}
                               <input type="hidden" name="{{ group.group.code }}_{{ item_index }}__id" value="{{ item.row_id }}" />
                             {% endif %}
-                            {% if not dynamic_form.is_submitted and group.can_delete %}
+                            {% if edit_mode and not dynamic_form.is_submitted and group.can_delete %}
                               <button
                                 type="button"
                                 class="df-button df-button-danger df-repeatable-delete"
@@ -731,7 +727,7 @@
                   {% endif %}
                 </div>
 
-                {% if not dynamic_form.is_submitted and group.can_add %}
+                {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
                   <button
                     type="button"
                     class="df-button df-button-secondary df-repeatable-add"
@@ -792,7 +788,7 @@
                         </label>
 
 
-                        {% if not dynamic_form.is_submitted and item_field.can_edit %}
+                        {% if edit_mode and not dynamic_form.is_submitted and item_field.can_edit %}
 
                           {% if item_field.field.field_type == "TEXT" %}
 
@@ -901,7 +897,7 @@
 
                     {% endfor %}
 
-                    {% if not dynamic_form.is_submitted and group.can_delete %}
+                    {% if edit_mode and not dynamic_form.is_submitted and group.can_delete %}
                       <div class="df-repeatable-item-actions">
                         <button
                           type="button"
@@ -921,7 +917,7 @@
 
               {% else %}
 
-                {% if not dynamic_form.is_submitted and group.can_add %}
+                {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
                   <div
                     class="df-repeatable-item"
                     data-repeatable-item
@@ -1045,7 +1041,7 @@
   {% for section in dynamic_form.sections %}
     {% for group in section.repeatable_groups %}
 
-        {% if group.group.group_type == "DEVICE" and group.can_add %}
+        {% if edit_mode and group.group.group_type == "DEVICE" and group.can_add and not dynamic_form.is_submitted %}
 
             <div
               class="df-device-modal"
@@ -1388,7 +1384,7 @@
       </a>
     {% endif %}
 
-    {% if dynamic_form.has_saved_data and dynamic_form.has_editable_fields %}
+    {% if edit_mode and dynamic_form.has_saved_data and dynamic_form.has_editable_fields and not dynamic_form.is_submitted %}
       <form
         method="post"
         action="{% url 'operator_panel:clear_form_data' instance.pk %}"

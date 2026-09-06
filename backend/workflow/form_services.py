@@ -2588,6 +2588,7 @@ class DynamicFormService:
         instance,
         user,
         submitted_data,
+        edit_mode=False,
     ):
         """
         Save normal form fields and process repeatable groups.
@@ -2595,16 +2596,12 @@ class DynamicFormService:
         Device repeatable groups are persisted through
         InstanceDeviceService and are not stored as the
         source of truth inside FormData.data.
+
+        Requires edit_mode=True to allow any mutation.
         """
 
         workflow = instance.workflow
         step = instance.current_step
-
-        #-----------ِDebug-----------
-        print("========== GET FORM DEBUG ==========")
-        print("SUBMITTED DATA:", repr(submitted_data))
-        print("====================================")
-        #--------End-Debug----------
 
         if step is None:
             raise ValidationError(
@@ -2630,6 +2627,15 @@ class DynamicFormService:
         ):
             raise ValidationError(
                 "فرم این مرحله قبلاً ارسال شده و دیگر قابل ویرایش نیست."
+            )
+
+        # ---------------------------------------------------------
+        # Edit mode is required for any mutation
+        # ---------------------------------------------------------
+
+        if not edit_mode:
+            raise ValidationError(
+                "فرم در حالت ویرایش نیست و قابل ذخیره نیست."
             )
         form = (
             FormDefinition.objects.filter(
@@ -2693,11 +2699,6 @@ class DynamicFormService:
                 if can_edit:
                     editable_codes.add(field.code)
 
-
-        print("========== REQUIRED VALIDATION DEBUG ==========")
-        print("SUBMITTED DATA:", repr(submitted_data))
-        print("EDITABLE CODES:", repr(editable_codes))
-
         for section in form.sections.filter(is_active=True):
             for field in section.fields.filter(
                 is_active=True,
@@ -2711,7 +2712,6 @@ class DynamicFormService:
                     "editable=", field.code in editable_codes,
                 )
 
-        print("===============================================")
         # -------------------------------------------------
         # 2. Validate required normal fields
         # -------------------------------------------------
@@ -4050,17 +4050,6 @@ class DynamicFormService:
                         # -------------------------------------------------
                         # New device
                         # -------------------------------------------------
-
-                        #-------------------Debug--------------
-                        print("========== DEBUG BEFORE NEW DEVICE ==========")
-                        print("item:", item)
-                        print("instance_device_id:", item.get("instance_device_id"))
-                        print("can_add:", can_add)
-                        print("editable_system_keys:", editable_system_keys)
-                        print("imei_code:", imei_code)
-                        print("device_model_code:", device_model_code)
-                        print("=============================================")
-                        #----------------End-Debug-------------
                         if not can_add:
                             raise ValidationError(
                                 "شما اجازه افزودن مورد جدید به این گروه را ندارید."
@@ -4502,10 +4491,13 @@ class DynamicFormService:
         *,
         instance,
         user,
+        edit_mode=False,
     ):
         """
         Clear only fields that the current user
         is authorized to edit in the current step.
+
+        Requires edit_mode=True.
         """
 
         workflow = instance.workflow
@@ -4538,6 +4530,12 @@ class DynamicFormService:
         if current_step_execution.is_submitted:
             raise PermissionDenied(
                 "این مرحله قبلاً ارسال شده و اطلاعات آن قابل حذف نیست."
+            )
+
+        # Edit mode is required for clearing form data
+        if not edit_mode:
+            raise PermissionDenied(
+                "فرم در حالت ویرایش نیست و قابل پاک‌سازی نیست."
             )
 
         form = (
