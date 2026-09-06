@@ -259,9 +259,74 @@ def workflow_instance(request, instance_id):
     #
     # =========================================================
 
-    edit_mode = (
-        request.GET.get("edit") == "1"
+    # =========================================================
+    # GET
+    # =========================================================
+
+    transitions = (
+        WorkflowAuthorizationService
+        .get_allowed_transitions(
+            user=request.user,
+            workflow=instance.workflow,
+            from_step=instance.current_step,
+        )
     )
+
+    # ---------------------------------------------------------
+    # Current step execution
+    # ---------------------------------------------------------
+
+    current_step_execution = (
+        instance.step_executions
+        .filter(
+            workflow_step=instance.current_step,
+        )
+        .order_by("-performed_at")
+        .first()
+    )
+
+    # ---------------------------------------------------------
+    # Determine whether current step is submitted
+    # ---------------------------------------------------------
+
+    is_submitted = (
+        current_step_execution is not None
+        and current_step_execution.is_submitted
+    )
+
+    # ---------------------------------------------------------
+    # Determine whether data has already been saved
+    # ---------------------------------------------------------
+
+    form_data = (
+        FormData.objects
+        .filter(
+            instance=instance,
+        )
+        .first()
+    )
+
+    has_form_data = (
+        form_data is not None
+        and bool(form_data.data)
+    )
+
+    has_device_data = (
+        InstanceDevice.objects
+        .filter(
+            instance=instance,
+            is_active=True,
+        )
+        .exists()
+    )
+
+    has_saved_data = (
+        has_form_data
+        or has_device_data
+    )
+
+    # Use the canonical edit_mode derivation
+    edit_mode = _get_edit_mode(instance=instance, request=request)
 
     # =========================================================
     # POST
@@ -279,6 +344,7 @@ def workflow_instance(request, instance_id):
                 instance=instance,
                 user=request.user,
                 submitted_data=request.POST,
+                edit_mode=edit_mode,
             )
 
         except ValidationError as exc:
@@ -366,11 +432,6 @@ def workflow_instance(request, instance_id):
                 [],
             )
 
-            print(
-                "VALIDATION_ERRORS:",
-                repr(validation_errors),
-            )
-
             transitions = (
                 WorkflowAuthorizationService
                 .get_allowed_transitions(
@@ -424,105 +485,6 @@ def workflow_instance(request, instance_id):
         )
 
     # =========================================================
-    # GET
-    # =========================================================
-
-    transitions = (
-        WorkflowAuthorizationService
-        .get_allowed_transitions(
-            user=request.user,
-            workflow=instance.workflow,
-            from_step=instance.current_step,
-        )
-    )
-
-    # ---------------------------------------------------------
-    # Current step execution
-    # ---------------------------------------------------------
-
-    current_step_execution = (
-        instance.step_executions
-        .filter(
-            workflow_step=instance.current_step,
-        )
-        .order_by("-performed_at")
-        .first()
-    )
-
-    # ---------------------------------------------------------
-    # Determine whether current step is submitted
-    # ---------------------------------------------------------
-
-    is_submitted = (
-        current_step_execution is not None
-        and current_step_execution.is_submitted
-    )
-
-    # ---------------------------------------------------------
-    # Determine whether data has already been saved
-    # ---------------------------------------------------------
-
-    form_data = (
-        FormData.objects
-        .filter(
-            instance=instance,
-        )
-        .first()
-    )
-
-    has_form_data = (
-        form_data is not None
-        and bool(form_data.data)
-    )
-
-    has_device_data = (
-        InstanceDevice.objects
-        .filter(
-            instance=instance,
-            is_active=True,
-        )
-        .exists()
-    )
-
-    has_saved_data = (
-        has_form_data
-        or has_device_data
-    )
-    # =========================================================
-    # EDIT MODE DECISION
-    # =========================================================
-   
-    if is_submitted:
-
-        edit_mode = False
-
-    elif request.GET.get("edit") == "1":
-
-        edit_mode = True
-
-    elif has_saved_data:
-
-        # -----------------------------------------------------
-        # Saved but not submitted.
-        #
-        # IMPORTANT:
-        # Do NOT automatically enter edit mode.
-        # -----------------------------------------------------
-
-        edit_mode = False
-
-    else:
-
-        # -----------------------------------------------------
-        # First visit.
-        #
-        # Nothing has been saved yet, so the form is naturally
-        # editable.
-        # -----------------------------------------------------
-
-        edit_mode = True
-
-    # =========================================================
     # BUILD DYNAMIC FORM
     # =========================================================
 
@@ -554,7 +516,7 @@ def workflow_instance(request, instance_id):
         },
     )
 
-def _require_device_group_edit_permission(*, instance, user, group_code):
+def _require_device_group_delete_permission(*, instance, user, group_code):
     current_execution = (
         instance.step_executions
         .filter(workflow_step=instance.current_step)
@@ -581,12 +543,12 @@ def _require_device_group_edit_permission(*, instance, user, group_code):
         step=instance.current_step,
     )
     user_rule = rules.filter(user=user).first()
-    can_edit = (
-        user_rule.can_edit
+    can_delete = (
+        user_rule.can_delete
         if user_rule
-        else rules.filter(role__in=roles, user__isnull=True, can_edit=True).exists()
+        else rules.filter(role__in=roles, user__isnull=True, can_delete=True).exists()
     )
-    if not can_edit:
+    if not can_delete:
         raise PermissionDenied("کاربر اجازه حذف دستگاه را ندارد.")
     return group
 
@@ -607,7 +569,7 @@ def delete_device(request, instance_id, group_code, instance_device_id):
         step=instance.current_step,
         instance=instance,
     )
-    _require_device_group_edit_permission(
+    _require_device_group_delete_permission(
         instance=instance,
         user=request.user,
         group_code=group_code,
@@ -783,16 +745,74 @@ def start_workflow(request, workflow_id):
     )
 
 
+def _get_edit_mode(*, instance, request):
+    """
+    Determine edit_mode for a workflow instance.
+    
+    This is the canonical edit_mode derivation logic.
+    It must be used consistently across all views.
+    
+    Lifecycle:
+    - Submitted → read-only (immutable)
+    - Explicit ?edit=1 → editable
+    - Has saved data → read-only (until user clicks Edit)
+    - No saved data → editable (first visit)
+    """
+    current_step_execution = (
+        instance.step_executions
+        .filter(
+            workflow_step=instance.current_step,
+        )
+        .order_by("-performed_at")
+        .first()
+    )
+
+    is_submitted = (
+        current_step_execution is not None
+        and current_step_execution.is_submitted
+    )
+
+    if is_submitted:
+        return False
+
+    if request.GET.get("edit") == "1":
+        return True
+
+    form_data = (
+        FormData.objects
+        .filter(
+            instance=instance,
+        )
+        .first()
+    )
+
+    has_form_data = (
+        form_data is not None
+        and bool(form_data.data)
+    )
+
+    has_device_data = (
+        InstanceDevice.objects
+        .filter(
+            instance=instance,
+            is_active=True,
+        )
+        .exists()
+    )
+
+    has_saved_data = (
+        has_form_data
+        or has_device_data
+    )
+
+    if has_saved_data:
+        return False
+
+    return True
+
+
 @login_required
 def clear_form_data(request, instance_id):
-    print(
-        "CLEAR FORM REQUEST:",
-        request.method,
-        "INSTANCE:",
-        instance_id,
-        "USER:",
-        request.user,
-    )
     if request.method != "POST":
         return redirect(
             "operator_panel:workflow_instance",
@@ -820,9 +840,13 @@ def clear_form_data(request, instance_id):
         instance=instance,
     )
 
+    # Use the canonical edit_mode derivation
+    edit_mode = _get_edit_mode(instance=instance, request=request)
+
     DynamicFormService.clear_form_for_step(
         instance=instance,
         user=request.user,
+        edit_mode=edit_mode,
     )
 
     from django.contrib import messages

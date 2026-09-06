@@ -1,12 +1,24 @@
 document.addEventListener("DOMContentLoaded", () => {
 
-    /*
-     * ---------------------------------------------------------
-     * UUID generator for stable row identity
-     * ---------------------------------------------------------
-     */
+/*
+ * ---------------------------------------------------------
+ * Edit mode check
+ * ---------------------------------------------------------
+ */
 
-    function generateRowId() {
+function isEditMode() {
+    const form = document.querySelector("form[data-instance-id]");
+    if (!form) return false;
+    return form.dataset.editMode === "1";
+}
+
+/*
+ * ---------------------------------------------------------
+ * UUID generator for stable row identity
+ * ---------------------------------------------------------
+ */
+
+function generateRowId() {
         return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
             /[xy]/g,
             function (c) {
@@ -906,17 +918,20 @@ const submitNewDevice = (modal, groupCode) => {
         ).forEach((element) => {
             element.hidden = !editing;
         });
-    };
-
-    document.addEventListener("click", (event) => {
+    };    document.addEventListener("click", (event) => {
 
         /*
          * ADD
          */
         const addButton =
-            event.target.closest(".df-device-add");
+            event.target.closest(
+                ".df-device-add"
+            );
 
         if (addButton) {
+
+            /* Do not allow adding in read-only mode. */
+            if (!isEditMode()) return;
 
             const groupCode =
                 addButton.dataset.groupCode;
@@ -1015,6 +1030,9 @@ const submitNewDevice = (modal, groupCode) => {
             )
         ) {
 
+            /* Do not allow editing in read-only mode. */
+            if (!isEditMode()) return;
+
             setDeviceRowEditing(
                 row,
                 true
@@ -1042,6 +1060,9 @@ const submitNewDevice = (modal, groupCode) => {
                 ".df-device-delete"
             )
         ) {
+
+            /* Do not allow deleting in read-only mode. */
+            if (!isEditMode()) return;
 
             const id =
                 row.querySelector(
@@ -1986,6 +2007,9 @@ document.addEventListener("click", (event) => {
         /* Do not allow deleting the last row. */
         if (repeatableDeleteBtn.disabled) return;
 
+        /* Do not allow deleting in read-only mode. */
+        if (!isEditMode()) return;
+
         const row = repeatableDeleteBtn.closest(
             "[data-repeatable-item]"
         );
@@ -2059,26 +2083,27 @@ document.addEventListener("click", (event) => {
         }
 
         return;
-    }
-
-    const addButton = event.target.closest(
-        ".df-repeatable-add"
-    );
-
-    if (!addButton) {
-        return;
-    }
-
-    const groupCode =
-        addButton.dataset.groupCode;
-
-    if (!groupCode) {
-        console.error(
-            "Repeatable group code not found."
+    }        const addButton = event.target.closest(
+            ".df-repeatable-add"
         );
 
-        return;
-    }
+        if (!addButton) {
+            return;
+        }
+
+        /* Do not allow adding in read-only mode. */
+        if (!isEditMode()) return;
+
+        const groupCode =
+            addButton.dataset.groupCode;
+
+        if (!groupCode) {
+            console.error(
+                "Repeatable group code not found."
+            );
+
+            return;
+        }
 
     const group =
         document.querySelector(

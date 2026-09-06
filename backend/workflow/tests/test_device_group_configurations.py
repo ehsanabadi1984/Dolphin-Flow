@@ -389,6 +389,7 @@ class DeviceGroupConfigurationTests(TestCase):
                 "devices_0_device_type": str(self.device_type.pk),
                 "devices_0_device_model_id": str(self.device_model.pk),
             },
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(instance=instance)
@@ -416,6 +417,7 @@ class DeviceGroupConfigurationTests(TestCase):
                 "devices_0_device_type": str(self.device_type.pk),
                 "devices_0_device_model_id": str(self.device_model.pk),
             },
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(instance=instance)
@@ -446,6 +448,7 @@ class DeviceGroupConfigurationTests(TestCase):
             submitted_data={
                 "devices_0_device_type": str(self.device_type.pk),
             },
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(instance=instance)
@@ -472,6 +475,7 @@ class DeviceGroupConfigurationTests(TestCase):
             submitted_data={
                 "devices_0_device_type": str(self.device_type.pk),
             },
+            edit_mode=True,
         )
 
         self.assertEqual(Device.objects.count(), 0)
@@ -490,6 +494,7 @@ class DeviceGroupConfigurationTests(TestCase):
             submitted_data={
                 "devices_0_device_type": str(self.device_type.pk),
             },
+            edit_mode=True,
         )
 
         self.assertEqual(DeviceIdentifier.objects.count(), 0)
@@ -512,6 +517,7 @@ class DeviceGroupConfigurationTests(TestCase):
             submitted_data={
                 "devices_0_device_type": str(self.device_type.pk),
             },
+            edit_mode=True,
         )
 
         result = DynamicFormService.get_form_for_step(
@@ -559,6 +565,7 @@ class DeviceGroupConfigurationTests(TestCase):
                 "devices_0_device_type": str(self.device_type.pk),
                 "devices_1_device_type": str(self.device_type.pk),
             },
+            edit_mode=True,
         )
 
         instance_devices = list(
@@ -613,6 +620,7 @@ class DeviceGroupConfigurationTests(TestCase):
                         self.device_type.pk
                     ),
                 },
+                edit_mode=True,
             )
 
     def test_device_type_permission_not_required_when_blank(self):
@@ -646,6 +654,7 @@ class DeviceGroupConfigurationTests(TestCase):
             submitted_data={
                 "devices_0_instance_device_id": "",
             },
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(instance=instance)
@@ -668,6 +677,7 @@ class DeviceGroupConfigurationTests(TestCase):
             submitted_data={
                 "devices_0_instance_device_id": "",
             },
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(instance=instance)
@@ -714,6 +724,7 @@ class DeviceGroupConfigurationTests(TestCase):
                     "devices_0_device_type": str(self.device_type.pk),
                     "devices_0_device_model_id": str(self.device_model.pk),
                 },
+                edit_mode=True,
             )
 
         self.assertEqual(
@@ -754,6 +765,7 @@ class DeviceGroupConfigurationTests(TestCase):
                         self.device_model_2.pk
                     ),
                 },
+                edit_mode=True,
             )
 
     def test_type_model_mismatch_still_rejected(self):
@@ -785,6 +797,7 @@ class DeviceGroupConfigurationTests(TestCase):
                     "devices_0_device_type": str(other_type.pk),
                     "devices_0_device_model_id": str(self.device_model.pk),
                 },
+                edit_mode=True,
             )
 
     def test_existing_draft_with_blank_imei_does_not_resolve(self):
@@ -815,6 +828,7 @@ class DeviceGroupConfigurationTests(TestCase):
             submitted_data={
                 "devices_0_device_type": str(self.device_type.pk),
             },
+            edit_mode=True,
         )
 
         draft = InstanceDevice.objects.get(instance=instance)
@@ -829,6 +843,7 @@ class DeviceGroupConfigurationTests(TestCase):
                 "devices_0_instance_device_id": str(draft.pk),
                 "devices_0_device_type": str(self.device_type.pk),
             },
+            edit_mode=True,
         )
 
         draft.refresh_from_db()
