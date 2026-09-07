@@ -12,6 +12,8 @@ from django.template.response import TemplateResponse
 from django.contrib.contenttypes.models import ContentType
 from django.db import models, transaction
 from django.core.exceptions import PermissionDenied
+from django.urls import reverse
+
 import json
 
 from .models import (
@@ -2043,7 +2045,20 @@ class FormSectionAdmin(admin.ModelAdmin):
         "code",
         "order",
         "is_active",
+        "layout_designer_link",
     )
+
+    def layout_designer_link(self, obj):
+        url = reverse(
+            "admin:workflow_formsection_layout",
+            args=[obj.pk],
+        )
+        return format_html(
+            '<a href="{}">طراحی ترتیب نمایش</a>',
+            url,
+        )
+
+    layout_designer_link.short_description = "ترتیب نمایش"
 
     list_filter = (
         "is_active",
@@ -2108,6 +2123,9 @@ class FormSectionAdmin(admin.ModelAdmin):
             pk=object_id,
         )
 
+        if not self.has_change_permission(request, obj=section):
+            raise PermissionDenied()
+
         # Top-level active FormFields.
         fields = (
             FormField.objects
@@ -2121,6 +2139,7 @@ class FormSectionAdmin(admin.ModelAdmin):
                 "code",
                 "label",
                 "layout_order",
+                "order",
             )
         )
 
@@ -2136,6 +2155,7 @@ class FormSectionAdmin(admin.ModelAdmin):
                 "code",
                 "name",
                 "layout_order",
+                "order",
             )
         )
 
@@ -2216,7 +2236,11 @@ class FormSectionAdmin(admin.ModelAdmin):
             raise PermissionDenied()
 
         section = get_object_or_404(
-            FormSection.objects.only("id", "form_id"),
+            FormSection.objects.only(
+                "id",
+                "form_id",
+                "name",
+            ),
             pk=object_id,
         )
 
@@ -2283,7 +2307,10 @@ class FormSectionAdmin(admin.ModelAdmin):
                 )
             }
 
-            expected_ids = set(current_fields) | set(current_groups)
+            expected_ids = (
+                {("field", item_id) for item_id in current_fields}
+                | {("group", item_id) for item_id in current_groups}
+            )
             resolved = []
             seen = set()
 
@@ -2370,7 +2397,7 @@ class FormSectionAdmin(admin.ModelAdmin):
                 seen.add(typed_identity)
                 resolved.append(obj)
 
-            if set(seen) != expected_ids:
+            if seen != expected_ids:
                 return JsonResponse(
                     {"error": "مجموعه آیتم‌های ارسالی با ترکیب فعلی Section کاملاً همخوانی ندارد."},
                     status=400,
