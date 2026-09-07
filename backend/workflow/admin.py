@@ -2159,14 +2159,14 @@ class FormSectionAdmin(admin.ModelAdmin):
         )
 
         # Deterministic presentational ordering for NULL layout_order.
-        def presentational_key(obj):
-            layout = obj.layout_order
+        def presentational_key(item):
+            layout = item["layout_order"]
             return (
                 layout is None,
                 layout if layout is not None else 0,
-                obj.order,
-                0 if getattr(obj, "_meta", None) and obj._meta.model_name == "formfield" else 1,
-                obj.pk,
+                item["order"],
+                0 if item["type"] == "field" else 1,
+                item["id"],
             )
 
         layout_items = []

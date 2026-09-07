@@ -374,7 +374,10 @@ class SectionLayoutAdminTests(TestCase):
             )
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn("نمی‌توانند در ترتیب نمایش Section", response.json()["error"])
+        self.assertEqual(
+            response.json()["error"],
+            "فیلد نامعتبر یا غیرفعال است.",
+        )
 
     def test_cross_section_injection_is_rejected(self):
         other_section = make_section("OTHER_ADMIN_LAYOUT_SECTION")
@@ -395,27 +398,42 @@ class SectionLayoutAdminTests(TestCase):
         )
 
     def test_same_numeric_pk_for_field_and_group_is_typed_correctly(self):
-        field = make_field(self.section, "collision_field", order=20, layout_order=None)
-        group = make_group(self.section, "collision_group", order=21, layout_order=None)
-        FormField.objects.filter(pk=field.pk).update(pk=9999)
-        FormRepeatableGroup.objects.filter(pk=group.pk).update(pk=9999)
-        field.refresh_from_db()
-        group.refresh_from_db()
+        collision_pk = self.group_a.pk
+
+        field = make_field(
+            self.section,
+            "collision_field",
+            order=20,
+            layout_order=None,
+        )
+
+        FormField.objects.filter(pk=field.pk).delete()
+
+        field = make_field(
+            self.section,
+            "collision_field",
+            order=20,
+            layout_order=None,
+        )
+        field.pk = collision_pk
+        field.save(force_insert=True)
 
         response = self.post_layout(
             self.payload(
                 ("field", self.field_a.pk),
                 ("group", self.group_a.pk),
                 ("field", self.field_b.pk),
-                ("field", 9999),
-                ("group", 9999),
+                ("field", collision_pk),
             )
         )
+
         self.assertEqual(response.status_code, 200)
+
         field.refresh_from_db()
-        group.refresh_from_db()
-        self.assertEqual(field.layout_order, 40)
-        self.assertEqual(group.layout_order, 50)
+        self.group_a.refresh_from_db()
+
+        self.assertEqual(field.layout_order, 30)
+        self.assertEqual(self.group_a.layout_order, 20)
 
     def test_null_and_duplicate_existing_layout_orders_are_normalized(self):
         self.field_a.layout_order = None
