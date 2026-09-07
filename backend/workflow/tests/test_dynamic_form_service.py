@@ -21,6 +21,7 @@ from workflow.models import (
     FormRepeatableGroup,
     DeviceIdentifier,
     WorkflowStepExecution,
+    RepeatableGroupAccess,
 )
 
 
@@ -28,6 +29,20 @@ User = get_user_model()
 
 
 class DynamicFormServiceTests(TestCase):
+
+    @staticmethod
+    def flatten_repeatable_submission(submitted_data):
+        result = {
+            key: value
+            for key, value in submitted_data.items()
+            if key != "devices"
+        }
+
+        for index, row in enumerate(submitted_data.get("devices", [])):
+            for field, value in row.items():
+                result[f"devices_{index}_{field}"] = value
+
+        return result
 
     @classmethod
     def setUpTestData(cls):
@@ -106,7 +121,18 @@ class DynamicFormServiceTests(TestCase):
             name="Devices",
             code="devices",
             order=3,
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
             is_active=True,
+        )
+
+        RepeatableGroupAccess.objects.create(
+            group=cls.device_group,
+            step=cls.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
         )
 
         cls.device_imei_field = FormField.objects.create(
@@ -114,6 +140,7 @@ class DynamicFormServiceTests(TestCase):
             repeatable_group=cls.device_group,
             name="IMEI",
             code="imei",
+            system_key=FormField.SystemKey.IMEI,
             field_type=FormField.FieldType.TEXT,
             label="IMEI",
             order=1,
@@ -126,6 +153,7 @@ class DynamicFormServiceTests(TestCase):
             repeatable_group=cls.device_group,
             name="Device Model",
             code="device_model_id",
+            system_key=FormField.SystemKey.DEVICE_MODEL,
             field_type=FormField.FieldType.TEXT,
             label="مدل دستگاه",
             order=2,
@@ -138,10 +166,37 @@ class DynamicFormServiceTests(TestCase):
             repeatable_group=cls.device_group,
             name="Problem",
             code="reported_problem",
+            system_key=FormField.SystemKey.REPORTED_PROBLEM,
             field_type=FormField.FieldType.TEXTAREA,
             label="شرح مشکل",
             order=3,
             is_required=True,
+            is_active=True,
+        )
+
+        cls.warranty_status_field = FormField.objects.create(
+            section=cls.section,
+            repeatable_group=cls.device_group,
+            name="Warranty Status",
+            code="warranty_status",
+            system_key=FormField.SystemKey.WARRANTY_STATUS,
+            field_type=FormField.FieldType.TEXT,
+            label="وضعیت گارانتی",
+            order=4,
+            is_required=False,
+            is_active=True,
+        )
+
+        cls.device_status_field = FormField.objects.create(
+            section=cls.section,
+            repeatable_group=cls.device_group,
+            name="Status",
+            code="status",
+            system_key=FormField.SystemKey.STATUS,
+            field_type=FormField.FieldType.TEXT,
+            label="وضعیت دستگاه",
+            order=5,
+            is_required=False,
             is_active=True,
         )
 
@@ -179,6 +234,22 @@ class DynamicFormServiceTests(TestCase):
 
         FieldAccess.objects.create(
             field=cls.problem_field,
+            step=cls.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+
+        FieldAccess.objects.create(
+            field=cls.warranty_status_field,
+            step=cls.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+
+        FieldAccess.objects.create(
+            field=cls.device_status_field,
             step=cls.step_one,
             role=WorkflowMembership.Role.EXECUTOR,
             can_view=True,
@@ -274,6 +345,15 @@ class DynamicFormServiceTests(TestCase):
     def test_save_form_saves_normal_fields(self):
         instance = self.create_instance()
 
+        group_access = RepeatableGroupAccess.objects.get(
+            group=self.device_group,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+        group_access.can_view = False
+        group_access.save(update_fields=["can_view"])
+
+
         submitted_data = {
             "Phone": "09120000000",
             "customer_address": "آدرس تست - کد پستی 1234567890",
@@ -282,7 +362,7 @@ class DynamicFormServiceTests(TestCase):
         form_data = DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
             edit_mode=True,
         )
 
@@ -316,7 +396,8 @@ class DynamicFormServiceTests(TestCase):
         form_data = DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            edit_mode=True,
         )
 
         self.assertEqual(
@@ -374,7 +455,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance_1,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            edit_mode=True,
         )
 
         submitted_data_2 = {
@@ -392,7 +474,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance_2,
             user=self.user,
-            submitted_data=submitted_data_2,
+            submitted_data=self.flatten_repeatable_submission(submitted_data_2),
+            edit_mode=True,
         )
 
         device_1 = InstanceDevice.objects.get(
@@ -430,7 +513,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=first_data,
+            submitted_data=self.flatten_repeatable_submission(first_data),
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(
@@ -464,7 +548,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=second_data,
+            submitted_data=self.flatten_repeatable_submission(second_data),
+            edit_mode=True,
         )
 
         instance_device.refresh_from_db()
@@ -502,7 +587,8 @@ class DynamicFormServiceTests(TestCase):
             DynamicFormService.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=submitted_data,
+                submitted_data=self.flatten_repeatable_submission(submitted_data),
+                edit_mode=True,
             )
 
     def test_clear_form_does_not_delete_persistent_devices(self):
@@ -525,7 +611,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(
@@ -598,7 +685,8 @@ class DynamicFormServiceTests(TestCase):
             DynamicFormService.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=submitted_data,
+                submitted_data=self.flatten_repeatable_submission(submitted_data),
+                edit_mode=True,
             )
 
         self.assertFalse(
@@ -627,7 +715,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=first_data,
+            submitted_data=self.flatten_repeatable_submission(first_data),
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(
@@ -667,7 +756,8 @@ class DynamicFormServiceTests(TestCase):
             DynamicFormService.save_form_for_step(
                 instance=second_instance,
                 user=self.user,
-                submitted_data=second_data,
+                submitted_data=self.flatten_repeatable_submission(second_data),
+                edit_mode=True,
             )
 
         self.assertFalse(
@@ -711,7 +801,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            edit_mode=True,
         )
 
         instance_devices = list(
@@ -771,7 +862,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(
@@ -831,7 +923,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(
@@ -893,7 +986,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            edit_mode=True,
         )
 
         result = DynamicFormService.get_form_for_step(
@@ -969,7 +1063,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=first_submission,
+            submitted_data=self.flatten_repeatable_submission(first_submission),
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(
@@ -995,7 +1090,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=second_submission,
+            submitted_data=self.flatten_repeatable_submission(second_submission),
+            edit_mode=True,
         )
 
         instance_devices = list(
@@ -1058,7 +1154,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=first_submission,
+            submitted_data=self.flatten_repeatable_submission(first_submission),
+            edit_mode=True,
         )
 
         instance_devices = list(
@@ -1092,7 +1189,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=second_submission,
+            submitted_data=self.flatten_repeatable_submission(second_submission),
+            edit_mode=True,
         )
 
         first_device = InstanceDevice.objects.get(
@@ -1160,7 +1258,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(
@@ -1238,7 +1337,8 @@ class DynamicFormServiceTests(TestCase):
             DynamicFormService.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=submitted_data,
+                submitted_data=self.flatten_repeatable_submission(submitted_data),
+                edit_mode=True,
             )
 
         self.assertFalse(
@@ -1268,7 +1368,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(
@@ -1321,7 +1422,8 @@ class DynamicFormServiceTests(TestCase):
             DynamicFormService.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=update_submission,
+                submitted_data=self.flatten_repeatable_submission(update_submission),
+                edit_mode=True,
             )
 
         instance_device.refresh_from_db()
@@ -1362,7 +1464,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=submitted_data,
+            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            edit_mode=True,
         )
 
         instance_device = (
@@ -1438,7 +1541,8 @@ class DynamicFormServiceTests(TestCase):
             DynamicFormService.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=submitted_data,
+                submitted_data=self.flatten_repeatable_submission(submitted_data),
+                edit_mode=True,
             )
 
         instance_device.refresh_from_db()
@@ -1484,7 +1588,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=first_submission,
+            submitted_data=self.flatten_repeatable_submission(first_submission),
+            edit_mode=True,
         )
 
         instance_devices = list(
@@ -1519,7 +1624,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=second_submission,
+            submitted_data=self.flatten_repeatable_submission(second_submission),
+            edit_mode=True,
         )
 
         self.assertTrue(
@@ -1557,7 +1663,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=first_submission,
+            submitted_data=self.flatten_repeatable_submission(first_submission),
+            edit_mode=True,
         )
 
         instance_device = (
@@ -1589,7 +1696,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=second_submission,
+            submitted_data=self.flatten_repeatable_submission(second_submission),
+            edit_mode=True,
         )
 
         self.assertTrue(
@@ -1644,7 +1752,8 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=first_submission,
+            submitted_data=self.flatten_repeatable_submission(first_submission),
+            edit_mode=True,
         )
 
         instance_devices = list(
@@ -1691,7 +1800,8 @@ class DynamicFormServiceTests(TestCase):
             DynamicFormService.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=second_submission,
+                submitted_data=self.flatten_repeatable_submission(second_submission),
+                edit_mode=True,
             )
 
         first_device.refresh_from_db()
