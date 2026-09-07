@@ -47,6 +47,11 @@ class FormulaFieldAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Choice Model dynamic fields
+        self.fields["choice_label_field"].widget = forms.Select()
+        self.fields["choice_value_field"].widget = forms.Select()
+        self.fields["choice_filter_field"].widget = forms.Select()
+        
         original_field = self.fields["field_type"]
         choices = list(original_field.choices or [])
         if not any(value == FormulaService.FIELD_TYPE for value, _ in choices):
