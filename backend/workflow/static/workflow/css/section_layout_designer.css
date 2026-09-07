@@ -1,0 +1,163 @@
+.df-section-layout-page {
+    direction: rtl;
+    text-align: right;
+    max-width: 980px;
+}
+
+.df-section-layout-header {
+    margin-bottom: 20px;
+}
+
+.df-section-layout-header h1 {
+    margin: 0 0 10px;
+    font-size: 20px;
+}
+
+.df-section-layout-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-bottom: 8px;
+}
+
+.df-section-layout-meta div {
+    margin-right: 0;
+}
+
+.df-section-layout-note {
+    margin: 0 0 18px;
+    padding: 10px 14px;
+    background: var(--darkened-bg);
+    border: 1px solid var(--hairline-color);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--body-fg);
+}
+
+.df-section-layout-note code {
+    background: rgba(128, 128, 128, 0.15);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.df-section-layout-empty {
+    margin: 0 0 18px;
+    padding: 14px;
+    border: 1px dashed var(--hairline-color);
+    border-radius: 6px;
+    background: #f7f7f7;
+    font-size: 13px;
+    color: var(--body-fg);
+}
+
+.df-section-layout-form {
+    margin: 0;
+}
+
+.df-section-layout-list {
+    margin: 0 0 18px;
+    padding: 0;
+    list-style: none;
+}
+
+.df-layout-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    background: #fff;
+    border: 1px solid var(--hairline-color);
+    border-radius: 6px;
+    cursor: default;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.df-layout-item:hover {
+    border-color: var(--link-fg);
+    background: var(--darkened-bg);
+}
+
+.df-layout-item-dragging {
+    opacity: 0.55;
+    border-color: var(--link-fg);
+}
+
+.df-layout-item-grip {
+    cursor: grab;
+    font-size: 14px;
+    color: var(--link-fg);
+    user-select: none;
+}
+
+.df-layout-item-title {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.df-layout-item-badge {
+    font-size: 12px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+    color: #fff;
+    background: var(--button-fg);
+}
+
+.df-layout-item-badge-field {
+    background: #1a7f37;
+}
+
+.df-layout-item-badge-group {
+    background: #14477a;
+}
+
+.df-layout-item-order {
+    font-size: 12px;
+    color: var(--body-fg);
+    background: var(--darkened-bg);
+    border: 1px solid var(--hairline-color);
+    border-radius: 4px;
+    padding: 1px 6px;
+    min-width: 28px;
+    text-align: center;
+}
+
+.df-layout-item-order-null {
+    color: var(--body-fg);
+    background: #eee;
+    border-style: dashed;
+}
+
+.df-section-layout-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.df-section-layout-save-button {
+    padding: 8px 16px;
+    border: 1px solid var(--hairline-color);
+    border-radius: 6px;
+    background: var(--button-fg);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.df-section-layout-save-button:hover {
+    background: var(--highlight-fg);
+}
+
+.df-section-layout-status {
+    font-size: 13px;
+    color: var(--body-fg);
+}
+
+.df-section-layout-status-error {
+    color: var(--error-fg);
+    font-weight: 600;
+}

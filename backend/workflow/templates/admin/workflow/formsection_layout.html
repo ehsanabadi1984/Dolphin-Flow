@@ -1,0 +1,126 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static admin_urls %}
+
+{% block extrastyle %}
+    {{ block.super }}
+
+    <link
+        rel="stylesheet"
+        href="{% static 'workflow/css/section_layout_designer.css' %}"
+    >
+{% endblock %}
+
+{% block content %}
+
+<div class="df-section-layout-page">
+
+    <div class="df-section-layout-header">
+        <h1>
+            {{ title }}
+        </h1>
+
+        <div class="df-section-layout-meta">
+            <div>
+                <strong>Section:</strong>
+                {{ section.name }}
+            </div>
+
+            <div>
+                <strong>کد Section:</strong>
+                {{ section.code }}
+            </div>
+
+            <div>
+                <strong>Form:</strong>
+                {{ section.form.name }}
+            </div>
+        </div>
+    </div>
+
+    <div class="df-section-layout-note">
+        این صفحه ترتیب نمایش غالب آیتم‌های این Section را تنظیم می‌کند
+        و فقط فیلد <code>layout_order</code> را تغییر می‌دهد.
+        این تغییرات <strong>از ترتیب بیزینسی</strong>
+        <code>order</code> فیلدها و گروه‌ها کاملاً مستقل است و
+        هیچ‌گاه آن‌ها را تغییر نمی‌دهد.
+    </div>
+
+    {% if not layout_items %}
+        <div class="df-section-layout-empty">
+            این Section هیچ فیلد یا گروه تکرارشونده فعال در سطح بالا ندارد.
+        </div>
+    {% else %}
+
+        <form
+            id="df-section-layout-form"
+            method="post"
+            action="{% url 'admin:workflow_formsection_layout' section.pk %}"
+            class="df-section-layout-form"
+        >
+            {% csrf_token %}
+
+            <div class="df-section-layout-list" id="df-section-layout-list">
+
+                {% for item in layout_items %}
+                    <div
+                        class="df-layout-item df-layout-item-{{ item.type }}"
+                        data-item-id="{{ item.id }}"
+                        data-item-type="{{ item.type }}"
+                        draggable="true"
+                    >
+                        <span class="df-layout-item-grip" aria-hidden="true">☰</span>
+
+                        <span class="df-layout-item-title">{{ item.label }}</span>
+
+                        <span class="df-layout-item-badge df-layout-item-badge-{{ item.type }}">
+                            {% if item.type == "field" %}
+                                فیلد
+                            {% else %}
+                                گروه تکرارشونده
+                            {% endif %}
+                        </span>
+
+                        {% if item.layout_order is not None %}
+                            <span class="df-layout-item-order">
+                                {{ item.layout_order }}
+                            </span>
+                        {% else %}
+                            <span class="df-layout-item-order df-layout-item-order-null">
+                                —
+                            </span>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+            </div>
+
+            <div class="df-section-layout-actions">
+                <button
+                    type="submit"
+                    class="df-section-layout-save-button"
+                    id="df-section-layout-save"
+                >
+                    ذخیره ترتیب
+                </button>
+
+                <span
+                    class="df-section-layout-status"
+                    id="df-section-layout-status"
+                    aria-live="polite"
+                ></span>
+            </div>
+        </form>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block admin_extrajs %}
+    {{ block.super }}
+
+    <script
+        src="{% static 'workflow/js/section_layout_designer.js' %}"
+    ></script>
+{% endblock %}

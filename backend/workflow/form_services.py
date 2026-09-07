@@ -1004,6 +1004,36 @@ class DynamicFormService:
         return None
 
     @staticmethod
+    def _layout_sort_key(layout_item):
+        """
+        Deterministic sort key for the mixed top-level section layout.
+
+        Primary: ``layout_order`` ascending; items without an explicit
+        layout position (NULL) sort last. Secondary: the existing
+        ``order`` value, consistent with each model's ``Meta.ordering``.
+        ``order`` is unique per section within each type (see the model
+        constraints), so a type rank then disambiguates any field/group
+        tie; ``pk`` is only a final safety net.
+        """
+
+        if layout_item["type"] == "field":
+            model = layout_item["item"]["field"]
+            type_rank = 0
+        else:
+            model = layout_item["item"]["group"]
+            type_rank = 1
+
+        layout_order = model.layout_order
+
+        return (
+            layout_order is None,
+            layout_order if layout_order is not None else 0,
+            model.order,
+            type_rank,
+            model.pk,
+        )
+
+    @staticmethod
     def get_form_for_step(
         *,
         instance,
@@ -2552,6 +2582,31 @@ class DynamicFormService:
                     #---------------End-Debug-------------
 
             # -------------------------------------------------
+            # Mixed top-level layout (display-only)
+            #
+            # Combines the visible top-level fields (repeatable_group
+            # IS NULL) and the visible repeatable groups into a single
+            # presentation collection ordered by ``layout_order``.
+            # Nested group fields are already excluded because they
+            # never enter ``fields``. Existing ``fields`` and
+            # ``repeatable_groups`` collections are left untouched.
+            # -------------------------------------------------
+
+            layout_items = [
+                {"type": "field", "item": field_data}
+                for field_data in fields
+            ]
+
+            layout_items.extend(
+                {"type": "group", "item": group_data}
+                for group_data in repeatable_groups
+            )
+
+            layout_items.sort(
+                key=DynamicFormService._layout_sort_key,
+            )
+
+            # -------------------------------------------------
             # Add section only when it contains something
             # -------------------------------------------------
             if fields or repeatable_groups:
@@ -2560,6 +2615,7 @@ class DynamicFormService:
                         "section": section,
                         "fields": fields,
                         "repeatable_groups": repeatable_groups,
+                        "layout_items": layout_items,
                     }
                 )
 

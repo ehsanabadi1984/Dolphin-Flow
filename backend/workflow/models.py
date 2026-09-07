@@ -960,6 +960,16 @@ class FormRepeatableGroup(models.Model):
         default=0,
     )
 
+    # Top-level display position of the group within its section.
+    # Independent of ``order`` (group ordering) and used only for
+    # the mixed field/group layout. NULL means "not explicitly
+    # positioned yet"; the service sorts NULLs deterministically
+    # to the end.
+    layout_order = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+
     is_required = models.BooleanField(
         default=False,
     )
@@ -1250,6 +1260,16 @@ class FormField(models.Model):
 
     order = models.PositiveIntegerField(
         default=0,
+    )
+
+    # Top-level display position of the field within its section.
+    # Independent of ``order`` (field ordering / repeatable-group
+    # ordering) and used only for the mixed field/group layout.
+    # NULL means "not explicitly positioned yet"; the service sorts
+    # NULLs deterministically to the end.
+    layout_order = models.PositiveIntegerField(
+        null=True,
+        blank=True,
     )
 
     is_active = models.BooleanField(

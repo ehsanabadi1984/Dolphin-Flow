@@ -10,7 +10,9 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.contrib.contenttypes.models import ContentType
-from django.db import models
+from django.db import models, transaction
+from django.core.exceptions import PermissionDenied
+import json
 
 from .models import (
     Workflow,
@@ -2062,6 +2064,345 @@ class FormSectionAdmin(admin.ModelAdmin):
         FormFieldInline,
         FormRepeatableGroupInline,
     )
+
+    class Media:
+        js = (
+            "workflow/js/section_layout_designer.js",
+        )
+        css = {
+            "all": (
+                "workflow/css/section_layout_designer.css",
+            ),
+        }
+
+    def get_urls(self):
+        urls = super().get_urls()
+
+        custom_urls = [
+            path(
+                "<path:object_id>/layout/",
+                self.admin_site.admin_view(self.layout_view),
+                name=(
+                    "workflow_formsection_layout"
+                ),
+            ),
+            path(
+                "<path:object_id>/layout/save/",
+                self.admin_site.admin_view(self.layout_save_view),
+                name=(
+                    "workflow_formsection_layout_save"
+                ),
+            ),
+        ]
+
+        return custom_urls + urls
+
+    def layout_view(self, request, object_id):
+        section = get_object_or_404(
+            FormSection.objects.select_related("form").only(
+                "id",
+                "form_id",
+                "name",
+                "code",
+            ),
+            pk=object_id,
+        )
+
+        # Top-level active FormFields.
+        fields = (
+            FormField.objects
+            .filter(
+                section=section,
+                repeatable_group__isnull=True,
+                is_active=True,
+            )
+            .only(
+                "id",
+                "code",
+                "label",
+                "layout_order",
+            )
+        )
+
+        # Active FormRepeatableGroups.
+        groups = (
+            FormRepeatableGroup.objects
+            .filter(
+                section=section,
+                is_active=True,
+            )
+            .only(
+                "id",
+                "code",
+                "name",
+                "layout_order",
+            )
+        )
+
+        # Deterministic presentational ordering for NULL layout_order.
+        def presentational_key(obj):
+            layout = obj.layout_order
+            return (
+                layout is None,
+                layout if layout is not None else 0,
+                obj.order,
+                0 if getattr(obj, "_meta", None) and obj._meta.model_name == "formfield" else 1,
+                obj.pk,
+            )
+
+        layout_items = []
+
+        for field in fields:
+            layout_items.append(
+                {
+                    "type": "field",
+                    "id": field.id,
+                    "code": field.code,
+                    "label": field.label,
+                    "layout_order": (
+                        field.layout_order
+                        if field.layout_order is not None
+                        else None
+                    ),
+                    "order": field.order,
+                }
+            )
+
+        for group in groups:
+            layout_items.append(
+                {
+                    "type": "group",
+                    "id": group.id,
+                    "code": group.code,
+                    "label": group.name,
+                    "layout_order": (
+                        group.layout_order
+                        if group.layout_order is not None
+                        else None
+                    ),
+                    "order": group.order,
+                }
+            )
+
+        layout_items.sort(key=presentational_key)
+
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "section": section,
+            "layout_items": layout_items,
+            "title": (
+                f"ترتیب نمایش آیتم‌های Section «"
+                f"{section.name}»"
+            ),
+        }
+
+        return TemplateResponse(
+            request,
+            "admin/workflow/formsection_layout.html",
+            context,
+        )
+
+    def layout_save_view(self, request, object_id):
+        if not self.has_change_permission(request):
+            raise PermissionDenied()
+
+        # Authorization: Django Admin admin_view already enforces
+        # login/staff + model change permission for the wrapped view.
+        # We additionally require explicit change permission on this
+        # Section so cross-Section ID injection cannot be executed by
+        # a user who cannot change the target Section.
+        if not self.has_change_permission(request, obj=None):
+            raise PermissionDenied()
+
+        section = get_object_or_404(
+            FormSection.objects.only("id", "form_id"),
+            pk=object_id,
+        )
+
+        if not self.has_change_permission(request, obj=section):
+            raise PermissionDenied()
+
+        if request.method != "POST":
+            return JsonResponse(
+                {"error": "متد مجاز نیست."},
+                status=405,
+            )
+
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+        except (
+            ValueError,
+            UnicodeDecodeError,
+        ):
+            return JsonResponse(
+                {"error": "شیوه ارسال ترتیب نامعتبر است."},
+                status=400,
+            )
+
+        if not isinstance(payload, list):
+            return JsonResponse(
+                {"error": "ترتیب باید در قالب یک لیست ارسال شود."},
+                status=400,
+            )
+
+        with transaction.atomic():
+            # Re-query the current active top-level items to reject stale
+            # submissions and to validate the submitted complete set.
+            current_fields = {
+                obj.id: obj
+                for obj in (
+                    FormField.objects
+                    .filter(
+                        section=section,
+                        repeatable_group__isnull=True,
+                        is_active=True,
+                    )
+                    .only(
+                        "id",
+                        "code",
+                        "section_id",
+                        "repeatable_group_id",
+                    )
+                )
+            }
+
+            current_groups = {
+                obj.id: obj
+                for obj in (
+                    FormRepeatableGroup.objects
+                    .filter(
+                        section=section,
+                        is_active=True,
+                    )
+                    .only(
+                        "id",
+                        "code",
+                        "section_id",
+                    )
+                )
+            }
+
+            expected_ids = set(current_fields) | set(current_groups)
+            resolved = []
+            seen = set()
+
+            for item in payload:
+                if not isinstance(item, dict):
+                    return JsonResponse(
+                        {"error": "تصمیم‌نامه نامعتبر."},
+                        status=400,
+                    )
+
+                item_type = item.get("type")
+                item_id = item.get("id")
+
+                if item_type not in ("field", "group"):
+                    return JsonResponse(
+                        {"error": "نوع آیتم نامعتبر."},
+                        status=400,
+                    )
+
+                if item_id is None:
+                    return JsonResponse(
+                        {"error": "شناسه آیتم ارسال نشده است."},
+                        status=400,
+                    )
+
+                if item_type == "field":
+                    obj = current_fields.get(item_id)
+                    if obj is None:
+                        return JsonResponse(
+                            {"error": "فیلد نامعتبر یا غیرفعال است."},
+                            status=400,
+                        )
+
+                    if obj.repeatable_group_id is not None:
+                        return JsonResponse(
+                            {
+                                "error": (
+                                    "فیلدهای درون گروه تکرارشونده «"
+                                    "نمی‌توانند در ترتیب نمایش Section «"
+                                    f"{section.name}» ظاهر شوند."
+                                )
+                            },
+                            status=400,
+                        )
+
+                    if obj.section_id != section.id:
+                        return JsonResponse(
+                            {
+                                "error": (
+                                    "این آیتم متعلق به Section دیگری است "
+                                    "و نمی‌تواند در این Section نمایش داده شود."
+                                )
+                            },
+                            status=400,
+                        )
+
+                else:
+                    obj = current_groups.get(item_id)
+                    if obj is None:
+                        return JsonResponse(
+                            {"error": "گروه نامعتبر یا غیرفعال است."},
+                            status=400,
+                        )
+
+                    if obj.section_id != section.id:
+                        return JsonResponse(
+                            {
+                                "error": (
+                                    "این آیتم متعلق به Section دیگری است "
+                                    "و نمی‌تواند در این Section نمایش داده شود."
+                                )
+                            },
+                            status=400,
+                        )
+
+                typed_identity = (item_type, item_id)
+
+                if typed_identity in seen:
+                    return JsonResponse(
+                        {"error": "یک آیتم در ترتیب دو بار تکرار شده است."},
+                        status=400,
+                    )
+
+                seen.add(typed_identity)
+                resolved.append(obj)
+
+            if set(seen) != expected_ids:
+                return JsonResponse(
+                    {"error": "مجموعه آیتم‌های ارسالی با ترکیب فعلی Section کاملاً همخوانی ندارد."},
+                    status=400,
+                )
+
+            field_updates = []
+            group_updates = []
+
+            for index, obj in enumerate(resolved, start=1):
+                setattr(obj, "layout_order", index * 10)
+
+                if isinstance(obj, FormField):
+                    field_updates.append(obj)
+                else:
+                    group_updates.append(obj)
+
+            if field_updates:
+                FormField.objects.bulk_update(
+                    field_updates,
+                    ["layout_order"],
+                )
+
+            if group_updates:
+                FormRepeatableGroup.objects.bulk_update(
+                    group_updates,
+                    ["layout_order"],
+                )
+
+        return JsonResponse(
+            {"ok": True},
+            status=200,
+        )
 
 class RepeatableFieldInlineFormSet(forms.BaseInlineFormSet):
 
