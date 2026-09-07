@@ -10,8 +10,6 @@
         return;
     }
 
-    var initializing = false;
-
     function setStatus(message, isError) {
         if (!STATUS) {
             return;
@@ -22,12 +20,17 @@
             (isError ? " df-section-layout-status-error" : "");
     }
 
-    function itemCssValues() {
+    function itemValues() {
         var items = [];
 
         Array.prototype.forEach.call(LIST.children, function (node) {
             var id = node.getAttribute("data-item-id");
             var type = node.getAttribute("data-item-type");
+
+            if (!id || !type) {
+                return;
+            }
+
             items.push({
                 id: id,
                 type: type
@@ -37,59 +40,44 @@
         return items;
     }
 
-    function applyDocumentOrder() {
-        var items = itemCssValues();
-        var ordered = {};
-
-        Array.prototype.forEach.call(LIST.children, function (node) {
-            var id = node.getAttribute("data-item-id");
-            ordered[id] = node;
-        });
-
-        items.forEach(function (item) {
-            var node = ordered[item.id];
-            if (node && node.parentNode !== LIST) {
-                LIST.appendChild(node);
-            }
-        });
+    function typedIdentity(item) {
+        return item.type + ":" + item.id;
     }
 
     function dragStart(e) {
-        if (initializing) {
-            return;
-        }
-
         var node = e.target.closest(".df-layout-item");
-        if (!node) {
+        if (!node || !LIST.contains(node)) {
             return;
         }
 
-        if (!e.target.classList.contains("df-layout-item-grip")) {
-            e.preventDefault();
-        }
-
-        node.setAttribute("draggable", "true");
         node.classList.add("df-layout-item-dragging");
-        e.dataTransfer.setData("text/plain", node.getAttribute("data-item-id"));
+        node.setAttribute("draggable", "true");
         e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData(
+            "text/plain",
+            typedIdentity({
+                id: node.getAttribute("data-item-id"),
+                type: node.getAttribute("data-item-type")
+            })
+        );
     }
 
     function dragOver(e) {
         var node = e.target.closest(".df-layout-item");
-        if (!node) {
+        if (!node || !LIST.contains(node)) {
             return;
         }
-
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
 
         var dragging = LIST.querySelector(".df-layout-item-dragging");
         if (!dragging || node === dragging) {
             return;
         }
 
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+
         var rect = node.getBoundingClientRect();
-        var insertAfter = (e.clientX - rect.left) > (rect.width / 2);
+        var insertAfter = (e.clientY - rect.top) > (rect.height / 2);
 
         if (insertAfter) {
             LIST.insertBefore(dragging, node.nextSibling);
@@ -98,12 +86,14 @@
         }
     }
 
-    function dragEnd(e) {
+    function dragEnd() {
         var dragging = LIST.querySelector(".df-layout-item-dragging");
-        if (dragging) {
-            dragging.removeAttribute("draggable");
-            dragging.classList.remove("df-layout-item-dragging");
+        if (!dragging) {
+            return;
         }
+
+        dragging.removeAttribute("draggable");
+        dragging.classList.remove("df-layout-item-dragging");
     }
 
     function initSortable() {
@@ -111,36 +101,32 @@
             return;
         }
 
-        initializing = true;
-
         LIST.addEventListener("dragstart", dragStart);
         LIST.addEventListener("dragover", dragOver);
         LIST.addEventListener("dragend", dragEnd);
 
-        var items = LIST.querySelectorAll(".df-layout-item");
-        Array.prototype.forEach.call(items, function (node) {
-            node.setAttribute("draggable", "true");
-        });
+        Array.prototype.forEach.call(
+            LIST.querySelectorAll(".df-layout-item"),
+            function (node) {
+                node.setAttribute("draggable", "true");
+            }
+        );
 
-        initializing = false;
         LIST.dataset.sectionLayoutDesignerInitialized = "true";
     }
 
     function buildPayloadFromDom() {
-        var items = itemCssValues();
-        var seen = {};
         var payload = [];
+        var seen = {};
 
-        items.forEach(function (item) {
-            if (!item.id || !item.type) {
+        itemValues().forEach(function (item) {
+            var identity = typedIdentity(item);
+
+            if (seen[identity]) {
                 return;
             }
 
-            if (seen[item.id]) {
-                return;
-            }
-            seen[item.id] = true;
-
+            seen[identity] = true;
             payload.push({
                 type: item.type,
                 id: Number(item.id)
@@ -150,74 +136,91 @@
         return payload;
     }
 
-    function submitLayout(animateButton) {
-        if (animateButton) {
-            SAVE.disabled = true;
-            SAVE.textContent = "در حال ذخیره...";
-            setStatus("");
-        }
+    function getCookie(name) {
+        var value = null;
+        var cookies = document.cookie.split(";");
 
-        var payload = buildPayloadFromDom();
+        Array.prototype.forEach.call(cookies, function (cookie) {
+            cookie = cookie.trim();
+            if (cookie.indexOf(name + "=") === 0) {
+                value = decodeURIComponent(
+                    cookie.substring(name.length + 1)
+                );
+            }
+        });
+
+        return value;
+    }
+
+    function submitLayout() {
+        SAVE.disabled = true;
+        SAVE.textContent = "در حال ذخیره...";
+        setStatus("");
 
         return fetch(FORM.action, {
             method: "POST",
             headers: {
                 "X-Requested-With": "XMLHttpRequest",
-                "X-CSRFToken": getCookie("csrftoken")
+                "X-CSRFToken": getCookie("csrftoken") || ""
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(buildPayloadFromDom())
         }).then(function (response) {
-            if (!response.ok) {
-                return response.json().then(function (data) {
-                    throw new Error(
-                        data && data.error ? data.error : "ذخیره ترتیب با خطا مواجه شد."
-                    );
-                });
-            }
+            return response.text().then(function (text) {
+                var data = {};
 
-            return response.json();
+                try {
+                    data = text ? JSON.parse(text) : {};
+                } catch (error) {
+                    data = {};
+                }
+
+                if (!response.ok) {
+                    throw new Error(
+                        data && data.error
+                            ? data.error
+                            : "ذخیره ترتیب با خطا مواجه شد."
+                    );
+                }
+
+                return data;
+            });
         }).then(function () {
             SAVE.textContent = "ذخیره ترتیب";
             setStatus("ترتیب با موفقیت ذخیره شد.", false);
         }).catch(function (error) {
             SAVE.textContent = "ذخیره ترتیب";
-            setStatus(error.message || "ذخیره ترتیب با خطا مواجه شد.", true);
-            throw error;
+            setStatus(
+                error.message || "ذخیره ترتیب با خطا مواجه شد.",
+                true
+            );
         }).finally(function () {
             SAVE.disabled = false;
         });
     }
 
-    function getCookie(name) {
-        var value = null;
-        var cookies = document.cookie.split(";");
-        Array.prototype.forEach.call(cookies, function (cookie) {
-            cookie = cookie.trim();
-            if (cookie.indexOf(name + "=") === 0) {
-                value = decodeURIComponent(cookie.substring(name.length + 1));
-            }
-        });
-        return value;
-    }
-
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", function () {
-            initSortable();
-        }, { once: true });
-    } else {
+    function init() {
         initSortable();
-    }
 
-    FORM.addEventListener("submit", function (e) {
-        e.preventDefault();
-
-        if (SAVE.disabled) {
+        if (FORM.dataset.sectionLayoutSubmitInitialized === "true") {
             return;
         }
 
-        submitLayout(true).catch(function () {
-            SAVE.disabled = false;
-            SAVE.textContent = "ذخیره ترتیب";
+        FORM.addEventListener("submit", function (e) {
+            e.preventDefault();
+
+            if (SAVE.disabled) {
+                return;
+            }
+
+            submitLayout();
         });
-    });
+
+        FORM.dataset.sectionLayoutSubmitInitialized = "true";
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+        init();
+    }
 })();
