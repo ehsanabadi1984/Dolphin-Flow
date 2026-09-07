@@ -54,7 +54,7 @@
         <form
             id="df-section-layout-form"
             method="post"
-            action="{% url 'admin:workflow_formsection_layout' section.pk %}"
+            action="{% url 'admin:workflow_formsection_layout_save' section.pk %}"
             class="df-section-layout-form"
         >
             {% csrf_token %}
