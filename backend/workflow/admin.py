@@ -12,7 +12,6 @@ from django.template.response import TemplateResponse
 from django.contrib.contenttypes.models import ContentType
 from django.db import models, transaction
 from django.core.exceptions import PermissionDenied
-from django.urls import reverse
 
 import json
 
