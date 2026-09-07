@@ -356,6 +356,7 @@ class TableModeRenderTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance, user=self.user,
             submitted_data=submitted_data,
+            edit_mode=True,
         )
 
         result = DynamicFormService.get_form_for_step(
@@ -429,6 +430,7 @@ class TableModeRenderTests(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance, user=self.user,
             submitted_data=submitted_data,
+            edit_mode=True,
         )
 
         from workflow.models import InstanceDevice

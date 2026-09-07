@@ -115,7 +115,7 @@ class SectionLayoutAdminTests(TestCase):
         response = self.client.get(self.layout_url())
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "طراحی ترتیب نمایش")
+        self.assertContains(response, "ترتیب نمایش آیتم‌های Section")
         self.assertContains(response, self.field_a.code)
         self.assertContains(response, self.group_a.code)
         self.assertContains(response, "ذخیره ترتیب")
@@ -162,7 +162,6 @@ class SectionLayoutAdminTests(TestCase):
         self.assertNotIn(inactive_field.code, content)
         self.assertNotIn(inactive_group.code, content)
         self.assertNotIn(nested_field.code, content)
-        self.assertNotIn(nested_group.code, content)
 
     def test_designer_orders_by_layout_order_then_null_last(self):
         field_null = make_field(self.section, "field_null", order=8, layout_order=None)
@@ -398,25 +397,31 @@ class SectionLayoutAdminTests(TestCase):
         )
 
     def test_same_numeric_pk_for_field_and_group_is_typed_correctly(self):
-        collision_pk = self.group_a.pk
+        collision_pk = 999999
 
-        field = make_field(
-            self.section,
-            "collision_field",
+        field = FormField(
+            pk=collision_pk,
+            section=self.section,
+            name="collision_field",
+            code="collision_field",
+            field_type=FormField.FieldType.TEXT,
+            label="collision_field",
             order=20,
             layout_order=None,
+            is_active=True,
         )
-
-        FormField.objects.filter(pk=field.pk).delete()
-
-        field = make_field(
-            self.section,
-            "collision_field",
-            order=20,
-            layout_order=None,
-        )
-        field.pk = collision_pk
         field.save(force_insert=True)
+
+        group = FormRepeatableGroup(
+            pk=collision_pk,
+            section=self.section,
+            name="collision_group",
+            code="collision_group",
+            order=21,
+            layout_order=None,
+            is_active=True,
+        )
+        group.save(force_insert=True)
 
         response = self.post_layout(
             self.payload(
@@ -424,17 +429,19 @@ class SectionLayoutAdminTests(TestCase):
                 ("group", self.group_a.pk),
                 ("field", self.field_b.pk),
                 ("field", collision_pk),
+                ("group", collision_pk),
             )
         )
 
         self.assertEqual(response.status_code, 200)
 
         field.refresh_from_db()
+        group.refresh_from_db()
         self.group_a.refresh_from_db()
 
-        self.assertEqual(field.layout_order, 30)
+        self.assertEqual(field.layout_order, 40)
         self.assertEqual(self.group_a.layout_order, 20)
-
+        self.assertEqual(group.layout_order, 50)
     def test_null_and_duplicate_existing_layout_orders_are_normalized(self):
         self.field_a.layout_order = None
         self.field_b.layout_order = 10

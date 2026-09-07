@@ -197,6 +197,7 @@ class UnidentifiedDeviceTests(TestCase):
                 "devices_0_device_type": str(self.device_type.pk),
                 "devices_0_device_model_id": str(self.device_model.pk),
             },
+            edit_mode=True,
         )
 
         instance_devices = list(
@@ -234,6 +235,7 @@ class UnidentifiedDeviceTests(TestCase):
                 "devices_1_imei": "",
                 "devices_1_device_model_id": str(self.device_model.pk),
             },
+            edit_mode=True,
         )
 
         instance_devices = list(
@@ -272,6 +274,7 @@ class UnidentifiedDeviceTests(TestCase):
                 "devices_0_imei": "",
                 "devices_0_device_model_id": str(self.device_model.pk),
             },
+            edit_mode=True,
         )
 
         self.assertEqual(Device.objects.count(), 0)
@@ -299,6 +302,7 @@ class UnidentifiedDeviceTests(TestCase):
                 "devices_0_imei": "555555555555555",
                 "devices_0_device_model_id": str(self.device_model.pk),
             },
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(instance=instance)
@@ -327,6 +331,7 @@ class UnidentifiedDeviceTests(TestCase):
                     "devices_0_imei": "666666666666666",
                     "devices_0_device_model_id": str(self.device_model.pk),
                 },
+                edit_mode=True,
             )
 
         device_1 = InstanceDevice.objects.get(instance=instance_1)
@@ -353,6 +358,7 @@ class UnidentifiedDeviceTests(TestCase):
                     "devices_0_imei": "777777777777777",
                     "devices_0_device_model_id": str(self.device_model_2.pk),
                 },
+                edit_mode=True,
             )
 
     # -------------------------------------------------
@@ -382,6 +388,7 @@ class UnidentifiedDeviceTests(TestCase):
                 "devices_0_imei": "",
                 "devices_0_device_model_id": str(self.device_model.pk),
             },
+            edit_mode=True,
         )
 
         draft = InstanceDevice.objects.get(instance=instance)
@@ -398,6 +405,7 @@ class UnidentifiedDeviceTests(TestCase):
                 "devices_0_imei": "",
                 "devices_0_device_model_id": str(self.device_model.pk),
             },
+            edit_mode=True,
         )
 
         draft.refresh_from_db()
@@ -426,6 +434,7 @@ class UnidentifiedDeviceTests(TestCase):
                 "devices_1_imei": "",
                 "devices_1_device_model_id": str(self.device_model_2.pk),
             },
+            edit_mode=True,
         )
 
         instance_devices = list(
@@ -460,6 +469,7 @@ class UnidentifiedDeviceTests(TestCase):
                 "devices_0_device_model_id": "",
                 "devices_0_device_type": str(self.device_type.pk),
             },
+            edit_mode=True,
         )
 
         instance_device = InstanceDevice.objects.get(instance=instance)

@@ -201,7 +201,7 @@ def bootstrap_formula_system():
             *,
             instance,
             user,
-            edit_mode,
+            edit_mode=False,
             submitted_data=None,
         ):
             context = original_get(
@@ -210,6 +210,8 @@ def bootstrap_formula_system():
                 edit_mode=edit_mode,
                 submitted_data=submitted_data,
             )
+            if context is None:
+                return None
             form = context.get("form")
             if form is None:
                 return context

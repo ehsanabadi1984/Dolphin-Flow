@@ -405,6 +405,7 @@ class SelectDisplayValueTests(TestCase):
             instance=instance,
             user=self.user,
             submitted_data=submitted_data,
+            edit_mode=True,
         )
 
     def save_top_level(
@@ -423,6 +424,7 @@ class SelectDisplayValueTests(TestCase):
                 "warranty": warranty,
                 "device_choice": device_choice,
             },
+            edit_mode=True,
         )
 
     def get_group(self, result, code):
