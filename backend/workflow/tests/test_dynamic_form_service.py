@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 from workflow.instance_device_services import InstanceDeviceService
+from workflow.device_services import DeviceService
 
 from workflow.form_services import DynamicFormService
 from workflow.models import (
@@ -285,6 +286,19 @@ class DynamicFormServiceTests(TestCase):
 
         return instance
 
+    def create_persistent_device(self, imei, device_model=None):
+        device = Device.objects.create(
+            device_model=device_model or self.device_model,
+        )
+
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value=imei,
+        )
+
+        return device
+
     def test_get_form_for_step_returns_repeatable_device_group(self):
         instance = self.create_instance()
 
@@ -421,9 +435,33 @@ class DynamicFormServiceTests(TestCase):
 
         instance_device = instance_devices.first()
 
+        self.assertIsNone(instance_device.device_id)
+
         self.assertEqual(
-            instance_device.device.device_model_id,
+            instance_device.draft_imei,
+            "777777777777777",
+        )
+
+        self.assertIsNone(instance_device.device_id)
+
+        self.assertEqual(
+            instance_device.draft_imei,
+            "777777777777777",
+        )
+
+        self.assertEqual(
+            instance_device.draft_device_model_id,
             self.device_model.pk,
+        )
+
+        self.assertEqual(
+            instance_device.reported_problem,
+            "دستگاه روشن نمی‌شود",
+        )
+
+        self.assertEqual(
+            instance_device.status,
+            "RECEIVED",
         )
 
         self.assertEqual(
@@ -536,6 +574,7 @@ class DynamicFormServiceTests(TestCase):
             "customer_address": "آدرس تست",
             "devices": [
                 {
+                    "instance_device_id": instance_device.pk,
                     "imei": "999999999999999",
                     "device_model_id": self.device_model.pk,
                     "reported_problem": "مشکل به‌روزشده",
@@ -633,6 +672,7 @@ class DynamicFormServiceTests(TestCase):
         DynamicFormService.clear_form_for_step(
             instance=instance,
             user=self.user,
+            edit_mode=True,
         )
 
         form_data.refresh_from_db()
@@ -698,6 +738,22 @@ class DynamicFormServiceTests(TestCase):
     def test_save_form_rejects_imei_for_different_model(self):
         instance = self.create_instance()
 
+        self.create_persistent_device(
+            imei="777777777777777",
+            device_model=self.device_model,
+        )
+
+        device = DeviceService.get_device_by_identifier(
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="777777777777777",
+        )
+
+        self.assertIsNotNone(device)
+        self.assertEqual(
+            device.device_model_id,
+            self.device_model.pk,
+        )
+
         first_data = {
             "Phone": "09120000000",
             "customer_address": "آدرس تست",
@@ -723,10 +779,7 @@ class DynamicFormServiceTests(TestCase):
             instance=instance,
         )
 
-        self.assertEqual(
-            instance_device.device_id,
-            instance_device.device_id,
-        )
+        self.assertIsNotNone(instance_device.device_id)
 
         other_device_model = DeviceModel.objects.create(
             device_type=self.device_model.device_type,
@@ -816,20 +869,29 @@ class DynamicFormServiceTests(TestCase):
             len(instance_devices),
             2,
         )
-
+        self.assertIsNone(instance_devices[0].device_id)
         self.assertEqual(
-            instance_devices[0].device.device_model_id,
+            instance_devices[0].draft_imei,
+            "111111111111111",
+        )
+        self.assertEqual(
+            instance_devices[0].draft_device_model_id,
             self.device_model.pk,
+        )
+
+        self.assertIsNone(instance_devices[1].device_id)
+        self.assertEqual(
+            instance_devices[1].draft_imei,
+            "222222222222222",
+        )
+        self.assertEqual(
+            instance_devices[1].draft_device_model_id,
+            second_device_model.pk,
         )
 
         self.assertEqual(
             instance_devices[0].reported_problem,
             "مشکل دستگاه اول",
-        )
-
-        self.assertEqual(
-            instance_devices[1].device.device_model_id,
-            second_device_model.pk,
         )
 
         self.assertEqual(
@@ -844,7 +906,10 @@ class DynamicFormServiceTests(TestCase):
 
     def test_deactivate_instance_device(self):
         instance = self.create_instance()
-
+        device = self.create_persistent_device(
+            imei="333333333333333",
+            device_model=self.device_model,
+        )
         submitted_data = {
             "Phone": "09120000000",
             "customer_address": "آدرس تست",
@@ -1078,6 +1143,7 @@ class DynamicFormServiceTests(TestCase):
             "customer_address": "آدرس تست",
             "devices": [
                 {
+                    "instance_device_id": instance_device_id,
                     "imei": imei,
                     "device_model_id": self.device_model.pk,
                     "reported_problem": "مشکل به‌روزشده",
@@ -1177,6 +1243,7 @@ class DynamicFormServiceTests(TestCase):
             "customer_address": "آدرس تست",
             "devices": [
                 {
+                    "instance_device_id": first_id,
                     "imei": "777777777777777",
                     "device_model_id": self.device_model.pk,
                     "reported_problem": "مشکل دستگاه اول - UPDATED",
@@ -1302,12 +1369,6 @@ class DynamicFormServiceTests(TestCase):
         self.assertEqual(
             len(device_group["items"]),
             0,
-        )
-
-        self.assertTrue(
-            Device.objects.filter(
-                pk=instance_device.device_id,
-            ).exists()
         )
 
     def test_save_form_rejects_device_group_without_edit_access(self):
@@ -1445,6 +1506,11 @@ class DynamicFormServiceTests(TestCase):
 
     def test_save_form_rejects_device_field_without_edit_access(self):
         instance = self.create_instance()
+
+        persistent_device = self.create_persistent_device(
+            imei="555555555555555",
+            device_model=self.device_model,
+        )
 
         submitted_data = {
             "Phone": "09120000000",
@@ -1700,10 +1766,23 @@ class DynamicFormServiceTests(TestCase):
             edit_mode=True,
         )
 
-        self.assertTrue(
+        instance_device.refresh_from_db()
+
+        self.assertIsNone(instance_device.device_id)
+
+        self.assertEqual(
+            instance_device.draft_imei,
+            "444444444444444",
+        )
+
+        self.assertFalse(
             DeviceIdentifier.objects.filter(
-                device=instance_device.device,
-                identifier_type="IMEI",
+                value="333333333333333",
+            ).exists()
+        )
+
+        self.assertFalse(
+            DeviceIdentifier.objects.filter(
                 value="444444444444444",
             ).exists()
         )
@@ -1726,6 +1805,16 @@ class DynamicFormServiceTests(TestCase):
     def test_save_form_rejects_imei_belonging_to_another_device(
         self,
     ):
+
+        first_persistent_device = self.create_persistent_device(
+            imei="111111111111111",
+            device_model=self.device_model,
+        )
+
+        second_persistent_device = self.create_persistent_device(
+            imei="222222222222222",
+            device_model=self.device_model,
+        )
         instance = self.create_instance()
 
         first_submission = {
