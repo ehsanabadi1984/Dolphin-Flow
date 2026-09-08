@@ -5,6 +5,8 @@
     var FORM = document.getElementById("df-section-layout-form");
     var LIST = document.getElementById("df-section-layout-list");
     var SAVE = document.getElementById("df-section-layout-save");
+    var dragging = null;
+    var placeholder = null;
 
     if (!FORM || !LIST || !SAVE) {
         return;
@@ -27,7 +29,7 @@
             var id = node.getAttribute("data-item-id");
             var type = node.getAttribute("data-item-type");
 
-            if (!id || !type) {
+            if (!id || !type || node.classList.contains("df-layout-item-placeholder")) {
                 return;
             }
 
@@ -44,14 +46,46 @@
         return item.type + ":" + item.id;
     }
 
+    function createPlaceholder(node) {
+        if (placeholder) {
+            return;
+        }
+
+        placeholder = document.createElement("div");
+        placeholder.className = "df-layout-item-placeholder";
+        placeholder.setAttribute("aria-hidden", "true");
+        placeholder.style.height = node.getBoundingClientRect().height + "px";
+    }
+
+    function movePlaceholder(e) {
+        if (!dragging || !placeholder) {
+            return;
+        }
+
+        var node = e.target.closest(".df-layout-item");
+        if (!node || node === dragging || !LIST.contains(node)) {
+            return;
+        }
+
+        var rect = node.getBoundingClientRect();
+        var insertAfter = (e.clientY - rect.top) > (rect.height / 2);
+
+        if (insertAfter) {
+            LIST.insertBefore(placeholder, node.nextSibling);
+        } else {
+            LIST.insertBefore(placeholder, node);
+        }
+    }
+
     function dragStart(e) {
         var node = e.target.closest(".df-layout-item");
         if (!node || !LIST.contains(node)) {
             return;
         }
 
-        node.classList.add("df-layout-item-dragging");
-        node.setAttribute("draggable", "true");
+        dragging = node;
+        createPlaceholder(node);
+
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData(
             "text/plain",
@@ -60,40 +94,48 @@
                 type: node.getAttribute("data-item-type")
             })
         );
+
+        window.setTimeout(function () {
+            if (dragging) {
+                dragging.classList.add("df-layout-item-dragging");
+            }
+        }, 0);
     }
 
     function dragOver(e) {
-        var node = e.target.closest(".df-layout-item");
-        if (!node || !LIST.contains(node)) {
-            return;
-        }
-
-        var dragging = LIST.querySelector(".df-layout-item-dragging");
-        if (!dragging || node === dragging) {
+        if (!dragging) {
             return;
         }
 
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
-
-        var rect = node.getBoundingClientRect();
-        var insertAfter = (e.clientY - rect.top) > (rect.height / 2);
-
-        if (insertAfter) {
-            LIST.insertBefore(dragging, node.nextSibling);
-        } else {
-            LIST.insertBefore(dragging, node);
-        }
+        movePlaceholder(e);
     }
 
-    function dragEnd() {
-        var dragging = LIST.querySelector(".df-layout-item-dragging");
-        if (!dragging) {
+    function drop(e) {
+        if (!dragging || !placeholder) {
             return;
         }
 
-        dragging.removeAttribute("draggable");
-        dragging.classList.remove("df-layout-item-dragging");
+        e.preventDefault();
+
+        LIST.insertBefore(dragging, placeholder);
+        placeholder.remove();
+        placeholder = null;
+    }
+
+    function dragEnd() {
+        if (placeholder) {
+            placeholder.remove();
+            placeholder = null;
+        }
+
+        if (dragging) {
+            dragging.classList.remove("df-layout-item-dragging");
+            dragging.setAttribute("draggable", "true");
+        }
+
+        dragging = null;
     }
 
     function initSortable() {
@@ -103,6 +145,7 @@
 
         LIST.addEventListener("dragstart", dragStart);
         LIST.addEventListener("dragover", dragOver);
+        LIST.addEventListener("drop", drop);
         LIST.addEventListener("dragend", dragEnd);
 
         Array.prototype.forEach.call(
@@ -161,7 +204,8 @@
             method: "POST",
             headers: {
                 "X-Requested-With": "XMLHttpRequest",
-                "X-CSRFToken": getCookie("csrftoken") || ""
+                "X-CSRFToken": getCookie("csrftoken") || "",
+                "Content-Type": "application/json"
             },
             body: JSON.stringify(buildPayloadFromDom())
         }).then(function (response) {
