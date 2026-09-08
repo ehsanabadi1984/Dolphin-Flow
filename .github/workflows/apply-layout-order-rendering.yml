@@ -25,7 +25,7 @@ jobs:
           text = path.read_text(encoding='utf-8')
 
           def matching_endfor(src, start):
-              token_re = re.compile(r'{%\\s*(for|endfor|if|endif|elif|else|with|endwith|block|endblock|comment|endcomment|filter|endfilter|spaceless|endspaceless)\\b[^%]*%}')
+              token_re = re.compile(r'{%\s*(for|endfor|if|endif|elif|else|with|endwith|block|endblock|comment|endcomment|filter|endfilter|spaceless|endspaceless)\b[^%]*%}')
               stack = []
               for m in token_re.finditer(src, start):
                   tag = m.group(1)
@@ -55,9 +55,6 @@ jobs:
 
           include_dir = Path('backend/operator_panel/templates/operator_panel/layout_parts')
           include_dir.mkdir(parents=True, exist_ok=True)
-
-          # Preserve the existing renderers verbatim; only remove their
-          # outer loops so the parent template can choose their order.
           Path(include_dir / 'form_field.html').write_text(field_body.strip() + '\n', encoding='utf-8')
           Path(include_dir / 'repeatable_group.html').write_text(group_body.strip() + '\n', encoding='utf-8')
 
@@ -92,17 +89,16 @@ jobs:
 
 '''
 
-          # Replace from the Normal Fields marker through the complete group loop.
           text = text[:section_start] + replacement + text[group_end_end:]
           path.write_text(text, encoding='utf-8')
 
-          # Add only presentation CSS. Existing field/group classes and all
-          # form semantics remain unchanged.
           css = Path('backend/operator_panel/static/operator_panel/css/app.css')
           css_text = css.read_text(encoding='utf-8')
-          marker = '/* ---------------------------------------------------------\\n   Layout-ordered form rendering\\n   --------------------------------------------------------- */'
+          marker = '/* ---------------------------------------------------------\n   Layout-ordered form rendering\n   --------------------------------------------------------- */'
           if marker not in css_text:
-              css_text += '''\\n\\n/* ---------------------------------------------------------
+              css_text += '''
+
+/* ---------------------------------------------------------
    Layout-ordered form rendering
    --------------------------------------------------------- */
 
