@@ -43,10 +43,6 @@
 
             <h3>{{ section.section.name }}</h3>
 
-            {% if section.section.description %}
-              <p>{{ section.section.description }}</p>
-            {% endif %}
-
           </div>
 
 
@@ -70,9 +66,9 @@
 
             {% if layout_item.type == "field" %}
 
-              <div class="df-form-fields">
-
             {% with item=layout_item.item %}
+
+              <div class="df-form-fields df-field-span-{% if item.field.field_type == "TEXT" %}6{% elif item.field.field_type == "TEXTAREA" %}12{% else %}4{% endif %}">
 
               <div
                 class="df-form-field"
@@ -88,13 +84,6 @@
                   {% endif %}
 
                 </label>
-
-
-                {% if item.field.help_text %}
-                  <small>
-                    {{ item.field.help_text }}
-                  </small>
-                {% endif %}
 
 
                 {% if edit_mode and item.can_edit %}
@@ -195,9 +184,9 @@
 
               </div>
 
-            {% endwith %}
-
               </div>
+
+            {% endwith %}
 
             {% elif layout_item.type == "group" %}
 
@@ -213,10 +202,6 @@
                 <div class="df-form-section-header">
                     <div>
                         <h3>{{ group.group.name }}</h3>
-
-                        {% if group.group.description %}
-                            <p>{{ group.group.description }}</p>
-                        {% endif %}
                     </div>
 
 
@@ -459,10 +444,6 @@
               <div class="df-form-section-header">
                 <div>
                   <h3>{{ group.group.name }}</h3>
-
-                  {% if group.group.description %}
-                    <p>{{ group.group.description }}</p>
-                  {% endif %}
                 </div>
 
                 {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
@@ -730,10 +711,6 @@
               <div class="df-form-section-header">
                 <div>
                   <h3>{{ group.group.name }}</h3>
-
-                  {% if group.group.description %}
-                    <p>{{ group.group.description }}</p>
-                  {% endif %}
                 </div>
 
                 {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
@@ -1072,10 +1049,6 @@
 
                         <div>
                             <h2>افزودن دستگاه</h2>
-
-                            {% if group.group.description %}
-                                <p>{{ group.group.description }}</p>
-                            {% endif %}
                         </div>
 
                         <button
@@ -1108,12 +1081,6 @@
                 {% endif %}
             </label>
 
-            {% if field_info.field.help_text %}
-                <small>
-                    {{ field_info.field.help_text }}
-                </small>
-            {% endif %}
-
             <input
                 type="text"
                 data-device-modal-field="{{ field_info.field.code }}"
@@ -1145,12 +1112,6 @@
                     <span>*</span>
                 {% endif %}
             </label>
-
-            {% if field_info.field.help_text %}
-                <small>
-                    {{ field_info.field.help_text }}
-                </small>
-            {% endif %}
 
             {% if field_info.field.system_key == "DEVICE_TYPE" %}
 
@@ -1253,136 +1214,6 @@
 
     {% endfor %}
 {% endfor %}
-{% if not validation_errors %}
-<section class="df-saved-data">
-
-  <div class="df-saved-data-header">
-    <div>
-      <h2>اطلاعات ثبت‌شده</h2>
-      <p>اطلاعاتی که تاکنون برای این فرم ذخیره شده است.</p>
-    </div>
-  </div>
-
-  {% for section in dynamic_form.sections %}
-
-    <div class="df-saved-section">
-
-      <h3>{{ section.section.name }}</h3>
-
-      {% if section.fields %}
-
-        <div class="df-saved-table-wrapper">
-
-          <table class="df-saved-table">
-
-            <thead>
-              <tr>
-                <th>فیلد</th>
-                <th>مقدار</th>
-                <th>وضعیت</th>
-              </tr>
-            </thead>
-
-            <tbody>
-
-              {% for item in section.fields %}
-
-                <tr>
-
-                  <td>
-                    {{ item.field.label }}
-                  </td>
-
-                  <td>
-                    {{ item.value|default:"—" }}
-                  </td>
-
-                  <td>
-
-                    {% if item.can_edit %}
-                      قابل ویرایش
-                    {% else %}
-                      فقط مشاهده
-                    {% endif %}
-
-                  </td>
-
-                </tr>
-
-              {% endfor %}
-
-            </tbody>
-
-          </table>
-
-        </div>
-
-      {% endif %}
-
-      {% if section.repeatable_groups %}
-
-  {% for group in section.repeatable_groups %}
-
-    {% if group.items %}
-
-      <div class="df-saved-repeatable-group">
-
-        <h4>{{ group.group.name }}</h4>
-
-        <div class="df-saved-table-wrapper">
-
-          <table class="df-saved-table">
-
-            <thead>
-              <tr>
-
-                {% for field_info in group.fields %}
-                  <th>
-                    {{ field_info.field.label }}
-                  </th>
-                {% endfor %}
-
-              </tr>
-            </thead>
-
-            <tbody>
-
-              {% for repeatable_item in group.items %}
-
-                <tr>
-
-                  {% for field_info in repeatable_item.fields %}
-
-                    <td>
-                      {{ field_info.display_value|default:field_info.value|default:"—" }}
-                    </td>
-
-                  {% endfor %}
-
-                </tr>
-
-              {% endfor %}
-
-            </tbody>
-
-          </table>
-
-        </div>
-
-      </div>
-
-    {% endif %}
-
-  {% endfor %}
-
-{% endif %}
-
-    </div>
-
-  {% endfor %}
-
-</section>
-{% endif %}
 
 {% if not dynamic_form.is_submitted %}
 

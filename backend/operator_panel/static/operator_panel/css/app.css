@@ -1862,6 +1862,86 @@ body.df-modal-open {
 }
 
 /* =========================================================
+   Workflow Form — Dynamic Field Grid
+   ---------------------------------------------------------
+   Responsive CSS Grid for the workflow form sections
+   (operator_panel/workflow_instance.html).
+
+   ``.df-form-section`` is the SHARED grid container: every
+   ``.df-form-fields`` wrapper is a grid ITEM spanning part of
+   the same grid, so fields from one section share rows and
+   repeatable groups stay full-width blocks in between.
+
+   Only fields rendered by the backend participate in the grid
+   (permission filtering happens server-side), so hidden fields
+   naturally reflow without any JavaScript positioning.
+   ========================================================= */
+
+.df-form-section {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px 18px;
+    align-items: start;
+}
+
+.df-form-section-header {
+    grid-column: 1 / -1;
+}
+
+/* Compact fields (NUMBER, DATE, DATETIME, BOOLEAN, SELECT) take
+   a third of the row; normal TEXT takes half; TEXTAREA takes the
+   whole row (spans are set on .df-form-fields by the template). */
+
+.df-field-span-4 {
+    grid-column: span 4;
+}
+
+.df-field-span-6 {
+    grid-column: span 6;
+}
+
+.df-field-span-12 {
+    grid-column: 1 / -1;
+}
+
+/* Repeatable groups are full-width grid items, never squeezed
+   beside ordinary fields. */
+
+.df-repeatable-group {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 1199px) {
+
+    .df-form-section {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .df-field-span-4,
+    .df-field-span-6 {
+        grid-column: span 1;
+    }
+
+    .df-field-span-12 {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 767px) {
+
+    .df-form-section {
+        grid-template-columns: 1fr;
+    }
+
+    .df-form-fields,
+    .df-field-span-4,
+    .df-field-span-6,
+    .df-field-span-12 {
+        grid-column: 1 / -1;
+    }
+}
+
+/* =========================================================
    Repeatable Group Validation Error
    ========================================================= */
 
