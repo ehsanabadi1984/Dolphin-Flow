@@ -10,6 +10,15 @@
     >
 {% endblock %}
 
+{% block extrahead %}
+    {{ block.super }}
+
+    <script
+        src="{% static 'workflow/js/section_layout_designer.js' %}"
+        defer
+    ></script>
+{% endblock %}
+
 {% block content %}
 
 <div class="df-section-layout-page">
@@ -115,12 +124,4 @@
 
 </div>
 
-{% endblock %}
-
-{% block admin_extrajs %}
-    {{ block.super }}
-
-    <script
-        src="{% static 'workflow/js/section_layout_designer.js' %}"
-    ></script>
 {% endblock %}
