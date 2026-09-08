@@ -55,12 +55,24 @@
 
 
           <!-- ========================= -->
-          <!-- Normal Fields              -->
+          <!-- Top-Level Layout           -->
           <!-- ========================= -->
+          <!--
+            Mixed field/repeatable-group order comes from the backend
+            ``section.layout_items`` collection (ordered by
+            ``layout_order``). Each entry is either
+            ``{"type": "field", "item": field_data}`` or
+            ``{"type": "group", "item": group_data}``. The two
+            renderers below are the original ones, unchanged.
+          -->
 
-          <div class="df-form-fields">
+          {% for layout_item in section.layout_items %}
 
-            {% for item in section.fields %}
+            {% if layout_item.type == "field" %}
+
+              <div class="df-form-fields">
+
+            {% with item=layout_item.item %}
 
               <div
                 class="df-form-field"
@@ -183,16 +195,13 @@
 
               </div>
 
-            {% endfor %}
+            {% endwith %}
 
-          </div>
+              </div>
 
+            {% elif layout_item.type == "group" %}
 
-          <!-- ========================= -->
-          <!-- Repeatable Groups          -->
-          <!-- ========================= -->
-
-          {% for group in section.repeatable_groups %}
+            {% with group=layout_item.item %}
 
             {% if group.group.group_type == "DEVICE" %}
 
@@ -1002,6 +1011,10 @@
               {% endif %}
             </div>
             </section>
+
+            {% endif %}
+
+            {% endwith %}
 
             {% endif %}
 

@@ -12,7 +12,8 @@ from importlib import import_module
 from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, models, transaction
-from django.test import TestCase
+from django.template.loader import get_template
+from django.test import RequestFactory, TestCase
 
 from workflow.form_services import DynamicFormService
 from workflow.models import (
@@ -613,3 +614,199 @@ class LayoutOrderBackfillTests(TestCase):
         self.assertTrue(
             all(f.layout_order < group.layout_order for f in fields)
         )
+
+
+class MainFormTemplateLayoutTests(TestCase):
+    """
+    Test G — the main workflow form template must render each section's
+    contents in the mixed ``layout_items`` order provided by
+    ``DynamicFormService.get_form_for_step``.
+
+    Only the outer iteration order changes: the field and
+    repeatable-group renderers themselves are untouched, and sections
+    containing only fields (or only groups) keep rendering in their
+    existing business ``order``.
+    """
+
+    def _render_main_form(self, *, instance, result, edit_mode=False):
+        request = RequestFactory().get("/")
+        request.user = self.user
+
+        context = {
+            "instance": instance,
+            "dynamic_form": result,
+            "edit_mode": edit_mode,
+            "transitions": [],
+            "error": None,
+            "validation_errors": [],
+            "has_saved_data": False,
+            "current_step_execution": None,
+        }
+
+        return get_template(
+            "operator_panel/workflow_instance.html"
+        ).render(context, request)
+
+    def _assert_marker_order(self, html, markers):
+        """Every marker must appear, in the given document order."""
+        positions = []
+        for marker in markers:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, html)
+            positions.append(html.index(marker))
+
+        self.assertEqual(positions, sorted(positions))
+
+    def test_mixed_field_group_order_rendered(self):
+        """Field A, Group X, Field B, Group Y, Field C — in that order."""
+        (
+            user,
+            workflow,
+            step,
+            instance,
+            form,
+            section,
+        ) = create_service_environment()
+        self.user = user
+
+        field_a = make_field(section, "field_a", order=1, layout_order=10)
+        group_a = make_group(section, "group_a", order=1, layout_order=20)
+        field_b = make_field(section, "field_b", order=2, layout_order=30)
+        group_b = make_group(section, "group_b", order=2, layout_order=40)
+        field_c = make_field(section, "field_c", order=3, layout_order=50)
+
+        # Each NORMAL group needs a visible nested field to render.
+        group_a_field = make_field(
+            section,
+            "group_a_field",
+            order=1,
+            repeatable_group=group_a,
+        )
+        group_b_field = make_field(
+            section,
+            "group_b_field",
+            order=1,
+            repeatable_group=group_b,
+        )
+
+        for field in (
+            field_a,
+            field_b,
+            field_c,
+            group_a_field,
+            group_b_field,
+        ):
+            grant_field_access(step, field)
+
+        for group in (group_a, group_b):
+            grant_group_access(step, group)
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=user,
+            edit_mode=False,
+        )
+
+        html = self._render_main_form(instance=instance, result=result)
+
+        self._assert_marker_order(
+            html,
+            [
+                'for="field-field_a"',
+                'data-repeatable-group="group_a"',
+                'for="field-field_b"',
+                'data-repeatable-group="group_b"',
+                'for="field-field_c"',
+            ],
+        )
+
+    def test_fields_only_section_renders_in_business_order(self):
+        """A fields-only section renders exactly as before (by ``order``)."""
+        (
+            user,
+            workflow,
+            step,
+            instance,
+            form,
+            section,
+        ) = create_service_environment()
+        self.user = user
+
+        field_one = make_field(section, "field_one", order=1)
+        field_two = make_field(section, "field_two", order=2)
+        field_three = make_field(section, "field_three", order=3)
+
+        for field in (field_one, field_two, field_three):
+            grant_field_access(step, field)
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=user,
+            edit_mode=False,
+        )
+
+        html = self._render_main_form(instance=instance, result=result)
+
+        self._assert_marker_order(
+            html,
+            [
+                'for="field-field_one"',
+                'for="field-field_two"',
+                'for="field-field_three"',
+            ],
+        )
+
+        self.assertNotIn("data-repeatable-group=", html)
+
+    def test_groups_only_section_renders_in_business_order(self):
+        """A groups-only section renders exactly as before (by ``order``)."""
+        (
+            user,
+            workflow,
+            step,
+            instance,
+            form,
+            section,
+        ) = create_service_environment()
+        self.user = user
+
+        group_one = make_group(section, "group_one", order=1)
+        group_two = make_group(section, "group_two", order=2)
+
+        group_one_field = make_field(
+            section,
+            "group_one_field",
+            order=1,
+            repeatable_group=group_one,
+        )
+        group_two_field = make_field(
+            section,
+            "group_two_field",
+            order=1,
+            repeatable_group=group_two,
+        )
+
+        grant_field_access(step, group_one_field)
+        grant_field_access(step, group_two_field)
+        grant_group_access(step, group_one)
+        grant_group_access(step, group_two)
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=user,
+            edit_mode=False,
+        )
+
+        html = self._render_main_form(instance=instance, result=result)
+
+        self._assert_marker_order(
+            html,
+            [
+                'data-repeatable-group="group_one"',
+                'data-repeatable-group="group_two"',
+            ],
+        )
+
+        # No top-level field renderer output (nested group fields use
+        # labels without a ``for`` attribute).
+        self.assertNotIn('for="field-', html)
