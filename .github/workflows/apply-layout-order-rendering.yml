@@ -1,0 +1,154 @@
+name: Apply layout order rendering refactor
+
+on:
+  push:
+    branches:
+      - feature/unidentified-device-without-identifier
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refactor workflow form template
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('backend/operator_panel/templates/operator_panel/workflow_instance.html')
+          text = path.read_text(encoding='utf-8')
+
+          def matching_endfor(src, start):
+              token_re = re.compile(r'{%\\s*(for|endfor|if|endif|elif|else|with|endwith|block|endblock|comment|endcomment|filter|endfilter|spaceless|endspaceless)\\b[^%]*%}')
+              stack = []
+              for m in token_re.finditer(src, start):
+                  tag = m.group(1)
+                  if tag in {'for','if','with','block','comment','filter','spaceless'}:
+                      stack.append(tag)
+                  elif tag.startswith('end'):
+                      if not stack:
+                          raise RuntimeError(f'unbalanced template tag near {m.start()}')
+                      expected = tag[3:]
+                      actual = stack.pop()
+                      if expected != actual:
+                          raise RuntimeError(f'template tag mismatch: expected end{actual}, got {tag}')
+                      if not stack:
+                          return m.start(), m.end()
+              raise RuntimeError('matching end tag not found')
+
+          field_marker = '{% for item in section.fields %}'
+          group_marker = '{% for group in section.repeatable_groups %}'
+
+          field_start = text.index(field_marker)
+          field_end_start, field_end_end = matching_endfor(text, field_start)
+          field_body = text[field_start + len(field_marker):field_end_start]
+
+          group_start = text.index(group_marker, field_end_end)
+          group_end_start, group_end_end = matching_endfor(text, group_start)
+          group_body = text[group_start + len(group_marker):group_end_start]
+
+          include_dir = Path('backend/operator_panel/templates/operator_panel/layout_parts')
+          include_dir.mkdir(parents=True, exist_ok=True)
+
+          # Preserve the existing renderers verbatim; only remove their
+          # outer loops so the parent template can choose their order.
+          Path(include_dir / 'form_field.html').write_text(field_body.strip() + '\n', encoding='utf-8')
+          Path(include_dir / 'repeatable_group.html').write_text(group_body.strip() + '\n', encoding='utf-8')
+
+          section_start = text.rfind('<!-- ========================= -->', 0, field_start)
+          if section_start == -1:
+              raise RuntimeError('normal-field section marker not found')
+
+          group_comment_start = text.rfind('<!-- ========================= -->', 0, group_start)
+          if group_comment_start == -1 or group_comment_start <= section_start:
+              raise RuntimeError('repeatable-group section marker not found')
+
+          replacement = '''          <!-- ========================= -->
+          <!-- Mixed top-level layout    -->
+          <!-- ========================= -->
+
+          <div class="df-form-layout">
+
+            {% for layout_item in section.layout_items %}
+
+              {% if layout_item.type == "field" %}
+                <div class="df-form-layout-field">
+                  {% include "operator_panel/layout_parts/form_field.html" with item=layout_item.item %}
+                </div>
+
+              {% elif layout_item.type == "group" %}
+                {% include "operator_panel/layout_parts/repeatable_group.html" with group=layout_item.item %}
+              {% endif %}
+
+            {% endfor %}
+
+          </div>
+
+'''
+
+          # Replace from the Normal Fields marker through the complete group loop.
+          text = text[:section_start] + replacement + text[group_end_end:]
+          path.write_text(text, encoding='utf-8')
+
+          # Add only presentation CSS. Existing field/group classes and all
+          # form semantics remain unchanged.
+          css = Path('backend/operator_panel/static/operator_panel/css/app.css')
+          css_text = css.read_text(encoding='utf-8')
+          marker = '/* ---------------------------------------------------------\\n   Layout-ordered form rendering\\n   --------------------------------------------------------- */'
+          if marker not in css_text:
+              css_text += '''\\n\\n/* ---------------------------------------------------------
+   Layout-ordered form rendering
+   --------------------------------------------------------- */
+
+.df-form-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.df-form-layout-field {
+    min-width: 0;
+}
+'''
+              css.write_text(css_text, encoding='utf-8')
+          PY
+
+      - name: Validate template structure
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('backend/operator_panel/templates/operator_panel/workflow_instance.html')
+          s = p.read_text(encoding='utf-8')
+          required = [
+              '{% for layout_item in section.layout_items %}',
+              'operator_panel/layout_parts/form_field.html',
+              'operator_panel/layout_parts/repeatable_group.html',
+          ]
+          for x in required:
+              if x not in s:
+                  raise SystemExit(f'missing expected marker: {x}')
+          if '{% for item in section.fields %}' in s:
+              raise SystemExit('old top-level field loop still present')
+          if '{% for group in section.repeatable_groups %}' in s:
+              raise SystemExit('old top-level group loop still present')
+          print('template refactor markers OK')
+          PY
+
+      - name: Commit and push
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/operator_panel/templates/operator_panel/workflow_instance.html \
+                  backend/operator_panel/templates/operator_panel/layout_parts \
+                  backend/operator_panel/static/operator_panel/css/app.css \
+                  .github/workflows/apply-layout-order-rendering.yml
+          git commit -m 'feat: render form sections by layout order'
+          git rm .github/workflows/apply-layout-order-rendering.yml
+          git commit -m 'chore: remove temporary layout refactor workflow'
+          git push
