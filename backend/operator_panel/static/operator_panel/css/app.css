@@ -23,6 +23,31 @@
     --df-shadow-lg: 0 20px 50px rgba(0,0,0,.35);
 }
 
+/* Workflow UI semantic variables (dark defaults) */
+:root {
+    --surface-input: var(--surface-3);
+    --surface-hover: rgba(255, 255, 255, 0.04);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --text-secondary: var(--muted);
+    --danger-soft: rgba(239, 68, 68, 0.10);
+    --success-soft: rgba(34, 197, 94, 0.10);
+    --warning-soft: rgba(245, 158, 11, 0.10);
+    --info-soft: rgba(59, 130, 246, 0.10);
+    --on-accent: #111419;
+}
+
+html.theme-light {
+    --surface-input: #ffffff;
+    --surface-hover: rgba(15, 23, 42, 0.04);
+    --border-strong: rgba(15, 23, 42, 0.22);
+    --text-secondary: #475569;
+    --danger-soft: rgba(239, 68, 68, 0.08);
+    --success-soft: rgba(34, 197, 94, 0.10);
+    --warning-soft: rgba(245, 158, 11, 0.10);
+    --info-soft: rgba(59, 130, 246, 0.08);
+    --on-accent: #111419;
+}
+
 @font-face {
     font-family: "Yekan";
     src: url("../fonts/Yekan.woff2") format("woff2");
@@ -2137,5 +2162,747 @@ body.df-modal-open {
     #df-nav-workflows .df-nav-empty {
         display: block;
         padding: 12px;
+    }
+}
+
+/* =========================================================
+   Workflow Instance Page — Compact Professional Redesign
+   ---------------------------------------------------------
+   Scoped to .workflow-instance (and the device modal it owns).
+   Fully theme-variable driven so it adapts to Light/Dark.
+   Grid architecture untouched: .df-form-section stays the
+   shared 12-column container; spans stay on .df-form-fields.
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   Page header: title + compact metadata
+   --------------------------------------------------------- */
+
+.workflow-instance {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 20px 24px;
+}
+
+.workflow-instance > h1 {
+    margin: 0 0 4px;
+    font-size: 21px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.workflow-instance > p {
+    margin: 0;
+}
+
+/* "Instance #n" — small muted metadata */
+.workflow-instance > p:nth-of-type(1) {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+/* Status + current step row: compact pills */
+.workflow-instance > p:not(:nth-of-type(1)) {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.workflow-instance > p:not(:nth-of-type(1)) strong {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+/* Messages banner (page-level django messages) */
+
+.workflow-instance .df-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 0 12px;
+}
+
+.workflow-instance .df-message {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-right: 3px solid var(--info);
+    border-radius: 8px;
+    background: var(--surface-2);
+    font-size: 12px;
+}
+
+.workflow-instance .df-message-success { border-right-color: var(--success); background: var(--success-soft); }
+.workflow-instance .df-message-error,
+.workflow-instance .df-message-danger { border-right-color: var(--danger); background: var(--danger-soft); }
+.workflow-instance .df-message-warning { border-right-color: var(--warning); background: var(--warning-soft); }
+
+/* ---------------------------------------------------------
+   Main form surface
+   --------------------------------------------------------- */
+
+.workflow-instance .df-form {
+    margin-top: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--df-shadow-sm);
+    overflow: hidden;
+}
+
+.workflow-instance .df-form-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+}
+
+.workflow-instance .df-form-header h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+/* ---------------------------------------------------------
+   Section: shared grid container (architecture preserved)
+   --------------------------------------------------------- */
+
+.workflow-instance .df-form-section {
+    padding: 14px 16px;
+    margin: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-2);
+}
+
+.workflow-instance .df-form-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+}
+
+.workflow-instance .df-form-section-header h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* ---------------------------------------------------------
+   Field grid items and field containers
+   --------------------------------------------------------- */
+
+.workflow-instance .df-form-fields {
+    min-width: 0;
+}
+
+.workflow-instance .df-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+
+/* Labels */
+
+.workflow-instance .df-form-field label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.workflow-instance .df-form-field label span {
+    color: var(--danger);
+    font-weight: 700;
+}
+
+/* ---------------------------------------------------------
+   Inputs / selects / textareas (workflow form only)
+   --------------------------------------------------------- */
+
+.workflow-instance .df-form-field input,
+.workflow-instance .df-form-field select,
+.workflow-instance .df-form-field textarea {
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-input);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.workflow-instance .df-form-field input:focus,
+.workflow-instance .df-form-field select:focus,
+.workflow-instance .df-form-field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.workflow-instance .df-form-field textarea {
+    min-height: 80px;
+    resize: vertical;
+    line-height: 1.7;
+}
+
+.workflow-instance .df-form-field input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    min-height: 0;
+    flex: 0 0 16px;
+    align-self: flex-start;
+    margin-top: 2px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.workflow-instance .df-form-field input:disabled,
+.workflow-instance .df-form-field select:disabled,
+.workflow-instance .df-form-field textarea:disabled {
+    opacity: .65;
+    cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------
+   Read-only displayed values — intentional value chip
+   --------------------------------------------------------- */
+
+.workflow-instance .df-form-value {
+    display: block;
+    min-height: 36px;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-3);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+/* ---------------------------------------------------------
+   Field error states
+   --------------------------------------------------------- */
+
+.workflow-instance .df-field-error {
+    margin-top: 4px;
+    color: var(--danger);
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.workflow-instance .df-form-field.has-error input,
+.workflow-instance .df-form-field.has-error textarea,
+.workflow-instance .df-form-field.has-error select {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 2px var(--danger-soft);
+}
+
+.workflow-instance .df-form-field.has-error .df-field-error {
+    display: block;
+}
+
+.workflow-instance .df-form-field.has-validation-error input,
+.workflow-instance .df-form-field.has-validation-error textarea,
+.workflow-instance .df-form-field.has-validation-error select {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 2px var(--danger-soft);
+}
+
+.workflow-instance .df-form-field.has-validation-error label {
+    color: var(--danger);
+}
+
+/* ---------------------------------------------------------
+   Buttons — compact enterprise style (dark/light aware)
+   --------------------------------------------------------- */
+
+.workflow-instance .df-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 6px 12px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: filter .15s ease, background .15s ease,
+                border-color .15s ease, color .15s ease,
+                box-shadow .15s ease;
+}
+
+.workflow-instance .df-button:hover { filter: brightness(.94); }
+
+.workflow-instance .df-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.workflow-instance .df-button:active { filter: brightness(.88); }
+
+.workflow-instance .df-button:disabled,
+.workflow-instance .df-button[disabled] {
+    opacity: .45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Secondary */
+.workflow-instance .df-button-secondary {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+.workflow-instance .df-button-secondary:hover {
+    background: var(--surface-3);
+    border-color: var(--accent);
+    color: var(--text);
+    filter: none;
+}
+
+/* Danger */
+.workflow-instance .df-button-danger {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.workflow-instance .df-button-danger:hover {
+    background: var(--danger);
+    color: var(--on-accent);
+    filter: none;
+}
+
+/* Success (kept for future/inline states) */
+.workflow-instance .df-button-success {
+    border-color: var(--success);
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.workflow-instance .df-button-success:hover {
+    background: var(--success);
+    color: var(--on-accent);
+}
+
+/* Compact buttons inside tables */
+.workflow-instance .df-device-actions .df-button,
+.workflow-instance .df-table-actions .df-button,
+.workflow-instance .df-repeatable-item-actions .df-button {
+    min-height: 26px;
+    padding: 4px 8px;
+    font-size: 10px;
+}
+
+.workflow-instance .df-device-actions,
+.workflow-instance .df-table-actions,
+.workflow-instance .df-repeatable-item-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* ---------------------------------------------------------
+   Repeatable groups — compact full-width panels
+   --------------------------------------------------------- */
+
+.workflow-instance .df-repeatable-group {
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-3);
+}
+
+.workflow-instance .df-repeatable-group .df-form-section-header {
+    margin-bottom: 10px;
+}
+
+.workflow-instance .df-repeatable-group .df-form-section-header h3 {
+    font-size: 12px;
+}
+
+/* DEVICE + normal tables: denser rows, same overflow behavior */
+
+.workflow-instance .df-device-table-wrapper,
+.workflow-instance .df-table-wrapper {
+    border-radius: 8px;
+}
+
+.workflow-instance .df-device-table th,
+.workflow-instance .df-device-table td,
+.workflow-instance .df-normal-table th,
+.workflow-instance .df-normal-table td {
+    padding: 8px 10px;
+}
+
+.workflow-instance .df-device-table,
+.workflow-instance .df-normal-table {
+    font-size: 11px;
+}
+
+.workflow-instance .df-device-table th,
+.workflow-instance .df-normal-table th {
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.workflow-instance .df-device-table th {
+    background: var(--surface-hover);
+}
+
+.workflow-instance .df-device-empty td,
+.workflow-instance .df-table-empty td {
+    padding: 16px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.workflow-instance .df-table-input {
+    min-height: 30px;
+    padding: 5px 8px;
+    background: var(--surface-input);
+    border-color: var(--border);
+    color: var(--text);
+    font-size: 11px;
+}
+
+.workflow-instance .df-table-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.workflow-instance .df-table-value {
+    color: var(--text-secondary);
+}
+
+.workflow-instance .df-device-editor input,
+.workflow-instance .df-device-editor select,
+.workflow-instance .df-device-editor textarea {
+    background: var(--surface-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font: inherit;
+    font-size: 11px;
+}
+
+.workflow-instance .df-device-display {
+    color: var(--text);
+}
+
+/* LIST-mode repeatable fields */
+
+.workflow-instance .df-repeatable-items > .df-repeatable-item {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+}
+
+.workflow-instance .df-repeatable-items > .df-repeatable-item + .df-repeatable-item {
+    margin-top: 8px;
+}
+
+/* ---------------------------------------------------------
+   Validation banners (group-level)
+   --------------------------------------------------------- */
+
+.workflow-instance .df-device-group-error,
+.workflow-instance .df-repeatable-group-error {
+    margin: 8px 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--danger);
+    border-right: 3px solid var(--danger);
+    border-radius: 8px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-size: 11px;
+    line-height: 1.6;
+    box-shadow: none;
+}
+
+.workflow-instance .df-device-group-error::before,
+.workflow-instance .df-repeatable-group-error::before {
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    border-color: var(--danger);
+    background: var(--danger);
+    color: var(--on-accent);
+    font-size: 11px;
+}
+
+.workflow-instance .df-repeatable-field-error {
+    margin-top: 6px;
+    padding: 6px 9px;
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-size: 10px;
+}
+
+.workflow-instance .df-repeatable-field-error-icon {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 15px;
+    background: var(--danger);
+    color: var(--on-accent);
+    font-size: 9px;
+}
+
+.workflow-instance .df-repeatable-validation-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--danger);
+    border-radius: 8px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-size: 11px;
+}
+
+.workflow-instance .df-repeatable-validation-error-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    border-radius: 50%;
+    background: var(--danger);
+    color: var(--on-accent);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.workflow-instance .df-device-group-error {
+    /* full-width grid item */
+    grid-column: 1 / -1;
+}
+
+.workflow-instance .df-empty-state {
+    padding: 14px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 8px;
+    font-size: 11px;
+    opacity: .7;
+}
+
+/* ---------------------------------------------------------
+   Form actions bar
+   --------------------------------------------------------- */
+
+.workflow-instance .df-form-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 16px;
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+/* ---------------------------------------------------------
+   Device modal — same language, theme aware
+   --------------------------------------------------------- */
+
+.workflow-instance .df-device-modal-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--df-shadow-lg);
+}
+
+.workflow-instance .df-device-modal-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.workflow-instance .df-device-modal-header h2 {
+    font-size: 15px;
+}
+
+.workflow-instance .df-device-modal-header p {
+    margin-top: 4px;
+    font-size: 11px;
+}
+
+.workflow-instance .df-device-modal-close {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
+}
+
+.workflow-instance .df-device-modal-close:hover {
+    background: var(--surface-3);
+    color: var(--text);
+}
+
+.workflow-instance .df-device-modal-body {
+    padding: 14px 16px;
+}
+
+.workflow-instance .df-device-modal-field {
+    margin-bottom: 12px;
+}
+
+.workflow-instance .df-device-modal-field label {
+    margin-bottom: 5px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.workflow-instance .df-device-modal-field label span {
+    color: var(--danger);
+}
+
+.workflow-instance .df-device-modal-field small {
+    margin-bottom: 5px;
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.workflow-instance .df-device-modal-field input,
+.workflow-instance .df-device-modal-field select,
+.workflow-instance .df-device-modal-field textarea {
+    min-height: 36px;
+    padding: 7px 10px;
+    background: var(--surface-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+}
+
+.workflow-instance .df-device-modal-field input:focus,
+.workflow-instance .df-device-modal-field select:focus,
+.workflow-instance .df-device-modal-field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.workflow-instance .df-device-modal-field textarea {
+    min-height: 76px;
+}
+
+.workflow-instance .df-device-modal-field.has-error input,
+.workflow-instance .df-device-modal-field.has-error select,
+.workflow-instance .df-device-modal-field.has-error textarea {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 2px var(--danger-soft);
+}
+
+.workflow-instance .df-device-modal-error {
+    margin-top: 4px;
+    color: var(--danger);
+    font-size: 10px;
+}
+
+.workflow-instance .df-device-modal-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+}
+
+.workflow-instance .df-device-modal-submit {
+    min-width: 110px;
+}
+
+/* ---------------------------------------------------------
+   Workflow actions (transitions)
+   --------------------------------------------------------- */
+
+.workflow-instance .df-workflow-actions {
+    margin-top: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.workflow-instance .df-workflow-actions-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.workflow-instance .df-workflow-actions-header h2 {
+    margin: 0 0 2px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.workflow-instance .df-workflow-actions-header p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+/* ---------------------------------------------------------
+   Responsive: keep grid architecture, compact page chrome
+   --------------------------------------------------------- */
+
+@media (max-width: 767px) {
+
+    .workflow-instance {
+        padding: 12px 12px 16px;
+    }
+
+    .workflow-instance .df-form-section {
+        padding: 12px;
+        margin: 8px;
+    }
+
+    .workflow-instance .df-form,
+    .workflow-instance .df-form-actions,
+    .workflow-instance .df-workflow-actions {
+        border-radius: 10px;
+    }
+
+    .workflow-instance .df-device-actions,
+    .workflow-instance .df-table-actions {
+        white-space: normal;
     }
 }
