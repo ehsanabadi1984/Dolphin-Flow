@@ -59,6 +59,7 @@
     margin: 0 0 18px;
     padding: 0;
     list-style: none;
+    min-height: 12px;
 }
 
 .df-layout-item {
@@ -70,8 +71,12 @@
     background: #fff;
     border: 1px solid var(--hairline-color);
     border-radius: 6px;
-    cursor: default;
-    transition: box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+    cursor: grab;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+}
+
+.df-layout-item:active {
+    cursor: grabbing;
 }
 
 .df-layout-item:hover {
@@ -80,13 +85,24 @@
 }
 
 .df-layout-item-dragging {
-    opacity: 0.55;
+    opacity: 0.45;
     border-color: var(--link-fg);
 }
 
+.df-layout-item-placeholder {
+    height: 44px;
+    margin-bottom: 6px;
+    border: 2px dashed var(--link-fg);
+    border-radius: 6px;
+    background: var(--darkened-bg);
+    box-sizing: border-box;
+}
+
 .df-layout-item-grip {
+    flex: 0 0 auto;
     cursor: grab;
     font-size: 14px;
+    line-height: 1;
     color: var(--link-fg);
     user-select: none;
 }
@@ -95,6 +111,7 @@
     flex: 1;
     min-width: 0;
     overflow-wrap: anywhere;
+    user-select: none;
 }
 
 .df-layout-item-badge {
@@ -103,7 +120,7 @@
     border-radius: 999px;
     white-space: nowrap;
     color: #fff;
-    background: var(--button-fg);
+    background: var(--button-bg);
 }
 
 .df-layout-item-badge-field {
@@ -139,17 +156,25 @@
 }
 
 .df-section-layout-save-button {
+    display: inline-block;
     padding: 8px 16px;
-    border: 1px solid var(--hairline-color);
+    border: 1px solid var(--button-bg);
     border-radius: 6px;
-    background: var(--button-fg);
-    color: #fff;
+    background: var(--button-bg);
+    color: var(--button-fg);
     font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
     cursor: pointer;
 }
 
 .df-section-layout-save-button:hover {
-    background: var(--highlight-fg);
+    background: var(--button-hover-bg);
+}
+
+.df-section-layout-save-button:disabled {
+    opacity: 0.65;
+    cursor: wait;
 }
 
 .df-section-layout-status {
