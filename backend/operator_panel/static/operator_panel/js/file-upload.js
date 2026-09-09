@@ -14,6 +14,15 @@ document.addEventListener("DOMContentLoaded", () => {
             : String(value).replace(/(["\\])/g, "\\$1");
     }
 
+    function getCookie(name) {
+        const cookies = document.cookie ? document.cookie.split("; ") : [];
+        for (const cookie of cookies) {
+            const [key, ...parts] = cookie.trim().split("=");
+            if (key === name) return decodeURIComponent(parts.join("="));
+        }
+        return "";
+    }
+
     function renderExistingFile(container, file) {
         if (!container || !file) return;
         const target = container.querySelector(".df-form-value, .df-table-value") || container;
@@ -29,6 +38,58 @@ document.addEventListener("DOMContentLoaded", () => {
         target.dataset.fileRendered = "1";
     }
 
+    async function deleteFile(file, wrapper, input) {
+        if (!file || !file.delete_url || !wrapper) return;
+
+        if (!window.confirm("آیا از حذف این فایل مطمئن هستید؟")) return;
+
+        const button = wrapper.querySelector(".df-file-delete");
+        if (button) {
+            button.disabled = true;
+            button.textContent = "در حال حذف...";
+        }
+
+        try {
+            const response = await fetch(file.delete_url, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "X-CSRFToken": getCookie("csrftoken"),
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Accept": "application/json",
+                },
+            });
+
+            let payload = {};
+            try {
+                payload = await response.json();
+            } catch (_) {
+                // Keep the generic error below when the server did not return JSON.
+            }
+
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.error || "حذف فایل انجام نشد.");
+            }
+
+            const current = wrapper.querySelector(".df-file-current");
+            if (current) current.remove();
+
+            if (input) {
+                input.value = "";
+                input.required = false;
+            }
+
+            wrapper.dataset.fileId = "";
+            wrapper.dataset.fileDeleted = "1";
+        } catch (error) {
+            window.alert(error.message || "حذف فایل انجام نشد.");
+            if (button) {
+                button.disabled = false;
+                button.textContent = "حذف فایل";
+            }
+        }
+    }
+
     function addFileControl(container, field, file) {
         if (!container) return;
 
@@ -38,7 +99,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const selector = `input[type="file"][data-file-field="${cssEscape(field.code)}"]`;
-        if (container.querySelector(selector)) return;
+        const existingInput = container.querySelector(selector);
+        if (existingInput) return;
 
         const input = document.createElement("input");
         input.type = "file";
@@ -65,7 +127,18 @@ document.addEventListener("DOMContentLoaded", () => {
             const note = document.createElement("span");
             note.textContent = " (فایل فعلی؛ برای تعویض فایل جدید انتخاب کنید)";
             current.appendChild(note);
+
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "df-file-delete";
+            deleteButton.textContent = "حذف فایل";
+            deleteButton.addEventListener("click", () => {
+                deleteFile(file, wrapper, input);
+            });
+            current.appendChild(deleteButton);
+
             wrapper.appendChild(current);
+            wrapper.dataset.fileId = String(file.id || "");
         }
 
         container.appendChild(wrapper);
