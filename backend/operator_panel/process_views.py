@@ -1,3 +1,6 @@
+import re
+from datetime import datetime
+
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -6,6 +9,9 @@ from django.shortcuts import render
 from workflow.models import WorkflowInstance
 
 from .dashboard_services import DashboardService
+
+
+FORM_NUMBER_PATTERN = re.compile(r"^(?P<date>\d{6})-(?P<pk>\d{6})$")
 
 
 @login_required
@@ -40,8 +46,19 @@ def my_processes(request):
             | Q(workflow__code__icontains=search)
             | Q(current_step__name__icontains=search)
         )
-        if search.isdigit():
+
+        # Keep the existing numeric PK search, while also accepting the
+        # human-readable form number: YYMMDD-NNNNNN.
+        form_number_match = FORM_NUMBER_PATTERN.fullmatch(search)
+        if form_number_match:
+            form_date = datetime.strptime(
+                form_number_match.group("date"), "%y%m%d"
+            ).date()
+            form_pk = int(form_number_match.group("pk"))
+            search_filter |= Q(pk=form_pk, started_at__date=form_date)
+        elif search.isdigit():
             search_filter |= Q(pk=int(search))
+
         instances = instances.filter(search_filter)
 
     if status:
