@@ -5,11 +5,21 @@ class WorkflowConfig(AppConfig):
     name = "workflow"
 
     def ready(self):
-        from .models import FormField
+        from .models import FormField, WorkflowInstance
         from .form_file_models import FormFile  # noqa: F401
         from .formula_bootstrap import bootstrap_formula_system
         from . import signals  # noqa: F401
         from django.core.signals import request_started
+
+        # Human-readable form number: YYMMDD-NNNNNN.
+        # It is derived from the existing instance creation date and PK,
+        # so no database field or migration is required.
+        if not hasattr(WorkflowInstance, "form_number"):
+            WorkflowInstance.form_number = property(
+                lambda instance: (
+                    f"{instance.started_at:%y%m%d}-{instance.pk:06d}"
+                )
+            )
 
         model_field = FormField._meta.get_field("field_type")
         choices = list(model_field.choices or [])
