@@ -314,6 +314,7 @@ def _file_payload(item):
         "id": item.pk,
         "name": item.original_name or Path(item.file.name).name,
         "url": reverse("operator_panel:download_form_file", args=[item.pk]),
+        "delete_url": reverse("operator_panel:delete_form_file", args=[item.pk]),
     }
 
 
@@ -427,6 +428,57 @@ def file_field_definitions(request, instance_id):
             })
 
     return JsonResponse({"fields": fields, "groups": groups})
+
+
+@login_required
+@transaction.atomic
+def delete_form_file(request, file_id):
+    if request.method != "POST":
+        return JsonResponse({"error": "فقط درخواست POST مجاز است."}, status=405)
+
+    form_file = (
+        FormFile.objects
+        .select_related(
+            "form_data",
+            "form_data__instance",
+            "form_data__instance__workflow",
+            "form_data__instance__current_step",
+            "field",
+            "field__section",
+            "field__repeatable_group",
+        )
+        .filter(pk=file_id)
+        .first()
+    )
+    if form_file is None:
+        raise Http404
+
+    instance = form_file.form_data.instance
+    step = instance.current_step
+
+    WorkflowAuthorizationService.require_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=WorkflowPermission.Action.VIEW,
+        step=step,
+        instance=instance,
+    )
+
+    if not _field_can_edit(form_file.field, user=request.user, step=step):
+        return JsonResponse({"error": "شما اجازه حذف این فایل را ندارید."}, status=403)
+
+    if form_file.field.repeatable_group_id and not _group_can_edit(
+        form_file.field.repeatable_group,
+        user=request.user,
+        step=step,
+    ):
+        return JsonResponse({"error": "شما اجازه حذف این فایل را ندارید."}, status=403)
+
+    if form_file.file:
+        form_file.file.delete(save=False)
+    form_file.delete()
+
+    return JsonResponse({"success": True, "file_id": file_id})
 
 
 @login_required
