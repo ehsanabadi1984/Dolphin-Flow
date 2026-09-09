@@ -156,32 +156,6 @@ class LifecycleAuthorizationTest(TestCase):
         form_data = FormData.objects.filter(instance=instance).first()
         self.assertEqual(form_data.data["simple_field"], "initial")
 
-    def test_readonly_blocks_clear_form(self):
-        """READONLY state blocks clear form."""
-        instance = self._create_instance()
-
-        # First save to enter readonly mode
-        DynamicFormService.save_form_for_step(
-            instance=instance,
-            user=self.user,
-            submitted_data={"simple_field": "initial"},
-            edit_mode=True,
-        )
-
-        # Try to clear in readonly mode
-        with self.assertRaises(PermissionDenied) as ctx:
-            DynamicFormService.clear_form_for_step(
-                instance=instance,
-                user=self.user,
-                edit_mode=False,
-            )
-
-        self.assertIn("ویرایش", str(ctx.exception))
-
-        # Verify data still exists
-        form_data = FormData.objects.filter(instance=instance).first()
-        self.assertIn("simple_field", form_data.data)
-
     # =========================================================
     # TEST 2: EDIT MODE - Mutation allowed with permissions
     # =========================================================
@@ -210,29 +184,6 @@ class LifecycleAuthorizationTest(TestCase):
 
         self.assertEqual(form_data.data["simple_field"], "modified")
 
-    def test_edit_mode_allows_clear_form(self):
-        """EDIT MODE allows clear form when has editable fields."""
-        instance = self._create_instance()
-
-        # First save
-        DynamicFormService.save_form_for_step(
-            instance=instance,
-            user=self.user,
-            submitted_data={"simple_field": "initial"},
-            edit_mode=True,
-        )
-
-        # Clear with edit_mode=True
-        DynamicFormService.clear_form_for_step(
-            instance=instance,
-            user=self.user,
-            edit_mode=True,
-        )
-
-        # Verify data cleared
-        form_data = FormData.objects.filter(instance=instance).first()
-        self.assertNotIn("simple_field", form_data.data)
-
     # =========================================================
     # TEST 3: SUBMITTED STATE - No mutation regardless
     # =========================================================
@@ -260,41 +211,6 @@ class LifecycleAuthorizationTest(TestCase):
             )
 
         self.assertIn("ارسال", str(ctx.exception))
-
-    def test_submitted_blocks_clear_form(self):
-        """SUBMITTED state blocks clear form even with edit_mode=True."""
-        instance = self._create_instance()
-
-        # Save data
-        DynamicFormService.save_form_for_step(
-            instance=instance,
-            user=self.user,
-            submitted_data={"simple_field": "initial"},
-            edit_mode=True,
-        )
-
-        # Mark as submitted
-        execution = WorkflowStepExecution.objects.get(
-            instance=instance,
-            workflow_step=self.step,
-        )
-        execution.is_submitted = True
-        execution.submitted_at = "2024-01-01T00:00:00Z"
-        execution.save()
-
-        # Try to clear with edit_mode=True - should fail
-        with self.assertRaises(PermissionDenied) as ctx:
-            DynamicFormService.clear_form_for_step(
-                instance=instance,
-                user=self.user,
-                edit_mode=True,
-            )
-
-        self.assertIn("ارسال", str(ctx.exception))
-
-        # Verify data still exists
-        form_data = FormData.objects.filter(instance=instance).first()
-        self.assertIn("simple_field", form_data.data)
 
     # =========================================================
     # TEST 4: TRANSITION INDEPENDENCE

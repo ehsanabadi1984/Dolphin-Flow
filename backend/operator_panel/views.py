@@ -820,56 +820,6 @@ def _get_edit_mode(*, instance, request):
 
 
 @login_required
-def clear_form_data(request, instance_id):
-    if request.method != "POST":
-        return redirect(
-            "operator_panel:workflow_instance",
-            instance_id=instance_id,
-        )
-
-    instance = get_object_or_404(
-        WorkflowInstance.objects.select_related(
-            "workflow",
-            "current_step",
-        ),
-        pk=instance_id,
-    )
-
-    if instance.status != WorkflowInstance.Status.ACTIVE:
-        raise ValidationError(
-            "این Workflow Instance فعال نیست."
-        )
-
-    WorkflowAuthorizationService.require_permission(
-        user=request.user,
-        workflow=instance.workflow,
-        action=WorkflowPermission.Action.VIEW,
-        step=instance.current_step,
-        instance=instance,
-    )
-
-    # Use the canonical edit_mode derivation
-    edit_mode = _get_edit_mode(instance=instance, request=request)
-
-    DynamicFormService.clear_form_for_step(
-        instance=instance,
-        user=request.user,
-        edit_mode=edit_mode,
-    )
-
-    from django.contrib import messages
-
-    messages.success(
-        request,
-        "اطلاعات قابل ویرایش این مرحله پاک شد.",
-    )
-
-    return redirect(
-        "operator_panel:workflow_instance",
-        instance_id=instance.pk,
-    )
-
-@login_required
 def notifications(request):
     unread = NotificationService.get_unread(
         user=request.user,

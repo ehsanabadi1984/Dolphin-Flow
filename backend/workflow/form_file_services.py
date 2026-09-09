@@ -472,27 +472,6 @@ def workflow_instance_with_files(request, instance_id):
 
 
 @login_required
-def clear_form_data_with_files(request, instance_id):
-    from operator_panel import views
-
-    response = views.clear_form_data(request, instance_id)
-    if 300 <= response.status_code < 400 and request.method == "POST":
-        instance = get_object_or_404(WorkflowInstance, pk=instance_id)
-        delete_form_files(instance=instance)
-    return response
-
-
-def delete_form_files(*, instance):
-    form_data = FormData.objects.filter(instance=instance).first()
-    if form_data is None:
-        return
-    for item in FormFile.objects.filter(form_data=form_data):
-        if item.file:
-            item.file.delete(save=False)
-        item.delete()
-
-
-@login_required
 def open_form_file(request, file_id):
     form_file = (
         FormFile.objects

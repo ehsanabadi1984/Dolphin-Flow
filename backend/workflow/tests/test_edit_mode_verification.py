@@ -138,55 +138,6 @@ class EditModeVerificationTest(TestCase):
         self.assertEqual(form_data.data.get("simple_field"), "test value")
         print(f"✓ edit_mode=True correctly accepted save")
 
-    def test_clear_form_edit_mode_false_rejects(self):
-        """Test that clear_form with edit_mode=False is rejected."""
-        instance = self._create_instance()
-
-        # First save some data
-        DynamicFormService.save_form_for_step(
-            instance=instance,
-            user=self.user,
-            submitted_data={"simple_field": "test value"},
-            edit_mode=True,
-        )
-
-        # Try to clear with edit_mode=False
-        with self.assertRaises(PermissionDenied) as ctx:
-            DynamicFormService.clear_form_for_step(
-                instance=instance,
-                user=self.user,
-                edit_mode=False,
-            )
-
-        # Verify the error is about edit_mode
-        self.assertIn("ویرایش", str(ctx.exception))
-        print(f"✓ clear_form with edit_mode=False correctly rejected: {ctx.exception}")
-
-    def test_clear_form_edit_mode_true_accepts(self):
-        """Test that clear_form with edit_mode=True is accepted."""
-        instance = self._create_instance()
-
-        # First save some data
-        DynamicFormService.save_form_for_step(
-            instance=instance,
-            user=self.user,
-            submitted_data={"simple_field": "test value"},
-            edit_mode=True,
-        )
-
-        # Clear with edit_mode=True
-        DynamicFormService.clear_form_for_step(
-            instance=instance,
-            user=self.user,
-            edit_mode=True,
-        )
-
-        # Verify data is cleared
-        form_data = FormData.objects.filter(instance=instance).first()
-        self.assertNotIn("simple_field", form_data.data)
-        print(f"✓ clear_form with edit_mode=True correctly cleared data")
-
-
 if __name__ == "__main__":
     import unittest
     unittest.main()

@@ -898,69 +898,6 @@ class EditModeAuthorizationTests(TestCase):
         self.assertIn("ارسال شده", str(ctx.exception))
 
     # =========================================================
-    # Test 10: clear_form_for_step requires edit_mode
-    # =========================================================
-
-    def test_clear_form_rejected_without_edit_mode(self):
-        """Clear form is rejected when edit_mode=False."""
-        instance = self._create_instance()
-
-        # Save some data first
-        try:
-            DynamicFormService.save_form_for_step(
-                instance=instance,
-                user=self.user,
-                submitted_data={"test_field": "some value"},
-                edit_mode=True,
-            )
-        except ValidationError:
-            # If save fails, skip this test - the setup is not working
-            self.skipTest("Setup failed: could not save initial data")
-            return
-
-        # Try to clear with edit_mode=False - should fail
-        with self.assertRaises(PermissionDenied) as ctx:
-            DynamicFormService.clear_form_for_step(
-                instance=instance,
-                user=self.user,
-                edit_mode=False,
-            )
-
-        self.assertIn("ویرایش", str(ctx.exception))
-
-        # Verify data still exists
-        form_data = FormData.objects.filter(instance=instance).first()
-        self.assertIn("test_field", form_data.data)
-
-    def test_clear_form_allowed_with_edit_mode(self):
-        """Clear form works when edit_mode=True."""
-        instance = self._create_instance()
-
-        # Save some data first
-        try:
-            DynamicFormService.save_form_for_step(
-                instance=instance,
-                user=self.user,
-                submitted_data={"test_field": "some value"},
-                edit_mode=True,
-            )
-        except ValidationError:
-            # If save fails, skip this test - the setup is not working
-            self.skipTest("Setup failed: could not save initial data")
-            return
-
-        # Clear with edit_mode=True should succeed
-        DynamicFormService.clear_form_for_step(
-            instance=instance,
-            user=self.user,
-            edit_mode=True,
-        )
-
-        # Verify data is cleared
-        form_data = FormData.objects.filter(instance=instance).first()
-        self.assertNotIn("test_field", form_data.data)
-
-    # =========================================================
     # Test 11: Workflow Transition is independent of edit_mode
     # =========================================================
 

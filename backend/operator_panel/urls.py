@@ -7,12 +7,10 @@ from .views import (
     execute_transition,
     start_workflow,
     workflow_instance,
-    clear_form_data,
     notifications,
     mark_notification_as_read,
 )
 from workflow.form_file_services import (
-    clear_form_data_with_files,
     file_field_definitions,
     open_form_file,
     workflow_instance_with_files,
@@ -23,12 +21,6 @@ app_name = "operator_panel"
 
 
 urlpatterns = [
-
-    path(
-        "workflow-instance/<int:instance_id>/clear/",
-        clear_form_data_with_files,
-        name="clear_form_data",
-    ),
 
     path(
         "",

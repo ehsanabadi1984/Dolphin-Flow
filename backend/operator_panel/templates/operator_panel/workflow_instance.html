@@ -1228,24 +1228,6 @@
       </a>
     {% endif %}
 
-    {% if edit_mode and dynamic_form.has_saved_data and dynamic_form.has_editable_fields and not dynamic_form.is_submitted %}
-      <form
-        method="post"
-        action="{% url 'operator_panel:clear_form_data' instance.pk %}"
-        style="display: inline"
-        onsubmit="return confirm('آیا مطمئن هستید که می‌خواهید اطلاعات قابل ویرایش این فرم را پاک کنید؟');"
-      >
-        {% csrf_token %}
-
-        <button
-          type="submit"
-          class="df-button df-button-danger"
-        >
-          پاک کردن اطلاعات
-        </button>
-      </form>
-    {% endif %}
-
   </div>
 
 {% endif %}

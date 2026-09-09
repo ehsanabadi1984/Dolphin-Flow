@@ -14,12 +14,6 @@
         return !!form && form.dataset.editMode === "1";
     };
 
-    const removeObsoleteClearFormAction = () => {
-        document.querySelectorAll('form[action*="/clear/"]').forEach((form) => {
-            form.remove();
-        });
-    };
-
     const activateExistingRows = () => {
         if (!isEditMode()) return;
 
@@ -112,7 +106,6 @@
 
     // app.js has not reached DOMContentLoaded yet, so apply the global
     // edit state now and avoid a visible frame with legacy row controls.
-    removeObsoleteClearFormAction();
     activateExistingRows();
 
     /*
