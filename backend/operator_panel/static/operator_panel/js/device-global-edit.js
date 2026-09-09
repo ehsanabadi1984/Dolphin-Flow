@@ -104,9 +104,9 @@
         tbody.appendChild(row);
     };
 
-    document.addEventListener("DOMContentLoaded", () => {
-        activateExistingRows();
-    });
+    // app.js has not reached DOMContentLoaded yet, so apply the global
+    // edit state now and avoid a visible frame with legacy row controls.
+    activateExistingRows();
 
     /*
      * The legacy app.js also listens for .df-device-modal-submit.
