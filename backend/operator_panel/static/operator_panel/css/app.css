@@ -2224,29 +2224,6 @@ body.df-modal-open {
     font-weight: 600;
 }
 
-/* Messages banner (page-level django messages) */
-
-.workflow-instance .df-messages {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin: 0 0 12px;
-}
-
-.workflow-instance .df-message {
-    padding: 8px 12px;
-    border: 1px solid var(--border);
-    border-right: 3px solid var(--info);
-    border-radius: 8px;
-    background: var(--surface-2);
-    font-size: 12px;
-}
-
-.workflow-instance .df-message-success { border-right-color: var(--success); background: var(--success-soft); }
-.workflow-instance .df-message-error,
-.workflow-instance .df-message-danger { border-right-color: var(--danger); background: var(--danger-soft); }
-.workflow-instance .df-message-warning { border-right-color: var(--warning); background: var(--warning-soft); }
-
 /* ---------------------------------------------------------
    Main form surface
    --------------------------------------------------------- */
@@ -2314,9 +2291,7 @@ body.df-modal-open {
     display: flex;
     flex-direction: column;
     gap: 0;
-    width: 100%;
     min-width: 0;
-    margin: 0;
 }
 
 /* Labels */
@@ -2422,10 +2397,6 @@ body.df-modal-open {
     box-shadow: 0 0 0 2px var(--danger-soft);
 }
 
-.workflow-instance .df-form-field.has-error .df-field-error {
-    display: block;
-}
-
 .workflow-instance .df-form-field.has-validation-error input,
 .workflow-instance .df-form-field.has-validation-error textarea,
 .workflow-instance .df-form-field.has-validation-error select {
@@ -2504,18 +2475,6 @@ body.df-modal-open {
     filter: none;
 }
 
-/* Success (kept for future/inline states) */
-.workflow-instance .df-button-success {
-    border-color: var(--success);
-    background: var(--success-soft);
-    color: var(--success);
-}
-
-.workflow-instance .df-button-success:hover {
-    background: var(--success);
-    color: var(--on-accent);
-}
-
 /* Compact buttons inside tables */
 .workflow-instance .df-device-actions .df-button,
 .workflow-instance .df-table-actions .df-button,
@@ -2568,36 +2527,22 @@ body.df-modal-open {
     padding: 8px 10px;
 }
 
-.workflow-instance .df-device-table,
-.workflow-instance .df-normal-table {
-    font-size: 11px;
-}
-
 .workflow-instance .df-device-table th,
 .workflow-instance .df-normal-table th {
     background: var(--surface-hover);
     color: var(--text-secondary);
-    font-size: 10px;
-}
-
-.workflow-instance .df-device-table th {
-    background: var(--surface-hover);
 }
 
 .workflow-instance .df-device-empty td,
 .workflow-instance .df-table-empty td {
     padding: 16px;
     color: var(--text-secondary);
-    font-size: 11px;
 }
 
 .workflow-instance .df-table-input {
     min-height: 30px;
     padding: 5px 8px;
     background: var(--surface-input);
-    border-color: var(--border);
-    color: var(--text);
-    font-size: 11px;
 }
 
 .workflow-instance .df-table-input:focus {
@@ -2618,10 +2563,6 @@ body.df-modal-open {
     color: var(--text);
     font: inherit;
     font-size: 11px;
-}
-
-.workflow-instance .df-device-display {
-    color: var(--text);
 }
 
 /* LIST-mode repeatable fields */
@@ -2712,11 +2653,6 @@ body.df-modal-open {
     font-weight: 700;
 }
 
-.workflow-instance .df-device-group-error {
-    /* full-width grid item */
-    grid-column: 1 / -1;
-}
-
 .workflow-instance .df-empty-state {
     padding: 14px;
     border: 1px dashed var(--border-strong);
@@ -2795,10 +2731,6 @@ body.df-modal-open {
     font-size: 11px;
 }
 
-.workflow-instance .df-device-modal-field label span {
-    color: var(--danger);
-}
-
 .workflow-instance .df-device-modal-field small {
     margin-bottom: 5px;
     color: var(--text-secondary);
@@ -2833,13 +2765,11 @@ body.df-modal-open {
 .workflow-instance .df-device-modal-field.has-error input,
 .workflow-instance .df-device-modal-field.has-error select,
 .workflow-instance .df-device-modal-field.has-error textarea {
-    border-color: var(--danger);
     box-shadow: 0 0 0 2px var(--danger-soft);
 }
 
 .workflow-instance .df-device-modal-error {
     margin-top: 4px;
-    color: var(--danger);
     font-size: 10px;
 }
 
@@ -2895,9 +2825,7 @@ body.df-modal-open {
         margin: 8px;
     }
 
-    .workflow-instance .df-form,
-    .workflow-instance .df-form-actions,
-    .workflow-instance .df-workflow-actions {
+    .workflow-instance .df-form {
         border-radius: 10px;
     }
 
