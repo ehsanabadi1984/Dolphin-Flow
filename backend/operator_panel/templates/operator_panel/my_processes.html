@@ -46,7 +46,7 @@
         <form method="get" class="df-process-filter-form">
             <div class="df-filter-field df-filter-search">
                 <label for="process-search">جستجو</label>
-                <input id="process-search" type="search" name="q" value="{{ search }}" placeholder="نام فرآیند، کد یا شماره...">
+                <input id="process-search" type="search" name="q" value="{{ search }}" placeholder="نام فرآیند، کد یا شماره فرم...">
             </div>
             <div class="df-filter-field">
                 <label for="process-status">وضعیت</label>
@@ -75,10 +75,11 @@
             {% for instance in instances %}
                 <div class="df-process-row">
                     <div class="df-process-row-main">
-                        <div class="df-process-row-title">{{ instance.workflow.name }} <span>#{{ instance.pk }}</span></div>
+                        <div class="df-process-row-title">{{ instance.workflow.name }} <span>#{{ instance.started_at|date:"ymd" }}-{{ instance.pk|stringformat:"06d" }}</span></div>
                         <div class="df-process-row-meta">
-                            {% if instance.current_step %}<span>مرحله: {{ instance.current_step.name }}</span>{% endif %}
-                            <span>·</span><span>{{ instance.get_status_display }}</span><span>·</span><span>{{ instance.started_at|date:"Y/m/d - H:i" }}</span>
+                            <span>شماره فرم: {{ instance.started_at|date:"ymd" }}-{{ instance.pk|stringformat:"06d" }}</span>
+                            {% if instance.current_step %}<span>·</span><span>مرحله: {{ instance.current_step.name }}</span>{% endif %}
+                            <span>·</span><span>{{ instance.get_status_display }}</span><span>·</span><span>تاریخ ایجاد: {{ instance.started_at|date:"Y/m/d - H:i" }}</span>
                         </div>
                     </div>
                     <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
