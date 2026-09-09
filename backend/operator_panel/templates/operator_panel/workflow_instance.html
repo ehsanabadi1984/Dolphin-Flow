@@ -1220,7 +1220,7 @@
 
   <div class="df-form-actions">
 
-    {% if dynamic_form.has_saved_data and dynamic_form.has_editable_fields and not edit_mode %}
+    {% if dynamic_form.has_saved_data and dynamic_form.can_reenter_edit_mode and not edit_mode %}
       <a
         href="?edit=1"
         class="df-button"

@@ -2629,12 +2629,18 @@ class DynamicFormService:
             for group in section["repeatable_groups"]
         )
 
+        can_reenter_edit_mode = (
+            not step_is_submitted
+            and has_editable_fields
+        )
+
         return {
             "form": form,
             "sections": sections,
             "has_saved_data": has_saved_data,
             "is_submitted": step_is_submitted,
             "has_editable_fields": has_editable_fields,
+            "can_reenter_edit_mode": can_reenter_edit_mode,
         }
 
     @staticmethod
