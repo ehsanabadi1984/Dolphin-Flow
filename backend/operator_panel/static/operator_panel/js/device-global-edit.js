@@ -20,10 +20,14 @@
         document.querySelectorAll("[data-device-row]").forEach((row) => {
             row.querySelectorAll(".df-device-editor").forEach((editor) => {
                 editor.hidden = false;
-            });
 
-            row.querySelectorAll(".df-device-display").forEach((display) => {
-                display.hidden = true;
+                const display = editor.parentElement.querySelector(
+                    ".df-device-display"
+                );
+
+                if (display) {
+                    display.hidden = true;
+                }
             });
 
             // The old per-row controls must not survive in the DOM.
