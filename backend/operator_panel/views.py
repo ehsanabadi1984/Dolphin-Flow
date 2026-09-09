@@ -752,20 +752,7 @@ def start_workflow(request, workflow_id):
         instance_id=instance.pk,
     )
 
-
 def _get_edit_mode(*, instance, request):
-    """
-    Determine edit_mode for a workflow instance.
-
-    This is the canonical edit_mode derivation logic.
-    It must be used consistently across all views.
-
-    Lifecycle:
-    - Submitted → read-only (immutable)
-    - Explicit ?edit=1 → editable
-    - Has saved data → read-only (until user clicks Edit)
-    - No saved data → editable (first visit)
-    """
     current_step_execution = (
         instance.step_executions
         .filter(
@@ -775,12 +762,10 @@ def _get_edit_mode(*, instance, request):
         .first()
     )
 
-    is_submitted = (
+    if (
         current_step_execution is not None
         and current_step_execution.is_submitted
-    )
-
-    if is_submitted:
+    ):
         return False
 
     if request.GET.get("edit") == "1":
@@ -788,13 +773,20 @@ def _get_edit_mode(*, instance, request):
 
     form_data = (
         FormData.objects
-        .filter(
-            instance=instance,
-        )
+        .filter(instance=instance)
         .first()
     )
 
-    has_form_data = (
+    # اگر Step فعلی تازه فعال شده و هنوز در این Step ذخیره نشده،
+    # مستقیماً در حالت ویرایش باز شود.
+    if current_step_execution is not None:
+        if (
+            form_data is None
+            or form_data.updated_at <= current_step_execution.performed_at
+        ):
+            return True
+
+    form_data_has_data = (
         form_data is not None
         and bool(form_data.data)
     )
@@ -809,7 +801,7 @@ def _get_edit_mode(*, instance, request):
     )
 
     has_saved_data = (
-        has_form_data
+        form_data_has_data
         or has_device_data
     )
 
@@ -817,7 +809,6 @@ def _get_edit_mode(*, instance, request):
         return False
 
     return True
-
 
 @login_required
 def notifications(request):

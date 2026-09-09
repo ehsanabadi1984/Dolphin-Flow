@@ -1611,7 +1611,7 @@ class DynamicFormService:
 
                     group_has_editable_fields = (
                         any(
-                            field_info["can_edit"]
+                            field_info["permission_can_edit"]
                             for field_info in group_fields
                         )
                         or (
