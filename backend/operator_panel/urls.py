@@ -14,6 +14,7 @@ from workflow.form_file_services import (
     file_field_definitions,
     open_form_file,
     workflow_instance_with_files,
+    delete_form_file,
 )
 
 
@@ -104,6 +105,12 @@ urlpatterns = [
         "workflow-file/<int:file_id>/download/",
         open_form_file,
         name="download_form_file",
+    ),
+
+    path(
+        "workflow-file/<int:file_id>/delete/",
+        delete_form_file,
+        name="delete_form_file",
     ),
 
     path(
