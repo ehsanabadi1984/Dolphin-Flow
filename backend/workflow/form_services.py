@@ -517,19 +517,38 @@ class DynamicFormService:
                     == FormField.SystemKey.WARRANTY_STATUS
                 ):
                     value = instance_device.warranty_status
-                    display_value = str(value)
+                    display_value = (
+                        DynamicFormService._get_display_value(
+                            field=field,
+                            value=value,
+                        )
+                    )
 
                 elif (
                     system_key
                     == FormField.SystemKey.STATUS
                 ):
                     value = instance_device.status
-                    display_value = str(value)
+                    display_value = (
+                        DynamicFormService._get_display_value(
+                            field=field,
+                            value=value,
+                        )
+                    )
 
                 else:
                     # Device fields with no system mapping are
                     # not currently stored in InstanceDevice.
                     continue
+
+                if (
+                    field.field_type == FormField.FieldType.SELECT
+                    and field.choice_source == FormField.ChoiceSource.STATIC
+                ):
+                    display_value = DynamicFormService._get_display_value(
+                        field=field,
+                        value=value,
+                    )
 
                 item_fields.append(
                     {
@@ -1877,7 +1896,12 @@ class DynamicFormService:
                                         "",
                                     )
 
-                                    display_value = value
+                                    display_value = (
+                                        DynamicFormService._get_display_value(
+                                            field=field,
+                                            value=value,
+                                        )
+                                    )
 
                                 # ---------------------------------------------
                                 # STATUS
@@ -1893,7 +1917,12 @@ class DynamicFormService:
                                         "",
                                     )
 
-                                    display_value = value
+                                    display_value = (
+                                        DynamicFormService._get_display_value(
+                                            field=field,
+                                            value=value,
+                                        )
+                                    )
 
                                 else:
 
@@ -2262,7 +2291,12 @@ class DynamicFormService:
                                         or ""
                                     )
 
-                                    display_value = value
+                                    display_value = (
+                                        DynamicFormService._get_display_value(
+                                            field=field,
+                                            value=value,
+                                        )
+                                    )
 
                                 # ---------------------------------------------
                                 # STATUS
@@ -2278,7 +2312,12 @@ class DynamicFormService:
                                         or ""
                                     )
 
-                                    display_value = value
+                                    display_value = (
+                                        DynamicFormService._get_display_value(
+                                            field=field,
+                                            value=value,
+                                        )
+                                    )
 
                                 else:
 
