@@ -156,4 +156,77 @@
         },
         true
     );
+
+    /*
+     * Keep deletion inside the global edit session.
+     *
+     * The legacy delete button submits directly to delete_device. That
+     * endpoint performs the deletion and redirects back without ?edit=1,
+     * so _get_edit_mode() correctly sees the redirected page as read-only.
+     * Intercept the delete click here, perform the POST ourselves, and then
+     * explicitly reload the instance with ?edit=1.
+     */
+    document.addEventListener(
+        "click",
+        async (event) => {
+            const deleteButton = event.target.closest(".df-device-delete");
+            if (!deleteButton) return;
+            if (!isEditMode()) return;
+
+            const row = deleteButton.closest("[data-device-row]");
+            if (!row) return;
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            if (!window.confirm("آیا از حذف این دستگاه از فرآیند مطمئن هستید؟")) {
+                return;
+            }
+
+            const instanceDeviceId = row.querySelector(
+                'input[name$="_instance_device_id"]'
+            )?.value;
+
+            // New, unsaved rows only need to disappear from the current form.
+            if (!instanceDeviceId) {
+                row.remove();
+                return;
+            }
+
+            const form = deleteButton.closest("form");
+            const csrfToken = form?.querySelector(
+                'input[name="csrfmiddlewaretoken"]'
+            )?.value;
+            const deleteUrl = deleteButton.formAction || deleteButton.getAttribute("formaction");
+
+            if (!csrfToken || !deleteUrl) {
+                console.error("Unable to delete device: missing CSRF token or delete URL.");
+                return;
+            }
+
+            try {
+                const response = await fetch(deleteUrl, {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": csrfToken,
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    credentials: "same-origin",
+                    redirect: "follow",
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Delete request failed with status ${response.status}`);
+                }
+
+                const url = new URL(window.location.href);
+                url.search = "?edit=1";
+                window.location.assign(url.toString());
+            } catch (error) {
+                console.error("Device deletion failed:", error);
+                window.alert("حذف دستگاه انجام نشد. لطفاً دوباره تلاش کنید.");
+            }
+        },
+        true
+    );
 })();
