@@ -55,6 +55,7 @@ class HistoryServiceTests(TestCase):
             label="IMEI",
             field_type=FormField.FieldType.TEXT,
             is_history_enabled=False,
+            order=0,
         )
         self.problem_field = FormField.objects.create(
             section=self.section,
@@ -63,6 +64,7 @@ class HistoryServiceTests(TestCase):
             label="Problem",
             field_type=FormField.FieldType.TEXT,
             is_history_enabled=True,
+            order=1,
         )
         self.group = FormRepeatableGroup.objects.create(
             section=self.section,
@@ -78,6 +80,7 @@ class HistoryServiceTests(TestCase):
             code="part_name",
             label="Part Name",
             field_type=FormField.FieldType.TEXT,
+            order=2,
         )
 
     def _instance(self, *, data=None):
@@ -199,6 +202,7 @@ class HistoryServiceTests(TestCase):
             label="IMEI",
             field_type=FormField.FieldType.TEXT,
             system_key=FormField.SystemKey.IMEI,
+            order=3,
         )
         HistoryField.objects.create(
             configuration=configuration,
