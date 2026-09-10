@@ -2,6 +2,7 @@ from django.test import TestCase
 
 from accounts.models import User
 
+from workflow.authorization import WorkflowAuthorizationService
 from workflow.history_models import HistoryConfiguration, HistoryField
 from workflow.history_services import HistoryService
 from workflow.models import (
@@ -17,9 +18,13 @@ from workflow.models import (
     InstanceDevice,
     Workflow,
     WorkflowInstance,
+    WorkflowMembership,
+    WorkflowPermission,
     WorkflowStep,
     WorkflowStepExecution,
+    WorkflowTransition,
 )
+from workflow.services import WorkflowExecutionService
 
 
 class HistoryServiceTests(TestCase):
@@ -259,4 +264,101 @@ class HistoryServiceTests(TestCase):
         self.assertEqual(
             [field["code"] for field in snapshot["fields"]],
             ["problem"],
+        )
+
+    def test_transition_persists_independent_history_for_two_repairs_of_same_device(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.problem_field,
+            display_label="شرح مشکل تعمیر",
+            display_order=1,
+        )
+
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            from_step=self.step,
+            to_step=None,
+            name="Finish Repair",
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            transition=transition,
+            user=self.user,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        device_type = DeviceType.objects.create(
+            name="Phone E2E",
+            code="PHONE_E2E",
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Brand",
+            name="Model E2E",
+            code="MODEL_E2E",
+        )
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="987654321",
+        )
+
+        first = self._instance(data={"problem": "Broken LCD"})
+        InstanceDevice.objects.create(
+            instance=first,
+            device=device,
+            reported_problem="Broken LCD",
+            is_active=True,
+        )
+
+        WorkflowExecutionService.execute_transition(
+            instance=first,
+            transition=transition,
+            user=self.user,
+        )
+
+        first_execution = first.step_executions.get(workflow_step=self.step)
+        first_history = first_execution.data["history"]
+        self.assertEqual(
+            first_history["fields"][0]["value"],
+            "Broken LCD",
+        )
+
+        second = self._instance(data={"problem": "Battery issue"})
+        InstanceDevice.objects.create(
+            instance=second,
+            device=device,
+            reported_problem="Battery issue",
+            is_active=True,
+        )
+
+        WorkflowExecutionService.execute_transition(
+            instance=second,
+            transition=transition,
+            user=self.user,
+        )
+
+        second_execution = second.step_executions.get(workflow_step=self.step)
+        second_history = second_execution.data["history"]
+
+        self.assertEqual(
+            second_history["fields"][0]["value"],
+            "Battery issue",
+        )
+        self.assertEqual(
+            first_execution.refresh_from_db() or first_execution.data["history"]["fields"][0]["value"],
+            "Broken LCD",
+        )
+        self.assertNotEqual(
+            first_execution.data["history"]["fields"][0]["value"],
+            second_history["fields"][0]["value"],
         )
