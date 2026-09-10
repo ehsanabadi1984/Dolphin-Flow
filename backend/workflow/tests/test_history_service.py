@@ -2,7 +2,6 @@ from django.test import TestCase
 
 from accounts.models import User
 
-from workflow.authorization import WorkflowAuthorizationService
 from workflow.history_models import HistoryConfiguration, HistoryField
 from workflow.history_services import HistoryService
 from workflow.models import (
@@ -354,8 +353,10 @@ class HistoryServiceTests(TestCase):
             second_history["fields"][0]["value"],
             "Battery issue",
         )
+
+        first_execution.refresh_from_db()
         self.assertEqual(
-            first_execution.refresh_from_db() or first_execution.data["history"]["fields"][0]["value"],
+            first_execution.data["history"]["fields"][0]["value"],
             "Broken LCD",
         )
         self.assertNotEqual(
