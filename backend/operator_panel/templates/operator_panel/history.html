@@ -1,0 +1,111 @@
+{% extends "operator_panel/base.html" %}
+
+{% block content %}
+<section class="df-saved-data">
+  <div class="df-saved-data-header">
+    <div>
+      <h2>سوابق</h2>
+      <p>{{ device }}</p>
+    </div>
+    <a class="df-button df-button-secondary" href="{% url 'operator_panel:workflow_instance' instance.pk %}">بازگشت</a>
+  </div>
+
+  {% if history %}
+    {% for entry in history %}
+      <article class="df-saved-data" style="margin-bottom: 1.5rem;">
+        <div class="df-saved-data-header">
+          <div>
+            <h3>{{ entry.execution.instance.workflow.name }}</h3>
+            <p>
+              مرحله: {{ entry.execution.workflow_step.name }}
+              — ثبت‌شده در: {{ entry.execution.submitted_at|date:"Y/m/d H:i" }}
+            </p>
+          </div>
+          <span>#{{ entry.execution.instance.pk }}</span>
+        </div>
+
+        {% if entry.snapshot.fields %}
+          <div class="df-saved-table-wrapper">
+            <table class="df-saved-table">
+              <thead>
+                <tr>
+                  <th>عنوان</th>
+                  <th>مقدار</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for field in entry.snapshot.fields %}
+                  <tr>
+                    <td>{{ field.display_label|default:field.label }}</td>
+                    <td>{{ field.display_value|default:field.value|default:"—" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+
+        {% for group in entry.snapshot.repeatable_groups %}
+          <section style="margin-top: 1rem;">
+            <h4>{{ group.name }}</h4>
+            {% for item in group.items %}
+              <div class="df-saved-table-wrapper" style="margin-top: .75rem;">
+                <table class="df-saved-table">
+                  <thead>
+                    <tr>
+                      {% for field in item.fields %}
+                        <th>{{ field.display_label|default:field.label }}</th>
+                      {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      {% for field in item.fields %}
+                        <td>{{ field.display_value|default:field.value|default:"—" }}</td>
+                      {% endfor %}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            {% endfor %}
+          </section>
+        {% endfor %}
+      </article>
+    {% endfor %}
+
+  {% elif legacy_histories %}
+    <div class="df-message df-message-info">
+      سوابق قدیمی این دستگاه از ساختار قبل از History جدید استفاده می‌کنند و برای حفظ سازگاری نمایش داده می‌شوند.
+    </div>
+
+    <div class="df-saved-table-wrapper">
+      <table class="df-saved-table">
+        <thead>
+          <tr>
+            <th>فرآیند</th>
+            <th>نمونه</th>
+            <th>مرحله</th>
+            <th>ثبت‌شده در</th>
+            <th>وضعیت اتصال</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for history_item in legacy_histories %}
+            <tr>
+              <td>{{ history_item.instance.workflow.name }}</td>
+              <td>#{{ history_item.instance.pk }}</td>
+              <td>{{ history_item.instance.current_step|default:"—" }}</td>
+              <td>{{ history_item.received_at|date:"Y/m/d H:i" }}</td>
+              <td>{% if history_item.is_active %}فعال{% else %}حذف‌شده از فرآیند{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="df-message df-message-info">
+      سابقه قابل مشاهده‌ای برای این دستگاه وجود ندارد.
+    </div>
+  {% endif %}
+</section>
+{% endblock %}
