@@ -7,6 +7,8 @@ class WorkflowConfig(AppConfig):
     def ready(self):
         from .models import FormField, WorkflowInstance
         from .form_file_models import FormFile  # noqa: F401
+        from .history_models import HistoryConfiguration, HistoryField  # noqa: F401
+        from .history_admin import HistoryConfigurationAdmin  # noqa: F401
         from .formula_bootstrap import bootstrap_formula_system
         from . import signals  # noqa: F401
         from django.core.signals import request_started
