@@ -125,12 +125,14 @@ document.addEventListener("DOMContentLoaded", () => {
             current.appendChild(link);
 
             const note = document.createElement("span");
+            note.className = "df-file-current-note";
             note.textContent = " (فایل فعلی؛ برای تعویض فایل جدید انتخاب کنید)";
             current.appendChild(note);
 
             const deleteButton = document.createElement("button");
             deleteButton.type = "button";
             deleteButton.className = "df-file-delete";
+            deleteButton.classList.add("df-button", "df-button-danger");
             deleteButton.textContent = "حذف فایل";
             deleteButton.addEventListener("click", () => {
                 deleteFile(file, wrapper, input);

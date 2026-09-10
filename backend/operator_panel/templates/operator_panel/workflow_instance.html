@@ -1248,7 +1248,6 @@
   
   {% if instance.status == "ACTIVE" %}
 
-  <h2>Transitionهای قابل اجرا</h2>
   <section class="df-workflow-actions">
     <div class="df-workflow-actions-header">
       <h2>عملیات فرآیند</h2>
@@ -1264,7 +1263,7 @@
     >
       {% csrf_token %}
 
-      <button type="submit">{{ transition.name }}</button>
+      <button type="submit" class="df-button df-button-secondary">{{ transition.name }}</button>
 
       {% if transition.description %}
       <p>{{ transition.description }}</p>
