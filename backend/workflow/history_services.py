@@ -1,7 +1,10 @@
+from django.db.models import Prefetch
+
 from .form_services import DynamicFormService
 from .models import (
     DeviceIdentifier,
     FormData,
+    FormDefinition,
     FormField,
     FormRepeatableGroup,
     InstanceDevice,
@@ -23,9 +26,16 @@ class HistoryService:
 
     @staticmethod
     def build_snapshot(*, instance, user=None):
-        form = getattr(instance.workflow, "form_definition", None)
+        form = (
+            FormDefinition.objects
+            .filter(
+                workflow=instance.workflow,
+                is_active=True,
+            )
+            .first()
+        )
 
-        if form is None or not form.is_active:
+        if form is None:
             return {
                 "version": HistoryService.SNAPSHOT_VERSION,
                 "configuration_id": None,
@@ -54,6 +64,26 @@ class HistoryService:
                     is_enabled=True,
                     form_field__is_active=True,
                     form_field__section__is_active=True,
+                    form_field__section__form=form,
+                    form_field__repeatable_group__isnull=True,
+                )
+                .select_related(
+                    "form_field",
+                    "form_field__section",
+                    "form_field__repeatable_group",
+                )
+                .order_by("display_order", "id")
+            )
+            configured_group_fields = list(
+                HistoryField.objects
+                .filter(
+                    configuration=configuration,
+                    is_enabled=True,
+                    form_field__is_active=True,
+                    form_field__section__is_active=True,
+                    form_field__section__form=form,
+                    form_field__repeatable_group__isnull=False,
+                    form_field__repeatable_group__is_active=True,
                 )
                 .select_related(
                     "form_field",
@@ -63,6 +93,8 @@ class HistoryService:
                 )
                 .order_by("display_order", "id")
             )
+            configured_fields.extend(configured_group_fields)
+            configured_fields.sort(key=lambda item: (item.display_order, item.pk))
         else:
             configured_fields = []
 
@@ -75,6 +107,8 @@ class HistoryService:
                     is_active=True,
                     is_history_enabled=True,
                 ).select_related("repeatable_group"):
+                    if field.repeatable_group_id and not field.repeatable_group.is_active:
+                        continue
                     selected.append(
                         {
                             "form_field": field,
@@ -251,6 +285,15 @@ class HistoryService:
                 "draft_device_model__device_type",
                 "draft_device_type",
             )
+            .prefetch_related(
+                Prefetch(
+                    "device__identifiers",
+                    queryset=DeviceIdentifier.objects.filter(
+                        identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+                    ),
+                    to_attr="history_imei_identifiers",
+                )
+            )
         )
 
         items = []
@@ -265,13 +308,12 @@ class HistoryService:
 
                 if system_key == FormField.SystemKey.IMEI:
                     if instance_device.device:
-                        identifier = (
-                            instance_device.device.identifiers
-                            .filter(
-                                identifier_type=DeviceIdentifier.IdentifierType.IMEI
-                            )
-                            .first()
+                        identifiers = getattr(
+                            instance_device.device,
+                            "history_imei_identifiers",
+                            [],
                         )
+                        identifier = identifiers[0] if identifiers else None
                         value = identifier.value if identifier else ""
                     else:
                         value = instance_device.draft_imei
