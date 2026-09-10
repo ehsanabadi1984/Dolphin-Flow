@@ -8,6 +8,8 @@ class WorkflowConfig(AppConfig):
         from .models import FormField, WorkflowInstance
         from .form_file_models import FormFile  # noqa: F401
         from .history_models import HistoryConfiguration, HistoryField  # noqa: F401
+        from django.contrib.admin import autodiscover
+        autodiscover()
         from .history_admin import HistoryConfigurationAdmin  # noqa: F401
         from .formula_bootstrap import bootstrap_formula_system
         from . import signals  # noqa: F401
