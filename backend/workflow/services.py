@@ -204,9 +204,9 @@ class WorkflowExecutionService:
                     "ابتدا اطلاعات فرم یا دستگاه را ذخیره کنید."
                 )
 
-        from .form_services import DynamicFormService
+        from .history_services import HistoryService
 
-        history_snapshot = DynamicFormService._build_history_snapshot(
+        history_snapshot = HistoryService.build_snapshot(
             instance=instance,
             user=user,
         )
