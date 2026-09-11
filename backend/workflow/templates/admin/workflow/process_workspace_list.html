@@ -1,0 +1,69 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<style>
+    .df-pw { direction: rtl; text-align: right; max-width: 1280px; margin: 0 auto; }
+    .df-pw-header { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:24px; }
+    .df-pw-header h1 { margin:0; }
+    .df-pw-subtitle { color:#666; margin-top:6px; }
+    .df-pw-grid { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:24px; align-items:start; }
+    .df-pw-card { background:var(--body-bg,#fff); border:1px solid var(--hairline-color,#ddd); border-radius:14px; padding:22px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .df-pw-card h2 { margin-top:0; }
+    .df-pw-list { display:grid; gap:12px; }
+    .df-pw-process { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px; border:1px solid var(--hairline-color,#ddd); border-radius:12px; text-decoration:none; color:inherit; }
+    .df-pw-process:hover { background:var(--darkened-bg,#f5f5f5); }
+    .df-pw-process-name { font-weight:700; font-size:16px; }
+    .df-pw-meta { color:#777; font-size:13px; margin-top:5px; }
+    .df-pw-status { font-size:12px; }
+    .df-pw-status.active { color:#188038; }
+    .df-pw-status.inactive { color:#b3261e; }
+    .df-pw-form p { margin:0 0 14px; }
+    .df-pw-form label { display:block; font-weight:600; margin-bottom:5px; }
+    .df-pw-form input, .df-pw-form textarea, .df-pw-form select { width:100%; box-sizing:border-box; }
+    .df-pw-actions { margin-top:16px; }
+    .df-pw-empty { color:#777; padding:18px 0; }
+    @media (max-width: 900px) { .df-pw-grid { grid-template-columns:1fr; } }
+</style>
+
+<div class="df-pw">
+    <div class="df-pw-header">
+        <div>
+            <h1>فرآیندها</h1>
+            <div class="df-pw-subtitle">Process Workspace — ساخت و مدیریت ساختار فرآیند</div>
+        </div>
+    </div>
+
+    <div class="df-pw-grid">
+        <section class="df-pw-card">
+            <h2>فرآیندهای تعریف‌شده</h2>
+            <div class="df-pw-list">
+                {% for workflow in workflows %}
+                    <a class="df-pw-process" href="{% url 'process_workspace' workflow_id=workflow.pk %}">
+                        <div>
+                            <div class="df-pw-process-name">{{ workflow.name }}</div>
+                            <div class="df-pw-meta">{{ workflow.code }} · {{ workflow.steps.count }} مرحله · {{ workflow.transitions.count }} ارتباط</div>
+                        </div>
+                        <div class="df-pw-status {% if workflow.is_active %}active{% else %}inactive{% endif %}">
+                            {% if workflow.is_active %}فعال{% else %}غیرفعال{% endif %}
+                        </div>
+                    </a>
+                {% empty %}
+                    <div class="df-pw-empty">هنوز فرآیندی ایجاد نشده است.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="df-pw-card">
+            <h2>ایجاد فرآیند</h2>
+            <form method="post" class="df-pw-form">
+                {% csrf_token %}
+                {{ create_form.as_p }}
+                <div class="df-pw-actions">
+                    <button type="submit" class="default">ایجاد و ورود به Workspace</button>
+                </div>
+            </form>
+        </section>
+    </div>
+</div>
+{% endblock %}
