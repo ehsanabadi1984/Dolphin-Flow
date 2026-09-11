@@ -31,6 +31,50 @@
         clearSelect("id_choice_label_field");
         clearSelect("id_choice_value_field");
         clearSelect("id_choice_parent_field");
+        clearSelect("id_choice_filter_field");
+    }
+
+    function addOption(select, value, label) {
+        if (!select) return;
+        select.add(new Option(label, value));
+    }
+
+    async function loadModelFields(modelId) {
+        const label = document.getElementById("id_choice_label_field");
+        const value = document.getElementById("id_choice_value_field");
+        const filter = document.getElementById("id_choice_filter_field");
+
+        [label, value, filter].forEach(function (select) {
+            if (select) select.replaceChildren(new Option("---------", ""));
+        });
+
+        if (!modelId) return;
+
+        try {
+            const url = new URL("/admin/workflow/dynamic/formfield-model-fields/", window.location.origin);
+            url.searchParams.set("content_type", modelId);
+            const response = await fetch(url.toString(), {
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            if (!response.ok) return;
+
+            const data = await response.json();
+            const fields = Array.isArray(data.fields) ? data.fields : [];
+
+            fields.forEach(function (field) {
+                const text = field.label ? `${field.name} (${field.label})` : field.name;
+                addOption(label, field.name, text);
+                addOption(value, field.name, text);
+                if (field.is_foreign_key) {
+                    const filterText = field.related_model
+                        ? `${field.name} → ${field.related_model}`
+                        : text;
+                    addOption(filter, field.name, filterText);
+                }
+            });
+        } catch (error) {
+            console.warn("Form Designer: unable to load model fields", error);
+        }
     }
 
     function sync() {
@@ -69,15 +113,20 @@
         if (!source) return;
 
         const selectedSource = source.value;
-        if (selectedSource === "MODEL") {
+        const isModel = ["MODEL", "SYSTEM_MODEL"].includes(selectedSource);
+        const isStatic = ["STATIC", "STATIC_SET"].includes(selectedSource);
+        const isLookup = ["LOOKUP", "LOOKUP_LIST"].includes(selectedSource);
+
+        if (isModel) {
             setVisible("id_choice_model", true);
             setVisible("id_choice_label_field", true);
             setVisible("id_choice_value_field", true);
             setVisible("id_choice_parent_field", true);
+            setVisible("id_choice_filter_field", true);
             setDisabled("id_choice_model", false);
-        } else if (selectedSource === "STATIC") {
+        } else if (isStatic) {
             setVisible("id_choice_static_set", true);
-        } else if (selectedSource === "LOOKUP") {
+        } else if (isLookup) {
             setVisible("id_choice_lookup_list", true);
             setVisible("id_choice_parent_field", true);
         }
@@ -89,6 +138,7 @@
 
         const type = document.getElementById("id_field_type");
         const source = document.getElementById("id_choice_source");
+        const model = document.getElementById("id_choice_model");
 
         type?.addEventListener("change", function () {
             if (type.value !== "SELECT") clearChoiceConfiguration(false);
@@ -98,10 +148,24 @@
         source?.addEventListener("change", function () {
             clearChoiceConfiguration(true);
             sync();
+            if (["MODEL", "SYSTEM_MODEL"].includes(source.value) && model?.value) {
+                loadModelFields(model.value);
+            }
+        });
+
+        model?.addEventListener("change", function () {
+            loadModelFields(model.value);
         });
 
         sync();
+        if (model?.value && ["MODEL", "SYSTEM_MODEL"].includes(source?.value)) {
+            loadModelFields(model.value);
+        }
     }
 
-    document.addEventListener("DOMContentLoaded", init);
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
 }());
