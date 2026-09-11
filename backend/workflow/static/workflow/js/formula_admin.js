@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const groupField = document.getElementById("id_repeatable_group");
     if (!typeField || !sourceField || !decimalField) return;
     const optionsUrl = sourceField.dataset.optionsUrl || "";
+    const isWorkspace = !!document.getElementById("field-properties");
     let fieldOptions = [], tokens = [], initialized = false;
     const functionNames = ["SUM","ABS","MIN","MAX","AVG","ROUND","FLOOR","CEIL"];
     try { const initial = JSON.parse(sourceField.value || "{}"); if (Array.isArray(initial.tokens)) tokens = initial.tokens; if (initial.decimal_places !== undefined && !decimalField.value) decimalField.value = initial.decimal_places; } catch (error) { tokens = []; }
@@ -32,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
     panel.querySelectorAll("[data-function]").forEach(button=>button.addEventListener("click",()=>{tokens.push({type:"function",value:button.dataset.function},{type:"paren",value:"("});render();}));
     const controlledIds=["id_choice_source","id_choice_model","id_choice_static_set","id_choice_lookup_list","id_choice_label_field","id_choice_value_field","id_choice_parent_field","id_choice_filter_field","id_system_key","id_is_required"];
     function setRowVisible(id,visible){const row=rowFor(id);if(row)row.style.display=visible?"":"none";}
-    function syncVisibility(){const isFormula=typeField.value==="FORMULA";builderRow.style.display=isFormula?"":"none";setRowVisible("id_formula_decimal_places",isFormula);controlledIds.forEach(id=>setRowVisible(id,!isFormula));if(isFormula){const required=document.getElementById("id_is_required");if(required)required.checked=false;}}
+    function syncVisibility(){if(isWorkspace)return;const isFormula=typeField.value==="FORMULA";builderRow.style.display=isFormula?"":"none";setRowVisible("id_formula_decimal_places",isFormula);controlledIds.forEach(id=>setRowVisible(id,!isFormula));if(isFormula){const required=document.getElementById("id_is_required");if(required)required.checked=false;}}
     function scopeChanged(){if(!initialized||typeField.value!=="FORMULA")return;tokens=[];render();loadFieldOptions();}
     typeField.addEventListener("change",()=>{syncVisibility();if(typeField.value==="FORMULA")loadFieldOptions();});decimalField.addEventListener("input",render);sectionField?.addEventListener("change",scopeChanged);groupField?.addEventListener("change",scopeChanged);
     rebuildFieldSelect();render();syncVisibility();initialized=true;if(typeField.value==="FORMULA")loadFieldOptions();
