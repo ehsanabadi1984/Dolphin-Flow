@@ -99,7 +99,14 @@
                             <input type="hidden" name="step_id" value="{{ step.pk }}">
                             <p><label>نام مرحله</label><input type="text" name="name" value="{{ step.name }}" maxlength="150" required></p>
                             <p><label>توضیحات</label><textarea name="description" rows="2">{{ step.description }}</textarea></p>
-                            <p><label>مسئول مرحله</label>{{ step_form.assigned_to }}</p>
+                            <p><label>مسئول مرحله</label>
+                                <select name="assigned_to">
+                                    <option value="">---------</option>
+                                    {% for user in step_form.assigned_to.field.queryset %}
+                                        <option value="{{ user.pk }}" {% if step.assigned_to_id == user.pk %}selected{% endif %}>{{ user }}</option>
+                                    {% endfor %}
+                                </select>
+                            </p>
                             <p><label><input type="checkbox" name="is_active" {% if step.is_active %}checked{% endif %}> فعال</label></p>
                             <div class="df-pw-actions">
                                 <button type="submit">ذخیره مرحله</button>
