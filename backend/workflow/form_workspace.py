@@ -85,6 +85,18 @@ class FormFieldWorkspaceForm(FormulaFieldAdminForm):
         self.fields["choice_static_set"].queryset = StaticChoiceSet.objects.filter(is_active=True).order_by("name")
         self.fields["choice_lookup_list"].queryset = LookupList.objects.filter(is_active=True).order_by("name")
 
+        # These three values are selected from fields of the chosen model.
+        # They must be <select> elements because form_workspace.js populates
+        # their options dynamically from the existing model-fields endpoint.
+        for field_name in (
+            "choice_label_field",
+            "choice_value_field",
+            "choice_filter_field",
+        ):
+            self.fields[field_name].widget = forms.Select(
+                choices=[("", "---------")]
+            )
+
         parent_qs = FormField.objects.none()
         if form_definition:
             parent_qs = FormField.objects.filter(
