@@ -126,7 +126,7 @@ class FormulaFieldAdminForm(forms.ModelForm):
             )
         )
 
-        current_id = self.instance.pk if self.instance and self.instance.pk else None
+        current_id = self.instance.pk if self.instance.pk else None
         if current_id:
             queryset = queryset.exclude(pk=current_id)
 
