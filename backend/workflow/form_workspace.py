@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib import messages
-from django.core.exceptions import ProtectedError, ValidationError
+from django.core.exceptions import ValidationError
+from django.db.models import ProtectedError
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
