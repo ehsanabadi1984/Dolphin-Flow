@@ -43,6 +43,11 @@
         const label = document.getElementById("id_choice_label_field");
         const value = document.getElementById("id_choice_value_field");
         const filter = document.getElementById("id_choice_filter_field");
+        const current = {
+            label: label?.value || "",
+            value: value?.value || "",
+            filter: filter?.value || "",
+        };
 
         [label, value, filter].forEach(function (select) {
             if (select) select.replaceChildren(new Option("---------", ""));
@@ -60,6 +65,7 @@
 
             const data = await response.json();
             const fields = Array.isArray(data.fields) ? data.fields : [];
+            const fieldNames = new Set(fields.map(function (field) { return field.name; }));
 
             fields.forEach(function (field) {
                 const text = field.label ? `${field.name} (${field.label})` : field.name;
@@ -72,6 +78,14 @@
                     addOption(filter, field.name, filterText);
                 }
             });
+
+            if (current.label && fieldNames.has(current.label)) label.value = current.label;
+            if (current.value && fieldNames.has(current.value)) value.value = current.value;
+            if (current.filter && fields.some(function (field) {
+                return field.name === current.filter && field.is_foreign_key;
+            })) {
+                filter.value = current.filter;
+            }
         } catch (error) {
             console.warn("Form Designer: unable to load model fields", error);
         }
