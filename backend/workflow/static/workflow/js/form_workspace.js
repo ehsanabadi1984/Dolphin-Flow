@@ -31,27 +31,6 @@
         clearSelect("id_choice_label_field");
         clearSelect("id_choice_value_field");
         clearSelect("id_choice_parent_field");
-        clearSelect("id_choice_filter_field");
-    }
-
-    function populateModelFields(modelId, currentValues) {
-        const payload = document.getElementById("form-workspace-model-fields");
-        const map = payload ? JSON.parse(payload.textContent || "{}") : {};
-        const fields = map[String(modelId)] || [];
-        const values = currentValues || {};
-
-        ["id_choice_label_field", "id_choice_value_field", "id_choice_filter_field"].forEach(function (id) {
-            const select = document.getElementById(id);
-            if (!select) return;
-            const previous = values[id] !== undefined ? values[id] : select.value;
-            select.replaceChildren(new Option("---------", ""));
-            fields.forEach(function (field) {
-                select.add(new Option(field.label, field.value));
-            });
-            if (previous && fields.some(function (field) { return field.value === previous; })) {
-                select.value = previous;
-            }
-        });
     }
 
     function sync() {
@@ -94,9 +73,8 @@
             setVisible("id_choice_model", true);
             setVisible("id_choice_label_field", true);
             setVisible("id_choice_value_field", true);
-            setVisible("id_choice_filter_field", true);
+            setVisible("id_choice_parent_field", true);
             setDisabled("id_choice_model", false);
-            populateModelFields(document.getElementById("id_choice_model")?.value);
         } else if (selectedSource === "STATIC") {
             setVisible("id_choice_static_set", true);
         } else if (selectedSource === "LOOKUP") {
@@ -111,7 +89,6 @@
 
         const type = document.getElementById("id_field_type");
         const source = document.getElementById("id_choice_source");
-        const model = document.getElementById("id_choice_model");
 
         type?.addEventListener("change", function () {
             if (type.value !== "SELECT") clearChoiceConfiguration(false);
@@ -123,18 +100,7 @@
             sync();
         });
 
-        model?.addEventListener("change", function () {
-            populateModelFields(model.value, {
-                id_choice_label_field: "",
-                id_choice_value_field: "",
-                id_choice_filter_field: "",
-            });
-        });
-
         sync();
-        if (model?.value && source?.value === "MODEL") {
-            populateModelFields(model.value);
-        }
     }
 
     document.addEventListener("DOMContentLoaded", init);
