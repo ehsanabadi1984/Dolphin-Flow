@@ -1,9 +1,7 @@
 from django import forms
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ProtectedError, ValidationError
 from django.db import transaction
-from django.db.models.deletion import ProtectedError
-from django.contrib.contenttypes.models import ContentType
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -97,43 +95,6 @@ class FormFieldWorkspaceForm(FormulaFieldAdminForm):
                 parent_qs = parent_qs.exclude(pk=self.instance.pk)
         self.fields["choice_parent_field"].queryset = parent_qs
 
-        self._set_model_field_choices()
-
-    def _selected_choice_model_id(self):
-        field_name = self.add_prefix("choice_model")
-        raw = self.data.get(field_name) if self.is_bound else None
-        if raw:
-            try:
-                return int(raw)
-            except (TypeError, ValueError):
-                return None
-        return self.instance.choice_model_id if self.instance.pk else None
-
-    @staticmethod
-    def _model_field_choices(content_type_id):
-        if not content_type_id:
-            return [("", "---------")]
-        try:
-            content_type = ContentType.objects.get(pk=content_type_id)
-            model = content_type.model_class()
-        except (ContentType.DoesNotExist, ValueError, TypeError):
-            return [("", "---------")]
-        if model is None:
-            return [("", "---------")]
-
-        choices = [("", "---------")]
-        for field in model._meta.get_fields():
-            if not getattr(field, "concrete", False) or getattr(field, "many_to_many", False):
-                continue
-            label = str(getattr(field, "verbose_name", field.name)).strip()
-            choices.append((field.name, f"{label} ({field.name})"))
-        return choices
-
-    def _set_model_field_choices(self):
-        choices = self._model_field_choices(self._selected_choice_model_id())
-        for name in ("choice_label_field", "choice_value_field", "choice_filter_field"):
-            self.fields[name].choices = choices
-
     def clean(self):
         cleaned = super().clean()
         section = cleaned.get("section")
@@ -143,25 +104,6 @@ class FormFieldWorkspaceForm(FormulaFieldAdminForm):
         if group and section and group.section_id != section.id:
             raise forms.ValidationError("گروه تکرارشونده باید متعلق به همان Section فیلد باشد.")
         return cleaned
-
-
-def _model_field_options():
-    """Return model field metadata used by the workspace JS without a new runtime service."""
-    result = {}
-    for content_type in ContentType.objects.order_by("app_label", "model"):
-        model = content_type.model_class()
-        if model is None:
-            continue
-        fields = []
-        for field in model._meta.get_fields():
-            if not getattr(field, "concrete", False) or getattr(field, "many_to_many", False):
-                continue
-            fields.append({
-                "value": field.name,
-                "label": f"{str(getattr(field, 'verbose_name', field.name)).strip()} ({field.name})",
-            })
-        result[str(content_type.pk)] = fields
-    return result
 
 
 def _redirect_designer(workflow, *, section=None, field=None, group=None):
@@ -348,7 +290,6 @@ def form_workspace(request, workflow_id):
         "section_form": FormSectionWorkspaceForm(form_definition=form_definition),
         "group_form": FormRepeatableGroupWorkspaceForm(section=selected_section),
         "field_form": FormFieldWorkspaceForm(form_definition=form_definition),
-        "model_field_options": _model_field_options(),
     }
     if selected_section:
         context["selected_section_form"] = FormSectionWorkspaceForm(instance=selected_section, form_definition=form_definition)
