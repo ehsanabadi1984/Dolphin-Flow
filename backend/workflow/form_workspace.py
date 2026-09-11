@@ -88,14 +88,25 @@ class FormFieldWorkspaceForm(FormulaFieldAdminForm):
         # These three values are selected from fields of the chosen model.
         # They must be <select> elements because form_workspace.js populates
         # their options dynamically from the existing model-fields endpoint.
+        # The currently bound/saved value is seeded as an option so the saved
+        # selection survives the re-render and is not cleared before
+        # form_workspace.js loads the real options of the chosen model.
         for field_name in (
             "choice_label_field",
             "choice_value_field",
             "choice_filter_field",
         ):
-            self.fields[field_name].widget = forms.Select(
-                choices=[("", "---------")]
-            )
+            field = self.fields[field_name]
+            if self.is_bound:
+                bound_value = self.data.get(self.add_prefix(field_name)) or ""
+            elif self.instance.pk:
+                bound_value = getattr(self.instance, field_name) or ""
+            else:
+                bound_value = ""
+            widget_choices = [("", "---------")]
+            if bound_value:
+                widget_choices.append((bound_value, bound_value))
+            field.widget = forms.Select(choices=widget_choices)
 
         parent_qs = FormField.objects.none()
         if form_definition:

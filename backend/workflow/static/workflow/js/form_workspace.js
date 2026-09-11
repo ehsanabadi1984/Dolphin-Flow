@@ -2,13 +2,13 @@
     "use strict";
 
     const CHOICE_FIELDS = [
-        "id_choice_model",
-        "id_choice_static_set",
-        "id_choice_lookup_list",
-        "id_choice_label_field",
-        "id_choice_value_field",
-        "id_choice_parent_field",
-        "id_choice_filter_field",
+        "choice_model",
+        "choice_static_set",
+        "choice_lookup_list",
+        "choice_label_field",
+        "choice_value_field",
+        "choice_parent_field",
+        "choice_filter_field",
     ];
 
     function installThemeFixes() {
@@ -26,12 +26,28 @@
                 background-color: var(--body-bg, #fff) !important;
             }
             .df-fw-form select option,
-            .df-fw-form select option:checked {
+            .df-fw-form select option:checked,
+            .df-fw-form select option:hover,
+            .df-fw-form select option:focus {
                 color: var(--body-fg, #222) !important;
                 background-color: var(--body-bg, #fff) !important;
             }
         `;
         document.head.appendChild(style);
+    }
+
+    // The Workspace template renders the same FormFieldWorkspaceForm twice
+    // (the "add-field" form and the "field-properties" form), so Django
+    // generates identical element IDs in both. Global getElementById lookups
+    // only ever resolve to the first form, which left the Properties panel
+    // without working change listeners. Always resolve inputs relative to the
+    // specific form instead (falling back to the legacy global IDs).
+    function findInput(form, fieldName) {
+        if (!form) return null;
+        return (
+            form.elements.namedItem(fieldName) ||
+            form.querySelector('[id$="' + fieldName + '"]')
+        );
     }
 
     function closestRow(element) {
@@ -44,8 +60,7 @@
         );
     }
 
-    function setVisible(id, visible) {
-        const element = document.getElementById(id);
+    function setVisible(element, visible) {
         const row = closestRow(element);
         if (!row) return;
 
@@ -53,20 +68,20 @@
         row.style.display = visible ? "" : "none";
     }
 
-    function setDisabled(id, disabled) {
-        const element = document.getElementById(id);
+    function setDisabled(element, disabled) {
         if (element) element.disabled = disabled;
     }
 
-    function clearSelect(id) {
-        const element = document.getElementById(id);
+    function clearSelect(element) {
         if (!element) return;
         element.value = "";
     }
 
-    function clearChoiceConfiguration(keepSource) {
-        if (!keepSource) clearSelect("id_choice_source");
-        CHOICE_FIELDS.forEach(clearSelect);
+    function clearChoiceConfiguration(controls, keepSource) {
+        if (!keepSource) clearSelect(controls.choice_source);
+        CHOICE_FIELDS.forEach(function (name) {
+            clearSelect(controls[name]);
+        });
     }
 
     function addOption(select, value, label) {
@@ -74,160 +89,205 @@
         select.add(new Option(label, value));
     }
 
-    async function loadModelFields(modelId) {
-        const label = document.getElementById("id_choice_label_field");
-        const value = document.getElementById("id_choice_value_field");
-        const filter = document.getElementById("id_choice_filter_field");
+    function createModelFieldsLoader(controls) {
+        return async function loadModelFields(modelId) {
+            const label = controls.choice_label_field;
+            const value = controls.choice_value_field;
+            const filter = controls.choice_filter_field;
 
-        const current = {
-            label: label?.value || "",
-            value: value?.value || "",
-            filter: filter?.value || "",
-        };
+            const current = {
+                label: label?.value || "",
+                value: value?.value || "",
+                filter: filter?.value || "",
+            };
 
-        [label, value, filter].forEach(function (select) {
-            if (select) {
-                select.replaceChildren(new Option("---------", ""));
-            }
-        });
-
-        if (!modelId) return;
-
-        try {
-            const url = new URL(
-                "/admin/workflow/form-workspace/model-fields/",
-                window.location.origin
-            );
-            url.searchParams.set("content_type", modelId);
-
-            const response = await fetch(url.toString(), {
-                headers: { "X-Requested-With": "XMLHttpRequest" },
-            });
-
-            if (!response.ok) {
-                console.warn(
-                    "Form Designer: Workspace model fields endpoint returned",
-                    response.status
-                );
-                return;
-            }
-
-            const data = await response.json();
-            const fields = Array.isArray(data.fields) ? data.fields : [];
-
-            fields.forEach(function (field) {
-                const text = field.label
-                    ? `${field.name} (${field.label})`
-                    : field.name;
-
-                addOption(label, field.name, text);
-                addOption(value, field.name, text);
-
-                if (field.is_foreign_key) {
-                    const filterText = field.related_model
-                        ? `${field.name} → ${field.related_model}`
-                        : text;
-                    addOption(filter, field.name, filterText);
+            [label, value, filter].forEach(function (select) {
+                if (select) {
+                    select.replaceChildren(new Option("---------", ""));
                 }
             });
 
-            if (current.label && label) label.value = current.label;
-            if (current.value && value) value.value = current.value;
-            if (current.filter && filter) filter.value = current.filter;
-        } catch (error) {
-            console.warn(
-                "Form Designer: unable to load Workspace model fields",
-                error
-            );
-        }
+            if (!modelId) return;
+
+            try {
+                const url = new URL(
+                    "/admin/workflow/form-workspace/model-fields/",
+                    window.location.origin
+                );
+                url.searchParams.set("content_type", modelId);
+
+                const response = await fetch(url.toString(), {
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+
+                if (!response.ok) {
+                    console.warn(
+                        "Form Designer: Workspace model fields endpoint returned",
+                        response.status
+                    );
+                    return;
+                }
+
+                const data = await response.json();
+                const fields = Array.isArray(data.fields) ? data.fields : [];
+
+                // The value select always offers the model's primary key,
+                // mirroring the existing FormField admin behavior.
+                addOption(value, "id", "id (شناسه)");
+
+                fields.forEach(function (field) {
+                    const text = field.label
+                        ? `${field.name} (${field.label})`
+                        : field.name;
+
+                    addOption(label, field.name, text);
+                    addOption(value, field.name, text);
+
+                    if (field.is_foreign_key) {
+                        const filterText = field.related_model
+                            ? `${field.name} → ${field.related_model}`
+                            : text;
+                        addOption(filter, field.name, filterText);
+                    }
+                });
+
+                // Restore saved/bound selections only after the options exist.
+                if (current.label && label) label.value = current.label;
+                if (current.value && value) value.value = current.value;
+                if (current.filter && filter) filter.value = current.filter;
+            } catch (error) {
+                console.warn(
+                    "Form Designer: unable to load Workspace model fields",
+                    error
+                );
+            }
+        };
     }
 
-    function syncProperties() {
-        const type = document.getElementById("id_field_type");
-        const source = document.getElementById("id_choice_source");
+    function createPropertySyncer(controls) {
+        return function syncProperties() {
+            const type = controls.field_type;
+            const source = controls.choice_source;
 
-        if (!type) return;
+            if (!type) return;
 
-        const isSelect = type.value === "SELECT";
-        const isFormula = type.value === "FORMULA";
+            const isSelect = type.value === "SELECT";
+            const isFormula = type.value === "FORMULA";
 
-        setVisible("id_system_key", !isSelect && !isFormula);
-        setVisible("id_is_required", !isFormula);
-        setVisible("id_is_history_enabled", !isFormula);
+            setVisible(controls.system_key, !isSelect && !isFormula);
+            setVisible(controls.is_required, !isFormula);
+            setVisible(controls.is_history_enabled, !isFormula);
 
-        setVisible("id_choice_source", isSelect);
-        CHOICE_FIELDS.forEach(function (id) {
-            setVisible(id, false);
-            setDisabled(id, !isSelect);
-        });
+            setVisible(controls.choice_source, isSelect);
+            CHOICE_FIELDS.forEach(function (name) {
+                setVisible(controls[name], false);
+                setDisabled(controls[name], !isSelect);
+            });
 
-        setVisible("id_formula_builder", isFormula);
-        setVisible("id_formula_decimal_places", isFormula);
-        setDisabled("id_formula_builder", !isFormula);
-        setDisabled("id_formula_decimal_places", !isFormula);
+            setVisible(controls.formula_builder, isFormula);
+            setVisible(controls.formula_decimal_places, isFormula);
+            setDisabled(controls.formula_builder, !isFormula);
+            setDisabled(controls.formula_decimal_places, !isFormula);
 
-        if (!isSelect) {
-            setDisabled("id_choice_source", true);
-            clearChoiceConfiguration(false);
-            return;
-        }
+            if (!isSelect) {
+                setDisabled(controls.choice_source, true);
+                clearChoiceConfiguration(controls, false);
+                return;
+            }
 
-        setDisabled("id_choice_source", false);
-        if (!source) return;
+            setDisabled(controls.choice_source, false);
+            if (!source) return;
 
-        const selectedSource = source.value;
+            const selectedSource = source.value;
 
-        if (selectedSource === "MODEL") {
-            setVisible("id_choice_model", true);
-            setVisible("id_choice_label_field", true);
-            setVisible("id_choice_value_field", true);
-            setVisible("id_choice_parent_field", true);
-            setVisible("id_choice_filter_field", true);
-        } else if (selectedSource === "STATIC") {
-            setVisible("id_choice_static_set", true);
-        } else if (selectedSource === "LOOKUP") {
-            setVisible("id_choice_lookup_list", true);
-            setVisible("id_choice_parent_field", true);
-        }
+            if (selectedSource === "MODEL") {
+                setVisible(controls.choice_model, true);
+                setVisible(controls.choice_label_field, true);
+                setVisible(controls.choice_value_field, true);
+                setVisible(controls.choice_parent_field, true);
+                setVisible(controls.choice_filter_field, true);
+            } else if (selectedSource === "STATIC") {
+                setVisible(controls.choice_static_set, true);
+            } else if (selectedSource === "LOOKUP") {
+                setVisible(controls.choice_lookup_list, true);
+                setVisible(controls.choice_parent_field, true);
+            }
+        };
     }
 
     function init() {
-        const form = document.getElementById("field-properties");
-        if (!form) return;
+        // Identify the FormField Workspace form(s) structurally: the form(s)
+        // that contain the field_type input. Do not depend on #add-field or
+        // #field-properties — #add-field is a <section> (the form inside it
+        // has no id) and #field-properties only exists when a field is
+        // selected via ?field= in the URL.
+        const forms = Array.from(
+            document.querySelectorAll("form.df-fw-form")
+        ).filter(function (form) {
+            return form.querySelector('[name="field_type"]');
+        });
+        if (!forms.length) return;
 
         installThemeFixes();
 
-        const type = document.getElementById("id_field_type");
-        const source = document.getElementById("id_choice_source");
-        const model = document.getElementById("id_choice_model");
+        forms.forEach(function (form) {
+            const controls = {
+                field_type: findInput(form, "field_type"),
+                choice_source: findInput(form, "choice_source"),
+                choice_model: findInput(form, "choice_model"),
+                choice_static_set: findInput(form, "choice_static_set"),
+                choice_lookup_list: findInput(form, "choice_lookup_list"),
+                choice_label_field: findInput(form, "choice_label_field"),
+                choice_value_field: findInput(form, "choice_value_field"),
+                choice_parent_field: findInput(form, "choice_parent_field"),
+                choice_filter_field: findInput(form, "choice_filter_field"),
+                system_key: findInput(form, "system_key"),
+                is_required: findInput(form, "is_required"),
+                is_history_enabled: findInput(form, "is_history_enabled"),
+                formula_builder: findInput(form, "formula_builder"),
+                formula_decimal_places: findInput(
+                    form,
+                    "formula_decimal_places"
+                ),
+            };
 
-        type?.addEventListener("change", function () {
-            if (type.value !== "SELECT") {
-                clearChoiceConfiguration(false);
-            }
+            const syncProperties = createPropertySyncer(controls);
+            const loadModelFields = createModelFieldsLoader(controls);
+
+            controls.field_type?.addEventListener("change", function () {
+                if (controls.field_type.value !== "SELECT") {
+                    clearChoiceConfiguration(controls, false);
+                }
+                syncProperties();
+            });
+
+            controls.choice_source?.addEventListener("change", function () {
+                clearChoiceConfiguration(controls, true);
+                syncProperties();
+
+                if (
+                    controls.choice_source.value === "MODEL" &&
+                    controls.choice_model?.value
+                ) {
+                    loadModelFields(controls.choice_model.value);
+                }
+            });
+
+            controls.choice_model?.addEventListener("change", function () {
+                if (controls.choice_source?.value === "MODEL") {
+                    loadModelFields(controls.choice_model.value);
+                }
+            });
+
             syncProperties();
-        });
 
-        source?.addEventListener("change", function () {
-            clearChoiceConfiguration(true);
-            syncProperties();
-
-            if (source.value === "MODEL" && model?.value) {
-                loadModelFields(model.value);
+            if (
+                controls.choice_source?.value === "MODEL" &&
+                controls.choice_model?.value
+            ) {
+                loadModelFields(controls.choice_model.value);
             }
         });
-
-        model?.addEventListener("change", function () {
-            if (source?.value === "MODEL") {
-                loadModelFields(model.value);
-            }
-        });
-
-        syncProperties();
-
-        if (source?.value === "MODEL" && model?.value) {
-            loadModelFields(model.value);
-        }
     }
 
     if (document.readyState === "loading") {
