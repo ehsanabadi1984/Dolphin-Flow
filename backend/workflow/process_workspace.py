@@ -1,7 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib import messages
-from django.db import transaction
 from django.db.models import Max
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -105,7 +104,7 @@ def process_workspace_list(request):
             messages.success(request, f"فرآیند «{workflow.name}» ایجاد شد.")
             return redirect(
                 reverse(
-                    "dolphin_admin:process_workspace",
+                    "process_workspace",
                     kwargs={"workflow_id": workflow.pk},
                 )
             )
