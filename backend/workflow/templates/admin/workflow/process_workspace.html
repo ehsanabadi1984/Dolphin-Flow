@@ -1,0 +1,164 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<style>
+    .df-pw { direction:rtl; text-align:right; max-width:1400px; margin:0 auto; }
+    .df-pw-header { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:22px; }
+    .df-pw-header h1 { margin:0; }
+    .df-pw-subtitle { color:#666; margin-top:6px; }
+    .df-pw-back { white-space:nowrap; }
+    .df-pw-layout { display:grid; grid-template-columns:270px minmax(0,1fr) 330px; gap:18px; align-items:start; }
+    .df-pw-card { background:var(--body-bg,#fff); border:1px solid var(--hairline-color,#ddd); border-radius:14px; padding:18px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+    .df-pw-card + .df-pw-card { margin-top:18px; }
+    .df-pw-card h2 { font-size:18px; margin:0 0 14px; }
+    .df-pw-card h3 { font-size:14px; margin:18px 0 10px; }
+    .df-pw-structure { display:grid; gap:7px; }
+    .df-pw-node { display:block; padding:10px 12px; border-radius:9px; background:var(--darkened-bg,#f5f5f5); color:inherit; text-decoration:none; }
+    .df-pw-node strong { display:block; }
+    .df-pw-node small { color:#777; }
+    .df-pw-flow { min-height:420px; }
+    .df-pw-flowline { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:16px 0; }
+    .df-pw-step { min-width:150px; padding:14px; border:1px solid var(--hairline-color,#ddd); border-radius:12px; background:var(--body-bg,#fff); }
+    .df-pw-step-number { color:#777; font-size:12px; }
+    .df-pw-step-name { font-weight:700; margin:4px 0; }
+    .df-pw-assignee { color:#777; font-size:12px; }
+    .df-pw-arrow { font-size:20px; color:#777; }
+    .df-pw-transitions { display:grid; gap:8px; }
+    .df-pw-transition { display:flex; justify-content:space-between; gap:12px; padding:11px 12px; border:1px solid var(--hairline-color,#ddd); border-radius:9px; }
+    .df-pw-muted { color:#777; }
+    .df-pw-form p { margin:0 0 12px; }
+    .df-pw-form label { display:block; font-weight:600; margin-bottom:5px; }
+    .df-pw-form input, .df-pw-form textarea, .df-pw-form select { width:100%; box-sizing:border-box; }
+    .df-pw-form textarea { resize:vertical; }
+    .df-pw-actions { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; }
+    .df-pw-small-form { margin:0; }
+    .df-pw-small-form button { font-size:12px; padding:5px 9px; }
+    .df-pw-status { font-size:12px; }
+    .df-pw-status.active { color:#188038; }
+    .df-pw-status.inactive { color:#b3261e; }
+    .df-pw-context { padding:10px 12px; border-radius:9px; background:var(--darkened-bg,#f5f5f5); font-size:13px; }
+    .df-pw-context + .df-pw-context { margin-top:8px; }
+    @media (max-width:1100px) { .df-pw-layout { grid-template-columns:1fr; } .df-pw-flow { min-height:0; } }
+</style>
+
+<div class="df-pw">
+    <div class="df-pw-header">
+        <div>
+            <h1>{{ workflow.name }}</h1>
+            <div class="df-pw-subtitle">Process Workspace · {{ workflow.code }}</div>
+        </div>
+        <a class="button df-pw-back" href="{% url 'process_workspace_list' %}">بازگشت به فرآیندها</a>
+    </div>
+
+    <div class="df-pw-layout">
+        <aside>
+            <section class="df-pw-card">
+                <h2>ساختار</h2>
+                <div class="df-pw-structure">
+                    <a class="df-pw-node" href="#general"><strong>فرآیند</strong><small>مشخصات عمومی</small></a>
+                    <a class="df-pw-node" href="#steps"><strong>مراحل</strong><small>{{ steps|length }} مرحله</small></a>
+                    <a class="df-pw-node" href="#transitions"><strong>ارتباط‌ها</strong><small>{{ transitions|length }} Transition</small></a>
+                    <a class="df-pw-node" href="#access"><strong>دسترسی</strong><small>ورود به Access Workspace در مرحله بعد</small></a>
+                    <a class="df-pw-node" href="#sla"><strong>SLA</strong><small>پیکربندی از طریق Step</small></a>
+                </div>
+            </section>
+
+            <section class="df-pw-card">
+                <h2>وضعیت</h2>
+                <div class="df-pw-context">{% if workflow.is_active %}این فرآیند فعال است.{% else %}این فرآیند غیرفعال است.{% endif %}</div>
+                <div class="df-pw-context">فرم‌ها، دسترسی و SLA در Workspaceهای تخصصی خودشان مدیریت می‌شوند.</div>
+            </section>
+        </aside>
+
+        <main>
+            <section id="general" class="df-pw-card">
+                <h2>مشخصات فرآیند</h2>
+                <form method="post" class="df-pw-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_workflow">
+                    {{ workflow_form.as_p }}
+                    <div class="df-pw-actions"><button type="submit" class="default">ذخیره</button></div>
+                </form>
+            </section>
+
+            <section id="steps" class="df-pw-card">
+                <h2>مراحل فرآیند</h2>
+                {% for step in steps %}
+                    <div class="df-pw-context" style="margin-bottom:10px;">
+                        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+                            <div>
+                                <strong>{{ step.order }}. {{ step.name }}</strong>
+                                <div class="df-pw-muted">{% if step.assigned_to %}مسئول: {{ step.assigned_to }}{% else %}مسئول مرحله تعیین نشده{% endif %}</div>
+                            </div>
+                            <span class="df-pw-status {% if step.is_active %}active{% else %}inactive{% endif %}">{% if step.is_active %}فعال{% else %}غیرفعال{% endif %}</span>
+                        </div>
+                        <form method="post" class="df-pw-form" style="margin-top:12px;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="edit_step">
+                            <input type="hidden" name="step_id" value="{{ step.pk }}">
+                            <p><label>نام مرحله</label><input type="text" name="name" value="{{ step.name }}" maxlength="150" required></p>
+                            <p><label>توضیحات</label><textarea name="description" rows="2">{{ step.description }}</textarea></p>
+                            <p><label>مسئول مرحله</label>{{ step_form.assigned_to }}</p>
+                            <p><label><input type="checkbox" name="is_active" {% if step.is_active %}checked{% endif %}> فعال</label></p>
+                            <div class="df-pw-actions">
+                                <button type="submit">ذخیره مرحله</button>
+                            </div>
+                        </form>
+                    </div>
+                {% empty %}
+                    <div class="df-pw-muted">هنوز مرحله‌ای تعریف نشده است.</div>
+                {% endfor %}
+
+                <h3>افزودن مرحله</h3>
+                <form method="post" class="df-pw-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_step">
+                    {{ step_form.as_p }}
+                    <div class="df-pw-actions"><button type="submit" class="default">افزودن مرحله</button></div>
+                </form>
+            </section>
+
+            <section id="transitions" class="df-pw-card">
+                <h2>ارتباط بین مراحل</h2>
+                <div class="df-pw-transitions">
+                    {% for transition in transitions %}
+                        <div class="df-pw-transition">
+                            <span>{{ transition.from_step.name }} → {% if transition.to_step %}{{ transition.to_step.name }}{% else %}تکمیل فرآیند{% endif %}</span>
+                            <span class="df-pw-muted">{{ transition.name }}</span>
+                        </div>
+                    {% empty %}
+                        <div class="df-pw-muted">هنوز Transitionای تعریف نشده است.</div>
+                    {% endfor %}
+                </div>
+
+                <h3>افزودن Transition</h3>
+                <form method="post" class="df-pw-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_transition">
+                    {{ transition_form.as_p }}
+                    <div class="df-pw-actions"><button type="submit" class="default">افزودن ارتباط</button></div>
+                </form>
+            </section>
+        </main>
+
+        <aside>
+            <section id="access" class="df-pw-card">
+                <h2>Access</h2>
+                <p class="df-pw-muted">مدیریت Process / Step / Transition / Field Access در Workspace امنیت انجام خواهد شد.</p>
+                <span class="button" style="opacity:.6;pointer-events:none;">Access Workspace</span>
+            </section>
+            <section id="sla" class="df-pw-card">
+                <h2>SLA</h2>
+                <p class="df-pw-muted">SLA به‌صورت Step-specific تعریف می‌شود و Calendar منبع قابل استفاده مجدد است.</p>
+                <span class="button" style="opacity:.6;pointer-events:none;">SLA Workspace</span>
+            </section>
+            <section class="df-pw-card">
+                <h2>Form</h2>
+                <p class="df-pw-muted">فرم مرحله از Form Designer مدیریت خواهد شد؛ این صفحه فقط نقطه ورود contextual آن است.</p>
+                <span class="button" style="opacity:.6;pointer-events:none;">Form Designer</span>
+            </section>
+        </aside>
+    </div>
+</div>
+{% endblock %}
