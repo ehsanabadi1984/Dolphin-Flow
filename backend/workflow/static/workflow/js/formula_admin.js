@@ -4,238 +4,36 @@ document.addEventListener("DOMContentLoaded", () => {
     const decimalField = document.getElementById("id_formula_decimal_places");
     const sectionField = document.getElementById("id_section");
     const groupField = document.getElementById("id_repeatable_group");
-
     if (!typeField || !sourceField || !decimalField) return;
-
     const optionsUrl = sourceField.dataset.optionsUrl || "";
-    let fieldOptions = [];
-    let tokens = [];
-    let initialized = false;
-
-    const functionNames = [
-        "SUM", "ABS", "MIN", "MAX", "AVG", "ROUND", "FLOOR", "CEIL",
-    ];
-
-    try {
-        const initial = JSON.parse(sourceField.value || "{}");
-        if (Array.isArray(initial.tokens)) tokens = initial.tokens;
-        if (initial.decimal_places !== undefined && !decimalField.value) {
-            decimalField.value = initial.decimal_places;
-        }
-    } catch (error) {
-        tokens = [];
-    }
-
-    function rowFor(id) {
-        const field = document.getElementById(id);
-        return field?.closest(".form-row") || field?.closest(".fieldBox");
-    }
-
-    const builderRow = rowFor("id_formula_builder");
-    if (!builderRow) return;
-
-    const panel = document.createElement("div");
-    panel.className = "df-formula-builder";
-    panel.innerHTML = `
+    let fieldOptions = [], tokens = [], initialized = false;
+    const functionNames = ["SUM","ABS","MIN","MAX","AVG","ROUND","FLOOR","CEIL"];
+    try { const initial = JSON.parse(sourceField.value || "{}"); if (Array.isArray(initial.tokens)) tokens = initial.tokens; if (initial.decimal_places !== undefined && !decimalField.value) decimalField.value = initial.decimal_places; } catch (error) { tokens = []; }
+    function rowFor(id) { const field = document.getElementById(id); return field?.closest(".form-row") || field?.closest(".fieldBox") || field?.closest("p"); }
+    const builderRow = rowFor("id_formula_builder"); if (!builderRow) return;
+    const panel = document.createElement("div"); panel.className = "df-formula-builder"; panel.innerHTML = `
         <div class="df-formula-toolbar">
-            <div class="df-formula-control">
-                <label>فیلد</label>
-                <select class="df-formula-field-select">
-                    <option value="">انتخاب فیلد...</option>
-                </select>
-                <button type="button" data-add-field>افزودن</button>
-            </div>
-            <div class="df-formula-control">
-                <label>عدد</label>
-                <input type="text" class="df-formula-number" inputmode="decimal" placeholder="مثلاً 10" />
-                <button type="button" data-add-number>افزودن</button>
-            </div>
-            <div class="df-formula-operators" aria-label="عملگرها">
-                <button type="button" data-operator="+">+</button>
-                <button type="button" data-operator="-">−</button>
-                <button type="button" data-operator="*">×</button>
-                <button type="button" data-operator="/">÷</button>
-                <button type="button" data-operator="%">%</button>
-                <button type="button" data-paren="(">(</button>
-                <button type="button" data-paren=")">)</button>
-                <button type="button" data-comma=",">,</button>
-            </div>
-            <div class="df-formula-operators" aria-label="توابع فرمول">
-                ${functionNames.map((name) => `<button type="button" data-function="${name}">${name}</button>`).join("")}
-            </div>
-        </div>
-        <div class="df-formula-expression" aria-live="polite"></div>
-        <div class="df-formula-preview"></div>
-        <div class="df-formula-help">
-            فیلدهای داخل گروه معمولی از طریق SUM، MIN، MAX و AVG به‌صورت تجمیعی قابل استفاده‌اند.
-        </div>
-    `;
-
+            <div class="df-formula-control"><label>فیلد</label><select class="df-formula-field-select"><option value="">انتخاب فیلد...</option></select><button type="button" data-add-field>افزودن</button></div>
+            <div class="df-formula-control"><label>عدد</label><input type="text" class="df-formula-number" inputmode="decimal" placeholder="مثلاً 10" /><button type="button" data-add-number>افزودن</button></div>
+            <div class="df-formula-operators"><button type="button" data-operator="+">+</button><button type="button" data-operator="-">−</button><button type="button" data-operator="*">×</button><button type="button" data-operator="/">÷</button><button type="button" data-operator="%">%</button><button type="button" data-paren="(">(</button><button type="button" data-paren=")">)</button><button type="button" data-comma=",">,</button></div>
+            <div class="df-formula-operators">${functionNames.map(name => `<button type="button" data-function="${name}">${name}</button>`).join("")}</div>
+        </div><div class="df-formula-expression" aria-live="polite"></div><div class="df-formula-preview"></div><div class="df-formula-help">فیلدهای عددی و فرمولی موجود در همین محدوده قابل استفاده‌اند. برای حذف یک جزء روی آن کلیک کنید.</div>`;
     sourceField.parentElement.appendChild(panel);
-
-    const fieldSelect = panel.querySelector(".df-formula-field-select");
-    const numberInput = panel.querySelector(".df-formula-number");
-    const expression = panel.querySelector(".df-formula-expression");
-    const preview = panel.querySelector(".df-formula-preview");
-
-    function rebuildFieldSelect() {
-        fieldSelect.innerHTML = '<option value="">انتخاب فیلد...</option>';
-        fieldOptions.forEach((field) => {
-            const option = document.createElement("option");
-            option.value = field.id;
-            const scope = field.is_group_field
-                ? `${field.section_label} / ${field.group_label || field.group_code}`
-                : field.section_label || "فرم";
-            option.textContent = `${field.label} (${scope})`;
-            fieldSelect.appendChild(option);
-        });
-    }
-
-    function tokenText(token) {
-        if (token.type === "field") {
-            const field = fieldOptions.find(
-                (item) => Number(item.id) === Number(token.field_id)
-            );
-            return field ? field.label : `#${token.field_id}`;
-        }
-        if (token.type === "number") return token.value;
-        if (token.type === "function") return token.value;
-        if (token.type === "comma") return ",";
-        return token.value || "";
-    }
-
-    function render() {
-        expression.innerHTML = "";
-        tokens.forEach((token, index) => {
-            const chip = document.createElement("span");
-            chip.className = `df-formula-token df-formula-token-${token.type}`;
-            chip.textContent = tokenText(token);
-            chip.title = "حذف";
-            chip.addEventListener("click", () => {
-                tokens.splice(index, 1);
-                render();
-            });
-            expression.appendChild(chip);
-        });
-
-        const text = tokens.map(tokenText).join(" ");
-        preview.textContent = text ? `فرمول: ${text}` : "هنوز فرمولی ساخته نشده است.";
-
-        sourceField.value = JSON.stringify({
-            version: 2,
-            tokens,
-            decimal_places: Math.max(0, Math.min(Number(decimalField.value || 0), 6)),
-        });
-    }
-
-    async function loadFieldOptions() {
-        if (!optionsUrl) return;
-
-        const sectionId = sectionField?.value || "";
-        const groupId = groupField?.value || "";
-        const params = new URLSearchParams({
-            section_id: sectionId,
-            group_id: groupId,
-            exclude_id: document.getElementById("id_id")?.value || "",
-        });
-
-        try {
-            const response = await fetch(`${optionsUrl}?${params.toString()}`, {
-                headers: { "X-Requested-With": "XMLHttpRequest" },
-            });
-            if (!response.ok) return;
-
-            const payload = await response.json();
-            fieldOptions = Array.isArray(payload.fields) ? payload.fields : [];
-            rebuildFieldSelect();
-            render();
-        } catch (error) {
-            console.warn("Formula field options could not be loaded:", error);
-        }
-    }
-
-    panel.querySelector("[data-add-field]").addEventListener("click", () => {
-        const id = Number(fieldSelect.value);
-        if (!id) return;
-        tokens.push({ type: "field", field_id: id });
-        render();
-    });
-
-    panel.querySelector("[data-add-number]").addEventListener("click", () => {
-        const value = numberInput.value.trim().replace(/,/g, "");
-        if (!value || !/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)) return;
-        tokens.push({ type: "number", value });
-        numberInput.value = "";
-        render();
-    });
-
-    panel.querySelectorAll("[data-operator]").forEach((button) => {
-        button.addEventListener("click", () => {
-            tokens.push({ type: "operator", value: button.dataset.operator });
-            render();
-        });
-    });
-
-    panel.querySelectorAll("[data-paren]").forEach((button) => {
-        button.addEventListener("click", () => {
-            tokens.push({ type: "paren", value: button.dataset.paren });
-            render();
-        });
-    });
-
-    panel.querySelector("[data-comma]").addEventListener("click", () => {
-        tokens.push({ type: "comma", value: "," });
-        render();
-    });
-
-    panel.querySelectorAll("[data-function]").forEach((button) => {
-        button.addEventListener("click", () => {
-            tokens.push({ type: "function", value: button.dataset.function });
-            tokens.push({ type: "paren", value: "(" });
-            render();
-        });
-    });
-
-    const controlledIds = [
-        "id_choice_source", "id_choice_model", "id_choice_static_set",
-        "id_choice_lookup_list", "id_choice_label_field", "id_choice_value_field",
-        "id_choice_parent_field", "id_choice_filter_field", "id_system_key", "id_is_required",
-    ];
-
-    function setRowVisible(id, visible) {
-        const row = rowFor(id);
-        if (row) row.style.display = visible ? "" : "none";
-    }
-
-    function syncVisibility() {
-        const isFormula = typeField.value === "FORMULA";
-        builderRow.style.display = isFormula ? "" : "none";
-        setRowVisible("id_formula_decimal_places", isFormula);
-        controlledIds.forEach((id) => setRowVisible(id, !isFormula));
-        if (isFormula) {
-            const required = document.getElementById("id_is_required");
-            if (required) required.checked = false;
-        }
-    }
-
-    function scopeChanged() {
-        if (!initialized || typeField.value !== "FORMULA") return;
-        tokens = [];
-        render();
-        loadFieldOptions();
-    }
-
-    typeField.addEventListener("change", () => {
-        syncVisibility();
-        if (typeField.value === "FORMULA") loadFieldOptions();
-    });
-    decimalField.addEventListener("input", render);
-    sectionField?.addEventListener("change", scopeChanged);
-    groupField?.addEventListener("change", scopeChanged);
-
-    rebuildFieldSelect();
-    render();
-    syncVisibility();
-    initialized = true;
-    if (typeField.value === "FORMULA") loadFieldOptions();
+    const fieldSelect = panel.querySelector(".df-formula-field-select"), numberInput = panel.querySelector(".df-formula-number"), expression = panel.querySelector(".df-formula-expression"), preview = panel.querySelector(".df-formula-preview");
+    function rebuildFieldSelect() { fieldSelect.innerHTML = '<option value="">انتخاب فیلد...</option>'; fieldOptions.forEach(field => { const option=document.createElement("option"); option.value=field.id; const scope=field.is_group_field ? `${field.section_label} / ${field.group_label || field.group_code}` : field.section_label || "فرم"; option.textContent=`${field.label} (${scope})`; fieldSelect.appendChild(option); }); }
+    function tokenText(token) { if(token.type==="field"){const field=fieldOptions.find(item=>Number(item.id)===Number(token.field_id));return field?field.label:`#${token.field_id}`;} if(token.type==="number")return token.value; if(token.type==="function")return token.value; if(token.type==="comma")return ","; return token.value || ""; }
+    function render() { expression.innerHTML=""; tokens.forEach((token,index)=>{const chip=document.createElement("span");chip.className=`df-formula-token df-formula-token-${token.type}`;chip.textContent=tokenText(token);chip.title="حذف";chip.addEventListener("click",()=>{tokens.splice(index,1);render();});expression.appendChild(chip);}); const text=tokens.map(tokenText).join(" "); preview.textContent=text?`فرمول: ${text}`:"هنوز فرمولی ساخته نشده است."; sourceField.value=JSON.stringify({version:2,tokens,decimal_places:Math.max(0,Math.min(Number(decimalField.value||0),6))}); }
+    async function loadFieldOptions() { if(!optionsUrl)return; const params=new URLSearchParams({section_id:sectionField?.value||"",group_id:groupField?.value||"",exclude_id:document.getElementById("id_id")?.value||""}); try{const response=await fetch(`${optionsUrl}?${params.toString()}`,{headers:{"X-Requested-With":"XMLHttpRequest"}});if(!response.ok)return;const payload=await response.json();fieldOptions=Array.isArray(payload.fields)?payload.fields:[];rebuildFieldSelect();render();}catch(error){console.warn("Formula field options could not be loaded:",error);} }
+    panel.querySelector("[data-add-field]").addEventListener("click",()=>{const id=Number(fieldSelect.value);if(id){tokens.push({type:"field",field_id:id});render();}});
+    panel.querySelector("[data-add-number]").addEventListener("click",()=>{const value=numberInput.value.trim().replace(/,/g,"");if(!value||!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value))return;tokens.push({type:"number",value});numberInput.value="";render();});
+    panel.querySelectorAll("[data-operator]").forEach(button=>button.addEventListener("click",()=>{tokens.push({type:"operator",value:button.dataset.operator});render();}));
+    panel.querySelectorAll("[data-paren]").forEach(button=>button.addEventListener("click",()=>{tokens.push({type:"paren",value:button.dataset.paren});render();}));
+    panel.querySelector("[data-comma]").addEventListener("click",()=>{tokens.push({type:"comma",value:","});render();});
+    panel.querySelectorAll("[data-function]").forEach(button=>button.addEventListener("click",()=>{tokens.push({type:"function",value:button.dataset.function},{type:"paren",value:"("});render();}));
+    const controlledIds=["id_choice_source","id_choice_model","id_choice_static_set","id_choice_lookup_list","id_choice_label_field","id_choice_value_field","id_choice_parent_field","id_choice_filter_field","id_system_key","id_is_required"];
+    function setRowVisible(id,visible){const row=rowFor(id);if(row)row.style.display=visible?"":"none";}
+    function syncVisibility(){const isFormula=typeField.value==="FORMULA";builderRow.style.display=isFormula?"":"none";setRowVisible("id_formula_decimal_places",isFormula);controlledIds.forEach(id=>setRowVisible(id,!isFormula));if(isFormula){const required=document.getElementById("id_is_required");if(required)required.checked=false;}}
+    function scopeChanged(){if(!initialized||typeField.value!=="FORMULA")return;tokens=[];render();loadFieldOptions();}
+    typeField.addEventListener("change",()=>{syncVisibility();if(typeField.value==="FORMULA")loadFieldOptions();});decimalField.addEventListener("input",render);sectionField?.addEventListener("change",scopeChanged);groupField?.addEventListener("change",scopeChanged);
+    rebuildFieldSelect();render();syncVisibility();initialized=true;if(typeField.value==="FORMULA")loadFieldOptions();
 });
