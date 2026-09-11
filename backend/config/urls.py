@@ -16,6 +16,7 @@ from workflow.process_workspace import (
     process_workspace,
 )
 from workflow.form_workspace import form_workspace
+from workflow.form_workspace_api import workspace_model_fields
 
 
 urlpatterns = [
@@ -56,6 +57,12 @@ urlpatterns = [
         "admin/workflow/form-workspace/<int:workflow_id>/",
         dolphin_admin_site.admin_view(form_workspace),
         name="form_workspace",
+    ),
+
+    path(
+        "admin/workflow/form-workspace/model-fields/",
+        dolphin_admin_site.admin_view(workspace_model_fields),
+        name="workspace_model_fields",
     ),
 
     # ---------------------------------------------------------
