@@ -167,7 +167,7 @@
             const isSelect = type.value === "SELECT";
             const isFormula = type.value === "FORMULA";
 
-            setVisible(controls.system_key, !isSelect && !isFormula);
+            setVisible(controls.system_key, !isFormula);
             setVisible(controls.is_required, !isFormula);
             setVisible(controls.is_history_enabled, !isFormula);
 
