@@ -10,10 +10,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const parent = document.getElementById("id_choice_parent_field");
     const filter = document.getElementById("id_choice_filter_field");
 
-    // --------------------------------------------------
-    // Helpers
-    // --------------------------------------------------
-
     function getFieldRow(field) {
         if (!field) return null;
 
@@ -31,44 +27,35 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // --------------------------------------------------
-    // Choice Source visibility
-    // --------------------------------------------------
-
     function updateChoiceSourceVisibility() {
         if (!source) return;
 
         const sourceValue = source.value;
-
         const isModel = sourceValue === "MODEL";
         const isStatic = sourceValue === "STATIC";
         const isLookup = sourceValue === "LOOKUP";
 
-        // Source-specific fields
         setVisible(model, isModel);
         setVisible(staticSet, isStatic);
         setVisible(lookupList, isLookup);
 
-        // Model-only fields
+        // Existing System Model behavior:
+        // Label Field + Value Field + Parent Field.
         setVisible(label, isModel);
         setVisible(value, isModel);
         setVisible(parent, isModel);
-        setVisible(filter, isModel);
-    }
 
-    // --------------------------------------------------
-    // Dynamic Model Fields
-    // --------------------------------------------------
+        // choice_filter_field is not part of the existing FormField UX.
+        // Keep the model field untouched, but never expose it in Admin.
+        setVisible(filter, false);
+    }
 
     async function loadFields() {
         if (!model) return;
 
         const id = model.value;
-
-        // مقدارهای ذخیره‌شده قبل از بازسازی options
         const initialLabel = label?.dataset.initialValue || "";
         const initialValue = value?.dataset.initialValue || "";
-        const initialFilter = filter?.dataset.initialValue || "";
 
         if (label) {
             label.innerHTML =
@@ -77,11 +64,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (value) {
             value.innerHTML =
-                '<option value="">---------</option>';
-        }
-
-        if (filter) {
-            filter.innerHTML =
                 '<option value="">---------</option>';
         }
 
@@ -105,7 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (value) {
             value.innerHTML +=
-                `<option value="id">id (شناسه)</option>`;
+                '<option value="id">id (شناسه)</option>';
         }
 
         data.fields.forEach((field) => {
@@ -121,17 +103,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 value.innerHTML +=
                     `<option value="${field.name}">${text}</option>`;
             }
-
-            // فقط ForeignKeyها برای Filter Field
-            if (filter && field.is_foreign_key) {
-                filter.innerHTML +=
-                    `<option value="${field.name}">${field.name} → ${field.label}</option>`;
-            }
         });
-
-        // --------------------------------------------------
-        // Restore saved values
-        // --------------------------------------------------
 
         if (label && initialLabel) {
             label.value = initialLabel;
@@ -140,15 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (value && initialValue) {
             value.value = initialValue;
         }
-
-        if (filter && initialFilter) {
-            filter.value = initialFilter;
-        }
     }
-
-    // --------------------------------------------------
-    // Events
-    // --------------------------------------------------
 
     if (source) {
         source.addEventListener(
@@ -163,10 +127,6 @@ document.addEventListener("DOMContentLoaded", () => {
             loadFields
         );
     }
-
-    // --------------------------------------------------
-    // Initial state
-    // --------------------------------------------------
 
     updateChoiceSourceVisibility();
 
