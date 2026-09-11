@@ -36,12 +36,6 @@
         document.head.appendChild(style);
     }
 
-    // The Workspace template renders the same FormFieldWorkspaceForm twice
-    // (the "add-field" form and the "field-properties" form), so Django
-    // generates identical element IDs in both. Global getElementById lookups
-    // only ever resolve to the first form, which left the Properties panel
-    // without working change listeners. Always resolve inputs relative to the
-    // specific form instead (falling back to the legacy global IDs).
     function findInput(form, fieldName) {
         if (!form) return null;
         return (
@@ -131,8 +125,6 @@
                 const data = await response.json();
                 const fields = Array.isArray(data.fields) ? data.fields : [];
 
-                // The value select always offers the model's primary key,
-                // mirroring the existing FormField admin behavior.
                 addOption(value, "id", "id (شناسه)");
 
                 fields.forEach(function (field) {
@@ -151,7 +143,6 @@
                     }
                 });
 
-                // Restore saved/bound selections only after the options exist.
                 if (current.label && label) label.value = current.label;
                 if (current.value && value) value.value = current.value;
                 if (current.filter && filter) filter.value = current.filter;
@@ -190,7 +181,9 @@
             setDisabled(controls.formula_decimal_places, !isFormula);
 
             if (!isSelect) {
-                setDisabled(controls.choice_source, true);
+                // choice_source is a required ModelForm field. Keep it enabled
+                // while hidden so its cleared NONE value is included in POST.
+                setDisabled(controls.choice_source, false);
                 clearChoiceConfiguration(controls, false);
                 return;
             }
@@ -216,11 +209,6 @@
     }
 
     function init() {
-        // Identify the FormField Workspace form(s) structurally: the form(s)
-        // that contain the field_type input. Do not depend on #add-field or
-        // #field-properties — #add-field is a <section> (the form inside it
-        // has no id) and #field-properties only exists when a field is
-        // selected via ?field= in the URL.
         const forms = Array.from(
             document.querySelectorAll("form.df-fw-form")
         ).filter(function (form) {
