@@ -95,7 +95,7 @@
 
         try {
             const url = new URL(
-                "/admin/workflow/dynamic/formfield-model-fields/",
+                "/admin/workflow/form-workspace/model-fields/",
                 window.location.origin
             );
             url.searchParams.set("content_type", modelId);
@@ -106,7 +106,7 @@
 
             if (!response.ok) {
                 console.warn(
-                    "Form Designer: model fields endpoint returned",
+                    "Form Designer: Workspace model fields endpoint returned",
                     response.status
                 );
                 return;
@@ -136,7 +136,7 @@
             if (current.filter && filter) filter.value = current.filter;
         } catch (error) {
             console.warn(
-                "Form Designer: unable to load model fields",
+                "Form Designer: unable to load Workspace model fields",
                 error
             );
         }
@@ -151,7 +151,6 @@
         const isSelect = type.value === "SELECT";
         const isFormula = type.value === "FORMULA";
 
-        // form_workspace.js is the single owner of Workspace field-property visibility.
         setVisible("id_system_key", !isSelect && !isFormula);
         setVisible("id_is_required", !isFormula);
         setVisible("id_is_history_enabled", !isFormula);
