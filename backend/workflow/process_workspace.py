@@ -93,6 +93,15 @@ class WorkflowTransitionWorkspaceForm(forms.ModelForm):
         return instance
 
 
+def _workspace_redirect(request, **params):
+    url = reverse("process_workspace", kwargs={"workflow_id": params.pop("workflow_id")})
+    if params:
+        query = "&".join(f"{key}={value}" for key, value in params.items() if value)
+        if query:
+            url = f"{url}?{query}"
+    return redirect(url)
+
+
 def process_workspace_list(request):
     workflows = Workflow.objects.all().order_by("name")
     create_form = WorkflowWorkspaceForm()
@@ -133,16 +142,20 @@ def process_workspace(request, workflow_id):
                 messages.success(request, "مشخصات فرآیند ذخیره شد.")
             else:
                 messages.error(request, "اطلاعات فرآیند معتبر نیست.")
-            return redirect(request.path)
+            return _workspace_redirect(request, workflow_id=workflow.pk)
 
         if action == "add_step":
             form = WorkflowStepWorkspaceForm(workflow, request.POST)
             if form.is_valid():
-                form.save()
+                step = form.save()
                 messages.success(request, "مرحله جدید اضافه شد.")
-            else:
-                messages.error(request, "اطلاعات مرحله معتبر نیست.")
-            return redirect(request.path)
+                return _workspace_redirect(
+                    request,
+                    workflow_id=workflow.pk,
+                    step=step.pk,
+                )
+            messages.error(request, "اطلاعات مرحله معتبر نیست.")
+            return _workspace_redirect(request, workflow_id=workflow.pk)
 
         if action == "edit_step":
             step = get_object_or_404(
@@ -156,16 +169,46 @@ def process_workspace(request, workflow_id):
                 messages.success(request, "مرحله ذخیره شد.")
             else:
                 messages.error(request, "اطلاعات مرحله معتبر نیست.")
-            return redirect(request.path)
+            return _workspace_redirect(
+                request,
+                workflow_id=workflow.pk,
+                step=step.pk,
+            )
 
         if action == "add_transition":
             form = WorkflowTransitionWorkspaceForm(workflow, request.POST)
             if form.is_valid():
-                form.save()
+                transition = form.save()
                 messages.success(request, "ارتباط بین مراحل ایجاد شد.")
+                return _workspace_redirect(
+                    request,
+                    workflow_id=workflow.pk,
+                    transition=transition.pk,
+                )
+            messages.error(request, "اطلاعات Transition معتبر نیست.")
+            return _workspace_redirect(request, workflow_id=workflow.pk)
+
+        if action == "edit_transition":
+            transition = get_object_or_404(
+                WorkflowTransition,
+                pk=request.POST.get("transition_id"),
+                workflow=workflow,
+            )
+            form = WorkflowTransitionWorkspaceForm(
+                workflow,
+                request.POST,
+                instance=transition,
+            )
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Transition ذخیره شد.")
             else:
                 messages.error(request, "اطلاعات Transition معتبر نیست.")
-            return redirect(request.path)
+            return _workspace_redirect(
+                request,
+                workflow_id=workflow.pk,
+                transition=transition.pk,
+            )
 
         if action == "toggle_step":
             step = get_object_or_404(
@@ -176,7 +219,7 @@ def process_workspace(request, workflow_id):
             step.is_active = not step.is_active
             step.save(update_fields=["is_active", "updated_at"])
             messages.success(request, "وضعیت مرحله تغییر کرد.")
-            return redirect(request.path)
+            return _workspace_redirect(request, workflow_id=workflow.pk, step=step.pk)
 
         if action == "toggle_transition":
             transition = get_object_or_404(
@@ -187,9 +230,12 @@ def process_workspace(request, workflow_id):
             transition.is_active = not transition.is_active
             transition.save(update_fields=["is_active", "updated_at"])
             messages.success(request, "وضعیت Transition تغییر کرد.")
-            return redirect(request.path)
+            return _workspace_redirect(
+                request,
+                workflow_id=workflow.pk,
+                transition=transition.pk,
+            )
 
-    workflow_form = WorkflowWorkspaceForm(instance=workflow)
     steps = (
         workflow.steps
         .select_related("assigned_to")
@@ -198,8 +244,34 @@ def process_workspace(request, workflow_id):
     transitions = (
         workflow.transitions
         .select_related("from_step", "to_step")
-        .order_by("from_step__order", "to_step__order")
+        .order_by("from_step__order", "to_step__order", "name")
     )
+
+    selected_step = None
+    selected_transition = None
+    selected_step_id = request.GET.get("step")
+    selected_transition_id = request.GET.get("transition")
+
+    if selected_step_id:
+        selected_step = next((step for step in steps if str(step.pk) == selected_step_id), None)
+    if selected_transition_id:
+        selected_transition = next(
+            (transition for transition in transitions if str(transition.pk) == selected_transition_id),
+            None,
+        )
+
+    if selected_step:
+        step_form = WorkflowStepWorkspaceForm(workflow, instance=selected_step)
+    else:
+        step_form = WorkflowStepWorkspaceForm(workflow)
+
+    if selected_transition:
+        transition_form = WorkflowTransitionWorkspaceForm(
+            workflow,
+            instance=selected_transition,
+        )
+    else:
+        transition_form = WorkflowTransitionWorkspaceForm(workflow)
 
     return render(
         request,
@@ -207,10 +279,12 @@ def process_workspace(request, workflow_id):
         {
             "title": f"Process Workspace — {workflow.name}",
             "workflow": workflow,
-            "workflow_form": workflow_form,
+            "workflow_form": WorkflowWorkspaceForm(instance=workflow),
             "steps": steps,
             "transitions": transitions,
-            "step_form": WorkflowStepWorkspaceForm(workflow),
-            "transition_form": WorkflowTransitionWorkspaceForm(workflow),
+            "step_form": step_form,
+            "transition_form": transition_form,
+            "selected_step": selected_step,
+            "selected_transition": selected_transition,
         },
     )
