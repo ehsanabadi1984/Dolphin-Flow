@@ -4,8 +4,6 @@ import json
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.contrib.contenttypes.models import ContentType
-from django.db import models
 from django.urls import reverse
 
 from .formula_services import FormulaService
@@ -49,10 +47,6 @@ class FormulaFieldAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["choice_label_field"].widget = forms.Select()
-        self.fields["choice_value_field"].widget = forms.Select()
-        self.fields["choice_filter_field"].widget = forms.Select()
-
         original_field = self.fields["field_type"]
         choices = list(original_field.choices or [])
         if not any(value == FormulaService.FIELD_TYPE for value, _ in choices):
@@ -74,7 +68,6 @@ class FormulaFieldAdminForm(forms.ModelForm):
             "operator_panel:formula_field_options"
         )
         self._refresh_field_options()
-        self._refresh_choice_model_fields()
 
     def _section_id(self):
         if self.instance and self.instance.pk:
@@ -161,58 +154,6 @@ class FormulaFieldAdminForm(forms.ModelForm):
             options,
             ensure_ascii=False,
         )
-
-    def _choice_model(self):
-        choice_model = self.instance.choice_model if self.instance and self.instance.pk else None
-        if self.is_bound:
-            raw = self.data.get(self.add_prefix("choice_model"))
-            if raw:
-                try:
-                    choice_model = ContentType.objects.get(pk=raw)
-                except (ContentType.DoesNotExist, ValueError, TypeError):
-                    choice_model = None
-        return choice_model
-
-    def _refresh_choice_model_fields(self):
-        label_field = self.fields.get("choice_label_field")
-        value_field = self.fields.get("choice_value_field")
-        filter_field = self.fields.get("choice_filter_field")
-        model_class = self._choice_model()
-        model_class = model_class.model_class() if model_class else None
-
-        field_choices = []
-        filter_choices = []
-        if model_class:
-            for field in model_class._meta.get_fields():
-                if not getattr(field, "concrete", False):
-                    continue
-                if getattr(field, "auto_created", False):
-                    continue
-                if not getattr(field, "editable", True):
-                    continue
-
-                choice = (field.name, f"{field.name} ({field.verbose_name})")
-                field_choices.append(choice)
-                if isinstance(field, models.ForeignKey):
-                    related_model = field.remote_field.model
-                    filter_choices.append(
-                        (
-                            field.name,
-                            f"{field.name} → {related_model._meta.verbose_name}",
-                        )
-                    )
-
-        if label_field:
-            label_field.choices = [("", "---------"), *field_choices]
-            label_field.initial = self.instance.choice_label_field if self.instance and self.instance.pk else ""
-
-        if value_field:
-            value_field.choices = [("", "---------"), ("id", "id (شناسه)"), *field_choices]
-            value_field.initial = self.instance.choice_value_field if self.instance and self.instance.pk else ""
-
-        if filter_field:
-            filter_field.choices = [("", "---------"), *filter_choices]
-            filter_field.initial = self.instance.choice_filter_field if self.instance and self.instance.pk else ""
 
     def clean(self):
         cleaned = super().clean()
