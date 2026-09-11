@@ -31,9 +31,17 @@ class WorkflowStepWorkspaceForm(forms.ModelForm):
     def __init__(self, workflow, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.workflow = workflow
-        self.fields["assigned_to"].queryset = (
-            User.objects.filter(is_active=True)
-            .order_by("first_name", "last_name", "username")
+
+        users = User.objects.filter(is_active=True)
+        if self.instance and self.instance.assigned_to_id:
+            users = User.objects.filter(
+                is_active=True,
+            ) | User.objects.filter(
+                pk=self.instance.assigned_to_id,
+            )
+
+        self.fields["assigned_to"].queryset = users.distinct().order_by(
+            "first_name", "last_name", "username"
         )
         self.fields["assigned_to"].required = False
 
@@ -64,11 +72,21 @@ class WorkflowTransitionWorkspaceForm(forms.ModelForm):
     def __init__(self, workflow, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.workflow = workflow
-        steps = (
-            WorkflowStep.objects
-            .filter(workflow=workflow, is_active=True)
-            .order_by("order")
+        active_steps = WorkflowStep.objects.filter(
+            workflow=workflow,
+            is_active=True,
         )
+        step_ids = list(active_steps.values_list("pk", flat=True))
+        if self.instance and self.instance.pk:
+            if self.instance.from_step_id:
+                step_ids.append(self.instance.from_step_id)
+            if self.instance.to_step_id:
+                step_ids.append(self.instance.to_step_id)
+
+        steps = WorkflowStep.objects.filter(
+            workflow=workflow,
+            pk__in=set(step_ids),
+        ).order_by("order")
         self.fields["from_step"].queryset = steps
         self.fields["to_step"].queryset = steps
         self.fields["to_step"].required = False
