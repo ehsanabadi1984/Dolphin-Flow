@@ -72,7 +72,9 @@
     }
 
     function clearChoiceConfiguration(controls, keepSource) {
-        if (!keepSource) clearSelect(controls.choice_source);
+        if (!keepSource && controls.choice_source) {
+            controls.choice_source.value = "NONE";
+        }
         CHOICE_FIELDS.forEach(function (name) {
             clearSelect(controls[name]);
         });
@@ -182,7 +184,7 @@
 
             if (!isSelect) {
                 // choice_source is a required ModelForm field. Keep it enabled
-                // while hidden so its cleared NONE value is included in POST.
+                // while hidden so its valid NONE value is included in POST.
                 setDisabled(controls.choice_source, false);
                 clearChoiceConfiguration(controls, false);
                 return;
