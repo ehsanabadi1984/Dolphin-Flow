@@ -1,15 +1,33 @@
 (function () {
     "use strict";
 
+    const CHOICE_FIELDS = [
+        "id_choice_model",
+        "id_choice_static_set",
+        "id_choice_lookup_list",
+        "id_choice_label_field",
+        "id_choice_value_field",
+        "id_choice_parent_field",
+        "id_choice_filter_field",
+    ];
+
     function closestRow(element) {
         if (!element) return null;
-        return element.closest(".form-row, .form-group, p") || element.parentElement;
+        return (
+            element.closest(".form-row") ||
+            element.closest(".form-group") ||
+            element.closest("p") ||
+            element.parentElement
+        );
     }
 
     function setVisible(id, visible) {
         const element = document.getElementById(id);
         const row = closestRow(element);
-        if (row) row.hidden = !visible;
+        if (!row) return;
+
+        row.hidden = !visible;
+        row.style.display = visible ? "" : "none";
     }
 
     function setDisabled(id, disabled) {
@@ -25,13 +43,7 @@
 
     function clearChoiceConfiguration(keepSource) {
         if (!keepSource) clearSelect("id_choice_source");
-        clearSelect("id_choice_model");
-        clearSelect("id_choice_static_set");
-        clearSelect("id_choice_lookup_list");
-        clearSelect("id_choice_label_field");
-        clearSelect("id_choice_value_field");
-        clearSelect("id_choice_parent_field");
-        clearSelect("id_choice_filter_field");
+        CHOICE_FIELDS.forEach(clearSelect);
     }
 
     function addOption(select, value, label) {
@@ -43,6 +55,7 @@
         const label = document.getElementById("id_choice_label_field");
         const value = document.getElementById("id_choice_value_field");
         const filter = document.getElementById("id_choice_filter_field");
+
         const current = {
             label: label?.value || "",
             value: value?.value || "",
@@ -50,27 +63,43 @@
         };
 
         [label, value, filter].forEach(function (select) {
-            if (select) select.replaceChildren(new Option("---------", ""));
+            if (select) {
+                select.replaceChildren(new Option("---------", ""));
+            }
         });
 
         if (!modelId) return;
 
         try {
-            const url = new URL("/admin/workflow/dynamic/formfield-model-fields/", window.location.origin);
+            const url = new URL(
+                "/admin/workflow/dynamic/formfield-model-fields/",
+                window.location.origin
+            );
             url.searchParams.set("content_type", modelId);
+
             const response = await fetch(url.toString(), {
                 headers: { "X-Requested-With": "XMLHttpRequest" },
             });
-            if (!response.ok) return;
+
+            if (!response.ok) {
+                console.warn(
+                    "Form Designer: model fields endpoint returned",
+                    response.status
+                );
+                return;
+            }
 
             const data = await response.json();
             const fields = Array.isArray(data.fields) ? data.fields : [];
-            const fieldNames = new Set(fields.map(function (field) { return field.name; }));
 
             fields.forEach(function (field) {
-                const text = field.label ? `${field.name} (${field.label})` : field.name;
+                const text = field.label
+                    ? `${field.name} (${field.label})`
+                    : field.name;
+
                 addOption(label, field.name, text);
                 addOption(value, field.name, text);
+
                 if (field.is_foreign_key) {
                     const filterText = field.related_model
                         ? `${field.name} → ${field.related_model}`
@@ -79,43 +108,45 @@
                 }
             });
 
-            if (current.label && fieldNames.has(current.label)) label.value = current.label;
-            if (current.value && fieldNames.has(current.value)) value.value = current.value;
-            if (current.filter && fields.some(function (field) {
-                return field.name === current.filter && field.is_foreign_key;
-            })) {
-                filter.value = current.filter;
-            }
+            if (current.label && label) label.value = current.label;
+            if (current.value && value) value.value = current.value;
+            if (current.filter && filter) filter.value = current.filter;
         } catch (error) {
-            console.warn("Form Designer: unable to load model fields", error);
+            console.warn(
+                "Form Designer: unable to load model fields",
+                error
+            );
         }
     }
 
-    function sync() {
+    function syncProperties() {
         const type = document.getElementById("id_field_type");
         const source = document.getElementById("id_choice_source");
+
         if (!type) return;
 
         const isSelect = type.value === "SELECT";
         const isFormula = type.value === "FORMULA";
 
+        // Common properties are kept visible. Type-specific properties are
+        // controlled exclusively below, so switching type cannot leave stale
+        // configuration from the previous type on screen.
         setVisible("id_system_key", !isSelect && !isFormula);
         setVisible("id_is_required", !isFormula);
         setVisible("id_is_history_enabled", !isFormula);
+
+        // Select-only configuration.
         setVisible("id_choice_source", isSelect);
+        CHOICE_FIELDS.forEach(function (id) {
+            setVisible(id, false);
+            setDisabled(id, !isSelect);
+        });
 
-        [
-            "id_choice_model",
-            "id_choice_static_set",
-            "id_choice_lookup_list",
-            "id_choice_label_field",
-            "id_choice_value_field",
-            "id_choice_parent_field",
-            "id_choice_filter_field",
-        ].forEach(function (id) { setVisible(id, false); });
-
+        // Formula-only configuration.
         setVisible("id_formula_builder", isFormula);
         setVisible("id_formula_decimal_places", isFormula);
+        setDisabled("id_formula_builder", !isFormula);
+        setDisabled("id_formula_decimal_places", !isFormula);
 
         if (!isSelect) {
             setDisabled("id_choice_source", true);
@@ -127,9 +158,9 @@
         if (!source) return;
 
         const selectedSource = source.value;
-        const isModel = ["MODEL", "SYSTEM_MODEL"].includes(selectedSource);
-        const isStatic = ["STATIC", "STATIC_SET"].includes(selectedSource);
-        const isLookup = ["LOOKUP", "LOOKUP_LIST"].includes(selectedSource);
+        const isModel = selectedSource === "MODEL";
+        const isStatic = selectedSource === "STATIC";
+        const isLookup = selectedSource === "LOOKUP";
 
         if (isModel) {
             setVisible("id_choice_model", true);
@@ -137,7 +168,6 @@
             setVisible("id_choice_value_field", true);
             setVisible("id_choice_parent_field", true);
             setVisible("id_choice_filter_field", true);
-            setDisabled("id_choice_model", false);
         } else if (isStatic) {
             setVisible("id_choice_static_set", true);
         } else if (isLookup) {
@@ -155,24 +185,30 @@
         const model = document.getElementById("id_choice_model");
 
         type?.addEventListener("change", function () {
-            if (type.value !== "SELECT") clearChoiceConfiguration(false);
-            sync();
+            if (type.value !== "SELECT") {
+                clearChoiceConfiguration(false);
+            }
+            syncProperties();
         });
 
         source?.addEventListener("change", function () {
             clearChoiceConfiguration(true);
-            sync();
-            if (["MODEL", "SYSTEM_MODEL"].includes(source.value) && model?.value) {
+            syncProperties();
+
+            if (source.value === "MODEL" && model?.value) {
                 loadModelFields(model.value);
             }
         });
 
         model?.addEventListener("change", function () {
-            loadModelFields(model.value);
+            if (source?.value === "MODEL") {
+                loadModelFields(model.value);
+            }
         });
 
-        sync();
-        if (model?.value && ["MODEL", "SYSTEM_MODEL"].includes(source?.value)) {
+        syncProperties();
+
+        if (source?.value === "MODEL" && model?.value) {
             loadModelFields(model.value);
         }
     }
