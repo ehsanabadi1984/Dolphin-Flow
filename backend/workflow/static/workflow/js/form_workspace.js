@@ -151,20 +151,17 @@
         const isSelect = type.value === "SELECT";
         const isFormula = type.value === "FORMULA";
 
-        // Common properties remain visible. Only type-specific properties
-        // are controlled here, preventing stale configuration from another type.
+        // form_workspace.js is the single owner of Workspace field-property visibility.
         setVisible("id_system_key", !isSelect && !isFormula);
         setVisible("id_is_required", !isFormula);
         setVisible("id_is_history_enabled", !isFormula);
 
-        // Select-only configuration.
         setVisible("id_choice_source", isSelect);
         CHOICE_FIELDS.forEach(function (id) {
             setVisible(id, false);
             setDisabled(id, !isSelect);
         });
 
-        // Formula-only configuration.
         setVisible("id_formula_builder", isFormula);
         setVisible("id_formula_decimal_places", isFormula);
         setDisabled("id_formula_builder", !isFormula);
