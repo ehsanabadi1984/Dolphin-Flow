@@ -10,7 +10,10 @@ from workflow.admin import (
     workflow_dynamic_transitions,
     formfield_model_fields,
     dolphin_admin_site,
-
+)
+from workflow.process_workspace import (
+    process_workspace_list,
+    process_workspace,
 )
 
 
@@ -26,6 +29,22 @@ urlpatterns = [
             permanent=False,
         ),
         name="root",
+    ),
+
+    # ---------------------------------------------------------
+    # Process Workspace
+    # ---------------------------------------------------------
+
+    path(
+        "admin/workflow/process-workspace/",
+        dolphin_admin_site.admin_view(process_workspace_list),
+        name="process_workspace_list",
+    ),
+
+    path(
+        "admin/workflow/process-workspace/<int:workflow_id>/",
+        dolphin_admin_site.admin_view(process_workspace),
+        name="process_workspace",
     ),
 
     # ---------------------------------------------------------
