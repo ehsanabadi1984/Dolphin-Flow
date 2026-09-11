@@ -11,7 +11,6 @@
     .df-pw-card { background:var(--body-bg,#fff); border:1px solid var(--hairline-color,#ddd); border-radius:14px; padding:18px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
     .df-pw-card + .df-pw-card { margin-top:18px; }
     .df-pw-card h2 { font-size:18px; margin:0 0 14px; }
-    .df-pw-card h3 { font-size:14px; margin:18px 0 10px; }
     .df-pw-main { display:grid; grid-template-columns:230px minmax(0,1fr) 330px; gap:18px; align-items:start; }
     .df-pw-structure { display:grid; gap:7px; }
     .df-pw-node-link { display:block; padding:10px 12px; border-radius:9px; background:var(--darkened-bg,#f5f5f5); color:inherit; text-decoration:none; }
@@ -19,15 +18,12 @@
     .df-pw-node-link strong { display:block; }
     .df-pw-node-link small { color:var(--body-quiet-color,#777); }
     .df-pw-context { padding:10px 12px; border-radius:9px; background:var(--darkened-bg,#f5f5f5); font-size:13px; }
-    .df-pw-context + .df-pw-context { margin-top:8px; }
     .df-pw-muted { color:var(--body-quiet-color,#777); }
     .df-pw-status { font-size:12px; }
     .df-pw-status.active { color:#188038; }
     .df-pw-status.inactive { color:#b3261e; }
     .df-pw-canvas-card { min-width:0; }
     .df-pw-canvas-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
-    .df-pw-canvas-toolbar strong { font-size:15px; }
-    .df-pw-canvas-toolbar span { color:var(--body-quiet-color,#777); font-size:12px; }
     .df-pw-canvas { position:relative; min-height:520px; overflow:auto; padding:34px; border:1px solid var(--hairline-color,#ddd); border-radius:12px; background:var(--darkened-bg,#f8f8f8); }
     .df-pw-canvas-inner { position:relative; min-width:760px; min-height:440px; }
     .df-pw-edges { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
@@ -36,13 +32,12 @@
     .df-pw-canvas-nodes { position:relative; z-index:2; display:flex; flex-wrap:wrap; align-items:center; gap:34px; min-height:360px; padding:20px 10px; }
     .df-pw-step-node { position:relative; width:180px; min-height:88px; box-sizing:border-box; padding:14px; border:1px solid var(--hairline-color,#bbb); border-radius:13px; background:var(--body-bg,#fff); color:inherit; text-decoration:none; box-shadow:0 3px 10px rgba(0,0,0,.06); }
     .df-pw-step-node:hover { border-color:var(--link-fg,#417690); }
-    .df-pw-step-node.selected { border:2px solid var(--link-fg,#417690); padding:13px; box-shadow:0 0 0 3px rgba(65,118,144,.12); }
+    .df-pw-step-node.selected { border:2px solid var(--link-fg,#417690); padding:13px; }
     .df-pw-step-node.inactive { opacity:.58; }
     .df-pw-step-order { font-size:11px; color:var(--body-quiet-color,#777); }
     .df-pw-step-name { font-weight:700; margin:4px 0 7px; }
     .df-pw-step-meta { font-size:11px; color:var(--body-quiet-color,#777); }
     .df-pw-finish { align-self:center; width:150px; padding:15px; text-align:center; border:1px dashed var(--hairline-color,#999); border-radius:30px; background:var(--body-bg,#fff); font-weight:700; }
-    .df-pw-selection { border:2px solid var(--link-fg,#417690); }
     .df-pw-form p { margin:0 0 12px; }
     .df-pw-form label { display:block; font-weight:600; margin-bottom:5px; }
     .df-pw-form input:not([type="checkbox"]), .df-pw-form textarea, .df-pw-form select { width:100%; box-sizing:border-box; }
@@ -50,13 +45,13 @@
     .df-pw-actions { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; }
     .df-pw-small-form { margin:0; display:inline; }
     .df-pw-small-form button { font-size:12px; padding:5px 9px; }
+    .df-pw-danger { color:#b3261e !important; border-color:#b3261e !important; }
     .df-pw-transition-list { display:grid; gap:7px; margin-top:12px; }
     .df-pw-transition-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 10px; border:1px solid var(--hairline-color,#ddd); border-radius:9px; background:var(--body-bg,#fff); }
     .df-pw-transition-row a { color:inherit; text-decoration:none; flex:1; }
     .df-pw-transition-row.selected { border-color:var(--link-fg,#417690); }
     .df-pw-empty { padding:28px 10px; text-align:center; color:var(--body-quiet-color,#777); }
     .df-pw-note { font-size:12px; line-height:1.8; color:var(--body-quiet-color,#777); }
-    .df-pw-section-link { display:inline-block; margin-top:8px; }
     @media (max-width:1150px) { .df-pw-main { grid-template-columns:1fr; } .df-pw-canvas { min-height:420px; } }
 </style>
 
@@ -74,7 +69,7 @@
             <section class="df-pw-card">
                 <h2>ساختار</h2>
                 <div class="df-pw-structure">
-                    <a class="df-pw-node-link" href="?"><strong>فرآیند</strong><small>مشخصات عمومی</small></a>
+                    <a class="df-pw-node-link" href="#general"><strong>فرآیند</strong><small>مشخصات عمومی</small></a>
                     <a class="df-pw-node-link" href="#canvas"><strong>مراحل</strong><small>{{ steps|length }} مرحله</small></a>
                     <a class="df-pw-node-link" href="#transitions"><strong>ارتباط‌ها</strong><small>{{ transitions|length }} Transition</small></a>
                     <a class="df-pw-node-link" href="#access"><strong>دسترسی</strong><small>Workspace امنیت</small></a>
@@ -86,7 +81,7 @@
             <section class="df-pw-card">
                 <h2>راهنما</h2>
                 <div class="df-pw-note">
-                    برای ویرایش، یک Step یا Transition را روی Canvas انتخاب کنید. تنظیمات همان عنصر در پنل Properties نمایش داده می‌شود.
+                    یک Step یا Transition را انتخاب کنید تا Properties آن نمایش داده شود. حذف همیشه به‌صورت امن انجام می‌شود و اگر داده وابسته‌ای وجود داشته باشد، سیستم مانع حذف می‌شود.
                 </div>
             </section>
         </aside>
@@ -94,8 +89,8 @@
         <main>
             <section id="canvas" class="df-pw-card df-pw-canvas-card">
                 <div class="df-pw-canvas-toolbar">
-                    <div><strong>Process Canvas</strong></div>
-                    <span>انتخاب Step / Transition برای ویرایش جزئیات</span>
+                    <strong>Process Canvas</strong>
+                    <span class="df-pw-muted">انتخاب Step برای ویرایش</span>
                 </div>
 
                 <div id="df-pw-canvas" class="df-pw-canvas">
@@ -114,7 +109,6 @@
                                     id="df-pw-step-{{ step.pk }}"
                                     class="df-pw-step-node {% if not step.is_active %}inactive{% endif %} {% if selected_step.pk == step.pk %}selected{% endif %}"
                                     href="?step={{ step.pk }}#canvas"
-                                    data-step-id="{{ step.pk }}"
                                 >
                                     <div class="df-pw-step-order">مرحله {{ step.order }}</div>
                                     <div class="df-pw-step-name">{{ step.name }}</div>
@@ -127,34 +121,28 @@
                                 <div class="df-pw-empty">هنوز مرحله‌ای تعریف نشده است.</div>
                             {% endfor %}
 
-                            {% if transitions and not steps %}
-                                <div class="df-pw-empty">برای ساخت Transition ابتدا Step ایجاد کنید.</div>
-                            {% endif %}
-
-                            {% if transitions %}
-                                {% for transition in transitions %}
-                                    {% if not transition.to_step %}
-                                        <div id="df-pw-finish" class="df-pw-finish">پایان فرآیند</div>
-                                    {% endif %}
-                                {% endfor %}
-                            {% endif %}
+                            {% for transition in transitions %}
+                                {% if not transition.to_step %}
+                                    <div id="df-pw-finish" class="df-pw-finish">پایان فرآیند</div>
+                                {% endif %}
+                            {% endfor %}
                         </div>
                     </div>
                 </div>
 
-                {% if transitions %}
-                    <div id="transitions" class="df-pw-transition-list">
-                        {% for transition in transitions %}
-                            <div class="df-pw-transition-row {% if selected_transition.pk == transition.pk %}selected{% endif %}">
-                                <a href="?transition={{ transition.pk }}#transitions">
-                                    <strong>{{ transition.name }}</strong>
-                                    <span class="df-pw-muted"> — {{ transition.from_step.name }} → {% if transition.to_step %}{{ transition.to_step.name }}{% else %}پایان فرآیند{% endif %}</span>
-                                </a>
-                                <span class="df-pw-status {% if transition.is_active %}active{% else %}inactive{% endif %}">{% if transition.is_active %}فعال{% else %}غیرفعال{% endif %}</span>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% endif %}
+                <div id="transitions" class="df-pw-transition-list">
+                    {% for transition in transitions %}
+                        <div class="df-pw-transition-row {% if selected_transition.pk == transition.pk %}selected{% endif %}">
+                            <a href="?transition={{ transition.pk }}#transitions">
+                                <strong>{{ transition.name }}</strong>
+                                <span class="df-pw-muted"> — {{ transition.from_step.name }} → {% if transition.to_step %}{{ transition.to_step.name }}{% else %}پایان فرآیند{% endif %}</span>
+                            </a>
+                            <span class="df-pw-status {% if transition.is_active %}active{% else %}inactive{% endif %}">{% if transition.is_active %}فعال{% else %}غیرفعال{% endif %}</span>
+                        </div>
+                    {% empty %}
+                        <div class="df-pw-empty">هنوز Transitionای تعریف نشده است.</div>
+                    {% endfor %}
+                </div>
             </section>
 
             <section class="df-pw-card" id="general">
@@ -177,13 +165,11 @@
                         {% csrf_token %}
                         <input type="hidden" name="action" value="edit_step">
                         <input type="hidden" name="step_id" value="{{ selected_step.pk }}">
-                        <p><label for="id_step_name">نام مرحله</label>{{ step_form.name }}</p>
-                        <p><label for="id_step_description">توضیحات</label>{{ step_form.description }}</p>
-                        <p><label for="id_step_assigned_to">مسئول مرحله</label>{{ step_form.assigned_to }}</p>
+                        <p><label>نام مرحله</label>{{ step_form.name }}</p>
+                        <p><label>توضیحات</label>{{ step_form.description }}</p>
+                        <p><label>مسئول مرحله</label>{{ step_form.assigned_to }}</p>
                         <p><label>{{ step_form.is_active }} فعال</label></p>
-                        <div class="df-pw-actions">
-                            <button type="submit" class="default">ذخیره Step</button>
-                        </div>
+                        <div class="df-pw-actions"><button type="submit" class="default">ذخیره Step</button></div>
                     </form>
                     <div class="df-pw-actions">
                         <form method="post" class="df-pw-small-form">
@@ -191,6 +177,12 @@
                             <input type="hidden" name="action" value="toggle_step">
                             <input type="hidden" name="step_id" value="{{ selected_step.pk }}">
                             <button type="submit">{% if selected_step.is_active %}غیرفعال کردن{% else %}فعال کردن{% endif %}</button>
+                        </form>
+                        <form method="post" class="df-pw-small-form" onsubmit="return confirm('آیا از حذف این Step مطمئن هستید؟ اگر داده وابسته‌ای وجود داشته باشد حذف انجام نمی‌شود.');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete_step">
+                            <input type="hidden" name="step_id" value="{{ selected_step.pk }}">
+                            <button type="submit" class="df-pw-danger">حذف Step</button>
                         </form>
                     </div>
                     <div class="df-pw-actions">
@@ -215,6 +207,12 @@
                             <input type="hidden" name="transition_id" value="{{ selected_transition.pk }}">
                             <button type="submit">{% if selected_transition.is_active %}غیرفعال کردن{% else %}فعال کردن{% endif %}</button>
                         </form>
+                        <form method="post" class="df-pw-small-form" onsubmit="return confirm('آیا از حذف این Transition مطمئن هستید؟');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete_transition">
+                            <input type="hidden" name="transition_id" value="{{ selected_transition.pk }}">
+                            <button type="submit" class="df-pw-danger">حذف Transition</button>
+                        </form>
                         <a class="button" href="#access">Access</a>
                     </div>
                 {% else %}
@@ -228,9 +226,9 @@
                 <form method="post" class="df-pw-form">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="add_step">
-                    <p><label for="id_name">نام مرحله</label>{{ step_form.name }}</p>
-                    <p><label for="id_description">توضیحات</label>{{ step_form.description }}</p>
-                    <p><label for="id_assigned_to">مسئول مرحله</label>{{ step_form.assigned_to }}</p>
+                    <p><label>نام مرحله</label>{{ step_form.name }}</p>
+                    <p><label>توضیحات</label>{{ step_form.description }}</p>
+                    <p><label>مسئول مرحله</label>{{ step_form.assigned_to }}</p>
                     <p><label>{{ step_form.is_active }} فعال</label></p>
                     <div class="df-pw-actions"><button type="submit" class="default">افزودن Step</button></div>
                 </form>
@@ -251,13 +249,11 @@
                 <p class="df-pw-note">دسترسی Process / Step / Transition / Field در Access & Security Workspace مدیریت می‌شود.</p>
                 <span class="button" style="opacity:.6;pointer-events:none;">Access Workspace</span>
             </section>
-
             <section class="df-pw-card" id="sla">
                 <h2>SLA</h2>
                 <p class="df-pw-note">SLA به‌صورت Step-specific تعریف می‌شود و Calendar منبع قابل استفاده مجدد است.</p>
                 <span class="button" style="opacity:.6;pointer-events:none;">SLA Workspace</span>
             </section>
-
             <section class="df-pw-card" id="form">
                 <h2>Form</h2>
                 <p class="df-pw-note">در مدل فعلی FormDefinition در سطح Workflow است؛ این بخش بعداً نقطه ورود contextual به Form Designer خواهد بود.</p>
