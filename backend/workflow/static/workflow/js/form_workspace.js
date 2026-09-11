@@ -11,6 +11,29 @@
         "id_choice_filter_field",
     ];
 
+    function installThemeFixes() {
+        if (document.getElementById("df-fw-theme-fixes")) return;
+
+        const style = document.createElement("style");
+        style.id = "df-fw-theme-fixes";
+        style.textContent = `
+            .df-fw-tree-item:hover,
+            .df-fw-tree-item.selected {
+                color: var(--body-fg, #222) !important;
+            }
+            .df-fw-form select {
+                color: var(--body-fg, #222) !important;
+                background-color: var(--body-bg, #fff) !important;
+            }
+            .df-fw-form select option,
+            .df-fw-form select option:checked {
+                color: var(--body-fg, #222) !important;
+                background-color: var(--body-bg, #fff) !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
     function closestRow(element) {
         if (!element) return null;
         return (
@@ -128,9 +151,8 @@
         const isSelect = type.value === "SELECT";
         const isFormula = type.value === "FORMULA";
 
-        // Common properties are kept visible. Type-specific properties are
-        // controlled exclusively below, so switching type cannot leave stale
-        // configuration from the previous type on screen.
+        // Common properties remain visible. Only type-specific properties
+        // are controlled here, preventing stale configuration from another type.
         setVisible("id_system_key", !isSelect && !isFormula);
         setVisible("id_is_required", !isFormula);
         setVisible("id_is_history_enabled", !isFormula);
@@ -158,19 +180,16 @@
         if (!source) return;
 
         const selectedSource = source.value;
-        const isModel = selectedSource === "MODEL";
-        const isStatic = selectedSource === "STATIC";
-        const isLookup = selectedSource === "LOOKUP";
 
-        if (isModel) {
+        if (selectedSource === "MODEL") {
             setVisible("id_choice_model", true);
             setVisible("id_choice_label_field", true);
             setVisible("id_choice_value_field", true);
             setVisible("id_choice_parent_field", true);
             setVisible("id_choice_filter_field", true);
-        } else if (isStatic) {
+        } else if (selectedSource === "STATIC") {
             setVisible("id_choice_static_set", true);
-        } else if (isLookup) {
+        } else if (selectedSource === "LOOKUP") {
             setVisible("id_choice_lookup_list", true);
             setVisible("id_choice_parent_field", true);
         }
@@ -179,6 +198,8 @@
     function init() {
         const form = document.getElementById("field-properties");
         if (!form) return;
+
+        installThemeFixes();
 
         const type = document.getElementById("id_field_type");
         const source = document.getElementById("id_choice_source");
