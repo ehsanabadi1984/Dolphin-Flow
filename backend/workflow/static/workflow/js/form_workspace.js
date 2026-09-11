@@ -23,14 +23,7 @@
             }
             .df-fw-form select {
                 color: var(--body-fg, #222) !important;
-                background-color: var(--body-bg, #fff) !important;
-            }
-            .df-fw-form select option,
-            .df-fw-form select option:checked,
-            .df-fw-form select option:hover,
-            .df-fw-form select option:focus {
-                color: var(--body-fg, #222) !important;
-                background-color: var(--body-bg, #fff) !important;
+                background-color: var(--body-bg, #2b2323) !important;
             }
         `;
         document.head.appendChild(style);
