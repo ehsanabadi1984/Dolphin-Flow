@@ -15,6 +15,7 @@ from workflow.process_workspace import (
     process_workspace_list,
     process_workspace,
 )
+from workflow.form_workspace import form_workspace
 
 
 urlpatterns = [
@@ -45,6 +46,16 @@ urlpatterns = [
         "admin/workflow/process-workspace/<int:workflow_id>/",
         dolphin_admin_site.admin_view(process_workspace),
         name="process_workspace",
+    ),
+
+    # ---------------------------------------------------------
+    # Form Designer Workspace
+    # ---------------------------------------------------------
+
+    path(
+        "admin/workflow/form-workspace/<int:workflow_id>/",
+        dolphin_admin_site.admin_view(form_workspace),
+        name="form_workspace",
     ),
 
     # ---------------------------------------------------------
