@@ -1,0 +1,83 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<style>
+.df-access-workspace{direction:rtl;text-align:right;padding:20px}
+.df-access-head{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:20px}
+.df-access-head h1{margin:0 0 6px;font-size:24px}.df-access-head p{margin:0;color:#777}
+.df-access-layout{display:grid;grid-template-columns:220px 1fr;gap:20px}
+.df-access-nav,.df-access-panel{background:var(--body-bg,#fff);border:1px solid var(--hairline-color,#ddd);border-radius:14px}
+.df-access-nav{padding:10px;height:max-content}.df-access-nav a{display:block;padding:11px 12px;border-radius:9px;text-decoration:none;color:var(--body-fg,#222);margin-bottom:4px}.df-access-nav a.active{background:var(--selected-row,#eee);font-weight:600}
+.df-access-panel{padding:20px}.df-access-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.df-access-toolbar h2{margin:0}
+.df-access-table{width:100%;border-collapse:collapse}.df-access-table th,.df-access-table td{padding:10px;border-bottom:1px solid var(--hairline-color,#ddd);vertical-align:middle}.df-access-table th{font-size:13px;color:#777;text-align:right}
+.df-access-form{background:var(--darkened-bg,#f7f7f7);border:1px solid var(--hairline-color,#ddd);border-radius:12px;padding:15px;margin-bottom:20px}.df-access-form .form-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:12px}.df-access-form label{display:block;font-size:12px;font-weight:600;margin-bottom:5px}.df-access-form input,.df-access-form select{width:100%;box-sizing:border-box;padding:7px}.df-access-actions{display:flex;gap:8px;align-items:center}.df-access-btn{border:0;border-radius:8px;padding:8px 13px;cursor:pointer}.df-access-btn.primary{background:var(--button-bg,#417690);color:#fff}.df-access-btn.danger{background:#ba2121;color:#fff}.df-access-muted{color:#888}.df-access-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--darkened-bg,#eee);font-size:12px}
+@media(max-width:900px){.df-access-layout{grid-template-columns:1fr}.df-access-form .form-row{grid-template-columns:1fr}.df-access-table{font-size:12px}}
+</style>
+
+<div class="df-access-workspace">
+  <div class="df-access-head">
+    <div>
+      <h1>Access &amp; Security · {{ workflow.name }}</h1>
+      <p>مدیریت تمام دسترسی‌های موجود برای این Workflow در یک محیط واحد.</p>
+    </div>
+    <a class="button" href="{% url 'admin:workflow_workflow_changelist' %}">بازگشت به فرآیندها</a>
+  </div>
+
+  <div class="df-access-layout">
+    <nav class="df-access-nav">
+      <a class="{% if selected == 'memberships' %}active{% endif %}" href="?section=memberships">اعضای Workflow</a>
+      <a class="{% if selected == 'workflow-permissions' %}active{% endif %}" href="?section=workflow-permissions">Workflow Permissions</a>
+      <a class="{% if selected == 'field-access' %}active{% endif %}" href="?section=field-access">Field Access</a>
+      <a class="{% if selected == 'group-access' %}active{% endif %}" href="?section=group-access">Repeatable Group Access</a>
+    </nav>
+
+    <main class="df-access-panel">
+      {% if selected == 'memberships' %}
+        <div class="df-access-toolbar"><h2>اعضای Workflow</h2><span class="df-access-muted">{{ memberships|length }} عضو</span></div>
+        <form method="post" class="df-access-form">{% csrf_token %}<input type="hidden" name="action" value="save_membership">
+          <div class="form-row">{{ membership_form.user.as_field_group }}{{ membership_form.role.as_field_group }}{{ membership_form.is_active.as_field_group }}</div>
+          <button class="df-access-btn primary" type="submit">افزودن عضو</button>
+        </form>
+        <table class="df-access-table"><thead><tr><th>کاربر</th><th>Role</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>
+        {% for obj in memberships %}<tr><td>{{ obj.user }}</td><td>{{ obj.get_role_display }}</td><td>{% if obj.is_active %}فعال{% else %}غیرفعال{% endif %}</td><td><form method="post" class="df-access-actions">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="kind" value="membership"><input type="hidden" name="object_id" value="{{ obj.pk }}"><input type="hidden" name="section" value="memberships"><button class="df-access-btn danger" type="submit">حذف</button></form></td></tr>{% empty %}<tr><td colspan="4" class="df-access-muted">عضوی ثبت نشده است.</td></tr>{% endfor %}
+        </tbody></table>
+
+      {% elif selected == 'workflow-permissions' %}
+        <div class="df-access-toolbar"><h2>Workflow Permissions</h2><span class="df-access-muted">Workflow / Step / Transition</span></div>
+        <form method="post" class="df-access-form">{% csrf_token %}<input type="hidden" name="action" value="save_permission">
+          <div class="form-row">{{ permission_form.step.as_field_group }}{{ permission_form.transition.as_field_group }}{{ permission_form.user.as_field_group }}</div>
+          <div class="form-row">{{ permission_form.role.as_field_group }}{{ permission_form.action.as_field_group }}{{ permission_form.effect.as_field_group }}</div>
+          <button class="df-access-btn primary" type="submit">افزودن Permission</button>
+          {% if permission_form.non_field_errors %}<div>{{ permission_form.non_field_errors }}</div>{% endif %}
+        </form>
+        <table class="df-access-table"><thead><tr><th>Scope</th><th>User</th><th>Role</th><th>Action</th><th>Effect</th><th>عملیات</th></tr></thead><tbody>
+        {% for obj in permissions %}<tr><td>{% if obj.transition %}Transition: {{ obj.transition }}{% elif obj.step %}Step: {{ obj.step }}{% else %}Workflow{% endif %}</td><td>{{ obj.user|default:'—' }}</td><td>{{ obj.get_role_display|default:'—' }}</td><td>{{ obj.get_action_display }}</td><td>{{ obj.get_effect_display }}</td><td><form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="kind" value="permission"><input type="hidden" name="object_id" value="{{ obj.pk }}"><input type="hidden" name="section" value="workflow-permissions"><button class="df-access-btn danger" type="submit">حذف</button></form></td></tr>{% empty %}<tr><td colspan="6" class="df-access-muted">Permissionای ثبت نشده است.</td></tr>{% endfor %}
+        </tbody></table>
+
+      {% elif selected == 'field-access' %}
+        <div class="df-access-toolbar"><h2>Field Access</h2><span class="df-access-muted">View / Edit</span></div>
+        <form method="post" class="df-access-form">{% csrf_token %}<input type="hidden" name="action" value="save_field_access">
+          <div class="form-row">{{ field_access_form.field.as_field_group }}{{ field_access_form.step.as_field_group }}{{ field_access_form.user.as_field_group }}</div>
+          <div class="form-row">{{ field_access_form.role.as_field_group }}{{ field_access_form.can_view.as_field_group }}{{ field_access_form.can_edit.as_field_group }}</div>
+          <button class="df-access-btn primary" type="submit">افزودن دسترسی</button>
+        </form>
+        <table class="df-access-table"><thead><tr><th>Field</th><th>Step</th><th>User</th><th>Role</th><th>View</th><th>Edit</th><th>عملیات</th></tr></thead><tbody>
+        {% for obj in field_accesses %}<tr><td>{{ obj.field.label }}</td><td>{{ obj.step|default:'—' }}</td><td>{{ obj.user|default:'—' }}</td><td>{{ obj.get_role_display|default:'—' }}</td><td>{{ obj.can_view|yesno:'بله,خیر' }}</td><td>{{ obj.can_edit|yesno:'بله,خیر' }}</td><td><form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="kind" value="field_access"><input type="hidden" name="object_id" value="{{ obj.pk }}"><input type="hidden" name="section" value="field-access"><button class="df-access-btn danger" type="submit">حذف</button></form></td></tr>{% empty %}<tr><td colspan="7" class="df-access-muted">دسترسی Fieldای ثبت نشده است.</td></tr>{% endfor %}
+        </tbody></table>
+
+      {% else %}
+        <div class="df-access-toolbar"><h2>Repeatable Group Access</h2><span class="df-access-muted">View / Edit / Add / Delete</span></div>
+        <form method="post" class="df-access-form">{% csrf_token %}<input type="hidden" name="action" value="save_group_access">
+          <div class="form-row">{{ group_access_form.group.as_field_group }}{{ group_access_form.step.as_field_group }}{{ group_access_form.user.as_field_group }}</div>
+          <div class="form-row">{{ group_access_form.role.as_field_group }}{{ group_access_form.can_view.as_field_group }}{{ group_access_form.can_edit.as_field_group }}</div>
+          <div class="form-row">{{ group_access_form.can_add.as_field_group }}{{ group_access_form.can_delete.as_field_group }}</div>
+          <button class="df-access-btn primary" type="submit">افزودن دسترسی</button>
+        </form>
+        <table class="df-access-table"><thead><tr><th>Group</th><th>Step</th><th>User</th><th>Role</th><th>View</th><th>Edit</th><th>Add</th><th>Delete</th><th>عملیات</th></tr></thead><tbody>
+        {% for obj in group_accesses %}<tr><td>{{ obj.group.name }}</td><td>{{ obj.step|default:'—' }}</td><td>{{ obj.user|default:'—' }}</td><td>{{ obj.get_role_display|default:'—' }}</td><td>{{ obj.can_view|yesno:'بله,خیر' }}</td><td>{{ obj.can_edit|yesno:'بله,خیر' }}</td><td>{{ obj.can_add|yesno:'بله,خیر' }}</td><td>{{ obj.can_delete|yesno:'بله,خیر' }}</td><td><form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="kind" value="group_access"><input type="hidden" name="object_id" value="{{ obj.pk }}"><input type="hidden" name="section" value="group-access"><button class="df-access-btn danger" type="submit">حذف</button></form></td></tr>{% empty %}<tr><td colspan="9" class="df-access-muted">دسترسی گروهی ثبت نشده است.</td></tr>{% endfor %}
+        </tbody></table>
+      {% endif %}
+    </main>
+  </div>
+</div>
+{% endblock %}
