@@ -93,6 +93,14 @@ def _workspace_url(workflow, **params):
     return f"{url}?{query}" if query else url
 
 
+def access_security_workspace_list(request):
+    workflows = Workflow.objects.order_by("name")
+    return render(request, "admin/workflow/access_security_workspace_list.html", {
+        "title": "Access & Security Workspace",
+        "workflows": workflows,
+    })
+
+
 def _empty_forms(workflow):
     return {
         "membership_form": MembershipWorkspaceForm(workflow),
@@ -120,7 +128,6 @@ def access_security_workspace(request, workflow_id):
     selected = request.GET.get("section", "memberships")
     edit_id = request.GET.get("edit")
     edit_kind = request.GET.get("kind")
-
     context = _base_context(workflow, selected)
 
     if edit_id and edit_kind:
@@ -138,7 +145,6 @@ def access_security_workspace(request, workflow_id):
 
     if request.method == "POST":
         action = request.POST.get("action")
-
         if action in {"save_membership", "save_permission", "save_field_access", "save_group_access"}:
             config = {
                 "save_membership": (WorkflowMembership, {"workflow": workflow}, MembershipWorkspaceForm, "membership_form", "memberships"),
@@ -155,7 +161,6 @@ def access_security_workspace(request, workflow_id):
                 return redirect(_workspace_url(workflow, section=selected))
             context[context_key] = form
             context["selected"] = selected
-
         elif action == "delete":
             model_map = {
                 "membership": (WorkflowMembership, {"workflow": workflow}),
