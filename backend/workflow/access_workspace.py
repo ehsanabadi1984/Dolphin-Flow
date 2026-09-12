@@ -1,7 +1,6 @@
 from django import forms
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -11,7 +10,6 @@ from .models import (
     WorkflowPermission,
     WorkflowStep,
     WorkflowTransition,
-    FormDefinition,
     FormField,
     FormRepeatableGroup,
     FieldAccess,
@@ -47,19 +45,13 @@ class WorkflowPermissionWorkspaceForm(forms.ModelForm):
     def __init__(self, workflow, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.workflow = workflow
-        self.fields["step"].queryset = WorkflowStep.objects.filter(
-            workflow=workflow, is_active=True
-        ).order_by("order")
-        self.fields["transition"].queryset = WorkflowTransition.objects.filter(
-            workflow=workflow, is_active=True
-        ).order_by("from_step__order", "to_step__order")
+        self.fields["step"].queryset = WorkflowStep.objects.filter(workflow=workflow, is_active=True).order_by("order")
+        self.fields["transition"].queryset = WorkflowTransition.objects.filter(workflow=workflow, is_active=True).order_by("from_step__order", "to_step__order")
         self.fields["user"].queryset = User.objects.filter(is_active=True).order_by("username")
 
     def clean(self):
         cleaned = super().clean()
-        step = cleaned.get("step")
-        transition = cleaned.get("transition")
-        if step and transition:
+        if cleaned.get("step") and cleaned.get("transition"):
             raise forms.ValidationError("یک Permission نمی‌تواند همزمان برای Step و Transition ثبت شود.")
         return cleaned
 
@@ -78,15 +70,8 @@ class FieldAccessWorkspaceForm(forms.ModelForm):
 
     def __init__(self, workflow, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.workflow = workflow
-        self.fields["field"].queryset = FormField.objects.filter(
-            section__form__workflow=workflow
-        ).select_related("section", "section__form", "repeatable_group").order_by(
-            "section__order", "order", "label"
-        )
-        self.fields["step"].queryset = WorkflowStep.objects.filter(
-            workflow=workflow, is_active=True
-        ).order_by("order")
+        self.fields["field"].queryset = FormField.objects.filter(section__form__workflow=workflow).select_related("section", "repeatable_group").order_by("section__order", "order", "label")
+        self.fields["step"].queryset = WorkflowStep.objects.filter(workflow=workflow, is_active=True).order_by("order")
         self.fields["user"].queryset = User.objects.filter(is_active=True).order_by("username")
 
 
@@ -97,15 +82,8 @@ class RepeatableGroupAccessWorkspaceForm(forms.ModelForm):
 
     def __init__(self, workflow, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.workflow = workflow
-        self.fields["group"].queryset = FormRepeatableGroup.objects.filter(
-            section__form__workflow=workflow
-        ).select_related("section", "section__form").order_by(
-            "section__order", "order", "name"
-        )
-        self.fields["step"].queryset = WorkflowStep.objects.filter(
-            workflow=workflow, is_active=True
-        ).order_by("order")
+        self.fields["group"].queryset = FormRepeatableGroup.objects.filter(section__form__workflow=workflow).select_related("section").order_by("section__order", "order", "name")
+        self.fields["step"].queryset = WorkflowStep.objects.filter(workflow=workflow, is_active=True).order_by("order")
         self.fields["user"].queryset = User.objects.filter(is_active=True).order_by("username")
 
 
@@ -115,66 +93,68 @@ def _workspace_url(workflow, **params):
     return f"{url}?{query}" if query else url
 
 
-def _form_context(workflow, selected):
+def _empty_forms(workflow):
     return {
         "membership_form": MembershipWorkspaceForm(workflow),
         "permission_form": WorkflowPermissionWorkspaceForm(workflow),
         "field_access_form": FieldAccessWorkspaceForm(workflow),
         "group_access_form": RepeatableGroupAccessWorkspaceForm(workflow),
-        "selected": selected,
     }
+
+
+def _base_context(workflow, selected):
+    context = _empty_forms(workflow)
+    context.update({
+        "workflow": workflow,
+        "selected": selected,
+        "memberships": workflow.memberships.select_related("user").order_by("user__username"),
+        "permissions": workflow.permissions.select_related("user", "step", "transition").order_by("step__order", "transition__from_step__order", "action"),
+        "field_accesses": FieldAccess.objects.filter(field__section__form__workflow=workflow).select_related("field", "field__section", "field__repeatable_group", "step", "user").order_by("field__section__order", "field__order", "step__order"),
+        "group_accesses": RepeatableGroupAccess.objects.filter(group__section__form__workflow=workflow).select_related("group", "group__section", "step", "user").order_by("group__section__order", "group__order", "step__order"),
+    })
+    return context
 
 
 def access_security_workspace(request, workflow_id):
     workflow = get_object_or_404(Workflow, pk=workflow_id)
     selected = request.GET.get("section", "memberships")
+    edit_id = request.GET.get("edit")
+    edit_kind = request.GET.get("kind")
+
+    context = _base_context(workflow, selected)
+
+    if edit_id and edit_kind:
+        edit_map = {
+            "membership": (WorkflowMembership, {"workflow": workflow}, MembershipWorkspaceForm, "membership_form"),
+            "permission": (WorkflowPermission, {"workflow": workflow}, WorkflowPermissionWorkspaceForm, "permission_form"),
+            "field_access": (FieldAccess, {"field__section__form__workflow": workflow}, FieldAccessWorkspaceForm, "field_access_form"),
+            "group_access": (RepeatableGroupAccess, {"group__section__form__workflow": workflow}, RepeatableGroupAccessWorkspaceForm, "group_access_form"),
+        }
+        if edit_kind in edit_map:
+            model, filters, form_class, context_key = edit_map[edit_kind]
+            obj = get_object_or_404(model, pk=edit_id, **filters)
+            context[context_key] = form_class(workflow, instance=obj)
+            context["editing"] = {"kind": edit_kind, "id": obj.pk}
 
     if request.method == "POST":
         action = request.POST.get("action")
 
-        if action == "save_membership":
-            obj = None
-            if request.POST.get("object_id"):
-                obj = get_object_or_404(WorkflowMembership, pk=request.POST["object_id"], workflow=workflow)
-            form = MembershipWorkspaceForm(workflow, request.POST, instance=obj)
+        if action in {"save_membership", "save_permission", "save_field_access", "save_group_access"}:
+            config = {
+                "save_membership": (WorkflowMembership, {"workflow": workflow}, MembershipWorkspaceForm, "membership_form", "memberships"),
+                "save_permission": (WorkflowPermission, {"workflow": workflow}, WorkflowPermissionWorkspaceForm, "permission_form", "workflow-permissions"),
+                "save_field_access": (FieldAccess, {"field__section__form__workflow": workflow}, FieldAccessWorkspaceForm, "field_access_form", "field-access"),
+                "save_group_access": (RepeatableGroupAccess, {"group__section__form__workflow": workflow}, RepeatableGroupAccessWorkspaceForm, "group_access_form", "group-access"),
+            }
+            model, filters, form_class, context_key, selected = config[action]
+            obj = get_object_or_404(model, pk=request.POST["object_id"], **filters) if request.POST.get("object_id") else None
+            form = form_class(workflow, request.POST, instance=obj)
             if form.is_valid():
                 form.save()
-                messages.success(request, "عضویت فرآیند ذخیره شد.")
-                return redirect(_workspace_url(workflow, section="memberships"))
-            selected = "memberships"
-
-        elif action == "save_permission":
-            obj = None
-            if request.POST.get("object_id"):
-                obj = get_object_or_404(WorkflowPermission, pk=request.POST["object_id"], workflow=workflow)
-            form = WorkflowPermissionWorkspaceForm(workflow, request.POST, instance=obj)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "Permission ذخیره شد.")
-                return redirect(_workspace_url(workflow, section="workflow-permissions"))
-            selected = "workflow-permissions"
-
-        elif action == "save_field_access":
-            obj = None
-            if request.POST.get("object_id"):
-                obj = get_object_or_404(FieldAccess, pk=request.POST["object_id"], field__section__form__workflow=workflow)
-            form = FieldAccessWorkspaceForm(workflow, request.POST, instance=obj)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "دسترسی Field ذخیره شد.")
-                return redirect(_workspace_url(workflow, section="field-access"))
-            selected = "field-access"
-
-        elif action == "save_group_access":
-            obj = None
-            if request.POST.get("object_id"):
-                obj = get_object_or_404(RepeatableGroupAccess, pk=request.POST["object_id"], group__section__form__workflow=workflow)
-            form = RepeatableGroupAccessWorkspaceForm(workflow, request.POST, instance=obj)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "دسترسی گروه تکرارشونده ذخیره شد.")
-                return redirect(_workspace_url(workflow, section="group-access"))
-            selected = "group-access"
+                messages.success(request, "اطلاعات با موفقیت ذخیره شد.")
+                return redirect(_workspace_url(workflow, section=selected))
+            context[context_key] = form
+            context["selected"] = selected
 
         elif action == "delete":
             model_map = {
@@ -184,37 +164,11 @@ def access_security_workspace(request, workflow_id):
                 "group_access": (RepeatableGroupAccess, {"group__section__form__workflow": workflow}),
             }
             kind = request.POST.get("kind")
-            model_info = model_map.get(kind)
-            if model_info:
-                model, filters = model_info
+            if kind in model_map:
+                model, filters = model_map[kind]
                 obj = get_object_or_404(model, pk=request.POST.get("object_id"), **filters)
                 obj.delete()
                 messages.success(request, "رکورد حذف شد.")
             return redirect(_workspace_url(workflow, section=request.POST.get("section", "memberships")))
 
-        # Invalid POSTs render with the bound form below.
-        context = _form_context(workflow, selected)
-        if action == "save_membership":
-            context["membership_form"] = form
-        elif action == "save_permission":
-            context["permission_form"] = form
-        elif action == "save_field_access":
-            context["field_access_form"] = form
-        elif action == "save_group_access":
-            context["group_access_form"] = form
-        context["workflow"] = workflow
-        context["memberships"] = workflow.memberships.select_related("user").order_by("user__username")
-        context["permissions"] = workflow.permissions.select_related("user", "step", "transition").order_by("step__order", "transition__from_step__order", "action")
-        context["field_accesses"] = FieldAccess.objects.filter(field__section__form__workflow=workflow).select_related("field", "field__section", "field__repeatable_group", "step", "user").order_by("field__section__order", "field__order", "step__order")
-        context["group_accesses"] = RepeatableGroupAccess.objects.filter(group__section__form__workflow=workflow).select_related("group", "group__section", "step", "user").order_by("group__section__order", "group__order", "step__order")
-        return render(request, "admin/workflow/access_security_workspace.html", context)
-
-    context = _form_context(workflow, selected)
-    context.update({
-        "workflow": workflow,
-        "memberships": workflow.memberships.select_related("user").order_by("user__username"),
-        "permissions": workflow.permissions.select_related("user", "step", "transition").order_by("step__order", "transition__from_step__order", "action"),
-        "field_accesses": FieldAccess.objects.filter(field__section__form__workflow=workflow).select_related("field", "field__section", "field__repeatable_group", "step", "user").order_by("field__section__order", "field__order", "step__order"),
-        "group_accesses": RepeatableGroupAccess.objects.filter(group__section__form__workflow=workflow).select_related("group", "group__section", "step", "user").order_by("group__section__order", "group__order", "step__order"),
-    })
     return render(request, "admin/workflow/access_security_workspace.html", context)
