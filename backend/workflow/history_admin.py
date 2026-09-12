@@ -7,7 +7,7 @@ from django.utils.html import format_html
 
 from .admin import dolphin_admin_site
 from .history_models import HistoryConfiguration, HistoryField
-from .models import FormField, WorkflowStepExecution
+from .models import Device, FormField, WorkflowStepExecution
 
 
 class HistoryFieldInlineForm(forms.ModelForm):
@@ -108,6 +108,31 @@ class HistoryRecord(WorkflowStepExecution):
         verbose_name_plural = "سوابق"
 
 
+class HistoryDeviceFilter(admin.SimpleListFilter):
+    title = "دستگاه"
+    parameter_name = "device"
+
+    def lookups(self, request, model_admin):
+        devices = (
+            Device.objects
+            .filter(workflow_instances__isnull=False)
+            .select_related("device_model", "device_model__device_type")
+            .distinct()
+            .order_by("device_model__brand", "device_model__name", "pk")
+        )
+        return [
+            (device.pk, str(device))
+            for device in devices
+        ]
+
+    def queryset(self, request, queryset):
+        if not self.value():
+            return queryset
+        return queryset.filter(
+            instance__instance_devices__device_id=self.value(),
+        ).distinct()
+
+
 @admin.register(
     HistoryRecord,
     site=dolphin_admin_site,
@@ -145,6 +170,7 @@ class HistoryRecordAdmin(admin.ModelAdmin):
     list_filter = (
         "workflow_step__workflow",
         "workflow_step",
+        HistoryDeviceFilter,
         "performed_by",
         "submitted_at",
     )
