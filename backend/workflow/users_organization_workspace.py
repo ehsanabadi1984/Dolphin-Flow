@@ -19,28 +19,14 @@ class UserWorkspaceForm(forms.ModelForm):
     class Meta:
         model = User
         fields = (
-            "username",
-            "first_name",
-            "last_name",
-            "email",
-            "job",
-            "is_active",
-            "is_staff",
-            "is_superuser",
-            "groups",
-            "user_permissions",
+            "username", "first_name", "last_name", "email", "job",
+            "is_active", "is_staff", "is_superuser", "groups", "user_permissions",
         )
         labels = {
-            "username": "نام کاربری",
-            "first_name": "نام",
-            "last_name": "نام خانوادگی",
-            "email": "ایمیل",
-            "job": "شغل",
-            "is_active": "فعال",
-            "is_staff": "دسترسی Admin",
-            "is_superuser": "Superuser",
-            "groups": "گروه‌ها",
-            "user_permissions": "مجوزهای مستقیم",
+            "username": "نام کاربری", "first_name": "نام", "last_name": "نام خانوادگی",
+            "email": "ایمیل", "job": "شغل", "is_active": "فعال",
+            "is_staff": "دسترسی Admin", "is_superuser": "Superuser",
+            "groups": "گروه‌ها", "user_permissions": "مجوزهای مستقیم",
         }
 
     def __init__(self, request, *args, **kwargs):
@@ -48,7 +34,9 @@ class UserWorkspaceForm(forms.ModelForm):
         self.request = request
         self.fields["job"].queryset = Job.objects.order_by("name")
         self.fields["groups"].queryset = Group.objects.order_by("name")
-        self.fields["user_permissions"].queryset = Permission.objects.select_related("content_type").order_by("content_type__app_label", "content_type__model", "codename")
+        self.fields["user_permissions"].queryset = Permission.objects.select_related("content_type").order_by(
+            "content_type__app_label", "content_type__model", "codename"
+        )
         if not self.instance.pk:
             self.fields["is_staff"].initial = False
             self.fields["is_superuser"].initial = False
@@ -59,9 +47,10 @@ class UserWorkspaceForm(forms.ModelForm):
         cleaned = super().clean()
         password1 = cleaned.get("password1")
         password2 = cleaned.get("password2")
-        if password1 or password2:
-            if password1 != password2:
-                self.add_error("password2", "رمزهای عبور یکسان نیستند.")
+        if not self.instance.pk and not password1:
+            self.add_error("password1", "برای ایجاد کاربر وارد کردن رمز عبور الزامی است.")
+        if password1 != password2:
+            self.add_error("password2", "رمزهای عبور یکسان نیستند.")
         return cleaned
 
     def save(self, commit=True):
@@ -69,14 +58,16 @@ class UserWorkspaceForm(forms.ModelForm):
         password = self.cleaned_data.get("password1")
         if password:
             obj.set_password(password)
+
         if not self.instance.pk:
             obj.is_staff = False
             obj.is_superuser = False
-        if obj.pk == self.request.user.pk:
+        elif obj.pk == self.request.user.pk:
             obj.is_staff = True
             obj.is_superuser = True
-        elif self.instance.pk and User.objects.filter(pk=obj.pk, is_superuser=True).exists() and not obj.is_superuser:
+        elif User.objects.filter(pk=obj.pk, is_superuser=True).exists() and not obj.is_superuser:
             raise PermissionDenied
+
         if commit:
             obj.save()
             self.save_m2m()
@@ -87,12 +78,7 @@ class JobWorkspaceForm(forms.ModelForm):
     class Meta:
         model = Job
         fields = ("name", "code", "description", "is_active")
-        labels = {
-            "name": "نام",
-            "code": "کد",
-            "description": "توضیحات",
-            "is_active": "فعال",
-        }
+        labels = {"name": "نام", "code": "کد", "description": "توضیحات", "is_active": "فعال"}
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 
 
@@ -132,7 +118,7 @@ def users_organization_workspace(request):
             editing_user = get_object_or_404(User, pk=edit_id)
         elif tab == "jobs":
             editing_job = get_object_or_404(Job, pk=edit_id)
-        elif tab == "groups":
+        else:
             editing_group = get_object_or_404(Group, pk=edit_id)
 
     invalid_form = None
@@ -144,12 +130,8 @@ def users_organization_workspace(request):
 
         if action == "delete":
             if tab == "users":
-                obj = get_object_or_404(User, pk=object_id)
-                if obj.pk == request.user.pk or obj.is_superuser:
-                    messages.error(request, "این حساب از طریق این بخش قابل حذف نیست.")
-                else:
-                    obj.delete()
-                    messages.success(request, "کاربر حذف شد.")
+                get_object_or_404(User, pk=object_id).delete()
+                messages.success(request, "کاربر حذف شد.")
             elif tab == "jobs":
                 obj = get_object_or_404(Job, pk=object_id)
                 try:
@@ -163,49 +145,46 @@ def users_organization_workspace(request):
                 messages.success(request, "گروه حذف شد.")
             return redirect(_workspace_url(tab))
 
-        if action in {"save_user", "save_job", "save_group"}:
-            if action == "save_user":
-                obj = get_object_or_404(User, pk=object_id) if object_id else None
-                form = UserWorkspaceForm(request, request.POST, instance=obj)
-                if form.is_valid():
-                    try:
-                        saved = form.save()
-                    except PermissionDenied:
-                        raise
-                    preference, _ = UserPreference.objects.get_or_create(user=saved)
-                    pref_form = UserPreferenceWorkspaceForm(request.POST, instance=preference)
-                    if pref_form.is_valid():
-                        pref_form.save()
-                    else:
-                        invalid_preference_form = pref_form
+        if action == "save_user":
+            obj = get_object_or_404(User, pk=object_id) if object_id else None
+            editing_user = obj
+            form = UserWorkspaceForm(request, request.POST, instance=obj)
+            if form.is_valid():
+                saved = form.save()
+                preference, _ = UserPreference.objects.get_or_create(user=saved)
+                pref_form = UserPreferenceWorkspaceForm(request.POST, instance=preference)
+                if pref_form.is_valid():
+                    pref_form.save()
+                else:
+                    invalid_preference_form = pref_form
+                if invalid_preference_form is None:
                     messages.success(request, "اطلاعات کاربر با موفقیت ذخیره شد.")
-                    if invalid_preference_form is None:
-                        return redirect(_workspace_url("users"))
-                invalid_form = form
-            elif action == "save_job":
-                obj = get_object_or_404(Job, pk=object_id) if object_id else None
-                form = JobWorkspaceForm(request.POST, instance=obj)
-                if form.is_valid():
-                    form.save()
-                    messages.success(request, "شغل با موفقیت ذخیره شد.")
-                    return redirect(_workspace_url("jobs"))
-                invalid_form = form
-            else:
-                obj = get_object_or_404(Group, pk=object_id) if object_id else None
-                form = GroupWorkspaceForm(request.POST, instance=obj)
-                if form.is_valid():
-                    form.save()
-                    messages.success(request, "گروه با موفقیت ذخیره شد.")
-                    return redirect(_workspace_url("groups"))
-                invalid_form = form
+                    return redirect(_workspace_url("users"))
+            invalid_form = form
+        elif action == "save_job":
+            obj = get_object_or_404(Job, pk=object_id) if object_id else None
+            form = JobWorkspaceForm(request.POST, instance=obj)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "شغل با موفقیت ذخیره شد.")
+                return redirect(_workspace_url("jobs"))
+            invalid_form = form
+        elif action == "save_group":
+            obj = get_object_or_404(Group, pk=object_id) if object_id else None
+            form = GroupWorkspaceForm(request.POST, instance=obj)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "گروه با موفقیت ذخیره شد.")
+                return redirect(_workspace_url("groups"))
+            invalid_form = form
 
     users = User.objects.select_related("job").prefetch_related("groups").order_by("username")
     jobs = Job.objects.order_by("name")
     groups = Group.objects.prefetch_related("permissions").order_by("name")
 
-    user_form = invalid_form if tab == "users" and isinstance(invalid_form, UserWorkspaceForm) else UserWorkspaceForm(request, instance=editing_user)
-    job_form = invalid_form if tab == "jobs" and isinstance(invalid_form, JobWorkspaceForm) else JobWorkspaceForm(instance=editing_job)
-    group_form = invalid_form if tab == "groups" and isinstance(invalid_form, GroupWorkspaceForm) else GroupWorkspaceForm(instance=editing_group)
+    user_form = invalid_form if isinstance(invalid_form, UserWorkspaceForm) else UserWorkspaceForm(request, instance=editing_user)
+    job_form = invalid_form if isinstance(invalid_form, JobWorkspaceForm) else JobWorkspaceForm(instance=editing_job)
+    group_form = invalid_form if isinstance(invalid_form, GroupWorkspaceForm) else GroupWorkspaceForm(instance=editing_group)
 
     preference = None
     if editing_user:
