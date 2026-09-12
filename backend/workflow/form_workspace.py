@@ -71,6 +71,8 @@ class FormFieldWorkspaceForm(FormulaFieldAdminForm):
         super().__init__(*args, **kwargs)
         self.form_definition = form_definition
 
+        self.fields.pop("is_history_enabled", None)
+
         self.fields["section"].queryset = (
             FormSection.objects.filter(form=form_definition).order_by("order", "name")
             if form_definition else FormSection.objects.none()
