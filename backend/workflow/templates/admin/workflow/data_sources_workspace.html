@@ -1,0 +1,181 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<style>
+    .df-ds { direction:rtl; text-align:right; max-width:1500px; margin:0 auto; }
+    .df-ds-header { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:18px; }
+    .df-ds-header h1 { margin:0; }
+    .df-ds-subtitle { color:var(--body-quiet-color,#666); margin-top:6px; }
+    .df-ds-tabs { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+    .df-ds-tab { padding:9px 14px; border:1px solid var(--hairline-color,#ddd); border-radius:9px; text-decoration:none; color:inherit; background:var(--body-bg,#fff); }
+    .df-ds-tab.selected { background:var(--selected-row,#e9e9e9); border-color:var(--link-fg,#417690); font-weight:700; }
+    .df-ds-main { display:grid; grid-template-columns:260px minmax(0,1fr) 330px; gap:18px; align-items:start; }
+    .df-ds-card { background:var(--body-bg,#fff); border:1px solid var(--hairline-color,#ddd); border-radius:14px; padding:18px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+    .df-ds-card + .df-ds-card { margin-top:18px; }
+    .df-ds-card h2 { font-size:18px; margin:0 0 14px; }
+    .df-ds-list { display:grid; gap:7px; }
+    .df-ds-list a { display:block; padding:10px 12px; border-radius:9px; background:var(--darkened-bg,#f5f5f5); color:inherit; text-decoration:none; }
+    .df-ds-list a:hover { background:var(--selected-row,#eee); }
+    .df-ds-list a.selected { border:1px solid var(--link-fg,#417690); padding:9px 11px; }
+    .df-ds-list strong { display:block; }
+    .df-ds-muted { color:var(--body-quiet-color,#777); font-size:12px; }
+    .df-ds-form p { margin:0 0 12px; }
+    .df-ds-form label { display:block; font-weight:600; margin-bottom:5px; }
+    .df-ds-form input:not([type="checkbox"]), .df-ds-form textarea, .df-ds-form select { width:100%; box-sizing:border-box; }
+    .df-ds-form textarea { resize:vertical; }
+    .df-ds-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+    .df-ds-inline { display:inline; margin:0; }
+    .df-ds-danger { color:#b3261e !important; border-color:#b3261e !important; }
+    .df-ds-table { width:100%; border-collapse:collapse; }
+    .df-ds-table th, .df-ds-table td { padding:10px 9px; border-bottom:1px solid var(--hairline-color,#ddd); vertical-align:middle; }
+    .df-ds-table th { text-align:right; }
+    .df-ds-empty { padding:28px 10px; text-align:center; color:var(--body-quiet-color,#777); }
+    .df-ds-note { font-size:12px; line-height:1.8; color:var(--body-quiet-color,#777); }
+    @media (max-width:1150px) { .df-ds-main { grid-template-columns:1fr; } }
+</style>
+
+<div class="df-ds">
+    <div class="df-ds-header">
+        <div>
+            <h1>Data Sources Workspace</h1>
+            <div class="df-ds-subtitle">مدیریت منابع انتخابی مورد استفاده Form Designer</div>
+        </div>
+        <a class="button" href="{% url 'admin:index' %}">بازگشت به داشبورد</a>
+    </div>
+
+    <div class="df-ds-tabs">
+        <a class="df-ds-tab {% if source == 'static' %}selected{% endif %}" href="?source=static">گزینه‌های ثابت</a>
+        <a class="df-ds-tab {% if source == 'lookup' %}selected{% endif %}" href="?source=lookup">لیست‌های داده‌ای</a>
+    </div>
+
+    <div class="df-ds-main">
+        <aside>
+            <section class="df-ds-card">
+                <h2>{{ source_config.label }}</h2>
+                <div class="df-ds-list">
+                    {% for obj in sets %}
+                        <a class="{% if selected_set.pk == obj.pk %}selected{% endif %}" href="?source={{ source }}&set={{ obj.pk }}">
+                            <strong>{{ obj }}</strong>
+                            {% if source == 'static' %}<span class="df-ds-muted">{{ obj.items.count }} گزینه</span>{% else %}<span class="df-ds-muted">{{ obj.items.count }} آیتم</span>{% endif %}
+                        </a>
+                    {% empty %}
+                        <div class="df-ds-empty">موردی تعریف نشده است.</div>
+                    {% endfor %}
+                </div>
+                <div class="df-ds-actions"><a class="button" href="?source={{ source }}&new=set">+ ایجاد مورد جدید</a></div>
+            </section>
+        </aside>
+
+        <main>
+            {% if selected_set %}
+                <section class="df-ds-card">
+                    <h2>{{ selected_set }}</h2>
+                    <form method="post" class="df-ds-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="edit">
+                        <input type="hidden" name="object_type" value="set">
+                        <input type="hidden" name="object_id" value="{{ selected_set.pk }}">
+                        {{ set_form.as_p }}
+                        <div class="df-ds-actions">
+                            <button type="submit" class="default">ذخیره</button>
+                        </div>
+                    </form>
+                    <div class="df-ds-actions">
+                        <form method="post" class="df-ds-inline" onsubmit="return confirm('آیا از حذف این مورد مطمئن هستید؟');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="object_type" value="set">
+                            <input type="hidden" name="object_id" value="{{ selected_set.pk }}">
+                            <button type="submit" class="df-ds-danger">حذف</button>
+                        </form>
+                    </div>
+                </section>
+
+                <section class="df-ds-card">
+                    <h2>{% if source == 'static' %}گزینه‌ها{% else %}آیتم‌های لیست{% endif %}</h2>
+                    <table class="df-ds-table">
+                        <thead>
+                            <tr><th>عنوان</th><th>عملیات</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for item in items %}
+                            <tr>
+                                <td>{{ item }}</td>
+                                <td><a class="button" href="?source={{ source }}&set={{ selected_set.pk }}&item={{ item.pk }}">ویرایش</a></td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="2" class="df-ds-empty">هنوز آیتمی تعریف نشده است.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    <div class="df-ds-actions"><a class="button default" href="?source={{ source }}&set={{ selected_set.pk }}&new=item">+ افزودن آیتم</a></div>
+                </section>
+            {% else %}
+                <section class="df-ds-card">
+                    <div class="df-ds-empty">یک مورد را از فهرست انتخاب کنید یا مورد جدید بسازید.</div>
+                </section>
+            {% endif %}
+        </main>
+
+        <aside>
+            {% if selected_item %}
+                <section class="df-ds-card">
+                    <h2>ویرایش آیتم</h2>
+                    <form method="post" class="df-ds-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="edit">
+                        <input type="hidden" name="object_type" value="item">
+                        <input type="hidden" name="object_id" value="{{ selected_item.pk }}">
+                        <input type="hidden" name="owner_id" value="{{ selected_set.pk }}">
+                        {{ item_form.as_p }}
+                        <div class="df-ds-actions"><button type="submit" class="default">ذخیره آیتم</button></div>
+                    </form>
+                    <div class="df-ds-actions">
+                        <form method="post" class="df-ds-inline" onsubmit="return confirm('آیا از حذف این آیتم مطمئن هستید؟');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="object_type" value="item">
+                            <input type="hidden" name="object_id" value="{{ selected_item.pk }}">
+                            <input type="hidden" name="owner_id" value="{{ selected_set.pk }}">
+                            <button type="submit" class="df-ds-danger">حذف آیتم</button>
+                        </form>
+                    </div>
+                </section>
+            {% elif selected_set %}
+                <section class="df-ds-card">
+                    <h2>راهنما</h2>
+                    <div class="df-ds-note">
+                        برای افزودن آیتم از دکمه «افزودن آیتم» استفاده کنید. در Lookup List، فیلد Parent برای ساختار سلسله‌مراتبی آیتم‌ها در دسترس است.
+                    </div>
+                </section>
+            {% endif %}
+        </aside>
+    </div>
+
+    {% if request.GET.new == 'set' %}
+        <section class="df-ds-card" style="margin-top:18px;">
+            <h2>ایجاد {{ source_config.label }}</h2>
+            <form method="post" class="df-ds-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add">
+                <input type="hidden" name="object_type" value="set">
+                {{ set_form.as_p }}
+                <div class="df-ds-actions"><button type="submit" class="default">ایجاد</button></div>
+            </form>
+        </section>
+    {% elif request.GET.new == 'item' and selected_set %}
+        <section class="df-ds-card" style="margin-top:18px;">
+            <h2>افزودن آیتم به «{{ selected_set }}»</h2>
+            <form method="post" class="df-ds-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add">
+                <input type="hidden" name="object_type" value="item">
+                <input type="hidden" name="owner_id" value="{{ selected_set.pk }}">
+                {{ item_form.as_p }}
+                <div class="df-ds-actions"><button type="submit" class="default">افزودن</button></div>
+            </form>
+        </section>
+    {% endif %}
+</div>
+{% endblock %}
