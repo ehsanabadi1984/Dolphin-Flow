@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from .history_permissions import HISTORY_ACTION, HISTORY_ACTION_LABEL
 from .models import (
     Workflow,
     WorkflowMembership,
@@ -48,6 +49,32 @@ class WorkflowPermissionWorkspaceForm(forms.ModelForm):
         self.fields["step"].queryset = WorkflowStep.objects.filter(workflow=workflow, is_active=True).order_by("order")
         self.fields["transition"].queryset = WorkflowTransition.objects.filter(workflow=workflow, is_active=True).order_by("from_step__order", "to_step__order")
         self.fields["user"].queryset = User.objects.filter(is_active=True).order_by("username")
+
+        # HISTORY is a workflow-level permission.  The normal model choices are
+        # extended here explicitly because Workspace must not depend on the
+        # runtime mutation performed in AppConfig.ready().
+        action_choices = list(self.fields["action"].choices)
+        if not any(value == HISTORY_ACTION for value, _ in action_choices):
+            action_choices.append((HISTORY_ACTION, HISTORY_ACTION_LABEL))
+        self.fields["action"].choices = action_choices
+
+    def clean(self):
+        cleaned_data = super().clean()
+        action = cleaned_data.get("action")
+        step = cleaned_data.get("step")
+        transition = cleaned_data.get("transition")
+
+        if action == HISTORY_ACTION and (step or transition):
+            raise forms.ValidationError(
+                "دسترسی سوابق فقط در سطح Workflow قابل تعریف است."
+            )
+
+        if step and transition and transition.workflow_id != step.workflow_id:
+            raise forms.ValidationError(
+                "Step و Transition باید متعلق به یک Workflow باشند."
+            )
+
+        return cleaned_data
 
     def save(self, commit=True):
         obj = super().save(commit=False)
@@ -127,7 +154,7 @@ def access_security_workspace(request, workflow_id):
     if edit_id and edit_kind:
         edit_map = {
             "membership": (WorkflowMembership, {"workflow": workflow}, MembershipWorkspaceForm, "membership_form"),
-            "permission": (WorkflowPermission, {"workflow": workflow}, WorkflowPermissionWorkspaceForm, "permission_form"),
+            "permission": (WorkflowPermission, {"workflow": workflow}, WorkflowPermissionWorkspaceForm, "permission_form",),
             "field_access": (FieldAccess, {"field__section__form__workflow": workflow}, FieldAccessWorkspaceForm, "field_access_form"),
             "group_access": (RepeatableGroupAccess, {"group__section__form__workflow": workflow}, RepeatableGroupAccessWorkspaceForm, "group_access_form"),
         }
