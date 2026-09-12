@@ -4,10 +4,15 @@
 <section class="df-saved-data">
   <div class="df-saved-data-header">
     <div>
-      <h2>سوابق</h2>
-      <p>{{ device }}</p>
+      <h2>{{ history_title|default:"سوابق" }}</h2>
+      <p>{{ history_subtitle|default:device }}</p>
     </div>
-    <a class="df-button df-button-secondary" href="{% url 'operator_panel:workflow_instance' instance.pk %}">بازگشت</a>
+    <div style="display:flex;gap:.5rem;">
+      {% if device %}
+        <a class="df-button df-button-secondary" href="{% url 'operator_panel:workflow_history' instance.pk %}">سوابق فرآیند</a>
+      {% endif %}
+      <a class="df-button df-button-secondary" href="{% url 'operator_panel:workflow_instance' instance.pk %}">بازگشت</a>
+    </div>
   </div>
 
   {% if history %}
@@ -19,6 +24,7 @@
             <p>
               مرحله: {{ entry.execution.workflow_step.name }}
               — ثبت‌شده در: {{ entry.execution.submitted_at|date:"Y/m/d H:i" }}
+              — کاربر: {{ entry.execution.performed_by }}
             </p>
           </div>
           <span>#{{ entry.execution.instance.pk }}</span>
@@ -37,7 +43,7 @@
                 {% for field in entry.snapshot.fields %}
                   <tr>
                     <td>{{ field.display_label|default:field.label }}</td>
-                    <td>{{ field.display_value|default:field.value|default:"—" }}</td>
+                    <td>{% if field.display_value %}{{ field.display_value }}{% elif field.value %}{{ field.value }}{% else %}—{% endif %}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -61,7 +67,7 @@
                   <tbody>
                     <tr>
                       {% for field in item.fields %}
-                        <td>{{ field.display_value|default:field.value|default:"—" }}</td>
+                        <td>{% if field.display_value %}{{ field.display_value }}{% elif field.value %}{{ field.value }}{% else %}—{% endif %}</td>
                       {% endfor %}
                     </tr>
                   </tbody>
@@ -104,7 +110,7 @@
     </div>
   {% else %}
     <div class="df-message df-message-info">
-      سابقه قابل مشاهده‌ای برای این دستگاه وجود ندارد.
+      سابقه قابل مشاهده‌ای برای این مورد وجود ندارد.
     </div>
   {% endif %}
 </section>
