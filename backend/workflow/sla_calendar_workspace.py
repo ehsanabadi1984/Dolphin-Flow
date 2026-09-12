@@ -181,27 +181,27 @@ def sla_calendar_workspace(request):
                 form = BusinessCalendarWorkspaceForm(request.POST, instance=instance)
             elif object_type == "schedule":
                 calendar = get_object_or_404(BusinessCalendar, pk=request.POST.get("calendar_id"))
-                instance = get_object_or_404(WeeklySchedule, pk=request.POST.get("object_id"), calendar=calendar) if action == "edit" else None
+                instance = get_object_or_404(WeeklySchedule, pk=request.POST.get("object_id"), calendar=calendar) if action == "edit" else WeeklySchedule(calendar=calendar)
                 form = WeeklyScheduleWorkspaceForm(request.POST, instance=instance)
                 redirect_params = {"calendar": calendar.pk}
             elif object_type == "working_interval":
                 schedule = get_object_or_404(WeeklySchedule, pk=request.POST.get("schedule_id"))
-                instance = get_object_or_404(WorkingInterval, pk=request.POST.get("object_id"), weekly_schedule=schedule) if action == "edit" else None
+                instance = get_object_or_404(WorkingInterval, pk=request.POST.get("object_id"), weekly_schedule=schedule) if action == "edit" else WorkingInterval(weekly_schedule=schedule)
                 form = WorkingIntervalWorkspaceForm(request.POST, instance=instance)
                 redirect_params = {"calendar": schedule.calendar_id, "schedule": schedule.pk}
             elif object_type == "exception":
                 calendar = get_object_or_404(BusinessCalendar, pk=request.POST.get("calendar_id"))
-                instance = get_object_or_404(CalendarException, pk=request.POST.get("object_id"), calendar=calendar) if action == "edit" else None
+                instance = get_object_or_404(CalendarException, pk=request.POST.get("object_id"), calendar=calendar) if action == "edit" else CalendarException(calendar=calendar)
                 form = CalendarExceptionWorkspaceForm(request.POST, instance=instance)
                 redirect_params = {"calendar": calendar.pk}
             elif object_type == "exception_interval":
                 exception = get_object_or_404(CalendarException, pk=request.POST.get("exception_id"))
-                instance = get_object_or_404(CalendarExceptionInterval, pk=request.POST.get("object_id"), exception=exception) if action == "edit" else None
+                instance = get_object_or_404(CalendarExceptionInterval, pk=request.POST.get("object_id"), exception=exception) if action == "edit" else CalendarExceptionInterval(exception=exception)
                 form = CalendarExceptionIntervalWorkspaceForm(request.POST, instance=instance)
                 redirect_params = {"calendar": exception.calendar_id, "exception": exception.pk}
             elif object_type == "sla":
                 step = get_object_or_404(WorkflowStep, pk=request.POST.get("step_id"))
-                instance = get_object_or_404(WorkflowStepSLA, pk=request.POST.get("object_id"), step=step) if action == "edit" else None
+                instance = get_object_or_404(WorkflowStepSLA, pk=request.POST.get("object_id"), step=step) if action == "edit" else WorkflowStepSLA(step=step)
                 form = WorkflowStepSLAWorkspaceForm(request.POST, instance=instance)
                 redirect_params = {"step": step.pk}
             else:
@@ -210,18 +210,8 @@ def sla_calendar_workspace(request):
 
             if form.is_valid():
                 obj = form.save(commit=False)
-                if object_type == "schedule":
-                    obj.calendar_id = request.POST.get("calendar_id")
-                elif object_type == "working_interval":
-                    obj.weekly_schedule_id = request.POST.get("schedule_id")
-                elif object_type == "exception":
-                    obj.calendar_id = request.POST.get("calendar_id")
-                elif object_type == "exception_interval":
-                    obj.exception_id = request.POST.get("exception_id")
-                elif object_type == "sla":
-                    obj.step_id = request.POST.get("step_id")
                 obj.save()
-                messages.success(request, f"«{obj}» {'ذخیره شد' if instance else 'ایجاد شد'}.")
+                messages.success(request, f"«{obj}» {'ذخیره شد' if instance and instance.pk else 'ایجاد شد'}.")
                 if object_type == "calendar":
                     return redirect(_workspace_url("calendars", calendar=obj.pk))
                 return redirect(_workspace_url(tab, **redirect_params))
