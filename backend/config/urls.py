@@ -23,6 +23,7 @@ from workflow.access_workspace import (
 )
 from workflow.data_sources_workspace import data_sources_workspace
 from workflow.device_catalog_workspace import device_catalog_workspace
+from workflow.sla_calendar_workspace import sla_calendar_workspace
 
 
 urlpatterns = [
@@ -39,6 +40,7 @@ urlpatterns = [
 
     path("admin/workflow/data-sources/", dolphin_admin_site.admin_view(data_sources_workspace), name="data_sources_workspace"),
     path("admin/workflow/device-catalog/", dolphin_admin_site.admin_view(device_catalog_workspace), name="device_catalog_workspace"),
+    path("admin/workflow/sla-calendar/", dolphin_admin_site.admin_view(sla_calendar_workspace), name="sla_calendar_workspace"),
 
     path("admin/workflow/dynamic/steps/", dolphin_admin_site.admin_view(workflow_dynamic_steps), name="workflow_dynamic_steps"),
     path("admin/workflow/dynamic/transitions/", dolphin_admin_site.admin_view(workflow_dynamic_transitions), name="workflow_dynamic_transitions"),
