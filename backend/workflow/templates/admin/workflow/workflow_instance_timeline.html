@@ -240,16 +240,20 @@
 
                                     <div class="timeline-history-fields">
                                         {% for field in event.history.fields %}
-                                            {% if field.display_value %}
-                                                <div class="timeline-history-field">
-                                                    <span class="timeline-history-label">
-                                                        {{ field.label }}
-                                                    </span>
-                                                    <strong class="timeline-history-value">
+                                            <div class="timeline-history-field">
+                                                <span class="timeline-history-label">
+                                                    {{ field.display_label|default:field.label }}
+                                                </span>
+                                                <strong class="timeline-history-value">
+                                                    {% if field.display_value %}
                                                         {{ field.display_value }}
-                                                    </strong>
-                                                </div>
-                                            {% endif %}
+                                                    {% elif field.value %}
+                                                        {{ field.value }}
+                                                    {% else %}
+                                                        —
+                                                    {% endif %}
+                                                </strong>
+                                            </div>
                                         {% endfor %}
                                     </div>
 
@@ -269,16 +273,20 @@
                                                 </div>
 
                                                 {% for field in item.fields %}
-                                                    {% if field.display_value %}
-                                                        <div class="timeline-history-field">
-                                                            <span class="timeline-history-label">
-                                                                {{ field.label }}
-                                                            </span>
-                                                            <strong class="timeline-history-value">
+                                                    <div class="timeline-history-field">
+                                                        <span class="timeline-history-label">
+                                                            {{ field.display_label|default:field.label }}
+                                                        </span>
+                                                        <strong class="timeline-history-value">
+                                                            {% if field.display_value %}
                                                                 {{ field.display_value }}
-                                                            </strong>
-                                                        </div>
-                                                    {% endif %}
+                                                            {% elif field.value %}
+                                                                {{ field.value }}
+                                                            {% else %}
+                                                                —
+                                                            {% endif %}
+                                                        </strong>
+                                                    </div>
                                                 {% endfor %}
                                             </div>
                                         {% endfor %}
