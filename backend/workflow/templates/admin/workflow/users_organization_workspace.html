@@ -18,6 +18,10 @@
 .df-uow-danger{color:#b42318}
 .df-uow-muted{color:var(--body-quiet-color,#777)}
 .df-uow-errors{color:#b42318;margin-bottom:12px}
+.df-uow-warning{border:1px solid #d9a441;border-radius:10px;padding:14px;margin-top:16px;background:var(--darkened-bg,#f7f7f7)}
+.df-uow-warning h3{margin-top:0}
+.df-uow-warning ul{margin-bottom:8px}
+.df-uow-transfer{margin-top:12px}
 @media(max-width:900px){.df-uow-grid{grid-template-columns:1fr}}
 </style>
 
@@ -63,8 +67,76 @@
                 {% endif %}
                 <div class="df-uow-actions"><button type="submit" class="button">ذخیره</button>{% if editing_user %}<a class="button" href="?tab=users">کاربر جدید</a>{% endif %}</div>
             </form>
+
             {% if editing_user and editing_user.pk != request.user.pk %}
-            <form method="post" class="df-uow-actions" onsubmit="return confirm('این کاربر حذف شود؟');">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="object_id" value="{{ editing_user.pk }}"><button type="submit" class="button df-uow-danger">حذف کاربر</button></form>
+            <form method="post" class="df-uow-actions" onsubmit="return confirm('این کاربر بررسی شود؟');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="object_id" value="{{ editing_user.pk }}">
+                <button type="submit" class="button df-uow-danger">حذف کاربر</button>
+            </form>
+            {% endif %}
+
+            {% if delete_analysis and delete_user %}
+            <div class="df-uow-warning">
+                <h3>بررسی حذف «{{ delete_user }}»</h3>
+                {% if delete_analysis.operational %}
+                    <p>این کاربر وابستگی‌های عملیاتی دارد و حذف مستقیم آن می‌تواند مسئولیت‌های جاری را از بین ببرد.</p>
+                    <ul>
+                        {% if delete_analysis.dependencies.memberships %}<li>{{ delete_analysis.dependencies.memberships|length }} عضویت در فرآیند</li>{% endif %}
+                        {% if delete_analysis.dependencies.assigned_steps %}<li>{{ delete_analysis.dependencies.assigned_steps|length }} مرحله با مسئولیت این کاربر</li>{% endif %}
+                        {% if delete_analysis.dependencies.workflow_permissions %}<li>{{ delete_analysis.dependencies.workflow_permissions|length }} مجوز اختصاصی فرآیند</li>{% endif %}
+                    </ul>
+                {% endif %}
+
+                {% if delete_analysis.historical %}
+                    <p>این کاربر سابقه تاریخی دارد. این سوابق نباید به شخص دیگری منتقل شوند.</p>
+                    <ul>
+                        {% if delete_analysis.dependencies.started_instances %}<li>{{ delete_analysis.dependencies.started_instances|length }} فرآیند ایجادشده</li>{% endif %}
+                        {% if delete_analysis.dependencies.step_executions %}<li>{{ delete_analysis.dependencies.step_executions|length }} اجرای مرحله</li>{% endif %}
+                        {% if delete_analysis.dependencies.transition_executions %}<li>{{ delete_analysis.dependencies.transition_executions|length }} تغییر مرحله</li>{% endif %}
+                        {% if delete_analysis.dependencies.notifications %}<li>{{ delete_analysis.dependencies.notifications|length }} اعلان</li>{% endif %}
+                        {% if delete_analysis.dependencies.repair_forms %}<li>{{ delete_analysis.dependencies.repair_forms|length }} فرم ایجادشده</li>{% endif %}
+                    </ul>
+                    <p><strong>نتیجه:</strong> حذف فیزیکی این کاربر مجاز نیست؛ برای حفظ تاریخچه، او را غیرفعال کنید.</p>
+                    <form method="post" class="df-uow-actions">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="object_id" value="{{ delete_user.pk }}">
+                        <input type="hidden" name="delete_mode" value="deactivate">
+                        <button type="submit" class="button">غیرفعال‌سازی کاربر</button>
+                    </form>
+                {% else %}
+                    <p><strong>هیچ سابقه تاریخی مسدودکننده‌ای وجود ندارد.</strong> مسئولیت‌های عملیاتی را می‌توان به کاربر دیگری منتقل کرد.</p>
+                    {% if delete_analysis.operational %}
+                    <form method="post" class="df-uow-transfer">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="object_id" value="{{ delete_user.pk }}">
+                        <input type="hidden" name="delete_mode" value="transfer_delete">
+                        <label for="delete-target-user">انتقال مسئولیت‌ها به:</label>
+                        <select id="delete-target-user" name="target_user_id" required>
+                            <option value="">---------</option>
+                            {% for target in delete_target_users %}
+                                <option value="{{ target.pk }}">{{ target.get_full_name|default:target.username }} — {{ target.username }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="df-uow-actions">
+                            <button type="submit" class="button df-uow-danger" onclick="return confirm('مسئولیت‌های این کاربر منتقل و سپس خود کاربر حذف شود؟');">انتقال و حذف کاربر</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <form method="post" class="df-uow-actions">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="object_id" value="{{ delete_user.pk }}">
+                        <input type="hidden" name="delete_mode" value="transfer_delete">
+                        <input type="hidden" name="target_user_id" value="">
+                        <button type="submit" class="button df-uow-danger" onclick="return confirm('این کاربر حذف شود؟');">حذف کاربر</button>
+                    </form>
+                    {% endif %}
+                {% endif %}
+            </div>
             {% endif %}
         </div>
     </div>
