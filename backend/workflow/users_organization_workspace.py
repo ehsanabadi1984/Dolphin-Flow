@@ -3,11 +3,23 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from accounts.models import Job, UserPreference
+from repairs.models import RepairForm
+
+from .models import (
+    Notification,
+    WorkflowInstance,
+    WorkflowMembership,
+    WorkflowPermission,
+    WorkflowStep,
+    WorkflowStepExecution,
+    WorkflowTransitionExecution,
+)
 
 User = get_user_model()
 
@@ -103,6 +115,76 @@ def _workspace_url(tab="users", **params):
     return f"{url}?{'&'.join(values)}"
 
 
+def _user_delete_dependencies(user):
+    return {
+        "memberships": list(
+            WorkflowMembership.objects.filter(user=user).select_related("workflow")
+        ),
+        "assigned_steps": list(
+            WorkflowStep.objects.filter(assigned_to=user).select_related("workflow")
+        ),
+        "workflow_permissions": list(
+            WorkflowPermission.objects.filter(user=user)
+            .select_related("workflow", "step", "transition")
+        ),
+        "started_instances": list(
+            WorkflowInstance.objects.filter(started_by=user).select_related("workflow")
+        ),
+        "step_executions": list(
+            WorkflowStepExecution.objects.filter(performed_by=user)
+            .select_related("workflow_step__workflow", "workflow_step")
+        ),
+        "transition_executions": list(
+            WorkflowTransitionExecution.objects.filter(performed_by=user)
+            .select_related("transition__workflow", "transition")
+        ),
+        "notifications": list(
+            Notification.objects.filter(recipient=user).select_related("workflow_instance")
+        ),
+        "repair_forms": list(
+            RepairForm.objects.filter(created_by=user).select_related("customer")
+        ),
+    }
+
+
+def _user_delete_analysis(user):
+    dependencies = _user_delete_dependencies(user)
+    operational = (
+        dependencies["memberships"]
+        + dependencies["assigned_steps"]
+        + dependencies["workflow_permissions"]
+    )
+    historical = (
+        dependencies["started_instances"]
+        + dependencies["step_executions"]
+        + dependencies["transition_executions"]
+        + dependencies["notifications"]
+        + dependencies["repair_forms"]
+    )
+    return {
+        "dependencies": dependencies,
+        "operational": operational,
+        "historical": historical,
+        "can_hard_delete": not historical,
+        "has_dependencies": bool(operational or historical),
+    }
+
+
+def _transfer_operational_dependencies(user, target):
+    for membership in list(WorkflowMembership.objects.filter(user=user).select_related("workflow")):
+        existing = WorkflowMembership.objects.filter(
+            workflow=membership.workflow, user=target
+        ).first()
+        if existing:
+            membership.delete()
+        else:
+            membership.user = target
+            membership.save(update_fields=["user"])
+
+    WorkflowStep.objects.filter(assigned_to=user).update(assigned_to=target)
+    WorkflowPermission.objects.filter(user=user).update(user=target)
+
+
 def users_organization_workspace(request):
     if not (request.user.is_authenticated and request.user.is_active and request.user.is_superuser):
         raise PermissionDenied
@@ -113,6 +195,8 @@ def users_organization_workspace(request):
 
     edit_id = request.GET.get("edit")
     editing_user = editing_job = editing_group = None
+    delete_analysis = None
+    delete_user = None
     if edit_id:
         if tab == "users":
             editing_user = get_object_or_404(User, pk=edit_id)
@@ -130,8 +214,62 @@ def users_organization_workspace(request):
 
         if action == "delete":
             if tab == "users":
-                get_object_or_404(User, pk=object_id).delete()
-                messages.success(request, "کاربر حذف شد.")
+                obj = get_object_or_404(User, pk=object_id)
+                delete_analysis = _user_delete_analysis(obj)
+                delete_user = obj
+                target_id = request.POST.get("target_user_id")
+                mode = request.POST.get("delete_mode", "")
+
+                if not delete_analysis["has_dependencies"]:
+                    obj.delete()
+                    messages.success(request, "کاربر حذف شد.")
+                    return redirect(_workspace_url("users"))
+
+                if mode == "deactivate":
+                    obj.is_active = False
+                    obj.save(update_fields=["is_active"])
+                    messages.success(request, "کاربر غیرفعال شد و سوابق او حفظ شد.")
+                    return redirect(_workspace_url("users"))
+
+                if mode == "transfer_delete":
+                    target = get_object_or_404(User, pk=target_id) if target_id else None
+                    if not target or target.pk == obj.pk:
+                        messages.error(request, "برای انتقال مسئولیت‌ها یک کاربر مقصد معتبر انتخاب کنید.")
+                    elif delete_analysis["historical"]:
+                        messages.error(request, "این کاربر سابقه تاریخی دارد؛ برای حفظ سابقه، فقط غیرفعال‌سازی مجاز است.")
+                    else:
+                        try:
+                            with transaction.atomic():
+                                _transfer_operational_dependencies(obj, target)
+                                obj.delete()
+                        except ProtectedError:
+                            messages.error(request, "حذف کاربر به دلیل یک وابستگی محافظت‌شده انجام نشد؛ کاربر غیرفعال باقی بماند.")
+                        else:
+                            messages.success(request, f"مسئولیت‌های کاربر به «{target}» منتقل و کاربر حذف شد.")
+                            return redirect(_workspace_url("users"))
+
+                return render(
+                    request,
+                    "admin/workflow/users_organization_workspace.html",
+                    {
+                        "tab": "users",
+                        "users": User.objects.select_related("job").prefetch_related("groups").order_by("username"),
+                        "jobs": Job.objects.order_by("name"),
+                        "groups": Group.objects.prefetch_related("permissions").order_by("name"),
+                        "editing_user": editing_user or obj,
+                        "editing_job": editing_job,
+                        "editing_group": editing_group,
+                        "user_form": UserWorkspaceForm(request, instance=editing_user or obj),
+                        "job_form": JobWorkspaceForm(instance=editing_job),
+                        "group_form": GroupWorkspaceForm(instance=editing_group),
+                        "preference_form": UserPreferenceWorkspaceForm(
+                            instance=UserPreference.objects.filter(user=editing_user or obj).first()
+                        ),
+                        "delete_analysis": delete_analysis,
+                        "delete_user": delete_user,
+                        "delete_target_users": User.objects.filter(is_active=True).exclude(pk=obj.pk).order_by("username"),
+                    },
+                )
             elif tab == "jobs":
                 obj = get_object_or_404(Job, pk=object_id)
                 try:
@@ -206,5 +344,8 @@ def users_organization_workspace(request):
             "job_form": job_form,
             "group_form": group_form,
             "preference_form": preference_form,
+            "delete_analysis": delete_analysis,
+            "delete_user": delete_user,
+            "delete_target_users": User.objects.filter(is_active=True).exclude(pk=editing_user.pk).order_by("username") if editing_user else User.objects.none(),
         },
     )
