@@ -165,7 +165,7 @@ def access_security_workspace(request, workflow_id):
             context["editing"] = {"kind": edit_kind, "id": obj.pk}
 
     if request.method == "POST":
-        action = request.POST.get("action")
+        action = request.POST.get("workspace_action")
         if action in {"save_membership", "save_permission", "save_field_access", "save_group_access"}:
             config = {
                 "save_membership": (WorkflowMembership, {"workflow": workflow}, MembershipWorkspaceForm, "membership_form", "memberships"),
