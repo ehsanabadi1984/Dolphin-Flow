@@ -21,6 +21,7 @@ from workflow.access_workspace import (
     access_security_workspace_list,
     access_security_workspace,
 )
+from workflow.data_sources_workspace import data_sources_workspace
 
 
 urlpatterns = [
@@ -34,6 +35,8 @@ urlpatterns = [
 
     path("admin/workflow/access-security/", dolphin_admin_site.admin_view(access_security_workspace_list), name="access_security_workspace_list"),
     path("admin/workflow/access-security/<int:workflow_id>/", dolphin_admin_site.admin_view(access_security_workspace), name="access_security_workspace"),
+
+    path("admin/workflow/data-sources/", dolphin_admin_site.admin_view(data_sources_workspace), name="data_sources_workspace"),
 
     path("admin/workflow/dynamic/steps/", dolphin_admin_site.admin_view(workflow_dynamic_steps), name="workflow_dynamic_steps"),
     path("admin/workflow/dynamic/transitions/", dolphin_admin_site.admin_view(workflow_dynamic_transitions), name="workflow_dynamic_transitions"),
