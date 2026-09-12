@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib import messages
+from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -36,6 +37,47 @@ class WorkingIntervalWorkspaceForm(forms.ModelForm):
             "start_time": forms.TimeInput(format="%H:%M", attrs={"type": "time"}),
             "end_time": forms.TimeInput(format="%H:%M", attrs={"type": "time"}),
         }
+
+
+class BulkWorkingScheduleWorkspaceForm(forms.Form):
+    weekdays = forms.MultipleChoiceField(
+        label="روزهای کاری",
+        choices=WeeklySchedule.Weekday.choices,
+        widget=forms.CheckboxSelectMultiple,
+        required=True,
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        raw_starts = self.data.getlist("bulk_start_time")
+        raw_ends = self.data.getlist("bulk_end_time")
+
+        if not raw_starts or not raw_ends:
+            raise forms.ValidationError("حداقل یک بازه کاری باید وارد شود.")
+        if len(raw_starts) != len(raw_ends):
+            raise forms.ValidationError("بازه‌های کاری کامل نیستند.")
+
+        intervals = []
+        for index, (raw_start, raw_end) in enumerate(zip(raw_starts, raw_ends), start=1):
+            try:
+                start_time = forms.TimeField(input_formats=["%H:%M", "%H:%M:%S"]).clean(raw_start)
+                end_time = forms.TimeField(input_formats=["%H:%M", "%H:%M:%S"]).clean(raw_end)
+            except forms.ValidationError:
+                raise forms.ValidationError(f"بازه شماره {index} زمان معتبری ندارد.")
+
+            if start_time >= end_time:
+                raise forms.ValidationError(
+                    f"بازه شماره {index}: زمان شروع باید قبل از زمان پایان باشد."
+                )
+            intervals.append((start_time, end_time))
+
+        ordered = sorted(intervals)
+        for previous, current in zip(ordered, ordered[1:]):
+            if current[0] < previous[1]:
+                raise forms.ValidationError("بازه‌های واردشده نباید با یکدیگر تداخل داشته باشند.")
+
+        cleaned_data["intervals"] = intervals
+        return cleaned_data
 
 
 class CalendarExceptionWorkspaceForm(forms.ModelForm):
@@ -75,6 +117,31 @@ def _workspace_url(tab="calendars", **params):
         if value is not None:
             values.append(f"{key}={value}")
     return f"{url}?{'&'.join(values)}"
+
+
+def _bulk_working_schedule(calendar, form):
+    weekdays = [int(value) for value in form.cleaned_data["weekdays"]]
+    intervals = form.cleaned_data["intervals"]
+
+    with transaction.atomic():
+        for weekday in weekdays:
+            schedule, _ = WeeklySchedule.objects.get_or_create(
+                calendar=calendar,
+                weekday=weekday,
+                defaults={"is_working": True},
+            )
+            if not schedule.is_working:
+                schedule.is_working = True
+                schedule.save(update_fields=["is_working"])
+
+            for start_time, end_time in intervals:
+                interval = WorkingInterval(
+                    weekly_schedule=schedule,
+                    start_time=start_time,
+                    end_time=end_time,
+                )
+                interval.full_clean()
+                interval.save()
 
 
 def sla_calendar_workspace(request):
@@ -171,53 +238,73 @@ def sla_calendar_workspace(request):
                 messages.success(request, "تنظیمات SLA حذف شد.")
                 return redirect(_workspace_url("sla", step=step_id))
 
-        if action in {"add", "edit"}:
+        if action in {"add", "edit", "bulk_add"}:
             instance = None
             form = None
             redirect_params = {}
 
-            if object_type == "calendar":
-                instance = get_object_or_404(BusinessCalendar, pk=request.POST.get("object_id")) if action == "edit" else None
-                form = BusinessCalendarWorkspaceForm(request.POST, instance=instance)
-            elif object_type == "schedule":
+            if object_type == "bulk_working_schedule":
                 calendar = get_object_or_404(BusinessCalendar, pk=request.POST.get("calendar_id"))
-                instance = get_object_or_404(WeeklySchedule, pk=request.POST.get("object_id"), calendar=calendar) if action == "edit" else WeeklySchedule(calendar=calendar)
-                form = WeeklyScheduleWorkspaceForm(request.POST, instance=instance)
+                form = BulkWorkingScheduleWorkspaceForm(request.POST)
                 redirect_params = {"calendar": calendar.pk}
-            elif object_type == "working_interval":
-                schedule = get_object_or_404(WeeklySchedule, pk=request.POST.get("schedule_id"))
-                instance = get_object_or_404(WorkingInterval, pk=request.POST.get("object_id"), weekly_schedule=schedule) if action == "edit" else WorkingInterval(weekly_schedule=schedule)
-                form = WorkingIntervalWorkspaceForm(request.POST, instance=instance)
-                redirect_params = {"calendar": schedule.calendar_id, "schedule": schedule.pk}
-            elif object_type == "exception":
-                calendar = get_object_or_404(BusinessCalendar, pk=request.POST.get("calendar_id"))
-                instance = get_object_or_404(CalendarException, pk=request.POST.get("object_id"), calendar=calendar) if action == "edit" else CalendarException(calendar=calendar)
-                form = CalendarExceptionWorkspaceForm(request.POST, instance=instance)
-                redirect_params = {"calendar": calendar.pk}
-            elif object_type == "exception_interval":
-                exception = get_object_or_404(CalendarException, pk=request.POST.get("exception_id"))
-                instance = get_object_or_404(CalendarExceptionInterval, pk=request.POST.get("object_id"), exception=exception) if action == "edit" else CalendarExceptionInterval(exception=exception)
-                form = CalendarExceptionIntervalWorkspaceForm(request.POST, instance=instance)
-                redirect_params = {"calendar": exception.calendar_id, "exception": exception.pk}
-            elif object_type == "sla":
-                step = get_object_or_404(WorkflowStep, pk=request.POST.get("step_id"))
-                instance = get_object_or_404(WorkflowStepSLA, pk=request.POST.get("object_id"), step=step) if action == "edit" else WorkflowStepSLA(step=step)
-                form = WorkflowStepSLAWorkspaceForm(request.POST, instance=instance)
-                redirect_params = {"step": step.pk}
+                if form.is_valid():
+                    try:
+                        _bulk_working_schedule(calendar, form)
+                    except forms.ValidationError as exc:
+                        form.add_error(None, exc)
+                    else:
+                        days_count = len(form.cleaned_data["weekdays"])
+                        intervals_count = len(form.cleaned_data["intervals"])
+                        messages.success(
+                            request,
+                            f"برای {days_count} روز، {intervals_count} بازه کاری اضافه شد.",
+                        )
+                        return redirect(_workspace_url("calendars", **redirect_params))
+                messages.error(request, "اطلاعات افزودن گروهی معتبر نیست.")
+                invalid_form = form
             else:
-                messages.error(request, "نوع عملیات نامعتبر است.")
-                return redirect(_workspace_url(tab))
-
-            if form.is_valid():
-                obj = form.save(commit=False)
-                obj.save()
-                messages.success(request, f"«{obj}» {'ذخیره شد' if instance and instance.pk else 'ایجاد شد'}.")
                 if object_type == "calendar":
-                    return redirect(_workspace_url("calendars", calendar=obj.pk))
-                return redirect(_workspace_url(tab, **redirect_params))
+                    instance = get_object_or_404(BusinessCalendar, pk=request.POST.get("object_id")) if action == "edit" else None
+                    form = BusinessCalendarWorkspaceForm(request.POST, instance=instance)
+                elif object_type == "schedule":
+                    calendar = get_object_or_404(BusinessCalendar, pk=request.POST.get("calendar_id"))
+                    instance = get_object_or_404(WeeklySchedule, pk=request.POST.get("object_id"), calendar=calendar) if action == "edit" else WeeklySchedule(calendar=calendar)
+                    form = WeeklyScheduleWorkspaceForm(request.POST, instance=instance)
+                    redirect_params = {"calendar": calendar.pk}
+                elif object_type == "working_interval":
+                    schedule = get_object_or_404(WeeklySchedule, pk=request.POST.get("schedule_id"))
+                    instance = get_object_or_404(WorkingInterval, pk=request.POST.get("object_id"), weekly_schedule=schedule) if action == "edit" else WorkingInterval(weekly_schedule=schedule)
+                    form = WorkingIntervalWorkspaceForm(request.POST, instance=instance)
+                    redirect_params = {"calendar": schedule.calendar_id, "schedule": schedule.pk}
+                elif object_type == "exception":
+                    calendar = get_object_or_404(BusinessCalendar, pk=request.POST.get("calendar_id"))
+                    instance = get_object_or_404(CalendarException, pk=request.POST.get("object_id"), calendar=calendar) if action == "edit" else CalendarException(calendar=calendar)
+                    form = CalendarExceptionWorkspaceForm(request.POST, instance=instance)
+                    redirect_params = {"calendar": calendar.pk}
+                elif object_type == "exception_interval":
+                    exception = get_object_or_404(CalendarException, pk=request.POST.get("exception_id"))
+                    instance = get_object_or_404(CalendarExceptionInterval, pk=request.POST.get("object_id"), exception=exception) if action == "edit" else CalendarExceptionInterval(exception=exception)
+                    form = CalendarExceptionIntervalWorkspaceForm(request.POST, instance=instance)
+                    redirect_params = {"calendar": exception.calendar_id, "exception": exception.pk}
+                elif object_type == "sla":
+                    step = get_object_or_404(WorkflowStep, pk=request.POST.get("step_id"))
+                    instance = get_object_or_404(WorkflowStepSLA, pk=request.POST.get("object_id"), step=step) if action == "edit" else WorkflowStepSLA(step=step)
+                    form = WorkflowStepSLAWorkspaceForm(request.POST, instance=instance)
+                    redirect_params = {"step": step.pk}
+                else:
+                    messages.error(request, "نوع عملیات نامعتبر است.")
+                    return redirect(_workspace_url(tab))
 
-            messages.error(request, "اطلاعات واردشده معتبر نیست.")
-            invalid_form = form
+                if form.is_valid():
+                    obj = form.save(commit=False)
+                    obj.save()
+                    messages.success(request, f"«{obj}» {'ذخیره شد' if instance and instance.pk else 'ایجاد شد'}.")
+                    if object_type == "calendar":
+                        return redirect(_workspace_url("calendars", calendar=obj.pk))
+                    return redirect(_workspace_url(tab, **redirect_params))
+
+                messages.error(request, "اطلاعات واردشده معتبر نیست.")
+                invalid_form = form
         else:
             invalid_form = None
     else:
@@ -238,7 +325,8 @@ def sla_calendar_workspace(request):
     calendar_form = invalid_form if object_type == "calendar" else BusinessCalendarWorkspaceForm(instance=selected_calendar)
     schedule_form = invalid_form if object_type == "schedule" else WeeklyScheduleWorkspaceForm()
     interval_form = invalid_form if object_type == "working_interval" else WorkingIntervalWorkspaceForm()
-    exception_form = invalid_form if object_type == "exception" else CalendarExceptionWorkspaceForm()
+    bulk_form = invalid_form if object_type == "bulk_working_schedule" else BulkWorkingScheduleWorkspaceForm()
+    exception_form = invalid_form if object_type == "exception" else CalendarExceptionWorkspaceForm(instance=selected_exception)
     exception_interval_form = invalid_form if object_type == "exception_interval" else CalendarExceptionIntervalWorkspaceForm()
     sla_form = invalid_form if object_type == "sla" else WorkflowStepSLAWorkspaceForm(instance=selected_sla)
 
@@ -263,6 +351,7 @@ def sla_calendar_workspace(request):
             "calendar_form": calendar_form,
             "schedule_form": schedule_form,
             "interval_form": interval_form,
+            "bulk_form": bulk_form,
             "exception_form": exception_form,
             "exception_interval_form": exception_interval_form,
             "sla_form": sla_form,
