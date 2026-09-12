@@ -17,6 +17,15 @@
 .df-sla-table{width:100%;border-collapse:collapse}.df-sla-table th,.df-sla-table td{padding:8px;border-bottom:1px solid var(--hairline-color,#ddd);vertical-align:middle}
 .df-sla-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.df-sla-actions form{display:inline}
 .df-sla-muted{color:var(--body-quiet-color,#777)}
+.df-bulk-days{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin:12px 0 18px}
+.df-bulk-day{display:flex!important;align-items:center;gap:7px;padding:9px 10px;border:1px solid var(--hairline-color,#ddd);border-radius:8px;background:var(--darkened-bg,#f7f7f7);cursor:pointer}
+.df-bulk-day input{width:auto!important;margin:0}
+.df-bulk-interval{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px}
+.df-bulk-interval label{display:block}
+.df-bulk-interval input{width:100%;box-sizing:border-box}
+.df-bulk-remove{padding:7px 10px!important}
+.df-bulk-errors{padding:10px 12px;border-radius:8px;background:var(--message-error-bg,#f8d7da);color:var(--message-error-fg,#721c24);margin-bottom:12px}
+@media(max-width:800px){.df-sla-grid{grid-template-columns:1fr}.df-bulk-days{grid-template-columns:repeat(2,minmax(120px,1fr))}.df-bulk-interval{grid-template-columns:1fr 1fr}}
 </style>
 
 <div class="df-sla">
@@ -64,6 +73,38 @@
 <form method="post" class="df-sla-form">{% csrf_token %}<input type="hidden" name="object_type" value="schedule"><input type="hidden" name="action" value="add"><input type="hidden" name="calendar_id" value="{{ selected_calendar.pk }}">{{ schedule_form.as_p }}<div class="submit-row"><button type="submit">افزودن</button></div></form>
 </div>
 
+<div class="df-sla-panel">
+<h2>افزودن گروهی روزها و بازه‌های کاری</h2>
+<p class="df-sla-muted">روزهای موردنظر را انتخاب کنید و بازه‌های کاری را وارد کنید. اگر روزی از قبل وجود داشته باشد، فقط بازه‌های جدید به همان روز اضافه می‌شوند.</p>
+{% if bulk_form.non_field_errors %}<div class="df-bulk-errors">{{ bulk_form.non_field_errors }}</div>{% endif %}
+<form method="post" class="df-sla-form" id="bulk-working-schedule-form">
+{% csrf_token %}
+<input type="hidden" name="object_type" value="bulk_working_schedule">
+<input type="hidden" name="action" value="bulk_add">
+<input type="hidden" name="calendar_id" value="{{ selected_calendar.pk }}">
+
+<label>روزها</label>
+<div class="df-bulk-days">
+{% for value,label in bulk_form.fields.weekdays.choices %}
+<label class="df-bulk-day"><input type="checkbox" name="weekdays" value="{{ value }}" {% if value in bulk_form.data|getlist:'weekdays' %}checked{% endif %}> <span>{{ label }}</span></label>
+{% endfor %}
+</div>
+
+<label>بازه‌های کاری</label>
+<div id="bulk-intervals">
+<div class="df-bulk-interval">
+<div><label>شروع</label><input type="time" name="bulk_start_time" required></div>
+<div><label>پایان</label><input type="time" name="bulk_end_time" required></div>
+<button type="button" class="df-bulk-remove" onclick="removeBulkInterval(this)">حذف</button>
+</div>
+</div>
+<div class="submit-row">
+<button type="button" onclick="addBulkInterval()">+ افزودن بازه</button>
+<button type="submit">افزودن گروهی</button>
+</div>
+</form>
+</div>
+
 {% if selected_schedule %}
 <div class="df-sla-panel">
 <h3>بازه‌های کاری — {{ selected_schedule.get_weekday_display }}</h3>
@@ -96,4 +137,27 @@
 </div></div>
 {% endif %}
 </div>
+
+<script>
+function addBulkInterval() {
+    const container = document.getElementById('bulk-intervals');
+    const row = document.createElement('div');
+    row.className = 'df-bulk-interval';
+    row.innerHTML = '<div><label>شروع</label><input type="time" name="bulk_start_time" required></div>' +
+        '<div><label>پایان</label><input type="time" name="bulk_end_time" required></div>' +
+        '<button type="button" class="df-bulk-remove" onclick="removeBulkInterval(this)">حذف</button>';
+    container.appendChild(row);
+}
+
+function removeBulkInterval(button) {
+    const container = document.getElementById('bulk-intervals');
+    const rows = container.querySelectorAll('.df-bulk-interval');
+    if (rows.length > 1) {
+        button.closest('.df-bulk-interval').remove();
+    } else {
+        const row = button.closest('.df-bulk-interval');
+        row.querySelectorAll('input').forEach(input => input.value = '');
+    }
+}
+</script>
 {% endblock %}
