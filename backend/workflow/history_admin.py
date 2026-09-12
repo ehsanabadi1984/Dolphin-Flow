@@ -71,12 +71,9 @@ class HistoryConfigurationForm(forms.ModelForm):
             )
 
     def save(self, commit=True):
-        instance = super().save(commit=commit)
-        if commit:
-            self._sync_history_fields(instance)
-        return instance
+        return super().save(commit=commit)
 
-    def _sync_history_fields(self, configuration):
+    def sync_history_fields(self, configuration):
         selected_ids = {
             field.pk
             for field in self.cleaned_data.get("history_fields", FormField.objects.none())
@@ -161,6 +158,10 @@ class HistoryConfigurationAdmin(admin.ModelAdmin):
         if obj:
             fields.insert(0, "form")
         return tuple(fields)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        form.sync_history_fields(obj)
 
     @admin.display(description="تعداد فیلدهای فعال")
     def field_count(self, obj):
