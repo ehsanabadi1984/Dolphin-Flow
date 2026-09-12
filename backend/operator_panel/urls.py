@@ -10,7 +10,7 @@ from .views import (
     notifications,
     mark_notification_as_read,
 )
-from .history_views import device_history
+from .history_views import device_history, workflow_history
 from workflow.form_file_services import (
     file_field_definitions,
     open_form_file,
@@ -52,6 +52,12 @@ urlpatterns = [
         "workflow-instance/<int:instance_id>/",
         workflow_instance_with_files,
         name="workflow_instance",
+    ),
+
+    path(
+        "workflow-instance/<int:instance_id>/history/",
+        workflow_history,
+        name="workflow_history",
     ),
 
     path(
