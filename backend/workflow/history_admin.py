@@ -10,7 +10,7 @@ from .history_models import HistoryConfiguration, HistoryField, HistoryRecord
 from .models import Device, FormField
 
 
-class HistoryFieldChoiceField(forms.ModelChoiceField):
+class HistoryFieldChoiceField(forms.ModelMultipleChoiceField):
     def label_from_instance(self, obj):
         parts = [obj.section.name]
         if obj.repeatable_group_id:
@@ -19,78 +19,108 @@ class HistoryFieldChoiceField(forms.ModelChoiceField):
         return " → ".join(parts)
 
 
-class HistoryFieldInlineForm(forms.ModelForm):
-    form_field = HistoryFieldChoiceField(
+class HistoryConfigurationForm(forms.ModelForm):
+    history_fields = HistoryFieldChoiceField(
         queryset=FormField.objects.none(),
-        label="فیلد فرم",
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label="فیلدهای ثبت در تاریخچه",
+        help_text="فیلدهایی را که باید هنگام ثبت History در snapshot ذخیره شوند انتخاب کنید.",
     )
 
     class Meta:
-        model = HistoryField
-        fields = "__all__"
+        model = HistoryConfiguration
+        fields = (
+            "form",
+            "name",
+            "is_active",
+            "history_fields",
+        )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        configuration = (
-            self.instance.configuration
-            if self.instance and self.instance.pk
-            else None
+        form_id = self.instance.form_id if self.instance and self.instance.pk else None
+        if form_id:
+            fields = (
+                FormField.objects
+                .filter(
+                    section__form_id=form_id,
+                    section__is_active=True,
+                    is_active=True,
+                )
+                .select_related("section", "repeatable_group")
+                .order_by(
+                    "section__order",
+                    "repeatable_group__order",
+                    "order",
+                    "id",
+                )
+            )
+            self.fields["history_fields"].queryset = fields
+            self.initial["history_fields"] = list(
+                HistoryField.objects
+                .filter(
+                    configuration=self.instance,
+                    is_enabled=True,
+                    form_field__section__form_id=form_id,
+                    form_field__section__is_active=True,
+                    form_field__is_active=True,
+                )
+                .values_list("form_field_id", flat=True)
+            )
+
+        if self.instance and self.instance.pk:
+            self.fields["form"].disabled = True
+
+    def save(self, commit=True):
+        instance = super().save(commit=commit)
+        if commit:
+            self._sync_history_fields(instance)
+        return instance
+
+    def _sync_history_fields(self, configuration):
+        selected_ids = {
+            field.pk
+            for field in self.cleaned_data.get("history_fields", FormField.objects.none())
+        }
+
+        form_fields = list(
+            self.fields["history_fields"].queryset
         )
-        if configuration:
-            self.fields["form_field"].queryset = (
-                FormField.objects
-                .filter(
-                    section__form_id=configuration.form_id,
-                    section__is_active=True,
-                    is_active=True,
-                )
-                .select_related("section", "repeatable_group")
-                .order_by(
-                    "section__order",
-                    "repeatable_group__order",
-                    "order",
-                    "id",
-                )
+
+        for display_order, form_field in enumerate(form_fields):
+            history_field, _ = HistoryField.objects.get_or_create(
+                configuration=configuration,
+                form_field=form_field,
+                defaults={
+                    "display_label": form_field.label,
+                    "display_order": display_order,
+                    "is_enabled": False,
+                },
             )
-        else:
-            self.fields["form_field"].queryset = FormField.objects.none()
 
+            changed = False
+            if not history_field.display_label:
+                history_field.display_label = form_field.label
+                changed = True
+            if history_field.display_order != display_order:
+                history_field.display_order = display_order
+                changed = True
 
-class HistoryFieldInline(admin.TabularInline):
-    model = HistoryField
-    form = HistoryFieldInlineForm
-    extra = 0
-    fields = (
-        "form_field",
-        "display_label",
-        "display_order",
-        "is_enabled",
-    )
-    ordering = ("display_order", "id")
+            enabled = form_field.pk in selected_ids
+            if history_field.is_enabled != enabled:
+                history_field.is_enabled = enabled
+                changed = True
 
-    def get_formset(self, request, obj=None, **kwargs):
-        formset = super().get_formset(request, obj, **kwargs)
-
-        if obj:
-            queryset = (
-                FormField.objects
-                .filter(
-                    section__form_id=obj.form_id,
-                    section__is_active=True,
-                    is_active=True,
+            if changed:
+                history_field.save(
+                    update_fields=(
+                        "display_label",
+                        "display_order",
+                        "is_enabled",
+                    )
                 )
-                .select_related("section", "repeatable_group")
-                .order_by(
-                    "section__order",
-                    "repeatable_group__order",
-                    "order",
-                    "id",
-                )
-            )
-            formset.form.base_fields["form_field"].queryset = queryset
-
-        return formset
 
 
 @admin.register(
@@ -100,6 +130,7 @@ class HistoryFieldInline(admin.TabularInline):
 class HistoryConfigurationAdmin(admin.ModelAdmin):
     admin_category = "forms"
     admin_section = "definition"
+    form = HistoryConfigurationForm
 
     list_display = (
         "form",
@@ -128,27 +159,15 @@ class HistoryConfigurationAdmin(admin.ModelAdmin):
         "updated_at",
     )
 
-    inlines = (
-        HistoryFieldInline,
-    )
-
     def get_readonly_fields(self, request, obj=None):
         fields = ["created_at", "updated_at"]
         if obj:
             fields.insert(0, "form")
         return tuple(fields)
 
-    def save_formset(self, request, form, formset, change):
-        instances = formset.save(commit=False)
-        for instance in instances:
-            if not instance.display_label and instance.form_field_id:
-                instance.display_label = instance.form_field.label
-            instance.save()
-        formset.save_m2m()
-
-    @admin.display(description="تعداد فیلدها")
+    @admin.display(description="تعداد فیلدهای فعال")
     def field_count(self, obj):
-        return obj.fields.count()
+        return obj.fields.filter(is_enabled=True).count()
 
 
 class HistoryDeviceFilter(admin.SimpleListFilter):
