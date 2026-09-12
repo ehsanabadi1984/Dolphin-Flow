@@ -50,83 +50,43 @@ class HistoryService:
         )
         data = form_data.data if form_data and form_data.data else {}
 
-        configuration = (
-            HistoryConfiguration.objects
-            .filter(form=form, is_active=True)
-            .first()
+        configuration, _ = HistoryConfiguration.objects.get_or_create(
+            form=form,
+            defaults={
+                "name": f"History - {form.name}",
+                "is_active": True,
+            },
         )
 
-        if configuration is not None:
-            configured_fields = list(
-                HistoryField.objects
-                .filter(
-                    configuration=configuration,
-                    is_enabled=True,
-                    form_field__is_active=True,
-                    form_field__section__is_active=True,
-                    form_field__section__form=form,
-                    form_field__repeatable_group__isnull=True,
-                )
-                .select_related(
-                    "form_field",
-                    "form_field__section",
-                    "form_field__repeatable_group",
-                )
-                .order_by("display_order", "id")
+        configured_fields = list(
+            HistoryField.objects
+            .filter(
+                configuration=configuration,
+                is_enabled=True,
+                form_field__is_active=True,
+                form_field__section__is_active=True,
+                form_field__section__form=form,
             )
-            configured_group_fields = list(
-                HistoryField.objects
-                .filter(
-                    configuration=configuration,
-                    is_enabled=True,
-                    form_field__is_active=True,
-                    form_field__section__is_active=True,
-                    form_field__section__form=form,
-                    form_field__repeatable_group__isnull=False,
-                    form_field__repeatable_group__is_active=True,
-                )
-                .select_related(
-                    "form_field",
-                    "form_field__section",
-                    "form_field__repeatable_group",
-                    "form_field__repeatable_group__section",
-                )
-                .order_by("display_order", "id")
+            .select_related(
+                "form_field",
+                "form_field__section",
+                "form_field__repeatable_group",
+                "form_field__repeatable_group__section",
             )
-            configured_fields.extend(configured_group_fields)
-            configured_fields.sort(key=lambda item: (item.display_order, item.pk))
-        else:
-            configured_fields = []
+            .order_by("display_order", "id")
+        )
 
-        if configuration is None:
-            # Backward-compatible fallback for forms that have not yet
-            # been configured in the new History admin.
-            selected = []
-            for section in form.sections.filter(is_active=True):
-                for field in section.fields.filter(
-                    is_active=True,
-                    is_history_enabled=True,
-                ).select_related("repeatable_group"):
-                    if field.repeatable_group_id and not field.repeatable_group.is_active:
-                        continue
-                    selected.append(
-                        {
-                            "form_field": field,
-                            "display_label": field.label,
-                            "display_order": field.order,
-                            "history_field_id": None,
-                        }
-                    )
-        else:
-            selected = [
-                {
-                    "form_field": item.form_field,
-                    "display_label": item.display_label or item.form_field.label,
-                    "display_order": item.display_order,
-                    "history_field_id": item.pk,
-                }
-                for item in configured_fields
-            ]
+        selected = [
+            {
+                "form_field": item.form_field,
+                "display_label": item.display_label or item.form_field.label,
+                "display_order": item.display_order,
+                "history_field_id": item.pk,
+            }
+            for item in configured_fields
+            if not item.form_field.repeatable_group_id
+            or item.form_field.repeatable_group.is_active
+        ]
 
         top_level = []
         groups = {}
@@ -205,7 +165,7 @@ class HistoryService:
 
         return {
             "version": HistoryService.SNAPSHOT_VERSION,
-            "configuration_id": configuration.pk if configuration else None,
+            "configuration_id": configuration.pk,
             "fields": history_fields,
             "repeatable_groups": history_groups,
         }
