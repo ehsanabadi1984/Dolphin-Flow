@@ -70,9 +70,6 @@ class HistoryConfigurationForm(forms.ModelForm):
                 .values_list("form_field_id", flat=True)
             )
 
-        if self.instance and self.instance.pk:
-            self.fields["form"].disabled = True
-
     def save(self, commit=True):
         instance = super().save(commit=commit)
         if commit:
