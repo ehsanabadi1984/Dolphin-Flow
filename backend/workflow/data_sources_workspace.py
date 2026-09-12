@@ -55,7 +55,7 @@ def _build_form(model, *, owner_field=None, owner=None, instance=None, data=None
             )
             if self.instance.pk:
                 queryset = queryset.exclude(pk=self.instance.pk)
-            self.fields["parent"].queryset = queryset.order_by("name")
+            self.fields["parent"].queryset = queryset.order_by("label")
 
     def save(self, commit=True):
         obj = forms.ModelForm.save(self, commit=False)
@@ -191,7 +191,7 @@ def data_sources_workspace(request):
                 return redirect(_workspace_url(source, selected_set=owner.pk))
 
     sets = set_model.objects.all().order_by("name")
-    items = selected_set.items.all().order_by("name") if selected_set else item_model.objects.none()
+    items = selected_set.items.all().order_by("label") if selected_set else item_model.objects.none()
 
     set_form = _build_form(
         set_model,
