@@ -2,6 +2,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 
 from .models import WorkflowPermission
+from .history_permissions import HISTORY_ACTION
 
 
 class WorkflowAuthorizationService:
@@ -166,6 +167,9 @@ class WorkflowAuthorizationService:
             and instance.started_by_id == user.pk
         ):
             return True
+
+        # HISTORY is intentionally independent from VIEW.
+        # There is no implicit HISTORY grant for an instance starter.
 
         # -----------------------------------------------------
         # 8. Deny by default
