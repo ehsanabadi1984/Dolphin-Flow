@@ -1,6 +1,6 @@
 from .authorization import WorkflowAuthorizationService
 from .history_permissions import HISTORY_ACTION
-from .models import WorkflowPermission, WorkflowStepExecution
+from .models import WorkflowStepExecution
 
 
 class HistoryBrowserService:
