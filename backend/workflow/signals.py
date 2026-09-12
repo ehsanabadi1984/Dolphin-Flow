@@ -1,26 +1,8 @@
-from django.db.models.signals import post_save, pre_save
+from django.db.models.signals import pre_save
 from django.dispatch import receiver
 
 from .formula_services import FormulaError, FormulaService
-from .history_models import HistoryConfiguration
 from .models import FormData, FormDefinition
-
-
-@receiver(
-    post_save,
-    sender=FormDefinition,
-    dispatch_uid="workflow.ensure_history_configuration",
-)
-def ensure_history_configuration(sender, instance, created, **kwargs):
-    """Ensure every FormDefinition has a HistoryConfiguration."""
-    if created:
-        HistoryConfiguration.objects.get_or_create(
-            form=instance,
-            defaults={
-                "name": f"History - {instance.name}",
-                "is_active": True,
-            },
-        )
 
 
 @receiver(
