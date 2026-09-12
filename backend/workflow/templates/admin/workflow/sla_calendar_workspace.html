@@ -1,0 +1,99 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<style>
+.df-sla{direction:rtl;text-align:right;padding:20px}
+.df-sla-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.df-sla-tabs a{padding:10px 16px;border-radius:10px;background:var(--darkened-bg,#f5f5f5);color:inherit;text-decoration:none}
+.df-sla-tabs a.active{background:var(--selected-row,#e6eef8);font-weight:700}
+.df-sla-grid{display:grid;grid-template-columns:280px 1fr;gap:18px}
+.df-sla-panel{background:var(--body-bg,#fff);border:1px solid var(--hairline-color,#ddd);border-radius:12px;padding:18px;margin-bottom:18px}
+.df-sla-list{display:flex;flex-direction:column;gap:8px}
+.df-sla-list a{display:block;padding:10px 12px;border-radius:8px;color:inherit;text-decoration:none;background:var(--darkened-bg,#f7f7f7)}
+.df-sla-list a.active{background:var(--selected-row,#e9eef5);font-weight:700}
+.df-sla-form p{margin:0 0 12px}.df-sla-form label{display:block;font-weight:600;margin-bottom:4px}.df-sla-form input,.df-sla-form select,.df-sla-form textarea{width:100%;box-sizing:border-box}
+.df-sla-form .submit-row{display:flex;gap:8px;margin-top:14px}.df-sla-form button{padding:8px 14px}
+.df-sla-table{width:100%;border-collapse:collapse}.df-sla-table th,.df-sla-table td{padding:8px;border-bottom:1px solid var(--hairline-color,#ddd);vertical-align:middle}
+.df-sla-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.df-sla-actions form{display:inline}
+.df-sla-muted{color:var(--body-quiet-color,#777)}
+</style>
+
+<div class="df-sla">
+<h1>⏱ SLA و تقویم</h1>
+
+<div class="df-sla-tabs">
+<a href="{% url 'sla_calendar_workspace' %}?tab=calendars" class="{% if tab == 'calendars' %}active{% endif %}">تقویم‌های کاری</a>
+<a href="{% url 'sla_calendar_workspace' %}?tab=sla" class="{% if tab == 'sla' %}active{% endif %}">SLA مراحل</a>
+</div>
+
+{% if tab == 'calendars' %}
+<div class="df-sla-grid">
+<div>
+<div class="df-sla-panel">
+<h2>تقویم‌ها</h2>
+<div class="df-sla-list">
+{% for calendar in calendars %}
+<a class="{% if selected_calendar and selected_calendar.pk == calendar.pk %}active{% endif %}" href="{% url 'sla_calendar_workspace' %}?tab=calendars&calendar={{ calendar.pk }}">{{ calendar.name }}</a>
+{% empty %}<div class="df-sla-muted">تقویمی ثبت نشده است.</div>{% endfor %}
+</div>
+</div>
+<div class="df-sla-panel">
+<h3>{% if selected_calendar %}ویرایش تقویم{% else %}تقویم جدید{% endif %}</h3>
+<form method="post" class="df-sla-form">{% csrf_token %}
+<input type="hidden" name="object_type" value="calendar">
+<input type="hidden" name="action" value="{% if selected_calendar %}edit{% else %}add{% endif %}">
+{% if selected_calendar %}<input type="hidden" name="object_id" value="{{ selected_calendar.pk }}">{% endif %}
+{{ calendar_form.as_p }}
+<div class="submit-row"><button type="submit">ذخیره</button></div>
+</form>
+{% if selected_calendar %}<form method="post" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="object_type" value="calendar"><input type="hidden" name="action" value="delete"><input type="hidden" name="object_id" value="{{ selected_calendar.pk }}"><button type="submit">حذف تقویم</button></form>{% endif %}
+</div>
+</div>
+
+<div>
+{% if selected_calendar %}
+<div class="df-sla-panel">
+<h2>برنامه هفتگی — {{ selected_calendar.name }}</h2>
+<table class="df-sla-table"><thead><tr><th>روز</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>
+{% for schedule in schedules %}
+<tr><td>{{ schedule.get_weekday_display }}</td><td>{% if schedule.is_working %}کاری{% else %}غیرکاری{% endif %}</td><td class="df-sla-actions"><a href="?tab=calendars&calendar={{ selected_calendar.pk }}&schedule={{ schedule.pk }}">بازه‌ها</a><form method="post">{% csrf_token %}<input type="hidden" name="object_type" value="schedule"><input type="hidden" name="action" value="delete"><input type="hidden" name="object_id" value="{{ schedule.pk }}"><button type="submit">حذف</button></form></td></tr>
+{% empty %}<tr><td colspan="3">برنامه‌ای ثبت نشده است.</td></tr>{% endfor %}
+</tbody></table>
+<h3>افزودن روز</h3>
+<form method="post" class="df-sla-form">{% csrf_token %}<input type="hidden" name="object_type" value="schedule"><input type="hidden" name="action" value="add"><input type="hidden" name="calendar_id" value="{{ selected_calendar.pk }}">{{ schedule_form.as_p }}<div class="submit-row"><button type="submit">افزودن</button></div></form>
+</div>
+
+{% if selected_schedule %}
+<div class="df-sla-panel">
+<h3>بازه‌های کاری — {{ selected_schedule.get_weekday_display }}</h3>
+<form method="post" class="df-sla-form">{% csrf_token %}<input type="hidden" name="object_type" value="schedule"><input type="hidden" name="action" value="edit"><input type="hidden" name="object_id" value="{{ selected_schedule.pk }}"><input type="hidden" name="calendar_id" value="{{ selected_calendar.pk }}"><p><label for="id_weekday_edit">روز</label><select id="id_weekday_edit" name="weekday">{% for value,label in schedule_form.fields.weekday.choices %}<option value="{{ value }}" {% if selected_schedule.weekday == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></p><p><label><input type="checkbox" name="is_working" {% if selected_schedule.is_working %}checked{% endif %}> روز کاری</label></p><div class="submit-row"><button type="submit">ذخیره روز</button></div></form>
+<table class="df-sla-table"><thead><tr><th>شروع</th><th>پایان</th><th>عملیات</th></tr></thead><tbody>
+{% for interval in working_intervals %}<tr><td>{{ interval.start_time|time:"H:i" }}</td><td>{{ interval.end_time|time:"H:i" }}</td><td class="df-sla-actions"><form method="post">{% csrf_token %}<input type="hidden" name="object_type" value="working_interval"><input type="hidden" name="action" value="delete"><input type="hidden" name="object_id" value="{{ interval.pk }}"><button type="submit">حذف</button></form></td></tr>{% empty %}<tr><td colspan="3">بازه‌ای ثبت نشده است.</td></tr>{% endfor %}
+</tbody></table>
+<form method="post" class="df-sla-form" style="margin-top:14px">{% csrf_token %}<input type="hidden" name="object_type" value="working_interval"><input type="hidden" name="action" value="add"><input type="hidden" name="schedule_id" value="{{ selected_schedule.pk }}">{{ interval_form.as_p }}<div class="submit-row"><button type="submit">افزودن بازه</button></div></form>
+</div>
+{% endif %}
+
+<div class="df-sla-panel">
+<h2>استثناهای تقویم</h2>
+<table class="df-sla-table"><thead><tr><th>تاریخ</th><th>وضعیت</th><th>عنوان</th><th>عملیات</th></tr></thead><tbody>
+{% for exception in exceptions %}<tr><td>{{ exception.date }}</td><td>{{ exception.get_status_display }}</td><td>{{ exception.title }}</td><td class="df-sla-actions"><a href="?tab=calendars&calendar={{ selected_calendar.pk }}&exception={{ exception.pk }}">بازه‌ها</a><form method="post">{% csrf_token %}<input type="hidden" name="object_type" value="exception"><input type="hidden" name="action" value="delete"><input type="hidden" name="object_id" value="{{ exception.pk }}"><button type="submit">حذف</button></form></td></tr>{% empty %}<tr><td colspan="4">استثنایی ثبت نشده است.</td></tr>{% endfor %}
+</tbody></table>
+<h3>{% if selected_exception %}ویرایش استثنا{% else %}افزودن استثنا{% endif %}</h3>
+<form method="post" class="df-sla-form">{% csrf_token %}<input type="hidden" name="object_type" value="exception"><input type="hidden" name="action" value="{% if selected_exception %}edit{% else %}add{% endif %}"><input type="hidden" name="calendar_id" value="{{ selected_calendar.pk }}">{% if selected_exception %}<input type="hidden" name="object_id" value="{{ selected_exception.pk }}">{% endif %}{{ exception_form.as_p }}<div class="submit-row"><button type="submit">ذخیره</button></div></form>
+{% if selected_exception %}<div style="margin-top:18px"><h3>بازه‌های استثنا</h3><table class="df-sla-table"><thead><tr><th>شروع</th><th>پایان</th><th>عملیات</th></tr></thead><tbody>{% for interval in exception_intervals %}<tr><td>{{ interval.start_time|time:"H:i" }}</td><td>{{ interval.end_time|time:"H:i" }}</td><td><form method="post">{% csrf_token %}<input type="hidden" name="object_type" value="exception_interval"><input type="hidden" name="action" value="delete"><input type="hidden" name="object_id" value="{{ interval.pk }}"><button type="submit">حذف</button></form></td></tr>{% empty %}<tr><td colspan="3">بازه‌ای ثبت نشده است.</td></tr>{% endfor %}</tbody></table><form method="post" class="df-sla-form">{% csrf_token %}<input type="hidden" name="object_type" value="exception_interval"><input type="hidden" name="action" value="add"><input type="hidden" name="exception_id" value="{{ selected_exception.pk }}">{{ exception_interval_form.as_p }}<div class="submit-row"><button type="submit">افزودن بازه</button></div></form></div>{% endif %}
+</div>
+{% else %}<div class="df-sla-panel"><p>برای مدیریت برنامه هفتگی و استثناها، یک تقویم را انتخاب کنید.</p></div>{% endif %}
+</div>
+</div>
+
+{% else %}
+<div class="df-sla-grid">
+<div class="df-sla-panel"><h2>فرآیندها</h2><div class="df-sla-list">{% for workflow in workflows %}<div class="df-sla-panel" style="margin:0"><strong>{{ workflow.name }}</strong><div class="df-sla-list" style="margin-top:8px">{% for step in workflow.steps.all %}<a class="{% if selected_step and selected_step.pk == step.pk %}active{% endif %}" href="?tab=sla&step={{ step.pk }}">{{ step.order }} — {{ step.name }}</a>{% empty %}<span class="df-sla-muted">مرحله‌ای ندارد.</span>{% endfor %}</div></div>{% empty %}<div class="df-sla-muted">فرآیندی ثبت نشده است.</div>{% endfor %}</div></div>
+<div class="df-sla-panel">
+{% if selected_step %}<h2>SLA — {{ selected_step.name }}</h2><p class="df-sla-muted">فرآیند: {{ selected_workflow.name }}</p><form method="post" class="df-sla-form">{% csrf_token %}<input type="hidden" name="object_type" value="sla"><input type="hidden" name="action" value="{% if selected_sla %}edit{% else %}add{% endif %}"><input type="hidden" name="step_id" value="{{ selected_step.pk }}">{% if selected_sla %}<input type="hidden" name="object_id" value="{{ selected_sla.pk }}">{% endif %}{{ sla_form.as_p }}<div class="submit-row"><button type="submit">{% if selected_sla %}ذخیره SLA{% else %}ایجاد SLA{% endif %}</button></div></form>{% if selected_sla %}<form method="post" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="object_type" value="sla"><input type="hidden" name="action" value="delete"><input type="hidden" name="object_id" value="{{ selected_sla.pk }}"><button type="submit">حذف SLA</button></form>{% endif %}{% else %}<h2>Workflow SLA</h2><p>یک مرحله را انتخاب کنید تا تنظیمات SLA همان Step مدیریت شود.</p>{% endif %}
+</div></div>
+{% endif %}
+</div>
+{% endblock %}
