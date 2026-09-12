@@ -10,9 +10,7 @@
 <div class="df-admin-category-header"><h2>{{ category.icon }} {{ category.label }}</h2><p>{{ category.description }}</p></div>
 {% if category_key == "workflows" %}
 <a href="{% url 'process_workspace_list' %}" class="df-admin-workspace-card"><strong>🧭 Process Workspace</strong><span>ساختار فرآیند، مراحل، ارتباط‌ها و مسئول هر مرحله را در یک محیط یکپارچه مدیریت کنید.</span></a>
-{% endif %}
-{% if category_key == "workflows" %}
-<a href="{% url 'admin:workflow_workflow_changelist' %}" class="df-admin-workspace-card"><strong>🔐 Access &amp; Security Workspace</strong><span>اعضا و تمام دسترسی‌های موجود Workflow، Step، Transition، Field و Repeatable Group را مدیریت کنید.</span></a>
+<a href="{% url 'access_security_workspace_list' %}" class="df-admin-workspace-card"><strong>🔐 Access &amp; Security Workspace</strong><span>اعضا و تمام دسترسی‌های موجود Workflow، Step، Transition، Field و Repeatable Group را مدیریت کنید.</span></a>
 {% endif %}
 {% for section_key, section in category.sections.items %}
 <div class="df-admin-section"><h3>{{ section.label }}</h3><div class="df-admin-models">
