@@ -51,6 +51,8 @@ class DeviceTypeWorkspaceForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["code"].required = False
+        if self.instance.pk:
+            self.fields["code"].disabled = True
 
 
 class DeviceModelWorkspaceForm(forms.ModelForm):
@@ -64,6 +66,8 @@ class DeviceModelWorkspaceForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["code"].required = False
+        if self.instance.pk:
+            self.fields["code"].disabled = True
 
 
 class DeviceWorkspaceForm(forms.ModelForm):
