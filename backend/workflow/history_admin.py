@@ -10,7 +10,21 @@ from .history_models import HistoryConfiguration, HistoryField, HistoryRecord
 from .models import Device, FormField
 
 
+class HistoryFieldChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        parts = [obj.section.name]
+        if obj.repeatable_group_id:
+            parts.append(obj.repeatable_group.name)
+        parts.append(obj.label)
+        return " → ".join(parts)
+
+
 class HistoryFieldInlineForm(forms.ModelForm):
+    form_field = HistoryFieldChoiceField(
+        queryset=FormField.objects.none(),
+        label="فیلد فرم",
+    )
+
     class Meta:
         model = HistoryField
         fields = "__all__"
@@ -18,13 +32,26 @@ class HistoryFieldInlineForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        configuration = self.instance.configuration if self.instance and self.instance.pk else None
+        configuration = (
+            self.instance.configuration
+            if self.instance and self.instance.pk
+            else None
+        )
         if configuration:
             self.fields["form_field"].queryset = (
                 FormField.objects
-                .filter(section__form_id=configuration.form_id)
+                .filter(
+                    section__form_id=configuration.form_id,
+                    section__is_active=True,
+                    is_active=True,
+                )
                 .select_related("section", "repeatable_group")
-                .order_by("section__order", "order", "id")
+                .order_by(
+                    "section__order",
+                    "repeatable_group__order",
+                    "order",
+                    "id",
+                )
             )
         else:
             self.fields["form_field"].queryset = FormField.objects.none()
@@ -48,9 +75,18 @@ class HistoryFieldInline(admin.TabularInline):
         if obj:
             queryset = (
                 FormField.objects
-                .filter(section__form_id=obj.form_id)
+                .filter(
+                    section__form_id=obj.form_id,
+                    section__is_active=True,
+                    is_active=True,
+                )
                 .select_related("section", "repeatable_group")
-                .order_by("section__order", "order", "id")
+                .order_by(
+                    "section__order",
+                    "repeatable_group__order",
+                    "order",
+                    "id",
+                )
             )
             formset.form.base_fields["form_field"].queryset = queryset
 
@@ -95,6 +131,20 @@ class HistoryConfigurationAdmin(admin.ModelAdmin):
     inlines = (
         HistoryFieldInline,
     )
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = ["created_at", "updated_at"]
+        if obj:
+            fields.insert(0, "form")
+        return tuple(fields)
+
+    def save_formset(self, request, form, formset, change):
+        instances = formset.save(commit=False)
+        for instance in instances:
+            if not instance.display_label and instance.form_field_id:
+                instance.display_label = instance.form_field.label
+            instance.save()
+        formset.save_m2m()
 
     @admin.display(description="تعداد فیلدها")
     def field_count(self, obj):
@@ -208,7 +258,7 @@ class HistoryRecordAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
-    def has_delete_permission(self, request, obj=None):
+    def has_delete_permission(self, request):
         return False
 
     def change_view(self, request, object_id, form_url="", extra_context=None):
