@@ -6,8 +6,8 @@ from django.urls import reverse
 from django.utils.html import format_html
 
 from .admin import dolphin_admin_site
-from .history_models import HistoryConfiguration, HistoryField
-from .models import Device, FormField, WorkflowStepExecution
+from .history_models import HistoryConfiguration, HistoryField, HistoryRecord
+from .models import Device, FormField
 
 
 class HistoryFieldInlineForm(forms.ModelForm):
@@ -99,13 +99,6 @@ class HistoryConfigurationAdmin(admin.ModelAdmin):
     @admin.display(description="تعداد فیلدها")
     def field_count(self, obj):
         return obj.fields.count()
-
-
-class HistoryRecord(WorkflowStepExecution):
-    class Meta:
-        proxy = True
-        verbose_name = "سابقه"
-        verbose_name_plural = "سوابق"
 
 
 class HistoryDeviceFilter(admin.SimpleListFilter):
