@@ -45,31 +45,36 @@ def _editable_fields(model, excluded=()):
 def _build_form(model, *, owner_field=None, owner=None, instance=None, data=None):
     excluded = (owner_field,) if owner_field else ()
     fields = _editable_fields(model, excluded=excluded)
+    meta = type("Meta", (), {"model": model, "fields": fields})
 
-    class WorkspaceModelForm(forms.ModelForm):
-        class Meta:
-            model = model
-            fields = fields
+    def __init__(self, *args, **kwargs):
+        forms.ModelForm.__init__(self, *args, **kwargs)
+        if model is LookupItem and "parent" in self.fields and owner:
+            queryset = LookupItem.objects.filter(
+                lookup_list=owner,
+            )
+            if self.instance.pk:
+                queryset = queryset.exclude(pk=self.instance.pk)
+            self.fields["parent"].queryset = queryset.order_by("name")
 
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            if owner_field and owner_field in self.fields:
-                self.fields.pop(owner_field)
-            if model is LookupItem and "parent" in self.fields and owner:
-                queryset = LookupItem.objects.filter(
-                    lookup_list=owner,
-                ).exclude(pk=self.instance.pk if self.instance.pk else None)
-                self.fields["parent"].queryset = queryset.order_by("name")
+    def save(self, commit=True):
+        obj = forms.ModelForm.save(self, commit=False)
+        if owner_field and owner is not None:
+            setattr(obj, owner_field, owner)
+        if commit:
+            obj.save()
+        return obj
 
-        def save(self, commit=True):
-            obj = super().save(commit=False)
-            if owner_field and owner is not None:
-                setattr(obj, owner_field, owner)
-            if commit:
-                obj.save()
-            return obj
-
-    return WorkspaceModelForm(data=data, instance=instance)
+    form_class = type(
+        "WorkspaceModelForm",
+        (forms.ModelForm,),
+        {
+            "Meta": meta,
+            "__init__": __init__,
+            "save": save,
+        },
+    )
+    return form_class(data=data, instance=instance)
 
 
 def _workspace_url(source, *, selected_set=None, selected_item=None):
