@@ -1,14 +1,51 @@
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, render
 
 from workflow.authorization import WorkflowAuthorizationService
-from workflow.history_services import HistoryService
+from workflow.history_browser_service import HistoryBrowserService
+from workflow.history_permissions import HISTORY_ACTION
 from workflow.models import (
     Device,
     InstanceDevice,
     WorkflowInstance,
-    WorkflowPermission,
 )
+
+
+@login_required
+def workflow_history(request, instance_id):
+    instance = get_object_or_404(
+        WorkflowInstance.objects.select_related(
+            "workflow",
+            "current_step",
+        ),
+        pk=instance_id,
+    )
+
+    history = HistoryBrowserService.get_history(
+        user=request.user,
+        instance_id=instance.pk,
+    )
+
+    if not history and HistoryBrowserService.has_stored_history(
+        instance_id=instance.pk,
+    ):
+        raise PermissionDenied("کاربر اجازه مشاهده سوابق این فرآیند را ندارد.")
+
+    return render(
+        request,
+        "operator_panel/history.html",
+        {
+            "instance": instance,
+            "device": None,
+            "history": history,
+            "legacy_histories": [],
+            "history_title": "سوابق اجرای فرآیند",
+            "history_subtitle": instance.workflow.name,
+            "page_title": "سوابق",
+            "page_breadcrumb": "سوابق",
+        },
+    )
 
 
 @login_required
@@ -21,30 +58,27 @@ def device_history(request, instance_id, device_id):
         pk=instance_id,
     )
 
-    WorkflowAuthorizationService.require_permission(
-        user=request.user,
-        workflow=instance.workflow,
-        action=WorkflowPermission.Action.VIEW,
-        step=instance.current_step,
-        instance=instance,
-    )
-
     device = get_object_or_404(
         Device,
         pk=device_id,
         workflow_instances__instance=instance,
     )
 
-    history = HistoryService.get_device_history(
+    history = HistoryBrowserService.get_history(
         device_id=device_id,
         user=request.user,
     )
 
-    # Keep pre-Phase-2 history visible until those records are naturally
-    # replaced by immutable snapshots. New records are rendered only from
-    # the stored snapshot and never read back from live InstanceDevice data.
     legacy_histories = []
-    if not history:
+    if not history and not HistoryBrowserService.has_stored_history(
+        device_id=device_id,
+    ):
+        WorkflowAuthorizationService.require_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=HISTORY_ACTION,
+        )
+
         legacy_histories = (
             InstanceDevice.objects.filter(
                 device=device,
@@ -60,6 +94,11 @@ def device_history(request, instance_id, device_id):
             .order_by("-received_at")
         )
 
+    elif not history and HistoryBrowserService.has_stored_history(
+        device_id=device_id,
+    ):
+        raise PermissionDenied("کاربر اجازه مشاهده سوابق این دستگاه را ندارد.")
+
     return render(
         request,
         "operator_panel/history.html",
@@ -68,6 +107,8 @@ def device_history(request, instance_id, device_id):
             "device": device,
             "history": history,
             "legacy_histories": legacy_histories,
+            "history_title": "سوابق دستگاه",
+            "history_subtitle": str(device),
             "page_title": "سوابق",
             "page_breadcrumb": "سوابق",
         },
