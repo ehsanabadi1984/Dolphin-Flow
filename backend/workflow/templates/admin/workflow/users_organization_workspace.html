@@ -63,7 +63,7 @@
                 {% endif %}
                 <div class="df-uow-actions"><button type="submit" class="button">ذخیره</button>{% if editing_user %}<a class="button" href="?tab=users">کاربر جدید</a>{% endif %}</div>
             </form>
-            {% if editing_user and editing_user.pk != request.user.pk and not editing_user.is_superuser %}
+            {% if editing_user and editing_user.pk != request.user.pk %}
             <form method="post" class="df-uow-actions" onsubmit="return confirm('این کاربر حذف شود؟');">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="object_id" value="{{ editing_user.pk }}"><button type="submit" class="button df-uow-danger">حذف کاربر</button></form>
             {% endif %}
         </div>
