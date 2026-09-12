@@ -211,7 +211,7 @@ class CalendarService:
         while current_date <= end_date:
             intervals = CalendarService.get_working_intervals(
                 calendar=calendar,
-                date=current_date,
+                value=current_date,
             )
 
             for interval_start, interval_end in intervals:
