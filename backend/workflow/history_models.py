@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from .models import WorkflowStepExecution
+
 
 class HistoryConfiguration(models.Model):
     form = models.OneToOneField(
@@ -85,3 +87,12 @@ class HistoryField(models.Model):
 
     def __str__(self):
         return self.display_label or self.form_field.label
+
+
+class HistoryRecord(WorkflowStepExecution):
+    """Proxy model exposing stored History snapshots in Admin."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "سابقه"
+        verbose_name_plural = "سوابق"
