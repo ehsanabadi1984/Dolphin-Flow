@@ -1,0 +1,96 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="module">
+    <h1>{{ title }}</h1>
+
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-bottom:1.5rem;">
+        <div>
+            <strong>فرآیند:</strong>
+            {{ execution.instance.workflow.name }}
+        </div>
+        <div>
+            <strong>نمونه:</strong>
+            #{{ execution.instance.pk }}
+        </div>
+        <div>
+            <strong>مرحله:</strong>
+            {{ execution.workflow_step.name }}
+        </div>
+        <div>
+            <strong>ثبت‌کننده:</strong>
+            {{ execution.performed_by }}
+        </div>
+        <div>
+            <strong>زمان ثبت:</strong>
+            {{ execution.submitted_at|date:"Y/m/d H:i:s" }}
+        </div>
+        <div>
+            <strong>Snapshot version:</strong>
+            {{ snapshot.version|default:"—" }}
+        </div>
+    </div>
+</div>
+
+{% if snapshot.fields %}
+<div class="module">
+    <h2>فیلدهای ثبت‌شده</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>عنوان</th>
+                <th>کد</th>
+                <th>مقدار</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for field in snapshot.fields %}
+            <tr>
+                <td>{{ field.display_label|default:field.label }}</td>
+                <td>{{ field.code }}</td>
+                <td>{% if field.display_value %}{{ field.display_value }}{% elif field.value %}{{ field.value }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% for group in snapshot.repeatable_groups %}
+<div class="module">
+    <h2>{{ group.name }}</h2>
+
+    {% for item in group.items %}
+        <div style="margin:1rem 0 1.5rem;">
+            <h3>آیتم {{ forloop.counter }}</h3>
+            <table>
+                <thead>
+                    <tr>
+                        {% for field in item.fields %}
+                            <th>{{ field.display_label|default:field.label }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        {% for field in item.fields %}
+                            <td>{% if field.display_value %}{{ field.display_value }}{% elif field.value %}{{ field.value }}{% else %}—{% endif %}</td>
+                        {% endfor %}
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    {% endfor %}
+</div>
+{% endfor %}
+
+{% if not snapshot.fields and not snapshot.repeatable_groups %}
+<div class="messagelist">
+    <div class="warning">این اجرای مرحله Snapshot قابل نمایش ندارد.</div>
+</div>
+{% endif %}
+
+<div class="submit-row">
+    <a href="{{ changelist_url }}" class="button">بازگشت به سوابق</a>
+</div>
+{% endblock %}
