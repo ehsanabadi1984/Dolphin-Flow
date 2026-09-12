@@ -49,12 +49,6 @@ class WorkflowPermissionWorkspaceForm(forms.ModelForm):
         self.fields["transition"].queryset = WorkflowTransition.objects.filter(workflow=workflow, is_active=True).order_by("from_step__order", "to_step__order")
         self.fields["user"].queryset = User.objects.filter(is_active=True).order_by("username")
 
-    def clean(self):
-        cleaned = super().clean()
-        if cleaned.get("step") and cleaned.get("transition"):
-            raise forms.ValidationError("یک Permission نمی‌تواند همزمان برای Step و Transition ثبت شود.")
-        return cleaned
-
     def save(self, commit=True):
         obj = super().save(commit=False)
         obj.workflow = self.workflow
