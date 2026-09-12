@@ -9,6 +9,7 @@ from workflow.models import (
     Device,
     InstanceDevice,
     WorkflowInstance,
+    WorkflowPermission,
 )
 
 
@@ -31,6 +32,15 @@ def workflow_history(request, instance_id):
         instance_id=instance.pk,
     ):
         raise PermissionDenied("کاربر اجازه مشاهده سوابق این فرآیند را ندارد.")
+
+    if not history:
+        WorkflowAuthorizationService.require_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.VIEW,
+            step=instance.current_step,
+            instance=instance,
+        )
 
     return render(
         request,
