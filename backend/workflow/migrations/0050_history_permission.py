@@ -45,8 +45,10 @@ def forwards(apps, schema_editor):
 
 
 def backwards(apps, schema_editor):
-    WorkflowPermission = apps.get_model("workflow", "WorkflowPermission")
-    WorkflowPermission.objects.filter(action=HISTORY_ACTION).delete()
+    # HISTORY permissions are valid data after the migration. Do not delete
+    # them on rollback because that could remove permissions created manually
+    # after the migration was applied.
+    pass
 
 
 class Migration(migrations.Migration):
