@@ -85,8 +85,8 @@
 
 <label>روزها</label>
 <div class="df-bulk-days">
-{% for value,label in bulk_form.fields.weekdays.choices %}
-<label class="df-bulk-day"><input type="checkbox" name="weekdays" value="{{ value }}" {% if value in bulk_form.data|getlist:'weekdays' %}checked{% endif %}> <span>{{ label }}</span></label>
+{% for checkbox in bulk_form.weekdays %}
+<label class="df-bulk-day">{{ checkbox.tag }} <span>{{ checkbox.choice_label }}</span></label>
 {% endfor %}
 </div>
 
@@ -155,8 +155,7 @@ function removeBulkInterval(button) {
     if (rows.length > 1) {
         button.closest('.df-bulk-interval').remove();
     } else {
-        const row = button.closest('.df-bulk-interval');
-        row.querySelectorAll('input').forEach(input => input.value = '');
+        button.closest('.df-bulk-interval').querySelectorAll('input').forEach(input => input.value = '');
     }
 }
 </script>
