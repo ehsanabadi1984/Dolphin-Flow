@@ -42,7 +42,7 @@ class WorkingIntervalWorkspaceForm(forms.ModelForm):
 class BulkWorkingScheduleWorkspaceForm(forms.Form):
     weekdays = forms.MultipleChoiceField(
         label="روزهای کاری",
-        choices=WeeklySchedule.Weekday.choices,
+        choices=WeeklySchedule._meta.get_field("weekday").choices,
         widget=forms.CheckboxSelectMultiple,
         required=True,
     )
