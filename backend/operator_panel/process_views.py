@@ -8,6 +8,7 @@ from django.shortcuts import render
 
 from workflow.models import WorkflowInstance
 
+from .dashboard_enhancements import DashboardEnhancementService
 from .dashboard_services import DashboardService, _can_take_action_q
 
 
@@ -108,4 +109,18 @@ def assigned_tasks(request):
         "selected_workflow": workflow_id,
         "page_title": "وظایف اختصاص‌یافته به من",
         "page_breadcrumb": "وظایف اختصاص‌یافته به من",
+    })
+
+
+@login_required
+def waiting_for_others(request):
+    """List all active processes started by the user and assigned to another operator."""
+    instances = DashboardEnhancementService(request.user).waiting_for_others_queryset()
+    paginator = Paginator(instances, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(request, "operator_panel/waiting_for_others.html", {
+        "page_obj": page_obj,
+        "instances": page_obj.object_list,
+        "page_title": "در انتظار اقدام دیگران",
+        "page_breadcrumb": "در انتظار اقدام دیگران",
     })
