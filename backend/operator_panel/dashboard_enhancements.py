@@ -1,13 +1,13 @@
 from django.utils import timezone
 
-from workflow.models import Notification
+from accounts.models import UserPreference
 
 from .dashboard_services import DashboardService
 
 
 NEXT_ACTION_LIMIT = 5
 WAITING_OTHERS_LIMIT = 5
-PERSONAL_UPDATES_LIMIT = 5
+UNFINISHED_PROCESSES_LIMIT = 5
 
 
 class DashboardEnhancementService:
@@ -19,12 +19,55 @@ class DashboardEnhancementService:
 
     def get_context(self):
         waiting_queryset = self.waiting_for_others_queryset()
+        unfinished_queryset = self.unfinished_processes_queryset(include_hidden=False)
+        unfinished_processes = list(unfinished_queryset[:UNFINISHED_PROCESSES_LIMIT])
+        self.dashboard._attach_dashboard_state(unfinished_processes, now=timezone.now())
+
         return {
             "next_best_actions": self._next_best_actions(),
             "waiting_for_others": list(waiting_queryset[:WAITING_OTHERS_LIMIT]),
             "waiting_for_others_count": waiting_queryset.count(),
-            "personal_updates": self._personal_updates(),
+            "unfinished_processes": unfinished_processes,
+            "unfinished_processes_count": unfinished_queryset.count(),
         }
+
+    def _user_preference(self):
+        preference, _ = UserPreference.objects.get_or_create(user=self.user)
+        return preference
+
+    def hidden_process_ids(self):
+        preference = self._user_preference()
+        return {
+            int(value)
+            for value in (preference.hidden_dashboard_process_ids or [])
+            if str(value).isdigit()
+        }
+
+    def unfinished_processes_queryset(self, *, include_hidden=True):
+        queryset = (
+            self.dashboard._my_active_queryset()
+            .select_related("workflow", "current_step")
+            .order_by("-started_at")
+        )
+        if not include_hidden:
+            hidden_ids = self.hidden_process_ids()
+            if hidden_ids:
+                queryset = queryset.exclude(pk__in=hidden_ids)
+        return queryset
+
+    def hide_process(self, instance_id):
+        preference = self._user_preference()
+        hidden_ids = self.hidden_process_ids()
+        hidden_ids.add(int(instance_id))
+        preference.hidden_dashboard_process_ids = sorted(hidden_ids)
+        preference.save(update_fields=["hidden_dashboard_process_ids"])
+
+    def restore_process(self, instance_id):
+        preference = self._user_preference()
+        hidden_ids = self.hidden_process_ids()
+        hidden_ids.discard(int(instance_id))
+        preference.hidden_dashboard_process_ids = sorted(hidden_ids)
+        preference.save(update_fields=["hidden_dashboard_process_ids"])
 
     def waiting_for_others_queryset(self):
         """The user's own active processes currently assigned to another operator."""
@@ -80,15 +123,3 @@ class DashboardEnhancementService:
                 instance.dashboard_priority_class = "normal"
 
         return instances[:NEXT_ACTION_LIMIT]
-
-    def _personal_updates(self):
-        """Unread notifications addressed to this operator only."""
-        return list(
-            Notification.objects
-            .filter(
-                recipient=self.user,
-                is_read=False,
-            )
-            .select_related("workflow_instance", "workflow_step")
-            .order_by("-created_at")[:PERSONAL_UPDATES_LIMIT]
-        )
