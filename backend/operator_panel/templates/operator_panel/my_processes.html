@@ -82,7 +82,8 @@
                             <span>·</span><span>{{ instance.get_status_display }}</span><span>·</span><span>تاریخ ایجاد: {{ instance.started_at|date:"Y/m/d - H:i" }}</span>
                         </div>
                     </div>
-                    <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
+                    <a href="{% url 'operator_panel:workflow_instance' instance.pk %}?source=my_processes"
+                        class="df-status df-status-success">مشاهده</a>
                 </div>
             {% empty %}
                 <div class="df-empty-state"><div class="df-empty-state-title">فرآیندی پیدا نشد.</div><div class="df-empty-state-meta">فیلترها یا عبارت جستجو را تغییر دهید.</div></div>

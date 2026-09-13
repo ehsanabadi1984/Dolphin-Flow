@@ -291,6 +291,24 @@ def workflow_instance(request, instance_id):
         .first()
     )
 
+    no_longer_my_task = (
+        request.GET.get("source") == "my_processes"
+        and instance.current_step.assigned_to_id
+        and instance.current_step.assigned_to_id != request.user.id
+    )
+
+    if no_longer_my_task:
+        return render(
+            request,
+            "operator_panel/workflow_instance.html",
+            {
+                "instance": instance,
+                "no_longer_my_task": True,
+                "page_title": instance.workflow.name,
+                "page_breadcrumb": instance.workflow.name,
+            },
+        )
+
     # ---------------------------------------------------------
     # Determine whether current step is submitted
     # ---------------------------------------------------------

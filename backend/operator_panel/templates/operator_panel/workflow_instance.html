@@ -19,7 +19,15 @@
     مرحله فعلی:
     <strong> {{ instance.current_step.name }} </strong>
   </p>
-  {% endif %} {% if dynamic_form %} 
+  {% endif %} 
+
+  {% if no_longer_my_task %}
+
+  <div class="df-message df-message-info">
+    این فرآیند به مرحله «{{ instance.current_step.name }}» ارسال شده است و از لیست وظایف شما خارج گردیده است.
+  </div>
+
+{% elif dynamic_form %}
 
   <form
     method="post"
