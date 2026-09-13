@@ -115,15 +115,40 @@ class WorkflowOverrideServiceTests(TestCase):
 
         self.instance.refresh_from_db()
         self.current_execution.refresh_from_db()
+        new_execution.refresh_from_db()
 
         self.assertEqual(self.instance.current_step_id, self.step_b.id)
         self.assertEqual(self.instance.status, WorkflowInstance.Status.ACTIVE)
         self.assertFalse(new_execution.is_submitted)
         self.assertEqual(new_execution.workflow_step_id, self.step_b.id)
-        self.assertEqual(new_execution.data["override"]["from_step_id"], self.step_c.id)
-        self.assertEqual(new_execution.data["override"]["reason"], "اصلاح اشتباه مسیر")
+        self.assertTrue(
+            new_execution.notes.startswith(
+                WorkflowOverrideService.OVERRIDE_NOTE_PREFIX
+            )
+        )
+        self.assertIn("C → B", new_execution.notes)
+        self.assertIn("اصلاح اشتباه مسیر", new_execution.notes)
         self.assertTrue(self.current_execution.pk != new_execution.pk)
         self.assertFalse(self.current_execution.is_submitted)
+
+    def test_override_audit_note_survives_step_submission(self):
+        new_execution = WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="اصلاح مسیر قبلی",
+        )
+
+        original_note = new_execution.notes
+        new_execution.is_submitted = True
+        new_execution.submitted_at = timezone.now()
+        new_execution.data = {"history": {"fields": [], "repeatable_groups": []}}
+        new_execution.save(
+            update_fields=["is_submitted", "submitted_at", "data"]
+        )
+
+        new_execution.refresh_from_db()
+        self.assertEqual(new_execution.notes, original_note)
 
     def test_completed_instance_is_reopened(self):
         self.instance.current_step = None
