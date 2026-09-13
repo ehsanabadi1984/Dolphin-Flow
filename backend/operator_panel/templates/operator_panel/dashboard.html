@@ -31,74 +31,42 @@
 
     <section class="df-kpis">
         <a href="{% url 'operator_panel:assigned_tasks' %}" class="df-card df-kpi">
-            <div class="df-kpi-label">وظایف من</div>
-            <div class="df-kpi-value">{{ summary.tasks }}</div>
-            <div class="df-kpi-meta">وظایف فعال اختصاص‌یافته به شما</div>
+            <div class="df-kpi-label">وظایف من</div><div class="df-kpi-value">{{ summary.tasks }}</div><div class="df-kpi-meta">وظایف فعال اختصاص‌یافته به شما</div>
         </a>
-        <div class="df-card df-kpi">
-            <div class="df-kpi-label">قابل اقدام</div>
-            <div class="df-kpi-value">{{ summary.pending }}</div>
-            <div class="df-kpi-meta">فرآیندهایی که اکنون می‌توانید روی آن‌ها اقدام کنید</div>
-        </div>
-        <div class="df-card df-kpi">
-            <div class="df-kpi-label">نزدیک به SLA</div>
-            <div class="df-kpi-value">{{ summary.sla_warning }}</div>
-            <div class="df-kpi-meta">مواردی که به سررسید نزدیک شده‌اند</div>
-        </div>
-        <div class="df-card df-kpi">
-            <div class="df-kpi-label">عقب‌افتاده</div>
-            <div class="df-kpi-value">{{ summary.sla_breached }}</div>
-            <div class="df-kpi-meta">مواردی که SLA آن‌ها گذشته است</div>
-        </div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">قابل اقدام</div><div class="df-kpi-value">{{ summary.pending }}</div><div class="df-kpi-meta">فرآیندهایی که اکنون می‌توانید روی آن‌ها اقدام کنید</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">نزدیک به SLA</div><div class="df-kpi-value">{{ summary.sla_warning }}</div><div class="df-kpi-meta">مواردی که به سررسید نزدیک شده‌اند</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">عقب‌افتاده</div><div class="df-kpi-value">{{ summary.sla_breached }}</div><div class="df-kpi-meta">مواردی که SLA آن‌ها گذشته است</div></div>
     </section>
 
     <section class="df-card df-panel" id="pending-actions">
-        <div class="df-panel-header">
-            <div class="df-panel-title">نیازمند اقدام</div>
-            <div class="df-dashboard-actions"><span class="df-panel-link">{{ summary.pending }} مورد</span></div>
-        </div>
+        <div class="df-panel-header"><div class="df-panel-title">نیازمند اقدام</div><span class="df-panel-link">{{ summary.pending }} مورد</span></div>
         <div class="df-activity df-dashboard-scroll df-pending-actions-scroll">
             {% for instance in pending_actions %}
                 <div class="df-activity-item">
-                    <div class="df-dashboard-priority {% if instance.dashboard_sla.status == 'breached' %}df-dashboard-priority-danger{% elif instance.dashboard_sla.status == 'warning' %}df-dashboard-priority-warning{% endif %}"></div>
+                    <div class="df-dashboard-priority"></div>
                     <div class="df-activity-main">
                         <div class="df-activity-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
                         <div class="df-activity-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}نیازمند اقدام</div>
                     </div>
                     <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-warning">اقدام</a>
                 </div>
-            {% empty %}
-                <div class="df-dashboard-empty">در حال حاضر کاری که نیازمند اقدام شما باشد وجود ندارد.</div>
-            {% endfor %}
+            {% empty %}<div class="df-dashboard-empty">در حال حاضر کاری که نیازمند اقدام شما باشد وجود ندارد.</div>{% endfor %}
         </div>
     </section>
 
     <section class="df-grid">
         <div class="df-card df-panel">
-            <div class="df-panel-header">
-                <div class="df-panel-title">فرآیندهای من</div>
-                <a href="{% url 'operator_panel:my_processes' %}" class="df-panel-link">مشاهده همه</a>
-            </div>
+            <div class="df-panel-header"><div class="df-panel-title">فرآیندهای من</div><a href="{% url 'operator_panel:my_processes' %}" class="df-panel-link">مشاهده همه</a></div>
             <div class="df-dashboard-scroll">
                 {% for instance in active_processes|slice:":5" %}
                     <article class="df-process-card">
                         <div class="df-process-card-header">
-                            <div>
-                                <div class="df-process-card-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
-                                <div class="df-process-card-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}شروع {{ instance.started_at|timesince }} قبل</div>
-                            </div>
+                            <div><div class="df-process-card-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div><div class="df-process-card-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}شروع {{ instance.started_at|timesince }} قبل</div></div>
                             <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
                         </div>
-                        {% if instance.dashboard_sla.configured %}
-                            <div class="df-sla-row">
-                                <span class="df-sla-status {% if instance.dashboard_sla.status == 'breached' %}df-sla-breached{% elif instance.dashboard_sla.status == 'warning' %}df-sla-warning{% elif instance.dashboard_sla.status == 'on_track' %}df-sla-on-track{% endif %}">{{ instance.dashboard_sla.label }}</span>
-                                <span>سررسید: {{ instance.dashboard_sla.due_at|date:"Y/m/d H:i" }}</span>
-                            </div>
-                        {% endif %}
+                        {% if instance.dashboard_sla.configured %}<div class="df-sla-row"><span class="df-sla-status {% if instance.dashboard_sla.status == 'breached' %}df-sla-breached{% elif instance.dashboard_sla.status == 'warning' %}df-sla-warning{% elif instance.dashboard_sla.status == 'on_track' %}df-sla-on-track{% endif %}">{{ instance.dashboard_sla.label }}</span><span>سررسید: {{ instance.dashboard_sla.due_at|date:"Y/m/d H:i" }}</span></div>{% endif %}
                     </article>
-                {% empty %}
-                    <div class="df-dashboard-empty">در حال حاضر فرآیند فعالی که توسط شما شروع شده باشد وجود ندارد.</div>
-                {% endfor %}
+                {% empty %}<div class="df-dashboard-empty">در حال حاضر فرآیند فعالی که توسط شما شروع شده باشد وجود ندارد.</div>{% endfor %}
             </div>
         </div>
 
@@ -106,19 +74,8 @@
             <div class="df-panel-header"><div class="df-panel-title">شروع سریع</div></div>
             <div class="df-activity">
                 {% for workflow in startable_workflows|slice:":4" %}
-                    <div class="df-activity-item">
-                        <div class="df-dashboard-priority"></div>
-                        <div class="df-activity-main">
-                            <div class="df-activity-title">{{ workflow.name }}</div>
-                            {% if workflow.description %}<div class="df-activity-meta">{{ workflow.description }}</div>{% endif %}
-                        </div>
-                        <form method="post" action="{% url 'operator_panel:start_workflow' workflow.pk %}">
-                            {% csrf_token %}<button type="submit" class="df-status df-status-info">شروع</button>
-                        </form>
-                    </div>
-                {% empty %}
-                    <div class="df-dashboard-empty">در حال حاضر فرآیندی برای شروع در دسترس شما نیست.</div>
-                {% endfor %}
+                    <div class="df-activity-item"><div class="df-dashboard-priority"></div><div class="df-activity-main"><div class="df-activity-title">{{ workflow.name }}</div>{% if workflow.description %}<div class="df-activity-meta">{{ workflow.description }}</div>{% endif %}</div><form method="post" action="{% url 'operator_panel:start_workflow' workflow.pk %}">{% csrf_token %}<button type="submit" class="df-status df-status-info">شروع</button></form></div>
+                {% empty %}<div class="df-dashboard-empty">در حال حاضر فرآیندی برای شروع در دسترس شما نیست.</div>{% endfor %}
             </div>
         </div>
     </section>
@@ -127,12 +84,8 @@
     <section class="df-card df-panel">
         <div class="df-panel-header"><div class="df-panel-title">هشدارهای SLA</div></div>
         <div class="df-activity">
-            {% if summary.sla_breached %}
-                <div class="df-activity-item"><div class="df-dashboard-priority df-dashboard-priority-danger"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.sla_breached }} مورد از SLA عبور کرده است</div><div class="df-activity-meta">این موارد را در اولویت بررسی قرار دهید.</div></div></div>
-            {% endif %}
-            {% if summary.sla_warning %}
-                <div class="df-activity-item"><div class="df-dashboard-priority df-dashboard-priority-warning"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.sla_warning }} مورد نزدیک به سررسید SLA است</div><div class="df-activity-meta">برای جلوگیری از تأخیر، این موارد را بررسی کنید.</div></div></div>
-            {% endif %}
+            {% if summary.sla_breached %}<div class="df-activity-item"><div class="df-dashboard-priority df-dashboard-priority-danger"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.sla_breached }} مورد از SLA عبور کرده است</div><div class="df-activity-meta">این موارد را در اولویت بررسی قرار دهید.</div></div></div>{% endif %}
+            {% if summary.sla_warning %}<div class="df-activity-item"><div class="df-dashboard-priority df-dashboard-priority-warning"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.sla_warning }} مورد نزدیک به سررسید SLA است</div><div class="df-activity-meta">برای جلوگیری از تأخیر، این موارد را بررسی کنید.</div></div></div>{% endif %}
         </div>
     </section>
     {% endif %}
