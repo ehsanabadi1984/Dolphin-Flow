@@ -9,8 +9,10 @@ class WorkflowConfig(AppConfig):
         from .form_file_models import FormFile  # noqa: F401
         from .history_models import HistoryConfiguration, HistoryField  # noqa: F401
         from .history_permissions import HISTORY_ACTION, HISTORY_ACTION_LABEL
+        from .branding_models import SystemBranding  # noqa: F401
         from django.contrib.admin import autodiscover
         autodiscover()
+        from .branding_admin import SystemBrandingAdmin  # noqa: F401
         from .history_admin import HistoryConfigurationAdmin  # noqa: F401
         from .override_admin import WorkflowInstanceOverrideAdmin  # noqa: F401
         from .formula_bootstrap import bootstrap_formula_system
