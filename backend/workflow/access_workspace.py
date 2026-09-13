@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -110,8 +111,26 @@ class RepeatableGroupAccessWorkspaceForm(forms.ModelForm):
 
 def _workspace_url(workflow, **params):
     url = reverse("access_security_workspace", kwargs={"workflow_id": workflow.pk})
-    query = "&".join(f"{k}={v}" for k, v in params.items() if v not in (None, ""))
+    query = "&".join(
+        f"{k}={v}" for k, v in params.items() if v not in (None, "")
+    )
     return f"{url}?{query}" if query else url
+
+
+def _section_filter_params(source, selected):
+    prefix = {
+        "workflow-permissions": "permission_",
+        "field-access": "field_",
+        "group-access": "group_",
+    }.get(selected)
+    if not prefix:
+        return {}
+    allowed = {
+        "workflow-permissions": ("permission_user", "permission_role", "permission_action", "permission_effect", "permission_step"),
+        "field-access": ("field_user", "field_role", "field_field", "field_step"),
+        "group-access": ("group_user", "group_role", "group_group", "group_step"),
+    }[selected]
+    return {key: source.get(key, "").strip() for key in allowed if source.get(key, "").strip()}
 
 
 def access_security_workspace_list(request):
@@ -131,15 +150,126 @@ def _empty_forms(workflow):
     }
 
 
-def _base_context(workflow, selected):
+def _base_context(workflow, selected, request):
     context = _empty_forms(workflow)
+    permissions = workflow.permissions.select_related(
+        "user", "step", "transition"
+    ).order_by(
+        "step__order",
+        "transition__from_step__order",
+        "action",
+    )
+    field_accesses = FieldAccess.objects.filter(
+        field__section__form__workflow=workflow
+    ).select_related(
+        "field",
+        "field__section",
+        "field__repeatable_group",
+        "step",
+        "user",
+    ).order_by(
+        "field__section__order",
+        "field__order",
+        "step__order",
+    )
+    group_accesses = RepeatableGroupAccess.objects.filter(
+        group__section__form__workflow=workflow
+    ).select_related(
+        "group",
+        "group__section",
+        "step",
+        "user",
+    ).order_by(
+        "group__section__order",
+        "group__order",
+        "step__order",
+    )
+
+    if selected == "workflow-permissions":
+        user = request.GET.get("permission_user", "").strip()
+        role = request.GET.get("permission_role", "").strip()
+        action = request.GET.get("permission_action", "").strip()
+        effect = request.GET.get("permission_effect", "").strip()
+        step = request.GET.get("permission_step", "").strip()
+        if user:
+            permissions = permissions.filter(
+                Q(user__username__icontains=user)
+                | Q(user__first_name__icontains=user)
+                | Q(user__last_name__icontains=user)
+                | Q(user__email__icontains=user)
+            )
+        if role:
+            permissions = permissions.filter(role=role)
+        if action:
+            permissions = permissions.filter(action=action)
+        if effect:
+            permissions = permissions.filter(effect=effect)
+        if step:
+            permissions = permissions.filter(step_id=step)
+
+    if selected == "field-access":
+        user = request.GET.get("field_user", "").strip()
+        role = request.GET.get("field_role", "").strip()
+        field = request.GET.get("field_field", "").strip()
+        step = request.GET.get("field_step", "").strip()
+        if user:
+            field_accesses = field_accesses.filter(
+                Q(user__username__icontains=user)
+                | Q(user__first_name__icontains=user)
+                | Q(user__last_name__icontains=user)
+                | Q(user__email__icontains=user)
+            )
+        if role:
+            field_accesses = field_accesses.filter(role=role)
+        if field:
+            field_accesses = field_accesses.filter(
+                Q(field__name__icontains=field)
+                | Q(field__label__icontains=field)
+                | Q(field__code__icontains=field)
+            )
+        if step:
+            field_accesses = field_accesses.filter(step_id=step)
+
+    if selected == "group-access":
+        user = request.GET.get("group_user", "").strip()
+        role = request.GET.get("group_role", "").strip()
+        group = request.GET.get("group_group", "").strip()
+        step = request.GET.get("group_step", "").strip()
+        if user:
+            group_accesses = group_accesses.filter(
+                Q(user__username__icontains=user)
+                | Q(user__first_name__icontains=user)
+                | Q(user__last_name__icontains=user)
+                | Q(user__email__icontains=user)
+            )
+        if role:
+            group_accesses = group_accesses.filter(role=role)
+        if group:
+            group_accesses = group_accesses.filter(
+                Q(group__name__icontains=group)
+                | Q(group__code__icontains=group)
+            )
+        if step:
+            group_accesses = group_accesses.filter(step_id=step)
+
+    filter_query = request.GET.copy()
+    filter_query.pop("edit", None)
+    filter_query.pop("kind", None)
+
     context.update({
         "workflow": workflow,
         "selected": selected,
         "memberships": workflow.memberships.select_related("user").order_by("user__username"),
-        "permissions": workflow.permissions.select_related("user", "step", "transition").order_by("step__order", "transition__from_step__order", "action"),
-        "field_accesses": FieldAccess.objects.filter(field__section__form__workflow=workflow).select_related("field", "field__section", "field__repeatable_group", "step", "user").order_by("field__section__order", "field__order", "step__order"),
-        "group_accesses": RepeatableGroupAccess.objects.filter(group__section__form__workflow=workflow).select_related("group", "group__section", "step", "user").order_by("group__section__order", "group__order", "step__order"),
+        "permissions": permissions,
+        "field_accesses": field_accesses,
+        "group_accesses": group_accesses,
+        "permission_steps": WorkflowStep.objects.filter(workflow=workflow, is_active=True).order_by("order"),
+        "field_steps": WorkflowStep.objects.filter(workflow=workflow, is_active=True).order_by("order"),
+        "group_steps": WorkflowStep.objects.filter(workflow=workflow, is_active=True).order_by("order"),
+        "role_choices": WorkflowMembership.Role.choices,
+        "permission_action_choices": WorkflowPermission.Action.choices,
+        "permission_effect_choices": WorkflowPermission.Effect.choices,
+        "filter_query": filter_query.urlencode(),
     })
     return context
 
@@ -149,7 +279,7 @@ def access_security_workspace(request, workflow_id):
     selected = request.GET.get("section", "memberships")
     edit_id = request.GET.get("edit")
     edit_kind = request.GET.get("kind")
-    context = _base_context(workflow, selected)
+    context = _base_context(workflow, selected, request)
 
     if edit_id and edit_kind:
         edit_map = {
@@ -179,7 +309,11 @@ def access_security_workspace(request, workflow_id):
             if form.is_valid():
                 form.save()
                 messages.success(request, "اطلاعات با موفقیت ذخیره شد.")
-                return redirect(_workspace_url(workflow, section=selected))
+                return redirect(_workspace_url(
+                    workflow,
+                    section=selected,
+                    **_section_filter_params(request.POST, selected),
+                ))
             context[context_key] = form
             context["selected"] = selected
         elif action == "delete":
@@ -195,6 +329,11 @@ def access_security_workspace(request, workflow_id):
                 obj = get_object_or_404(model, pk=request.POST.get("object_id"), **filters)
                 obj.delete()
                 messages.success(request, "رکورد حذف شد.")
-            return redirect(_workspace_url(workflow, section=request.POST.get("section", "memberships")))
+            selected = request.POST.get("section", "memberships")
+            return redirect(_workspace_url(
+                workflow,
+                section=selected,
+                **_section_filter_params(request.POST, selected),
+            ))
 
     return render(request, "admin/workflow/access_security_workspace.html", context)
