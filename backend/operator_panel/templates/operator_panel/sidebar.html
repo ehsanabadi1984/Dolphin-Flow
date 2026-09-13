@@ -14,10 +14,16 @@
 
 <aside class="df-sidebar">
     <div class="df-brand">
-        <div class="df-brand-mark"><span>DF</span></div>
+        <div class="df-brand-mark">
+            {% if system_branding.sidebar_logo %}
+                <img src="{{ system_branding.sidebar_logo.url }}" alt="{{ system_branding.logo_alt_text }}">
+            {% else %}
+                <span>{{ system_branding.sidebar_symbol }}</span>
+            {% endif %}
+        </div>
         <div class="df-brand-text">
-            <div class="df-brand-name">Dolphin Flow</div>
-            <div class="df-brand-subtitle">Process Management</div>
+            <div class="df-brand-name">{{ system_branding.short_name }}</div>
+            <div class="df-brand-subtitle">{{ system_branding.sidebar_subtitle }}</div>
         </div>
     </div>
 
@@ -65,7 +71,7 @@
 
     <div class="df-sidebar-footer">
         <a href="{% url 'accounts:settings' %}" class="df-nav-link{% if request.resolver_match.app_name == 'accounts' and request.resolver_match.url_name == 'settings' %} active{% endif %}" data-tooltip="تنظیمات">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8-.1.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1.4Z"></path></svg><span>تنظیمات</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8-.1.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.5 1.4Z"></path></svg><span>تنظیمات</span>
         </a>
         <form method="post" action="{% url 'accounts:logout' %}" class="df-nav-logout-form">
             {% csrf_token %}<button type="submit" class="df-nav-link df-nav-logout df-nav-logout-button" data-tooltip="خروج">
