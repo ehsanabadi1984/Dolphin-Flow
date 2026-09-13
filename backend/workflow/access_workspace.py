@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from urllib.parse import urlencode
 
 from .history_permissions import HISTORY_ACTION, HISTORY_ACTION_LABEL
 from .models import (
@@ -111,25 +112,16 @@ class RepeatableGroupAccessWorkspaceForm(forms.ModelForm):
 
 def _workspace_url(workflow, **params):
     url = reverse("access_security_workspace", kwargs={"workflow_id": workflow.pk})
-    query = "&".join(
-        f"{k}={v}" for k, v in params.items() if v not in (None, "")
-    )
+    query = urlencode({k: v for k, v in params.items() if v not in (None, "")})
     return f"{url}?{query}" if query else url
 
 
 def _section_filter_params(source, selected):
-    prefix = {
-        "workflow-permissions": "permission_",
-        "field-access": "field_",
-        "group-access": "group_",
-    }.get(selected)
-    if not prefix:
-        return {}
     allowed = {
         "workflow-permissions": ("permission_user", "permission_role", "permission_action", "permission_effect", "permission_step"),
         "field-access": ("field_user", "field_role", "field_field", "field_step"),
         "group-access": ("group_user", "group_role", "group_group", "group_step"),
-    }[selected]
+    }.get(selected, ())
     return {key: source.get(key, "").strip() for key in allowed if source.get(key, "").strip()}
 
 
@@ -256,6 +248,10 @@ def _base_context(workflow, selected, request):
     filter_query.pop("edit", None)
     filter_query.pop("kind", None)
 
+    action_choices = list(WorkflowPermission.Action.choices)
+    if not any(value == HISTORY_ACTION for value, _ in action_choices):
+        action_choices.append((HISTORY_ACTION, HISTORY_ACTION_LABEL))
+
     context.update({
         "workflow": workflow,
         "selected": selected,
@@ -267,9 +263,22 @@ def _base_context(workflow, selected, request):
         "field_steps": WorkflowStep.objects.filter(workflow=workflow, is_active=True).order_by("order"),
         "group_steps": WorkflowStep.objects.filter(workflow=workflow, is_active=True).order_by("order"),
         "role_choices": WorkflowMembership.Role.choices,
-        "permission_action_choices": WorkflowPermission.Action.choices,
+        "permission_action_choices": action_choices,
         "permission_effect_choices": WorkflowPermission.Effect.choices,
         "filter_query": filter_query.urlencode(),
+        "permission_user_filter": request.GET.get("permission_user", ""),
+        "permission_role_filter": request.GET.get("permission_role", ""),
+        "permission_action_filter": request.GET.get("permission_action", ""),
+        "permission_effect_filter": request.GET.get("permission_effect", ""),
+        "permission_step_filter": request.GET.get("permission_step", ""),
+        "field_user_filter": request.GET.get("field_user", ""),
+        "field_role_filter": request.GET.get("field_role", ""),
+        "field_field_filter": request.GET.get("field_field", ""),
+        "field_step_filter": request.GET.get("field_step", ""),
+        "group_user_filter": request.GET.get("group_user", ""),
+        "group_role_filter": request.GET.get("group_role", ""),
+        "group_group_filter": request.GET.get("group_group", ""),
+        "group_step_filter": request.GET.get("group_step", ""),
     })
     return context
 
