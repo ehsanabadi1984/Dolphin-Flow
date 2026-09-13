@@ -1,0 +1,55 @@
+{% extends "operator_panel/base.html" %}
+
+{% block title %}در انتظار اقدام دیگران | Dolphin Flow{% endblock %}
+
+{% block content %}
+<style>
+.df-page-heading { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; }
+.df-page-heading-title { margin:8px 0 6px; font-size:22px; }
+.df-page-heading-meta { margin:0; color:var(--muted); font-size:11px; }
+.df-waiting-list { overflow:hidden; }
+.df-waiting-row { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:17px 20px; border-bottom:1px solid var(--border); }
+.df-waiting-row:last-child { border-bottom:0; }
+.df-waiting-title { font-size:12px; font-weight:600; }
+.df-waiting-title span { color:var(--muted); font-weight:500; }
+.df-waiting-meta { display:flex; flex-wrap:wrap; gap:7px; margin-top:7px; color:var(--muted); font-size:9px; }
+.df-empty-state { padding:45px 20px; text-align:center; }
+.df-pagination { display:flex; align-items:center; justify-content:center; gap:16px; padding:16px; border-top:1px solid var(--border); color:var(--muted); font-size:10px; }
+.df-pagination a { padding:7px 11px; border:1px solid var(--border); border-radius:8px; background:var(--surface-2); color:var(--text); }
+@media (max-width:600px) { .df-waiting-row { align-items:flex-start; flex-direction:column; } }
+</style>
+
+<section class="df-content">
+    <div class="df-page-heading">
+        <div>
+            <h1 class="df-page-heading-title">در انتظار اقدام دیگران</h1>
+            <p class="df-page-heading-meta">فرآیندهایی که توسط شما شروع شده‌اند و اکنون منتظر اقدام اپراتور مرحله جاری هستند.</p>
+        </div>
+    </div>
+
+    <div class="df-card df-panel df-waiting-list">
+        <div class="df-panel-header"><div class="df-panel-title">لیست فرآیندها</div><div>{{ page_obj.paginator.count }} مورد</div></div>
+        {% for instance in instances %}
+            <div class="df-waiting-row">
+                <div>
+                    <div class="df-waiting-title">{{ instance.workflow.name }} <span>#{{ instance.started_at|date:"ymd" }}-{{ instance.pk|stringformat:"06d" }}</span></div>
+                    <div class="df-waiting-meta">
+                        {% if instance.current_step %}<span>مرحله: {{ instance.current_step.name }}</span><span>·</span>{% endif %}
+                        <span>شروع {{ instance.started_at|date:"Y/m/d - H:i" }}</span>
+                    </div>
+                </div>
+                <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-info">مشاهده</a>
+            </div>
+        {% empty %}
+            <div class="df-empty-state">در حال حاضر فرآیندی از فرآیندهای شما منتظر اقدام دیگران نیست.</div>
+        {% endfor %}
+        {% if page_obj.paginator.num_pages > 1 %}
+            <div class="df-pagination">
+                {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">قبلی</a>{% endif %}
+                <span>صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+                {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">بعدی</a>{% endif %}
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
