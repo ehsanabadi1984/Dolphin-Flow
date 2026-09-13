@@ -118,6 +118,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         updateThemeButton();
     }
+
+    document.title = document.title.replace(
+        "Dolphin Flow",
+        "{{ system_branding.browser_title|escapejs }}"
+    );
 });
 </script>
 </body>
