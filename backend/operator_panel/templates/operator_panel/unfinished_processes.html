@@ -1,0 +1,91 @@
+{% extends "operator_panel/base.html" %}
+
+{% block title %}فرآیندهای نیمه‌تمام من | Dolphin Flow{% endblock %}
+
+{% block content %}
+<style>
+.df-unfinished-card { padding:18px; border:1px solid var(--border); border-radius:14px; background:var(--surface-3); }
+.df-unfinished-card + .df-unfinished-card { margin-top:12px; }
+.df-unfinished-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px; }
+.df-unfinished-title { font-weight:700; }
+.df-unfinished-meta { margin-top:5px; font-size:12px; opacity:.68; }
+.df-unfinished-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.df-unfinished-timeline { overflow-x:auto; padding:4px 0 2px; scrollbar-width:thin; }
+.df-unfinished-track { display:flex; align-items:flex-start; min-width:max-content; }
+.df-unfinished-step { display:flex; align-items:flex-start; flex:0 0 auto; }
+.df-unfinished-node { display:flex; flex-direction:column; align-items:center; min-width:76px; max-width:110px; }
+.df-unfinished-dot { width:18px; height:18px; border-radius:50%; border:2px solid var(--border); background:var(--surface-3); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; }
+.df-unfinished-step.completed .df-unfinished-dot { border-color:var(--accent); background:var(--accent); color:var(--surface-1); }
+.df-unfinished-step.current .df-unfinished-dot { border-color:var(--accent); box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); }
+.df-unfinished-label { margin-top:6px; max-width:110px; text-align:center; font-size:11px; line-height:1.45; opacity:.72; }
+.df-unfinished-step.current .df-unfinished-label { opacity:1; font-weight:700; }
+.df-unfinished-connector { width:28px; height:2px; margin-top:8px; background:var(--border); flex:0 0 28px; }
+.df-unfinished-step.completed + .df-unfinished-step .df-unfinished-connector { background:var(--accent); }
+.df-unfinished-empty { padding:40px 16px; text-align:center; opacity:.65; }
+</style>
+
+<section class="df-content">
+    <div class="df-welcome">
+        <h1>فرآیندهای نیمه‌تمام من</h1>
+        <p>فرآیندهایی که خودتان شروع کرده‌اید و هنوز به پایان نرسیده‌اند.</p>
+    </div>
+
+    {% for instance in instances %}
+        <article class="df-card df-unfinished-card">
+            <div class="df-unfinished-header">
+                <div>
+                    <div class="df-unfinished-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
+                    <div class="df-unfinished-meta">
+                        {% if instance.current_step %}مرحله فعلی: {{ instance.current_step.name }} · {% endif %}
+                        شروع {{ instance.started_at|timesince }} قبل
+                    </div>
+                </div>
+                <div class="df-unfinished-actions">
+                    {% if instance.dashboard_hidden %}
+                        <form method="post" action="{% url 'operator_panel:restore_dashboard_process' instance.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="df-status df-status-info">نمایش در داشبورد</button>
+                        </form>
+                    {% else %}
+                        <form method="post" action="{% url 'operator_panel:hide_dashboard_process' instance.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="df-status df-status-secondary">حذف از داشبورد</button>
+                        </form>
+                    {% endif %}
+                    <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
+                </div>
+            </div>
+
+            {% if instance.dashboard_tracker %}
+            <div class="df-unfinished-timeline" aria-label="مسیر طی‌شده فرآیند">
+                <div class="df-unfinished-track">
+                    {% for item in instance.dashboard_tracker %}
+                        {% if item.state != "future" %}
+                            <div class="df-unfinished-step {{ item.state }}">
+                                {% if not forloop.first %}<span class="df-unfinished-connector" aria-hidden="true"></span>{% endif %}
+                                <div class="df-unfinished-node">
+                                    <span class="df-unfinished-dot">{% if item.state == "completed" %}✓{% endif %}</span>
+                                    <span class="df-unfinished-label">{{ item.step.name }}</span>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </article>
+    {% empty %}
+        <section class="df-card df-unfinished-empty">
+            در حال حاضر هیچ فرآیند نیمه‌تمامی از فرآیندهای شما وجود ندارد.
+        </section>
+    {% endfor %}
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="df-pagination" aria-label="صفحه‌بندی">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}" class="df-button df-button-secondary">قبلی</a>{% endif %}
+        <span>صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}" class="df-button df-button-secondary">بعدی</a>{% endif %}
+    </nav>
+    {% endif %}
+</section>
+{% endblock %}
