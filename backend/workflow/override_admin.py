@@ -126,34 +126,25 @@ class WorkflowInstanceOverrideAdmin(WorkflowInstanceAdmin):
             )
         )
 
+        event_by_id = {event["id"]: event for event in events}
+        prefix = WorkflowOverrideService.OVERRIDE_NOTE_PREFIX
+
         for step_execution in step_executions:
             notes = (step_execution.notes or "").strip()
-            prefix = WorkflowOverrideService.OVERRIDE_NOTE_PREFIX
             if not notes.startswith(prefix):
                 continue
 
             details = notes[len(prefix):].strip()
             path_text, separator, reason = details.partition("| دلیل:")
             reason = reason.strip() if separator else "—"
-            user = (
-                step_execution.performed_by.get_full_name()
-                or step_execution.performed_by.username
-            )
 
-            events.append(
-                {
-                    "type": "transition",
-                    "id": f"override-{step_execution.pk}",
-                    "performed_at": step_execution.performed_at,
-                    "user": user,
-                    "title": "اصلاح مسیر فرآیند",
-                    "description": (
-                        f"{path_text.strip()} | دلیل: {reason}"
-                    ),
-                    "is_submitted": False,
-                    "sla_completed": False,
-                    "sla_breached": False,
-                }
+            event = event_by_id.get(step_execution.pk)
+            if event is None:
+                continue
+
+            event["title"] = "اصلاح مسیر فرآیند"
+            event["description"] = (
+                f"{path_text.strip()} | دلیل: {reason}"
             )
 
         events.sort(key=lambda event: event["performed_at"])
