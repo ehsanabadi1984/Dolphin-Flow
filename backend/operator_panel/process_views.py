@@ -4,7 +4,8 @@ from datetime import datetime
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
 from workflow.models import WorkflowInstance
 
@@ -124,3 +125,43 @@ def waiting_for_others(request):
         "page_title": "در انتظار اقدام دیگران",
         "page_breadcrumb": "در انتظار اقدام دیگران",
     })
+
+
+@login_required
+def unfinished_processes(request):
+    """Show all active processes started by the user, including hidden dashboard items."""
+    service = DashboardEnhancementService(request.user)
+    instances = service.unfinished_processes_queryset(include_hidden=True)
+    paginator = Paginator(instances, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    page_instances = list(page_obj.object_list)
+    service.dashboard._attach_dashboard_state(page_instances)
+    hidden_ids = service.hidden_process_ids()
+
+    for instance in page_instances:
+        instance.dashboard_hidden = instance.pk in hidden_ids
+
+    return render(request, "operator_panel/unfinished_processes.html", {
+        "page_obj": page_obj,
+        "instances": page_instances,
+        "hidden_ids": hidden_ids,
+        "page_title": "فرآیندهای نیمه‌تمام من",
+        "page_breadcrumb": "فرآیندهای نیمه‌تمام من",
+    })
+
+
+@login_required
+@require_POST
+def hide_dashboard_process(request, instance_id):
+    service = DashboardEnhancementService(request.user)
+    if service.unfinished_processes_queryset(include_hidden=True).filter(pk=instance_id).exists():
+        service.hide_process(instance_id)
+    return redirect("operator_panel:dashboard")
+
+
+@login_required
+@require_POST
+def restore_dashboard_process(request, instance_id):
+    service = DashboardEnhancementService(request.user)
+    service.restore_process(instance_id)
+    return redirect("operator_panel:unfinished_processes")
