@@ -18,11 +18,26 @@ class DashboardEnhancementService:
         self.dashboard = DashboardService(user)
 
     def get_context(self):
+        waiting_queryset = self.waiting_for_others_queryset()
         return {
             "next_best_actions": self._next_best_actions(),
-            "waiting_for_others": self._waiting_for_others(),
+            "waiting_for_others": list(waiting_queryset[:WAITING_OTHERS_LIMIT]),
+            "waiting_for_others_count": waiting_queryset.count(),
             "personal_updates": self._personal_updates(),
         }
+
+    def waiting_for_others_queryset(self):
+        """The user's own active processes currently assigned to another operator."""
+        return (
+            self.dashboard._my_active_queryset()
+            .filter(
+                current_step__isnull=False,
+                current_step__assigned_to__isnull=False,
+            )
+            .exclude(current_step__assigned_to_id=self.user.pk)
+            .select_related("current_step", "current_step__assigned_to")
+            .order_by("-started_at")
+        )
 
     def _next_best_actions(self):
         """Return the most urgent actionable items without changing task rules."""
@@ -65,18 +80,6 @@ class DashboardEnhancementService:
                 instance.dashboard_priority_class = "normal"
 
         return instances[:NEXT_ACTION_LIMIT]
-
-    def _waiting_for_others(self):
-        """The user's own active processes currently assigned to another operator."""
-        return list(
-            self.dashboard._my_active_queryset()
-            .filter(
-                current_step__isnull=False,
-                current_step__assigned_to__isnull=False,
-            )
-            .exclude(current_step__assigned_to_id=self.user.pk)
-            .select_related("current_step", "current_step__assigned_to")[:WAITING_OTHERS_LIMIT]
-        )
 
     def _personal_updates(self):
         """Unread notifications addressed to this operator only."""
