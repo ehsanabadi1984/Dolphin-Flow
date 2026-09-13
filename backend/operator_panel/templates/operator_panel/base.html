@@ -5,9 +5,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/svg+xml" href="{% static 'operator_panel/favicon.svg' %}">
+    {% if system_branding.favicon %}
+        <link rel="icon" href="{{ system_branding.favicon.url }}">
+    {% else %}
+        <link rel="icon" type="image/svg+xml" href="{% static 'operator_panel/favicon.svg' %}">
+    {% endif %}
 
-    <title>{% block title %}Dolphin Flow{% endblock %}</title>
+    <title>{% block title %}{{ system_branding.browser_title }}{% endblock %}</title>
 
     <link rel="stylesheet" href="{% static 'operator_panel/css/app.css' %}">
     <link rel="stylesheet" href="{% static 'operator_panel/css/theme.css' %}">
