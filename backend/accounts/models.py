@@ -67,6 +67,10 @@ class UserPreference(models.Model):
         choices=SESSION_TIMEOUT_CHOICES,
         default=7200,
     )
+    hidden_dashboard_process_ids = models.JSONField(
+        default=list,
+        blank=True,
+    )
 
     class Meta:
         verbose_name = "ترجیح کاربر"
