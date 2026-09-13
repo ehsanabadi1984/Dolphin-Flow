@@ -16,6 +16,7 @@ class WorkflowOverrideService:
     """Administrative correction of a workflow instance's current step."""
 
     MIN_REASON_LENGTH = 5
+    OVERRIDE_NOTE_PREFIX = "اصلاح مسیر فرآیند:"
 
     @staticmethod
     @transaction.atomic
@@ -28,17 +29,23 @@ class WorkflowOverrideService:
         )
 
         if not performed_by.is_active or not performed_by.is_staff:
-            raise ValidationError("فقط کاربران فعال Admin می‌توانند مسیر فرآیند را اصلاح کنند.")
+            raise ValidationError(
+                "فقط کاربران فعال Admin می‌توانند مسیر فرآیند را اصلاح کنند."
+            )
 
         reason = (reason or "").strip()
         if len(reason) < WorkflowOverrideService.MIN_REASON_LENGTH:
-            raise ValidationError("دلیل اصلاح مسیر الزامی است و باید حداقل ۵ کاراکتر باشد.")
+            raise ValidationError(
+                "دلیل اصلاح مسیر الزامی است و باید حداقل ۵ کاراکتر باشد."
+            )
 
         if target_step is None:
             raise ValidationError("مرحله مقصد باید مشخص شود.")
 
         if target_step.workflow_id != instance.workflow_id:
-            raise ValidationError("مرحله مقصد متعلق به Workflow این Instance نیست.")
+            raise ValidationError(
+                "مرحله مقصد متعلق به Workflow این Instance نیست."
+            )
 
         if not target_step.is_active:
             raise ValidationError("مرحله مقصد فعال نیست.")
@@ -57,24 +64,19 @@ class WorkflowOverrideService:
 
         now = timezone.now()
         from_step = instance.current_step
-        from_step_id = from_step.pk if from_step else None
-        from_step_name = from_step.name if from_step else None
+        from_step_name = from_step.name if from_step else "—"
+        override_note = (
+            f"{WorkflowOverrideService.OVERRIDE_NOTE_PREFIX} "
+            f"{from_step_name} → {target_step.name} | "
+            f"دلیل: {reason}"
+        )
 
         step_execution = WorkflowStepExecution.objects.create(
             instance=instance,
             workflow_step=target_step,
             performed_by=performed_by,
-            data={
-                "override": {
-                    "from_step_id": from_step_id,
-                    "from_step_name": from_step_name,
-                    "to_step_id": target_step.pk,
-                    "to_step_name": target_step.name,
-                    "reason": reason,
-                    "performed_by_id": performed_by.pk,
-                    "performed_at": now.isoformat(),
-                },
-            },
+            performed_at=now,
+            notes=override_note,
             is_submitted=False,
         )
 
@@ -105,7 +107,7 @@ class WorkflowOverrideService:
                 title=f"اصلاح مسیر فرآیند «{instance.workflow.name}»",
                 message=(
                     f"فرآیند «{instance.workflow.name}» توسط Admin از مرحله "
-                    f"«{from_step_name or '—'}» به مرحله «{target_step.name}» "
+                    f"«{from_step_name}» به مرحله «{target_step.name}» "
                     "منتقل شد و نیازمند اقدام شماست."
                 ),
                 workflow_instance=instance,
