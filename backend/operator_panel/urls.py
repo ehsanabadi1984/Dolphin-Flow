@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from .dashboard_views import dashboard, dashboard_realtime
-from .process_views import my_processes
+from .process_views import my_processes, assigned_tasks
 from .formula_views import formula_definitions, formula_field_options
 from .views import (
     execute_transition,
@@ -23,118 +23,24 @@ app_name = "operator_panel"
 
 
 urlpatterns = [
-
-    path(
-        "",
-        dashboard,
-        name="dashboard",
-    ),
-
-    path(
-        "dashboard/realtime/",
-        dashboard_realtime,
-        name="dashboard_realtime",
-    ),
-
-    path(
-        "my-processes/",
-        my_processes,
-        name="my_processes",
-    ),
-
-    path(
-        "workflow/<int:workflow_id>/start/",
-        start_workflow,
-        name="start_workflow",
-    ),
-
-    path(
-        "workflow-instance/<int:instance_id>/",
-        workflow_instance_with_files,
-        name="workflow_instance",
-    ),
-
-    path(
-        "workflow-instance/<int:instance_id>/history/",
-        workflow_history,
-        name="workflow_history",
-    ),
-
-    path(
-        "workflow-instance/<int:instance_id>/device-group/<str:group_code>/device/<int:instance_device_id>/delete/",
-        views.delete_device,
-        name="delete_device",
-    ),
-
-    path(
-        "workflow-instance/<int:instance_id>/device/<int:device_id>/history/",
-        device_history,
-        name="device_history",
-    ),
-
-    path(
-        "workflow-instance/<int:instance_id>/transition/<int:transition_id>/execute/",
-        execute_transition,
-        name="execute_transition",
-    ),
-
-    path(
-        "device/lookup-by-imei/",
-        views.lookup_device_by_imei,
-        name="lookup_device_by_imei",
-    ),
-
-    path(
-        "device-models-by-type/",
-        views.device_models_by_type,
-        name="device_models_by_type",
-    ),
-
-    path(
-        "dependent-field-options/",
-        views.dependent_field_options,
-        name="dependent_field_options",
-    ),
-
-    path(
-        "workflow-instance/<int:instance_id>/formula-definitions/",
-        formula_definitions,
-        name="formula_definitions",
-    ),
-
-    path(
-        "formula-field-options/",
-        formula_field_options,
-        name="formula_field_options",
-    ),
-
-    path(
-        "workflow-instance/<int:instance_id>/file-field-definitions/",
-        file_field_definitions,
-        name="file_field_definitions",
-    ),
-
-    path(
-        "workflow-file/<int:file_id>/download/",
-        open_form_file,
-        name="download_form_file",
-    ),
-
-    path(
-        "workflow-file/<int:file_id>/delete/",
-        delete_form_file,
-        name="delete_form_file",
-    ),
-
-    path(
-        "notifications/",
-        notifications,
-        name="notifications",
-    ),
-
-    path(
-        "notifications/<int:notification_id>/read/",
-        mark_notification_as_read,
-        name="mark_notification_as_read",
-    ),
+    path("", dashboard, name="dashboard"),
+    path("dashboard/realtime/", dashboard_realtime, name="dashboard_realtime"),
+    path("my-processes/", my_processes, name="my_processes"),
+    path("assigned-tasks/", assigned_tasks, name="assigned_tasks"),
+    path("workflow/<int:workflow_id>/start/", start_workflow, name="start_workflow"),
+    path("workflow-instance/<int:instance_id>/", workflow_instance_with_files, name="workflow_instance"),
+    path("workflow-instance/<int:instance_id>/history/", workflow_history, name="workflow_history"),
+    path("workflow-instance/<int:instance_id>/device-group/<str:group_code>/device/<int:instance_device_id>/delete/", views.delete_device, name="delete_device"),
+    path("workflow-instance/<int:instance_id>/device/<int:device_id>/history/", device_history, name="device_history"),
+    path("workflow-instance/<int:instance_id>/transition/<int:transition_id>/execute/", execute_transition, name="execute_transition"),
+    path("device/lookup-by-imei/", views.lookup_device_by_imei, name="lookup_device_by_imei"),
+    path("device-models-by-type/", views.device_models_by_type, name="device_models_by_type"),
+    path("dependent-field-options/", views.dependent_field_options, name="dependent_field_options"),
+    path("workflow-instance/<int:instance_id>/formula-definitions/", formula_definitions, name="formula_definitions"),
+    path("formula-field-options/", formula_field_options, name="formula_field_options"),
+    path("workflow-instance/<int:instance_id>/file-field-definitions/", file_field_definitions, name="file_field_definitions"),
+    path("workflow-file/<int:file_id>/download/", open_form_file, name="download_form_file"),
+    path("workflow-file/<int:file_id>/delete/", delete_form_file, name="delete_form_file"),
+    path("notifications/", notifications, name="notifications"),
+    path("notifications/<int:notification_id>/read/", mark_notification_as_read, name="mark_notification_as_read"),
 ]
