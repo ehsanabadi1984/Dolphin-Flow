@@ -32,6 +32,7 @@ class WorkflowInstanceOverrideForm(forms.Form):
                 workflow=instance.workflow,
                 is_active=True,
             )
+            .exclude(pk=instance.current_step_id)
             .order_by("order")
         )
 
@@ -126,16 +127,14 @@ class WorkflowInstanceOverrideAdmin(WorkflowInstanceAdmin):
         )
 
         for step_execution in step_executions:
-            override = (step_execution.data or {}).get("override")
-            if not override:
+            notes = (step_execution.notes or "").strip()
+            prefix = WorkflowOverrideService.OVERRIDE_NOTE_PREFIX
+            if not notes.startswith(prefix):
                 continue
 
-            from_name = override.get("from_step_name") or "—"
-            to_name = (
-                override.get("to_step_name")
-                or step_execution.workflow_step.name
-            )
-            reason = override.get("reason") or "—"
+            details = notes[len(prefix):].strip()
+            path_text, separator, reason = details.partition("| دلیل:")
+            reason = reason.strip() if separator else "—"
             user = (
                 step_execution.performed_by.get_full_name()
                 or step_execution.performed_by.username
@@ -149,7 +148,7 @@ class WorkflowInstanceOverrideAdmin(WorkflowInstanceAdmin):
                     "user": user,
                     "title": "اصلاح مسیر فرآیند",
                     "description": (
-                        f"{from_name} → {to_name} | دلیل: {reason}"
+                        f"{path_text.strip()} | دلیل: {reason}"
                     ),
                     "is_submitted": False,
                     "sla_completed": False,
