@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from .dashboard_views import dashboard, dashboard_realtime
-from .process_views import my_processes, assigned_tasks
+from .process_views import my_processes, assigned_tasks, waiting_for_others
 from .formula_views import formula_definitions, formula_field_options
 from .views import (
     execute_transition,
@@ -27,6 +27,7 @@ urlpatterns = [
     path("dashboard/realtime/", dashboard_realtime, name="dashboard_realtime"),
     path("my-processes/", my_processes, name="my_processes"),
     path("assigned-tasks/", assigned_tasks, name="assigned_tasks"),
+    path("waiting-for-others/", waiting_for_others, name="waiting_for_others"),
     path("workflow/<int:workflow_id>/start/", start_workflow, name="start_workflow"),
     path("workflow-instance/<int:instance_id>/", workflow_instance_with_files, name="workflow_instance"),
     path("workflow-instance/<int:instance_id>/history/", workflow_history, name="workflow_history"),
