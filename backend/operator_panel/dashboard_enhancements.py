@@ -1,8 +1,8 @@
-from django.db.models import Q
+from django.utils import timezone
 
-from workflow.models import Notification, WorkflowInstance
+from workflow.models import Notification
 
-from .dashboard_services import DashboardService, _can_view_q
+from .dashboard_services import DashboardService
 
 
 NEXT_ACTION_LIMIT = 5
@@ -29,9 +29,12 @@ class DashboardEnhancementService:
         assigned = self.dashboard._pending_instances(assigned_only=True)
         other_actionable = self.dashboard._pending_instances(exclude_assigned=True)
 
-        instances = {instance.pk: instance for instance in [*assigned, *other_actionable]}
+        instances = {
+            instance.pk: instance
+            for instance in [*assigned, *other_actionable]
+        }
         instances = list(instances.values())
-        self.dashboard._attach_dashboard_state(instances, now=__import__("django.utils.timezone", fromlist=["timezone"]).timezone.now())
+        self.dashboard._attach_dashboard_state(instances, now=timezone.now())
 
         priority = {
             "breached": 0,
