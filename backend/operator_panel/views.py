@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
 from workflow.device_services import DeviceService
-
+from workflow.history_permissions import HISTORY_ACTION
 
 from workflow.notification_services import NotificationService
 from workflow.form_services import DynamicFormService
@@ -243,6 +243,12 @@ def workflow_instance(request, instance_id):
         instance=instance,
     )
 
+    can_view_device_history = WorkflowAuthorizationService.has_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=HISTORY_ACTION,
+    )
+
     # =========================================================
     # EDIT MODE
     # =========================================================
@@ -458,6 +464,7 @@ def workflow_instance(request, instance_id):
                         else ""
                     ),
                     "edit_mode": edit_mode,
+                    "can_view_device_history": can_view_device_history,
                     "validation_errors": validation_errors,
                     "page_title": instance.workflow.name,
                     "page_breadcrumb": instance.workflow.name,
@@ -509,6 +516,7 @@ def workflow_instance(request, instance_id):
             "transitions": transitions,
             "dynamic_form": dynamic_form,
             "edit_mode": edit_mode,
+            "can_view_device_history": can_view_device_history,
             "current_step_execution": current_step_execution,
             "has_saved_data": has_saved_data,
             "page_title": instance.workflow.name,
@@ -606,6 +614,21 @@ def device_history(request, instance_id, device_id):
         step=instance.current_step,
         instance=instance,
     )
+
+    if not WorkflowAuthorizationService.has_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=HISTORY_ACTION,
+    ):
+        messages.error(
+            request,
+            "شما اجازه مشاهده سوابق دستگاه را ندارید.",
+        )
+        return redirect(
+            "operator_panel:workflow_instance",
+            instance_id=instance.pk,
+        )
+
     device = get_object_or_404(
         Device,
         pk=device_id,

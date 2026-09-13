@@ -364,10 +364,12 @@
                                             value="{{ item.instance_device_id }}"
                                         >
 
-                                        {% if item.device_id %}
+                                        {% if item.device_id and can_view_device_history %}
                                             <a
                                                 class="df-button df-button-secondary"
                                                 href="{% url 'operator_panel:device_history' instance.pk item.device_id %}"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
                                             >
                                                 سوابق
                                             </a>
