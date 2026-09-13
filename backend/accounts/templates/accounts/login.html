@@ -5,8 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0f1d33">
-    <link rel="icon" type="image/svg+xml" href="{% static 'operator_panel/favicon.svg' %}">
-    <title>ورود | Dolphin Plus</title>
+    {% if system_branding.favicon %}
+        <link rel="icon" href="{{ system_branding.favicon.url }}">
+    {% else %}
+        <link rel="icon" type="image/svg+xml" href="{% static 'operator_panel/favicon.svg' %}">
+    {% endif %}
+    <title>ورود | {{ system_branding.browser_title }}</title>
     <style>
         @font-face {
             font-family: "Yekan";
@@ -259,15 +263,15 @@
 </head>
 <body>
     <main class="login-shell">
-        <section class="brand-panel" aria-label="Dolphin Plus">
-            <div class="plus-mark" aria-hidden="true"><span>+</span></div>
-            <p class="brand-name"><strong>Dolphin</strong> <em>Plus</em></p>
+        <section class="brand-panel" aria-label="{{ system_branding.logo_alt_text }}">
+            <div class="plus-mark" aria-hidden="true"><span>{{ system_branding.sidebar_symbol }}</span></div>
+            <p class="brand-name">{{ system_branding.system_name }}</p>
             <p class="brand-tagline">ساده‌تر، سریع‌تر، هوشمندتر</p>
         </section>
 
         <section class="form-panel">
             <div class="form-content">
-                <p class="eyebrow">DOLPHIN PLUS</p>
+                <p class="eyebrow">{{ system_branding.short_name }}</p>
                 <h1>خوش آمدید</h1>
                 <p class="welcome">برای ورود به سامانه، اطلاعات حساب کاربری خود را وارد کنید.</p>
 
@@ -299,7 +303,7 @@
                     </div>
                 </form>
 
-                <div class="footer">Dolphin Plus · مدیریت و پیشبرد فرایندهای سازمان</div>
+                <div class="footer">{{ system_branding.short_name }} · مدیریت و پیشبرد فرایندهای سازمان</div>
             </div>
         </section>
     </main>
