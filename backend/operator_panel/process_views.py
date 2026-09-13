@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from workflow.models import WorkflowInstance
@@ -135,7 +136,7 @@ def unfinished_processes(request):
     paginator = Paginator(instances, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
     page_instances = list(page_obj.object_list)
-    service.dashboard._attach_dashboard_state(page_instances)
+    service.dashboard._attach_dashboard_state(page_instances, now=timezone.now())
     hidden_ids = service.hidden_process_ids()
 
     for instance in page_instances:
