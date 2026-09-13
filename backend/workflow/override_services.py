@@ -21,10 +21,13 @@ class WorkflowOverrideService:
     @staticmethod
     @transaction.atomic
     def override_instance_step(*, instance, target_step, performed_by, reason):
+        # Lock only the WorkflowInstance row. current_step is nullable, so
+        # select_related("current_step") would introduce a LEFT OUTER JOIN
+        # that PostgreSQL cannot combine with FOR UPDATE.
         instance = (
             WorkflowInstance.objects
             .select_for_update()
-            .select_related("workflow", "current_step")
+            .select_related("workflow")
             .get(pk=instance.pk)
         )
 
