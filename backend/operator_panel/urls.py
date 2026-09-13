@@ -85,6 +85,12 @@ urlpatterns = [
     ),
 
     path(
+        "device-models-by-type/",
+        views.device_models_by_type,
+        name="device_models_by_type",
+    ),
+
+    path(
         "dependent-field-options/",
         views.dependent_field_options,
         name="dependent_field_options",

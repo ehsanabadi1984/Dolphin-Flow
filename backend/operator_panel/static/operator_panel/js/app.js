@@ -551,7 +551,8 @@ notificationToggle.addEventListener("click", async (event) => {
                 } else {
                     field.value = "";
                 }
-                field.disabled = false;
+                field.disabled =
+                    field.dataset.systemKey === "DEVICE_MODEL";
             }
 
         });
@@ -1106,6 +1107,160 @@ const submitNewDevice = (modal, groupCode) => {
         });
 
 })();
+
+
+/*
+ * ---------------------------------------------------------
+ * Device Type -> Device Model dependency
+ * ---------------------------------------------------------
+ */
+
+document.addEventListener(
+    "change",
+    async (event) => {
+
+        const typeField =
+            event.target.closest(
+                '[data-device-modal-field][data-system-key="DEVICE_TYPE"]'
+            );
+
+        if (!typeField) {
+            return;
+        }
+
+        const modal =
+            typeField.closest(".df-device-modal");
+
+        if (!modal) {
+            return;
+        }
+
+        const modelField =
+            modal.querySelector(
+                '[data-device-modal-field][data-system-key="DEVICE_MODEL"]'
+            );
+
+        if (!modelField) {
+            return;
+        }
+
+        const modelsUrl =
+            modelField.dataset.deviceModelsUrl;
+
+        if (!modelsUrl) {
+            console.warn(
+                "Device models URL is not configured."
+            );
+            return;
+        }
+
+        const deviceTypeId =
+            typeField.value;
+
+        /*
+         * No device type selected:
+         * clear and disable the model field.
+         */
+        if (!deviceTypeId) {
+
+            modelField.innerHTML =
+                '<option value="">---------</option>';
+
+            modelField.value = "";
+            modelField.disabled = true;
+
+            return;
+        }
+
+        /*
+         * Keep the currently selected model only if it
+         * is still valid for the selected device type.
+         */
+        const previousModelId =
+            modelField.value;
+
+        modelField.disabled = true;
+
+        try {
+
+            const response =
+                await fetch(
+                    `${modelsUrl}?device_type_id=${encodeURIComponent(deviceTypeId)}`,
+                    {
+                        method: "GET",
+                        headers: {
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                    }
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    "Unable to load device models."
+                );
+            }
+
+            const data =
+                await response.json();
+
+            const options =
+                Array.isArray(data.options)
+                    ? data.options
+                    : [];
+
+            modelField.innerHTML =
+                '<option value="">---------</option>';
+
+            options.forEach((option) => {
+
+                const element =
+                    document.createElement("option");
+
+                element.value =
+                    String(option.value);
+
+                element.textContent =
+                    option.label;
+
+                modelField.appendChild(
+                    element
+                );
+            });
+
+            /*
+             * Restore the old model only when it is valid
+             * for the newly selected type.
+             */
+            const stillValid =
+                previousModelId &&
+                options.some(
+                    (option) =>
+                        String(option.value) ===
+                        String(previousModelId)
+                );
+
+            modelField.value =
+                stillValid
+                    ? previousModelId
+                    : "";
+
+            modelField.disabled = false;
+
+        } catch (error) {
+
+            console.error(
+                "Unable to load device models:",
+                error
+            );
+
+            modelField.innerHTML =
+                '<option value="">---------</option>';
+
+            modelField.value = "";
+            modelField.disabled = true;
+        }
+    }
+);
 
 /*
  * Device IMEI lookup

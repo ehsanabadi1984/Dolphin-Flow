@@ -1141,14 +1141,14 @@
                 </select>
 
             {% elif field_info.field.system_key == "DEVICE_MODEL" %}
-
                 <select
                     data-device-modal-field="{{ field_info.field.code }}"
                     data-field-code="{{ field_info.field.code }}"
                     data-system-key="DEVICE_MODEL"
+                    data-device-models-url="{% url 'operator_panel:device_models_by_type' %}"
+                    disabled
                 >
                     <option value="">---------</option>
-
                     {% for choice in field_info.device_models %}
                         <option value="{{ choice.id }}">
                             {{ choice.name }}

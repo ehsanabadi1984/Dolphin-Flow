@@ -8,11 +8,13 @@ from django.urls import reverse
 from workflow.device_services import DeviceService
 from workflow.history_permissions import HISTORY_ACTION
 
+
 from workflow.notification_services import NotificationService
 from workflow.form_services import DynamicFormService
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.models import (
     Device,
+    DeviceModel,
     DeviceIdentifier,
     FormData,
     FormField,
@@ -98,6 +100,38 @@ def lookup_device_by_imei(request):
         "device_id": device.pk,
         "device_type_id": device_model.device_type_id,
         "device_model_id": device_model.pk,
+    })
+
+@login_required
+def device_models_by_type(request):
+    device_type_id = request.GET.get("device_type_id")
+
+    if not device_type_id:
+        return JsonResponse({"options": []})
+
+    try:
+        device_type_id = int(device_type_id)
+    except (TypeError, ValueError):
+        return JsonResponse({"options": []})
+
+    models = (
+        DeviceModel.objects
+        .filter(
+            device_type_id=device_type_id,
+            # اگر DeviceModel فیلد is_active دارد، این خط را هم اضافه کن:
+            # is_active=True,
+        )
+        .order_by("name")
+    )
+
+    return JsonResponse({
+        "options": [
+            {
+                "value": str(model.pk),
+                "label": model.name,
+            }
+            for model in models
+        ]
     })
 
 @login_required
