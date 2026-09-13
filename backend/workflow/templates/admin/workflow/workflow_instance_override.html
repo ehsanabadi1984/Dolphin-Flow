@@ -1,0 +1,54 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="max-width: 760px; margin: 30px auto;">
+    <h1>اصلاح مسیر فرآیند</h1>
+
+    <div style="margin: 20px 0; padding: 16px; border: 1px solid var(--border-color); border-radius: 8px;">
+        <p><strong>فرآیند:</strong> {{ instance.workflow.name }}</p>
+        <p><strong>شناسه:</strong> #{{ instance.pk }}</p>
+        <p><strong>مرحله فعلی:</strong> {{ instance.current_step|default:"— (فرآیند تکمیل شده)" }}</p>
+        <p><strong>وضعیت:</strong> {{ instance.get_status_display }}</p>
+    </div>
+
+    <div style="margin: 20px 0; padding: 14px; border-radius: 8px; background: var(--darkened-bg);">
+        <strong>توجه:</strong>
+        این عملیات Transition عادی نیست. سابقه اجرای قبلی حذف یا ویرایش نمی‌شود و یک اجرای جدید برای مرحله مقصد ایجاد خواهد شد.
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="errornote">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <fieldset class="module aligned">
+            <div class="form-row">
+                {{ form.target_step.errors }}
+                {{ form.target_step.label_tag }}
+                {{ form.target_step }}
+                {% if form.target_step.help_text %}
+                    <div class="help">{{ form.target_step.help_text }}</div>
+                {% endif %}
+            </div>
+
+            <div class="form-row">
+                {{ form.reason.errors }}
+                {{ form.reason.label_tag }}
+                {{ form.reason }}
+                {% if form.reason.help_text %}
+                    <div class="help">{{ form.reason.help_text }}</div>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <div class="submit-row">
+            <input type="submit" value="اعمال اصلاح مسیر" class="default">
+            <a href="{% url 'admin:workflow_workflowinstance_timeline' instance.pk %}" class="button cancel-link">انصراف</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
