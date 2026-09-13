@@ -1,0 +1,137 @@
+{% extends "operator_panel/base.html" %}
+
+{% block title %}داشبورد | Dolphin Flow{% endblock %}
+
+{% block content %}
+<style>
+.df-dashboard-scroll { max-height:420px; overflow-y:auto; padding-left:4px; scrollbar-width:thin; }
+.df-pending-actions-scroll { max-height:420px; }
+.df-waiting-others-scroll { max-height:300px; overflow-y:auto; scrollbar-width:thin; padding-left:4px; }
+.df-process-card { padding:18px; border:1px solid var(--border); border-radius:14px; background:var(--surface-3); }
+.df-process-card + .df-process-card { margin-top:12px; }
+.df-process-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:10px; }
+.df-process-card-title { font-weight:700; }
+.df-process-card-meta { margin-top:5px; font-size:12px; opacity:.68; }
+.df-process-timeline { margin-top:4px; padding:4px 0 2px; overflow-x:auto; scrollbar-width:thin; }
+.df-process-timeline-track { display:flex; align-items:flex-start; min-width:max-content; }
+.df-process-timeline-step { display:flex; align-items:flex-start; flex:0 0 auto; }
+.df-process-timeline-node { display:flex; flex-direction:column; align-items:center; min-width:76px; max-width:110px; }
+.df-process-timeline-dot { width:18px; height:18px; border-radius:50%; border:2px solid var(--border); background:var(--surface-3); display:flex; align-items:center; justify-content:center; font-size:10px; line-height:1; font-weight:800; }
+.df-process-timeline-step.completed .df-process-timeline-dot { border-color:var(--accent); background:var(--accent); color:var(--surface-1); }
+.df-process-timeline-step.current .df-process-timeline-dot { border-color:var(--accent); background:var(--surface-3); box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); }
+.df-process-timeline-label { margin-top:6px; max-width:110px; text-align:center; font-size:11px; line-height:1.45; opacity:.72; }
+.df-process-timeline-step.current .df-process-timeline-label { opacity:1; font-weight:700; }
+.df-process-timeline-connector { width:28px; height:2px; margin-top:8px; background:var(--border); flex:0 0 28px; }
+.df-process-timeline-step.completed + .df-process-timeline-step .df-process-timeline-connector { background:var(--accent); }
+.df-sla-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; padding-top:10px; border-top:1px solid var(--df-border,#e5e7eb); font-size:12px; }
+.df-sla-status { font-weight:700; }
+.df-sla-on-track { color:#15803d; }
+.df-sla-warning { color:#d97706; }
+.df-sla-breached { color:#dc2626; }
+.df-dashboard-empty { padding:24px 12px; text-align:center; opacity:.65; }
+.df-dashboard-priority { width:8px; height:8px; flex:0 0 8px; border-radius:50%; margin-top:6px; background:var(--accent); }
+.df-dashboard-priority-warning { background:#f59e0b; }
+.df-dashboard-priority-danger { background:#dc2626; }
+.df-dashboard-actions { display:flex; gap:8px; align-items:center; }
+.df-next-action-item { display:flex; align-items:flex-start; gap:12px; padding:13px 0; border-bottom:1px solid var(--border); }
+.df-next-action-item:last-child { border-bottom:0; }
+.df-next-action-main { flex:1; min-width:0; }
+.df-next-action-title { font-weight:700; }
+.df-next-action-meta { margin-top:5px; font-size:12px; opacity:.68; }
+.df-next-action-badge { flex:0 0 auto; font-size:11px; font-weight:700; }
+.df-next-action-badge-danger { color:#dc2626; }
+.df-next-action-badge-warning { color:#d97706; }
+.df-next-action-badge-normal { opacity:.72; }
+.df-dashboard-two-column { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr); gap:16px; }
+.df-update-item { display:flex; align-items:flex-start; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+.df-update-item:last-child { border-bottom:0; }
+.df-update-dot { width:8px; height:8px; flex:0 0 8px; margin-top:7px; border-radius:50%; background:var(--accent); }
+.df-update-main { flex:1; min-width:0; }
+.df-update-title { font-weight:700; }
+.df-update-message { margin-top:4px; font-size:12px; opacity:.68; line-height:1.6; }
+.df-update-meta { margin-top:5px; font-size:11px; opacity:.52; }
+@media (max-width:900px) { .df-dashboard-two-column { grid-template-columns:1fr; } }
+</style>
+
+<section class="df-content" data-dashboard-page="true">
+    <div class="df-welcome">
+        <h1>سلام، {{ request.user.get_full_name|default:request.user.username }}</h1>
+        <p>اینجا مهم‌ترین کارهایی را می‌بینید که همین حالا نیاز به توجه شما دارند.</p>
+    </div>
+
+    <section class="df-kpis">
+        <a href="{% url 'operator_panel:assigned_tasks' %}" class="df-card df-kpi"><div class="df-kpi-label">وظایف من</div><div class="df-kpi-value">{{ summary.tasks }}</div><div class="df-kpi-meta">وظایف فعال اختصاص‌یافته به شما</div></a>
+        <div class="df-card df-kpi"><div class="df-kpi-label">قابل اقدام</div><div class="df-kpi-value">{{ summary.pending }}</div><div class="df-kpi-meta">فرآیندهایی که اکنون می‌توانید روی آن‌ها اقدام کنید</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">نزدیک به SLA</div><div class="df-kpi-value">{{ summary.sla_warning }}</div><div class="df-kpi-meta">مواردی که به سررسید نزدیک شده‌اند</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">عقب‌افتاده</div><div class="df-kpi-value">{{ summary.sla_breached }}</div><div class="df-kpi-meta">مواردی که SLA آن‌ها گذشته است</div></div>
+    </section>
+
+    <section class="df-card df-panel">
+        <div class="df-panel-header"><div class="df-panel-title">الان چه کاری را اول انجام بدهم؟</div><span class="df-panel-link">{{ next_best_actions|length }} اولویت</span></div>
+        <div class="df-activity">
+            {% for instance in next_best_actions %}
+                <div class="df-next-action-item">
+                    <div class="df-dashboard-priority {% if instance.dashboard_priority_class == 'danger' %}df-dashboard-priority-danger{% elif instance.dashboard_priority_class == 'warning' %}df-dashboard-priority-warning{% endif %}"></div>
+                    <div class="df-next-action-main"><div class="df-next-action-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div><div class="df-next-action-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}{% if instance.dashboard_sla.configured %}{{ instance.dashboard_sla.label }}{% else %}بدون SLA{% endif %}</div></div>
+                    <span class="df-next-action-badge df-next-action-badge-{{ instance.dashboard_priority_class }}">{{ instance.dashboard_priority_label }}</span>
+                    <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-warning">انجام</a>
+                </div>
+            {% empty %}<div class="df-dashboard-empty">در حال حاضر اقدام قابل انجامی برای شما وجود ندارد.</div>{% endfor %}
+        </div>
+    </section>
+
+    <section class="df-card df-panel" id="pending-actions">
+        <div class="df-panel-header"><div class="df-panel-title">نیازمند اقدام</div><span class="df-panel-link">{{ summary.pending }} مورد</span></div>
+        <div class="df-activity df-dashboard-scroll df-pending-actions-scroll">
+            {% for instance in pending_actions %}
+                <div class="df-activity-item"><div class="df-dashboard-priority"></div><div class="df-activity-main"><div class="df-activity-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div><div class="df-activity-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}نیازمند اقدام</div></div><a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-warning">اقدام</a></div>
+            {% empty %}<div class="df-dashboard-empty">در حال حاضر کاری که نیازمند اقدام شما باشد وجود ندارد.</div>{% endfor %}
+        </div>
+    </section>
+
+    <section class="df-dashboard-two-column">
+        <section class="df-card df-panel">
+            <div class="df-panel-header"><div class="df-panel-title">در انتظار اقدام دیگران</div><a href="{% url 'operator_panel:waiting_for_others' %}" class="df-panel-link">{% if waiting_for_others_count > 5 %}مشاهده همه{% else %}{{ waiting_for_others_count }} مورد{% endif %}</a></div>
+            <div class="df-activity df-waiting-others-scroll">
+                {% for instance in waiting_for_others %}
+                    <div class="df-activity-item"><div class="df-dashboard-priority df-dashboard-priority-warning"></div><div class="df-activity-main"><div class="df-activity-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div><div class="df-activity-meta">{% if instance.current_step %}در مرحله «{{ instance.current_step.name }}» منتظر اقدام است.{% endif %}</div></div><a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-info">مشاهده</a></div>
+                {% empty %}<div class="df-dashboard-empty">فرآیندی از فرآیندهای شما در انتظار اقدام شخص دیگری نیست.</div>{% endfor %}
+            </div>
+            {% if waiting_for_others_count > 5 %}<div style="margin-top:10px;text-align:center;"><a href="{% url 'operator_panel:waiting_for_others' %}" class="df-panel-link">مشاهده همه {{ waiting_for_others_count }} مورد</a></div>{% endif %}
+        </section>
+
+        <section class="df-card df-panel">
+            <div class="df-panel-header"><div class="df-panel-title">به‌روزرسانی‌های شخصی</div><span class="df-panel-link">{{ personal_updates|length }} مورد جدید</span></div>
+            <div class="df-activity">
+                {% for update in personal_updates %}<div class="df-update-item"><div class="df-update-dot"></div><div class="df-update-main"><div class="df-update-title">{{ update.title }}</div>{% if update.message %}<div class="df-update-message">{{ update.message }}</div>{% endif %}<div class="df-update-meta">{{ update.created_at|timesince }} قبل</div></div></div>
+                {% empty %}<div class="df-dashboard-empty">به‌روزرسانی جدیدی برای شما وجود ندارد.</div>{% endfor %}
+            </div>
+        </section>
+    </section>
+
+    <section class="df-grid">
+        <div class="df-card df-panel">
+            <div class="df-panel-header"><div class="df-panel-title">فرآیندهای من</div><a href="{% url 'operator_panel:my_processes' %}" class="df-panel-link">مشاهده همه</a></div>
+            <div class="df-dashboard-scroll">
+                {% for instance in active_processes|slice:":5" %}
+                    <article class="df-process-card">
+                        <div class="df-process-card-header"><div><div class="df-process-card-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div><div class="df-process-card-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}شروع {{ instance.started_at|timesince }} قبل</div></div><a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a></div>
+                        {% if instance.dashboard_tracker %}<div class="df-process-timeline" aria-label="مسیر طی‌شده فرآیند"><div class="df-process-timeline-track">{% for item in instance.dashboard_tracker %}{% if item.state != "future" %}<div class="df-process-timeline-step {{ item.state }}">{% if not forloop.first %}<span class="df-process-timeline-connector" aria-hidden="true"></span>{% endif %}<div class="df-process-timeline-node"><span class="df-process-timeline-dot">{% if item.state == "completed" %}✓{% endif %}</span><span class="df-process-timeline-label">{{ item.step.name }}</span></div></div>{% endif %}{% endfor %}</div></div>{% endif %}
+                        {% if instance.dashboard_sla.configured %}<div class="df-sla-row"><span class="df-sla-status {% if instance.dashboard_sla.status == 'breached' %}df-sla-breached{% elif instance.dashboard_sla.status == 'warning' %}df-sla-warning{% elif instance.dashboard_sla.status == 'on_track' %}df-sla-on-track{% endif %}">{{ instance.dashboard_sla.label }}</span><span>سررسید: {{ instance.dashboard_sla.due_at|date:"Y/m/d H:i" }}</span></div>{% endif %}
+                    </article>
+                {% empty %}<div class="df-dashboard-empty">در حال حاضر فرآیند فعالی که توسط شما شروع شده باشد وجود ندارد.</div>{% endfor %}
+            </div>
+        </div>
+
+        <div class="df-card df-panel">
+            <div class="df-panel-header"><div class="df-panel-title">شروع سریع</div></div>
+            <div class="df-activity">
+                {% for workflow in startable_workflows|slice:":4" %}<div class="df-activity-item"><div class="df-dashboard-priority"></div><div class="df-activity-main"><div class="df-activity-title">{{ workflow.name }}</div>{% if workflow.description %}<div class="df-activity-meta">{{ workflow.description }}</div>{% endif %}</div><form method="post" action="{% url 'operator_panel:start_workflow' workflow.pk %}">{% csrf_token %}<button type="submit" class="df-status df-status-info">شروع</button></form></div>
+                {% empty %}<div class="df-dashboard-empty">در حال حاضر فرآیندی برای شروع در دسترس شما نیست.</div>{% endfor %}
+            </div>
+        </div>
+    </section>
+
+    {% if summary.sla_breached or summary.sla_warning %}<section class="df-card df-panel"><div class="df-panel-header"><div class="df-panel-title">هشدارهای SLA</div></div><div class="df-activity">{% if summary.sla_breached %}<div class="df-activity-item"><div class="df-dashboard-priority df-dashboard-priority-danger"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.sla_breached }} مورد از SLA عبور کرده است</div><div class="df-activity-meta">این موارد را در اولویت بررسی قرار دهید.</div></div></div>{% endif %}{% if summary.sla_warning %}<div class="df-activity-item"><div class="df-dashboard-priority df-dashboard-priority-warning"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.sla_warning }} مورد نزدیک به سررسید SLA است</div><div class="df-activity-meta">برای جلوگیری از تأخیر، این موارد را بررسی کنید.</div></div></div>{% endif %}</div></section>{% endif %}
+</section>
+{% endblock %}
