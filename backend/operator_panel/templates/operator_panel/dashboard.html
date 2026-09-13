@@ -6,6 +6,7 @@
 <style>
 .df-dashboard-scroll { max-height:420px; overflow-y:auto; padding-left:4px; scrollbar-width:thin; }
 .df-pending-actions-scroll { max-height:420px; }
+.df-waiting-others-scroll { max-height:300px; overflow-y:auto; padding-left:4px; scrollbar-width:thin; }
 .df-process-card { padding:18px; border:1px solid var(--border); border-radius:14px; background:var(--surface-3); }
 .df-process-card + .df-process-card { margin-top:12px; }
 .df-process-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:10px; }
@@ -31,7 +32,6 @@
 .df-dashboard-priority { width:8px; height:8px; flex:0 0 8px; border-radius:50%; margin-top:6px; background:var(--accent); }
 .df-dashboard-priority-warning { background:#f59e0b; }
 .df-dashboard-priority-danger { background:#dc2626; }
-.df-dashboard-actions { display:flex; gap:8px; align-items:center; }
 .df-next-action-item { display:flex; align-items:flex-start; gap:12px; padding:13px 0; border-bottom:1px solid var(--border); }
 .df-next-action-item:last-child { border-bottom:0; }
 .df-next-action-main { flex:1; min-width:0; }
@@ -42,13 +42,12 @@
 .df-next-action-badge-warning { color:#d97706; }
 .df-next-action-badge-normal { opacity:.72; }
 .df-dashboard-two-column { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr); gap:16px; }
-.df-update-item { display:flex; align-items:flex-start; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
-.df-update-item:last-child { border-bottom:0; }
-.df-update-dot { width:8px; height:8px; flex:0 0 8px; margin-top:7px; border-radius:50%; background:var(--accent); }
-.df-update-main { flex:1; min-width:0; }
-.df-update-title { font-weight:700; }
-.df-update-message { margin-top:4px; font-size:12px; opacity:.68; line-height:1.6; }
-.df-update-meta { margin-top:5px; font-size:11px; opacity:.52; }
+.df-unfinished-item { display:flex; align-items:flex-start; gap:12px; padding:13px 0; border-bottom:1px solid var(--border); }
+.df-unfinished-item:last-child { border-bottom:0; }
+.df-unfinished-main { flex:1; min-width:0; }
+.df-unfinished-title { font-weight:700; }
+.df-unfinished-meta { margin-top:5px; font-size:12px; opacity:.68; }
+.df-unfinished-actions { display:flex; gap:8px; align-items:center; flex:0 0 auto; }
 @media (max-width:900px) { .df-dashboard-two-column { grid-template-columns:1fr; } }
 </style>
 
@@ -102,8 +101,11 @@
 
     <section class="df-dashboard-two-column">
         <section class="df-card df-panel">
-            <div class="df-panel-header"><div class="df-panel-title">در انتظار اقدام دیگران</div><span class="df-panel-link">{{ waiting_for_others|length }} مورد</span></div>
-            <div class="df-activity">
+            <div class="df-panel-header">
+                <div class="df-panel-title">در انتظار اقدام دیگران</div>
+                {% if waiting_for_others_count > 5 %}<a href="{% url 'operator_panel:waiting_for_others' %}" class="df-panel-link">مشاهده همه</a>{% else %}<span class="df-panel-link">{{ waiting_for_others_count }} مورد</span>{% endif %}
+            </div>
+            <div class="df-activity df-waiting-others-scroll">
                 {% for instance in waiting_for_others %}
                     <div class="df-activity-item">
                         <div class="df-dashboard-priority df-dashboard-priority-warning"></div>
@@ -115,22 +117,33 @@
                     </div>
                 {% empty %}<div class="df-dashboard-empty">فرآیندی از فرآیندهای شما در انتظار اقدام شخص دیگری نیست.</div>{% endfor %}
             </div>
+            {% if waiting_for_others_count > 5 %}<div class="df-panel-footer"><a href="{% url 'operator_panel:waiting_for_others' %}" class="df-panel-link">مشاهده همه {{ waiting_for_others_count }} مورد</a></div>{% endif %}
         </section>
 
         <section class="df-card df-panel">
-            <div class="df-panel-header"><div class="df-panel-title">به‌روزرسانی‌های شخصی</div><span class="df-panel-link">{{ personal_updates|length }} مورد جدید</span></div>
+            <div class="df-panel-header">
+                <div class="df-panel-title">فرآیندهای نیمه‌تمام من</div>
+                {% if unfinished_processes_count > 5 %}<a href="{% url 'operator_panel:unfinished_processes' %}" class="df-panel-link">مشاهده همه</a>{% else %}<span class="df-panel-link">{{ unfinished_processes_count }} مورد</span>{% endif %}
+            </div>
             <div class="df-activity">
-                {% for update in personal_updates %}
-                    <div class="df-update-item">
-                        <div class="df-update-dot"></div>
-                        <div class="df-update-main">
-                            <div class="df-update-title">{{ update.title }}</div>
-                            {% if update.message %}<div class="df-update-message">{{ update.message }}</div>{% endif %}
-                            <div class="df-update-meta">{{ update.created_at|timesince }} قبل</div>
+                {% for instance in unfinished_processes %}
+                    <div class="df-unfinished-item">
+                        <div class="df-dashboard-priority"></div>
+                        <div class="df-unfinished-main">
+                            <div class="df-unfinished-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
+                            <div class="df-unfinished-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}شروع {{ instance.started_at|timesince }} قبل</div>
+                        </div>
+                        <div class="df-unfinished-actions">
+                            <form method="post" action="{% url 'operator_panel:hide_dashboard_process' instance.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="df-status df-status-secondary" title="حذف از این فهرست">حذف</button>
+                            </form>
+                            <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
                         </div>
                     </div>
-                {% empty %}<div class="df-dashboard-empty">به‌روزرسانی جدیدی برای شما وجود ندارد.</div>{% endfor %}
+                {% empty %}<div class="df-dashboard-empty">در حال حاضر فرآیند نیمه‌تمامی از فرآیندهای شما وجود ندارد.</div>{% endfor %}
             </div>
+            {% if unfinished_processes_count > 5 %}<div class="df-panel-footer"><a href="{% url 'operator_panel:unfinished_processes' %}" class="df-panel-link">مشاهده همه {{ unfinished_processes_count }} مورد</a></div>{% endif %}
         </section>
     </section>
 
@@ -144,7 +157,6 @@
                             <div><div class="df-process-card-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div><div class="df-process-card-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}شروع {{ instance.started_at|timesince }} قبل</div></div>
                             <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
                         </div>
-
                         {% if instance.dashboard_tracker %}
                         <div class="df-process-timeline" aria-label="مسیر طی‌شده فرآیند">
                             <div class="df-process-timeline-track">
@@ -162,7 +174,6 @@
                             </div>
                         </div>
                         {% endif %}
-
                         {% if instance.dashboard_sla.configured %}<div class="df-sla-row"><span class="df-sla-status {% if instance.dashboard_sla.status == 'breached' %}df-sla-breached{% elif instance.dashboard_sla.status == 'warning' %}df-sla-warning{% elif instance.dashboard_sla.status == 'on_track' %}df-sla-on-track{% endif %}">{{ instance.dashboard_sla.label }}</span><span>سررسید: {{ instance.dashboard_sla.due_at|date:"Y/m/d H:i" }}</span></div>{% endif %}
                     </article>
                 {% empty %}<div class="df-dashboard-empty">در حال حاضر فرآیند فعالی که توسط شما شروع شده باشد وجود ندارد.</div>{% endfor %}
@@ -181,10 +192,17 @@
 
     {% if summary.sla_breached or summary.sla_warning %}
     <section class="df-card df-panel">
-        <div class="df-panel-header"><div class="df-panel-title">هشدارهای SLA</div></div>
+        <div class="df-panel-header"><div class="df-panel-title">وضعیت SLA</div><span class="df-panel-link">{{ summary.sla_breached|add:summary.sla_warning }} مورد نیازمند توجه</span></div>
         <div class="df-activity">
-            {% if summary.sla_breached %}<div class="df-activity-item"><div class="df-dashboard-priority df-dashboard-priority-danger"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.sla_breached }} مورد از SLA عبور کرده است</div><div class="df-activity-meta">این موارد را در اولویت بررسی قرار دهید.</div></div></div>{% endif %}
-            {% if summary.sla_warning %}<div class="df-activity-item"><div class="df-dashboard-priority df-dashboard-priority-warning"></div><div class="df-activity-main"><div class="df-activity-title">{{ summary.sla_warning }} مورد نزدیک به سررسید SLA است</div><div class="df-activity-meta">برای جلوگیری از تأخیر، این موارد را بررسی کنید.</div></div></div>{% endif %}
+            {% for instance in active_processes %}
+                {% if instance.dashboard_sla.configured and instance.dashboard_sla.status != 'on_track' %}
+                <div class="df-activity-item">
+                    <div class="df-dashboard-priority {% if instance.dashboard_sla.status == 'breached' %}df-dashboard-priority-danger{% else %}df-dashboard-priority-warning{% endif %}"></div>
+                    <div class="df-activity-main"><div class="df-activity-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div><div class="df-activity-meta">{{ instance.dashboard_sla.label }}{% if instance.current_step %} · مرحله {{ instance.current_step.name }}{% endif %}</div></div>
+                    <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status {% if instance.dashboard_sla.status == 'breached' %}df-status-danger{% else %}df-status-warning{% endif %}">مشاهده</a>
+                </div>
+                {% endif %}
+            {% endfor %}
         </div>
     </section>
     {% endif %}
