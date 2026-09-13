@@ -12,6 +12,7 @@ class WorkflowConfig(AppConfig):
         from django.contrib.admin import autodiscover
         autodiscover()
         from .history_admin import HistoryConfigurationAdmin  # noqa: F401
+        from .override_admin import WorkflowInstanceOverrideAdmin  # noqa: F401
         from .formula_bootstrap import bootstrap_formula_system
         from . import signals  # noqa: F401
         from django.core.signals import request_started
