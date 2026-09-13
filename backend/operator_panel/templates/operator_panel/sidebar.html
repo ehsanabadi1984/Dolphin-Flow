@@ -2,21 +2,17 @@
 {% sidebar_counts as sidebar_counts %}
 
 <style>
-.df-nav-workflows { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; padding-left: 2px; scrollbar-width: thin; }
-.df-nav-workflow-form { margin: 0; }
-.df-nav-workflow-button { width: 100%; border: 0; text-align: right; cursor: pointer; background: transparent; font: inherit; }
-.df-nav-empty { padding: 8px 11px; color: #626a76; font-size: 10px; }
-.df-nav-badge { margin-right: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; line-height: 1; background: rgba(255,255,255,.10); }
-.df-nav-badge-warning { background: rgba(245,158,11,.18); color: #f59e0b; }
-.sidebar-collapsed .df-nav-workflow-button { justify-content: center; }
-.sidebar-collapsed .df-nav-badge { display: none; }
-.df-nav-logout-form { margin: 0; }
-.df-nav-logout-button { width: 100%; border: 0; text-align: right; cursor: pointer; background: transparent; font: inherit; }
-.sidebar-collapsed .df-nav-logout-button { justify-content: center; }
+.df-nav-workflows { display:flex; flex-direction:column; gap:4px; max-height:260px; overflow-y:auto; padding-left:2px; scrollbar-width:thin; }
+.df-nav-workflow-form,.df-nav-logout-form { margin:0; }
+.df-nav-workflow-button,.df-nav-logout-button { width:100%; border:0; text-align:right; cursor:pointer; background:transparent; font:inherit; }
+.df-nav-empty { padding:8px 11px; color:#626a76; font-size:10px; }
+.df-nav-badge { margin-right:auto; min-width:20px; height:20px; padding:0 6px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; line-height:1; background:rgba(255,255,255,.10); }
+.df-nav-badge-warning { background:rgba(245,158,11,.18); color:#f59e0b; }
+.sidebar-collapsed .df-nav-workflow-button,.sidebar-collapsed .df-nav-logout-button { justify-content:center; }
+.sidebar-collapsed .df-nav-badge { display:none; }
 </style>
 
 <aside class="df-sidebar">
-
     <div class="df-brand">
         <div class="df-brand-mark"><span>DF</span></div>
         <div class="df-brand-text">
@@ -31,90 +27,49 @@
 
     <nav class="df-nav">
         <div class="df-nav-label">اصلی</div>
-
         <a href="{% url 'operator_panel:dashboard' %}" class="df-nav-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" data-tooltip="داشبورد">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path><path d="M9 21v-6h6v6"></path>
-            </svg>
-            <span>داشبورد</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path><path d="M9 21v-6h6v6"></path></svg><span>داشبورد</span>
         </a>
 
         <div class="df-nav-label">فرآیندها</div>
-
         <a href="{% url 'operator_panel:my_processes' %}" class="df-nav-link{% if request.resolver_match.url_name == 'my_processes' %} active{% endif %}" data-tooltip="فرآیندهای من">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 4h14v16H5z"></path><path d="M8 9h8"></path><path d="M8 13h6"></path><path d="M8 17h4"></path>
-            </svg>
-            <span>فرآیندهای من</span>
-            <span class="df-nav-badge" id="df-sidebar-active-count"{% if not sidebar_counts.active %} hidden{% endif %}>{{ sidebar_counts.active }}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"></path><path d="M8 9h8"></path><path d="M8 13h6"></path><path d="M8 17h4"></path></svg>
+            <span>فرآیندهای من</span><span class="df-nav-badge" id="df-sidebar-active-count"{% if not sidebar_counts.active %} hidden{% endif %}>{{ sidebar_counts.active }}</span>
         </a>
 
         <div class="df-nav-label df-nav-label-workflows">شروع فرآیند</div>
-
-        <button
-            type="button"
-            class="df-nav-link df-nav-workflow-trigger"
-            id="df-nav-workflow-trigger"
-            aria-expanded="false"
-            aria-controls="df-nav-workflows"
-            data-tooltip="شروع فرآیند"
-        >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14"></path><path d="M5 12h14"></path>
-            </svg>
-            <span>شروع فرآیند</span>
+        <button type="button" class="df-nav-link df-nav-workflow-trigger" id="df-nav-workflow-trigger" aria-expanded="false" aria-controls="df-nav-workflows" data-tooltip="شروع فرآیند">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg><span>شروع فرآیند</span>
         </button>
-
         <div class="df-nav-workflows" id="df-nav-workflows">
             {% startable_workflows as sidebar_workflows %}
             {% for workflow in sidebar_workflows %}
                 <form method="post" action="{% url 'operator_panel:start_workflow' workflow.pk %}" class="df-nav-workflow-form">
-                    {% csrf_token %}
-                    <button type="submit" class="df-nav-link df-nav-workflow-button" data-tooltip="{{ workflow.name }}">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M5 4h14v16H5z"></path><path d="m9 12 2 2 4-4"></path>
-                        </svg>
-                        <span>{{ workflow.name }}</span>
+                    {% csrf_token %}<button type="submit" class="df-nav-link df-nav-workflow-button" data-tooltip="{{ workflow.name }}">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"></path><path d="m9 12 2 2 4-4"></path></svg><span>{{ workflow.name }}</span>
                     </button>
                 </form>
-            {% empty %}
-                <div class="df-nav-empty">فرآیند قابل شروعی وجود ندارد.</div>
-            {% endfor %}
+            {% empty %}<div class="df-nav-empty">فرآیند قابل شروعی وجود ندارد.</div>{% endfor %}
         </div>
 
-        <a href="{% url 'operator_panel:dashboard' %}#my-tasks" class="df-nav-link" data-tooltip="وظایف اختصاص‌یافته">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 4h14v16H5z"></path><path d="m8 9 2 2 4-4"></path><path d="M8 15h8"></path>
-            </svg>
-            <span>وظایف اختصاص‌یافته</span>
-            <span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-task-count"{% if not sidebar_counts.tasks %} hidden{% endif %}>{{ sidebar_counts.tasks }}</span>
+        <a href="{% url 'operator_panel:assigned_tasks' %}" class="df-nav-link{% if request.resolver_match.url_name == 'assigned_tasks' %} active{% endif %}" data-tooltip="وظایف اختصاص‌یافته">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"></path><path d="m8 9 2 2 4-4"></path><path d="M8 15h8"></path></svg>
+            <span>وظایف اختصاص‌یافته</span><span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-task-count"{% if not sidebar_counts.tasks %} hidden{% endif %}>{{ sidebar_counts.tasks }}</span>
         </a>
 
         <a href="{% url 'operator_panel:dashboard' %}#pending-actions" class="df-nav-link" data-tooltip="اقدام‌های قابل انجام">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l2.5 2"></path>
-            </svg>
-            <span>اقدام‌های قابل انجام</span>
-            <span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-pending-count"{% if not sidebar_counts.pending %} hidden{% endif %}>{{ sidebar_counts.pending }}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l2.5 2"></path></svg>
+            <span>اقدام‌های قابل انجام</span><span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-pending-count"{% if not sidebar_counts.pending %} hidden{% endif %}>{{ sidebar_counts.pending }}</span>
         </a>
     </nav>
 
     <div class="df-sidebar-footer">
         <a href="{% url 'accounts:settings' %}" class="df-nav-link{% if request.resolver_match.app_name == 'accounts' and request.resolver_match.url_name == 'settings' %} active{% endif %}" data-tooltip="تنظیمات">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8-.1.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1.4Z"></path>
-            </svg>
-            <span>تنظیمات</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8-.1.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.6-1H6v-2.5h.4A1.7 1.7 0 0 0 8 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9.3l.1-.1 1.8 1.8 0 .1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1.4Z"></path></svg><span>تنظیمات</span>
         </a>
-
         <form method="post" action="{% url 'accounts:logout' %}" class="df-nav-logout-form">
-            {% csrf_token %}
-            <button type="submit" class="df-nav-link df-nav-logout df-nav-logout-button" data-tooltip="خروج">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path><path d="M21 3v18"></path>
-                </svg>
-                <span>خروج</span>
+            {% csrf_token %}<button type="submit" class="df-nav-link df-nav-logout df-nav-logout-button" data-tooltip="خروج">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path><path d="M21 3v18"></path></svg><span>خروج</span>
             </button>
         </form>
     </div>
