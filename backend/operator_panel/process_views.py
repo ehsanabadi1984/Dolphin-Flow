@@ -8,7 +8,7 @@ from django.shortcuts import render
 
 from workflow.models import WorkflowInstance
 
-from .dashboard_services import DashboardService
+from .dashboard_services import DashboardService, _can_take_action_q
 
 
 FORM_NUMBER_PATTERN = re.compile(r"^(?P<date>\d{6})-(?P<pk>\d{6})$")
@@ -73,7 +73,7 @@ def assigned_tasks(request):
     instances = (
         service._accessible_active_queryset()
         .filter(current_step__assigned_to_id=request.user.pk)
-        .filter(Q(_df_execute_user_allow=True) | Q(_df_transition_granted=True))
+        .filter(_can_take_action_q(request.user))
     )
 
     workflows = (
