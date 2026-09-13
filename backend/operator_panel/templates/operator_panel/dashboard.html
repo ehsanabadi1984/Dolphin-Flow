@@ -8,10 +8,21 @@
 .df-pending-actions-scroll { max-height:420px; }
 .df-process-card { padding:18px; border:1px solid var(--border); border-radius:14px; background:var(--surface-3); }
 .df-process-card + .df-process-card { margin-top:12px; }
-.df-process-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px; }
+.df-process-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:10px; }
 .df-process-card-title { font-weight:700; }
 .df-process-card-meta { margin-top:5px; font-size:12px; opacity:.68; }
-.df-sla-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--df-border,#e5e7eb); font-size:12px; }
+.df-process-timeline { margin-top:4px; padding:4px 0 2px; overflow-x:auto; scrollbar-width:thin; }
+.df-process-timeline-track { display:flex; align-items:flex-start; min-width:max-content; }
+.df-process-timeline-step { display:flex; align-items:flex-start; flex:0 0 auto; }
+.df-process-timeline-node { display:flex; flex-direction:column; align-items:center; min-width:76px; max-width:110px; }
+.df-process-timeline-dot { width:18px; height:18px; border-radius:50%; border:2px solid var(--border); background:var(--surface-3); display:flex; align-items:center; justify-content:center; font-size:10px; line-height:1; font-weight:800; }
+.df-process-timeline-step.completed .df-process-timeline-dot { border-color:var(--accent); background:var(--accent); color:var(--surface-1); }
+.df-process-timeline-step.current .df-process-timeline-dot { border-color:var(--accent); background:var(--surface-3); box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); }
+.df-process-timeline-label { margin-top:6px; max-width:110px; text-align:center; font-size:11px; line-height:1.45; opacity:.72; }
+.df-process-timeline-step.current .df-process-timeline-label { opacity:1; font-weight:700; }
+.df-process-timeline-connector { width:28px; height:2px; margin-top:8px; background:var(--border); flex:0 0 28px; }
+.df-process-timeline-step.completed + .df-process-timeline-step .df-process-timeline-connector { background:var(--accent); }
+.df-sla-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; padding-top:10px; border-top:1px solid var(--df-border,#e5e7eb); font-size:12px; }
 .df-sla-status { font-weight:700; }
 .df-sla-on-track { color:#15803d; }
 .df-sla-warning { color:#d97706; }
@@ -64,6 +75,25 @@
                             <div><div class="df-process-card-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div><div class="df-process-card-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}شروع {{ instance.started_at|timesince }} قبل</div></div>
                             <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
                         </div>
+
+                        {% if instance.dashboard_tracker %}
+                        <div class="df-process-timeline" aria-label="مسیر طی‌شده فرآیند">
+                            <div class="df-process-timeline-track">
+                                {% for item in instance.dashboard_tracker %}
+                                    {% if item.state != "future" %}
+                                        <div class="df-process-timeline-step {{ item.state }}">
+                                            {% if not forloop.first %}<span class="df-process-timeline-connector" aria-hidden="true"></span>{% endif %}
+                                            <div class="df-process-timeline-node">
+                                                <span class="df-process-timeline-dot">{% if item.state == "completed" %}✓{% endif %}</span>
+                                                <span class="df-process-timeline-label">{{ item.step.name }}</span>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
                         {% if instance.dashboard_sla.configured %}<div class="df-sla-row"><span class="df-sla-status {% if instance.dashboard_sla.status == 'breached' %}df-sla-breached{% elif instance.dashboard_sla.status == 'warning' %}df-sla-warning{% elif instance.dashboard_sla.status == 'on_track' %}df-sla-on-track{% endif %}">{{ instance.dashboard_sla.label }}</span><span>سررسید: {{ instance.dashboard_sla.due_at|date:"Y/m/d H:i" }}</span></div>{% endif %}
                     </article>
                 {% empty %}<div class="df-dashboard-empty">در حال حاضر فرآیند فعالی که توسط شما شروع شده باشد وجود ندارد.</div>{% endfor %}
