@@ -41,9 +41,40 @@ document.addEventListener("DOMContentLoaded", () => {
         return Array.from(group.querySelectorAll("[data-repeatable-item]:not([data-repeatable-template])"));
     }
 
+    function getVisibleGroupFieldCodes(groupCode) {
+        return Array.from(state.fieldsById.values())
+            .filter(field => field.group_code === groupCode)
+            .map(field => field.code);
+    }
+
+    function readReadonlyGroupFieldValue(field, row, groupCode) {
+        const fieldCodes = getVisibleGroupFieldCodes(groupCode);
+        const columnIndex = fieldCodes.indexOf(field.code);
+        if (columnIndex < 0) return 0;
+
+        const cell = row.children[columnIndex];
+        if (!cell) return 0;
+
+        const output = cell.querySelector(".df-table-value");
+        return output ? toNumber(output.textContent) : 0;
+    }
+
     function readGroupFieldValue(field, row, groupCode, rowIndex) {
         const name = `${groupCode}_${rowIndex}_${field.code}`;
-        return readInput(findNamedElement(name, row));
+        const input = findNamedElement(name, row);
+        if (input) return readInput(input);
+        return readReadonlyGroupFieldValue(field, row, groupCode);
+    }
+
+    function readNormalFieldValue(field) {
+        const input = findNamedElement(field.code, form);
+        if (input) return readInput(input);
+
+        const container = form.querySelector(`.df-form-field[data-field-code="${CSS.escape(field.code)}"]`);
+        if (!container) return 0;
+
+        const output = container.querySelector(".df-form-value");
+        return output ? toNumber(output.textContent) : 0;
     }
 
     function aggregateGroupField(field, functionName) {
@@ -205,8 +236,10 @@ document.addEventListener("DOMContentLoaded", () => {
             return evaluateFormula(dependency, rowRoot, rowIndex, stack);
         }
         if (!ownerIsRow && field.group_code) return 0;
-        const name = ownerIsRow ? `${ownerFormula.group_code}_${rowIndex}_${field.code}` : field.code;
-        return readInput(findNamedElement(name, rowRoot || document));
+        if (ownerIsRow) {
+            return readGroupFieldValue(field, rowRoot, ownerFormula.group_code, rowIndex);
+        }
+        return readNormalFieldValue(field);
     }
 
     function formatNumber(value, decimalPlaces) {
@@ -262,13 +295,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function isEditMode() {
-        // Edit mode is signalled by the server on the <form> element.
-        // DOM heuristics cannot be used: the read-only page intentionally
-        // still renders a .df-form-actions bar (ویرایش / پاک کردن actions)
-        // as well as hidden device editors, so neither their presence nor
-        // input existence distinguishes edit from read-only state.
-        // Recalculating outside edit mode would read missing inputs as 0
-        // and overwrite the server-rendered formula values with zeros.
         return form.dataset.editMode === "1";
     }
 
