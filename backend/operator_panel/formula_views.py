@@ -231,6 +231,30 @@ def formula_definitions(request, instance_id):
         visible_field_ids.add(field.pk)
         visible_fields.append(field_payload)
 
+    # Formula resolution must know every numeric/formula source field even
+    # when the current workflow step hides that field. These entries are used
+    # only by the calculation engine; they are not rendered by this endpoint.
+    for field in all_fields:
+        if field.pk in visible_field_ids:
+            continue
+        if field.field_type not in {
+            FormField.FieldType.NUMBER,
+            FormulaService.FIELD_TYPE,
+        }:
+            continue
+        visible_fields.append(
+            {
+                "id": field.pk,
+                "code": field.code,
+                "label": field.label,
+                "group_code": (
+                    field.repeatable_group.code
+                    if field.repeatable_group_id
+                    else None
+                ),
+            }
+        )
+
     formulas = []
     all_formula_fields = [
         field for field in all_fields
@@ -272,18 +296,18 @@ def formula_definitions(request, instance_id):
             scope = "FORM"
             group_code = None
 
-        formula_payload = {
-            "field_id": field.pk,
-            "code": field.code,
-            "label": field.label,
-            "group_code": group_code,
-            "scope": scope,
-            "decimal_places": config.get("decimal_places", 2),
-            "tokens": config.get("tokens", []),
-            "visible_columns": visible_columns,
-        }
-
-        formulas.append(formula_payload)
+        formulas.append(
+            {
+                "field_id": field.pk,
+                "code": field.code,
+                "label": field.label,
+                "group_code": group_code,
+                "scope": scope,
+                "decimal_places": config.get("decimal_places", 2),
+                "tokens": config.get("tokens", []),
+                "visible_columns": visible_columns,
+            }
+        )
 
     return JsonResponse(
         {
