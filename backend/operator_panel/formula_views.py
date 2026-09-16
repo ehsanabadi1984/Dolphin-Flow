@@ -231,52 +231,14 @@ def formula_definitions(request, instance_id):
         visible_field_ids.add(field.pk)
         visible_fields.append(field_payload)
 
-    # Formula resolution must know every numeric/formula source field even
-    # when the current workflow step hides that field. These entries are used
-    # only by the calculation engine; they are not rendered by this endpoint.
-    for field in all_fields:
-        if field.pk in visible_field_ids:
-            continue
-        if field.field_type not in {
-            FormField.FieldType.NUMBER,
-            FormulaService.FIELD_TYPE,
-        }:
-            continue
-        visible_fields.append(
-            {
-                "id": field.pk,
-                "code": field.code,
-                "label": field.label,
-                "group_code": (
-                    field.repeatable_group.code
-                    if field.repeatable_group_id
-                    else None
-                ),
-            }
-        )
-
-    formulas = []
     all_formula_fields = [
         field for field in all_fields
         if field.field_type == FormulaService.FIELD_TYPE
     ]
 
-    source_data = {}
-    for field in all_fields:
-        if field.repeatable_group_id:
-            group = field.repeatable_group
-            rows = stored_data.get(group.code, [])
-            source_data[str(field.pk)] = {
-                "code": field.code,
-                "group_code": group.code,
-                "value": rows if isinstance(rows, list) else [],
-            }
-        else:
-            source_data[str(field.pk)] = {
-                "code": field.code,
-                "group_code": None,
-                "value": stored_data.get(field.code, ""),
-            }
+    formulas = []
+    formula_configs = {}
+    required_source_ids = set()
 
     for field in all_formula_fields:
         if field.pk not in visible_field_ids:
@@ -285,6 +247,9 @@ def formula_definitions(request, instance_id):
         config = FormulaService.get_config(field)
         if not config:
             continue
+
+        formula_configs[field.pk] = config
+        required_source_ids.update(FormulaService.referenced_field_ids(config))
 
         if field.repeatable_group_id:
             group = field.repeatable_group
@@ -308,6 +273,70 @@ def formula_definitions(request, instance_id):
                 "visible_columns": visible_columns,
             }
         )
+
+    # Include the dependency closure so a visible formula can resolve another
+    # formula field even when that dependency is hidden in the current step.
+    changed = True
+    while changed:
+        changed = False
+        for field_id in list(required_source_ids):
+            config = formula_configs.get(field_id)
+            if config is None:
+                field = next((item for item in all_formula_fields if item.pk == field_id), None)
+                if field is None:
+                    continue
+                config = FormulaService.get_config(field)
+                if not config:
+                    continue
+                formula_configs[field_id] = config
+            before = len(required_source_ids)
+            required_source_ids.update(FormulaService.referenced_field_ids(config))
+            changed = changed or len(required_source_ids) != before
+
+    # Formula resolution must know every numeric/formula source field even
+    # when the current workflow step hides that field. These entries are used
+    # only by the calculation engine; they are not rendered by this endpoint.
+    for field in all_fields:
+        if field.pk in visible_field_ids:
+            continue
+        if field.pk not in required_source_ids:
+            continue
+        if field.field_type not in {
+            FormField.FieldType.NUMBER,
+            FormulaService.FIELD_TYPE,
+        }:
+            continue
+        visible_fields.append(
+            {
+                "id": field.pk,
+                "code": field.code,
+                "label": field.label,
+                "group_code": (
+                    field.repeatable_group.code
+                    if field.repeatable_group_id
+                    else None
+                ),
+            }
+        )
+
+    source_data = {}
+    for field in all_fields:
+        if field.pk not in required_source_ids:
+            continue
+        if field.repeatable_group_id:
+            group = field.repeatable_group
+            rows = stored_data.get(group.code, [])
+            source_data[str(field.pk)] = {
+                "code": field.code,
+                "group_code": group.code,
+                "value": rows if isinstance(rows, list) else [],
+            }
+        else:
+            source_data[str(field.pk)] = {
+                "code": field.code,
+                "group_code": None,
+                "value": stored_data.get(field.code, ""),
+            }
 
     return JsonResponse(
         {
