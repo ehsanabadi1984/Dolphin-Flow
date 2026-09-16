@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.formula_services import FormulaService
 from workflow.models import (
+    FormData,
     FormDefinition,
     FormField,
     FormRepeatableGroup,
@@ -89,10 +90,6 @@ def _formula_source_fields(*, section_id, group_id, exclude_id=None):
     if exclude_id:
         queryset = queryset.exclude(pk=exclude_id)
 
-    # A Formula inside a NORMAL repeatable group is evaluated per row and may
-    # only consume fields from that same group. A top-level Formula can consume
-    # ordinary fields from the whole form and NORMAL-group fields through
-    # aggregate functions such as SUM/MIN/MAX/AVG.
     if group_id:
         group = get_object_or_404(
             FormRepeatableGroup,
@@ -172,20 +169,27 @@ def formula_definitions(request, instance_id):
                 "form_id": form.pk if form else None,
                 "fields": [],
                 "formulas": [],
+                "source_data": {},
             }
         )
+
+    form_data = FormData.objects.filter(instance=instance).first()
+    stored_data = form_data.data if form_data and isinstance(form_data.data, dict) else {}
+
+    all_fields = list(
+        FormField.objects
+        .filter(section__form=form, is_active=True)
+        .select_related("section", "repeatable_group")
+        .order_by("section__order", "repeatable_group__order", "order", "id")
+    )
+    fields_by_id = {field.pk: field for field in all_fields}
 
     visible_fields = []
     visible_field_ids = set()
     normal_dom_index = 0
     group_visible_columns = {}
 
-    for field in (
-        FormField.objects
-        .filter(section__form=form, is_active=True)
-        .select_related("section", "repeatable_group")
-        .order_by("section__order", "repeatable_group__order", "order", "id")
-    ):
+    for field in all_fields:
         if field.repeatable_group_id:
             group = field.repeatable_group
             if group.group_type != FormRepeatableGroup.GroupType.NORMAL:
@@ -229,15 +233,25 @@ def formula_definitions(request, instance_id):
         visible_fields.append(field_payload)
 
     formulas = []
-    all_formula_fields = (
-        FormField.objects
-        .filter(
-            section__form=form,
-            field_type=FormulaService.FIELD_TYPE,
-            is_active=True,
-        )
-        .select_related("repeatable_group")
-    )
+    all_formula_fields = [
+        field for field in all_fields
+        if field.field_type == FormulaService.FIELD_TYPE
+    ]
+
+    source_data = {}
+    for field in all_fields:
+        if field.repeatable_group_id:
+            group = field.repeatable_group
+            rows = stored_data.get(group.code, [])
+            source_data[str(field.pk)] = {
+                "group_code": group.code,
+                "value": rows if isinstance(rows, list) else [],
+            }
+        else:
+            source_data[str(field.pk)] = {
+                "group_code": None,
+                "value": stored_data.get(field.code, ""),
+            }
 
     for field in all_formula_fields:
         if field.pk not in visible_field_ids:
@@ -275,5 +289,6 @@ def formula_definitions(request, instance_id):
             "form_id": form.pk,
             "fields": visible_fields,
             "formulas": formulas,
+            "source_data": source_data,
         }
     )
