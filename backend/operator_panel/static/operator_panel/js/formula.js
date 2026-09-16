@@ -41,15 +41,18 @@ document.addEventListener("DOMContentLoaded", () => {
         return Array.from(group.querySelectorAll("[data-repeatable-item]:not([data-repeatable-template])"));
     }
 
-    function getVisibleGroupFieldCodes(groupCode) {
-        return Array.from(state.fieldsById.values())
-            .filter(field => field.group_code === groupCode)
-            .map(field => field.code);
+    function getGroupVisibleColumns(groupCode) {
+        for (const formula of state.formulasById.values()) {
+            if (formula.scope === "ROW" && formula.group_code === groupCode && Array.isArray(formula.visible_columns)) {
+                return formula.visible_columns;
+            }
+        }
+        return [];
     }
 
     function readReadonlyGroupFieldValue(field, row, groupCode) {
-        const fieldCodes = getVisibleGroupFieldCodes(groupCode);
-        const columnIndex = fieldCodes.indexOf(field.code);
+        const visibleColumns = getGroupVisibleColumns(groupCode);
+        const columnIndex = visibleColumns.indexOf(field.code);
         if (columnIndex < 0) return 0;
 
         const cell = row.children[columnIndex];
