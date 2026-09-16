@@ -182,7 +182,6 @@ def formula_definitions(request, instance_id):
         .select_related("section", "repeatable_group")
         .order_by("section__order", "repeatable_group__order", "order", "id")
     )
-    fields_by_id = {field.pk: field for field in all_fields}
 
     visible_fields = []
     visible_field_ids = set()
@@ -244,11 +243,13 @@ def formula_definitions(request, instance_id):
             group = field.repeatable_group
             rows = stored_data.get(group.code, [])
             source_data[str(field.pk)] = {
+                "code": field.code,
                 "group_code": group.code,
                 "value": rows if isinstance(rows, list) else [],
             }
         else:
             source_data[str(field.pk)] = {
+                "code": field.code,
                 "group_code": None,
                 "value": stored_data.get(field.code, ""),
             }
