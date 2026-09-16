@@ -3419,6 +3419,11 @@ class DynamicFormService:
                 if not group_can_view:
                     continue
 
+                # Read-only group does not participate in persistence.
+                # Existing hidden IDs in POST do not mean the group was edited.
+                if not group_can_edit and not group_can_add and not group_can_delete:
+                    continue
+
                 # -------------------------------------------------
                 # Verify submitted repeatable group
                 # -------------------------------------------------
@@ -3548,14 +3553,15 @@ class DynamicFormService:
                                 f"شما اجازه حذف ردیف از گروه «{group.name}» را ندارید."
                             )
 
+                    group_prefix = f"{group.code}_"
+                    has_submitted_group_data = any(
+                        str(key).startswith(group_prefix)
+                        for key in submitted_data.keys()
+                    )
+
                     if not items:
-                        # -------------------------------------------------
-                        # Genuine empty state.
-                        #
-                        # An untouched group stays empty; a group whose
-                        # rows were all removed (allowed by can_delete)
-                        # is persisted as [].
-                        # -------------------------------------------------
+                        if previous_items and not has_submitted_group_data:
+                            continue
 
                         if previous_items:
                             current_data[group.code] = []

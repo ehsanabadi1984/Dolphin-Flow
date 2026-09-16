@@ -109,6 +109,14 @@ def _inject_formula_context(*, context, calculated_data):
                 if not isinstance(rows, list):
                     rows = []
 
+                print("\n========== FORMULA DEBUG C ==========")
+                print("GROUP CODE:", group_obj.code)
+                print("CALCULATED ROWS:")
+                print(rows)
+                print("RENDER ITEMS:")
+                print(group.get("items", []))
+                print("=====================================\n")
+
                 for row_index, item in enumerate(group.get("items", [])):
                     row_data = rows[row_index] if row_index < len(rows) else {}
                     if not isinstance(row_data, dict):
@@ -294,6 +302,20 @@ def bootstrap_formula_system():
                     submitted_data=submitted_data,
                     edit_mode=edit_mode,
                 )
+                print("\n========== FORMULA DEBUG A ==========")
+                print("AFTER ORIGINAL SAVE:")
+                print(form_data if "form_data" in locals() else "form_data not loaded yet")
+
+                saved_form_data = (
+                    FormData.objects
+                    .filter(instance=instance)
+                    .values_list("data", flat=True)
+                    .first()
+                )
+
+                print("SAVED FormData.data:")
+                print(saved_form_data)
+                print("====================================\n")
 
                 if form is None or not formula_fields:
                     return result
@@ -307,6 +329,15 @@ def bootstrap_formula_system():
                     form=form,
                     data=form_data.data or {},
                 )
+                print("\n========== FORMULA DEBUG B ==========")
+                print("BEFORE CALCULATION:")
+                print(form_data.data)
+
+                print("AFTER CALCULATION:")
+                print(calculated)
+
+                print("====================================\n")
+
                 form_data.data = calculated
                 form_data.save()
 
