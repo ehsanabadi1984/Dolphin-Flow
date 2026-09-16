@@ -27,7 +27,7 @@
         {% csrf_token %}
         <input type="hidden" name="confirm" value="1">
         <button type="submit" class="button default">بله، بازیابی را شروع کن</button>
-        <a href="{% url 'admin:backup_backup_changelist' %}" class="button">انصراف</a>
+        <a href="{% url 'dolphin_admin:backup_backup_changelist' %}" class="button">انصراف</a>
     </form>
 </div>
 {% endblock %}
