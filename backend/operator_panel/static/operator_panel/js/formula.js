@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function findNamedElement(name, root = document) {
+        if (!root) return null;
         const elements = root.querySelectorAll("input, select, textarea");
         for (const element of elements) {
             if (element.name === name) return element;
@@ -60,23 +61,25 @@ document.addEventListener("DOMContentLoaded", () => {
             if (rowIndex === null || rowIndex < 0 || rowIndex >= rows.length) return null;
             const row = rows[rowIndex];
             if (!row || typeof row !== "object") return null;
-            const field = state.fieldsById.get(Number(fieldId));
-            if (!field) return null;
-            return row[field.code];
+            return row[source.code];
         }
 
         return source.value;
     }
 
     function readReadonlyGroupFieldValue(field, row, groupCode, rowIndex) {
-        const inputName = `${groupCode}_${rowIndex}_${field.code}`;
-        const input = findNamedElement(inputName, row);
-        if (input) return readInput(input);
+        if (row) {
+            const inputName = `${groupCode}_${rowIndex}_${field.code}`;
+            const input = findNamedElement(inputName, row);
+            if (input) return readInput(input);
+        }
 
         const storedValue = getStoredFieldValue(field.id, rowIndex);
         if (storedValue !== null && storedValue !== undefined && storedValue !== "") {
             return toNumber(storedValue);
         }
+
+        if (!row) return 0;
 
         const visibleColumns = getGroupVisibleColumns(groupCode);
         const columnIndex = visibleColumns.indexOf(field.code);
