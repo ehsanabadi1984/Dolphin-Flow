@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const state = {
         fieldsById: new Map(),
         formulasById: new Map(),
+        sourceDataById: new Map(),
         loading: false,
     };
 
@@ -50,7 +51,33 @@ document.addEventListener("DOMContentLoaded", () => {
         return [];
     }
 
-    function readReadonlyGroupFieldValue(field, row, groupCode) {
+    function getStoredFieldValue(fieldId, rowIndex = null) {
+        const source = state.sourceDataById.get(Number(fieldId));
+        if (!source) return null;
+
+        if (source.group_code) {
+            const rows = Array.isArray(source.value) ? source.value : [];
+            if (rowIndex === null || rowIndex < 0 || rowIndex >= rows.length) return null;
+            const row = rows[rowIndex];
+            if (!row || typeof row !== "object") return null;
+            const field = state.fieldsById.get(Number(fieldId));
+            if (!field) return null;
+            return row[field.code];
+        }
+
+        return source.value;
+    }
+
+    function readReadonlyGroupFieldValue(field, row, groupCode, rowIndex) {
+        const inputName = `${groupCode}_${rowIndex}_${field.code}`;
+        const input = findNamedElement(inputName, row);
+        if (input) return readInput(input);
+
+        const storedValue = getStoredFieldValue(field.id, rowIndex);
+        if (storedValue !== null && storedValue !== undefined && storedValue !== "") {
+            return toNumber(storedValue);
+        }
+
         const visibleColumns = getGroupVisibleColumns(groupCode);
         const columnIndex = visibleColumns.indexOf(field.code);
         if (columnIndex < 0) return 0;
@@ -63,15 +90,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function readGroupFieldValue(field, row, groupCode, rowIndex) {
-        const name = `${groupCode}_${rowIndex}_${field.code}`;
-        const input = findNamedElement(name, row);
-        if (input) return readInput(input);
-        return readReadonlyGroupFieldValue(field, row, groupCode);
+        return readReadonlyGroupFieldValue(field, row, groupCode, rowIndex);
     }
 
     function readNormalFieldValue(field) {
         const input = findNamedElement(field.code, form);
         if (input) return readInput(input);
+
+        const storedValue = getStoredFieldValue(field.id);
+        if (storedValue !== null && storedValue !== undefined && storedValue !== "") {
+            return toNumber(storedValue);
+        }
 
         const container = form.querySelector(`.df-form-field[data-field-code="${CSS.escape(field.code)}"]`);
         if (!container) return 0;
@@ -84,12 +113,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!field || !field.group_code) return 0;
         const rows = getGroupRows(field.group_code);
         const dependency = state.formulasById.get(Number(field.id));
-        const values = rows.map((row, index) => {
+        const stored = state.sourceDataById.get(Number(field.id));
+        const storedRows = stored && Array.isArray(stored.value) ? stored.value : [];
+        const rowCount = Math.max(rows.length, storedRows.length);
+        const values = [];
+
+        for (let index = 0; index < rowCount; index += 1) {
+            const row = rows[index] || null;
             if (dependency && dependency.scope === "ROW") {
-                return evaluateFormula(dependency, row, index, new Set());
+                values.push(evaluateFormula(dependency, row, index, new Set()));
+            } else {
+                values.push(readGroupFieldValue(field, row, field.group_code, index));
             }
-            return readGroupFieldValue(field, row, field.group_code, index);
-        });
+        }
+
         if (functionName === "SUM") return values.reduce((sum, value) => sum + value, 0);
         if (!values.length) return 0;
         if (functionName === "MIN") return Math.min(...values);
@@ -340,8 +377,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const payload = await response.json();
             state.fieldsById.clear();
             state.formulasById.clear();
+            state.sourceDataById.clear();
             for (const field of payload.fields || []) state.fieldsById.set(Number(field.id), field);
             for (const formula of payload.formulas || []) state.formulasById.set(Number(formula.field_id), formula);
+            for (const [fieldId, source] of Object.entries(payload.source_data || {})) {
+                state.sourceDataById.set(Number(fieldId), source);
+            }
             recalculate();
         } catch (error) {
             console.warn("Formula definitions could not be loaded:", error);
