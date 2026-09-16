@@ -107,8 +107,11 @@ class SLAService:
     @staticmethod
     def start_sla_if_configured(*, step_execution):
         try:
-            step_execution.workflow_step.sla
+            sla = step_execution.workflow_step.sla
         except WorkflowStepSLA.DoesNotExist:
+            return step_execution
+
+        if not sla.is_active:
             return step_execution
 
         return SLAService.start_sla(
