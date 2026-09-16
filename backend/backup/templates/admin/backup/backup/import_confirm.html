@@ -1,0 +1,33 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="direction:rtl;text-align:right;max-width:900px;margin:30px auto;">
+    <h1>تأیید بازیابی از فایل</h1>
+
+    <div style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:20px;margin:20px 0;">
+        <p><strong>فایل:</strong> {{ backup.filename }}</p>
+        {% if manifest %}
+            <p><strong>نسخه محصول:</strong> {{ manifest.product_version|default:"—" }}</p>
+            <p><strong>زمان ایجاد:</strong> {{ manifest.created_at|default:"—" }}</p>
+            <p><strong>پایگاه داده:</strong> {{ manifest.database_engine|default:"—" }}</p>
+            <p><strong>فرمت dump:</strong> {{ manifest.database_backup_format|default:"—" }}</p>
+            <p><strong>شامل رسانه:</strong> {% if manifest.includes_media %}بله{% else %}خیر{% endif %}</p>
+            <p><strong>حجم پایگاه داده:</strong> {{ manifest.database_size|default:"—" }}</p>
+            <p><strong>حجم رسانه:</strong> {{ manifest.media_size|default:"—" }}</p>
+            <p><strong>Checksum:</strong> {{ manifest.checksum|default:"—" }}</p>
+        {% endif %}
+    </div>
+
+    <div style="background:#fff3cd;border:1px solid #ffe69c;border-radius:10px;padding:16px;margin-bottom:20px;">
+        <strong>هشدار:</strong>
+        با شروع بازیابی، پایگاه داده و در صورت وجود رسانه، فایل‌های رسانه جایگزین محتوای فعلی خواهند شد.
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="confirm" value="1">
+        <button type="submit" class="button default">بله، بازیابی را شروع کن</button>
+        <a href="{% url 'admin:backup_backup_changelist' %}" class="button">انصراف</a>
+    </form>
+</div>
+{% endblock %}
