@@ -123,7 +123,7 @@
 
         <div class="df-restore-actions">
             <a
-                href="{% url 'admin:backup_backup_changelist' %}"
+                href="{% url 'dolphin_admin:backup_backup_changelist' %}"
                 class="df-restore-cancel"
             >
                 بازگشت به فهرست پشتیبان‌ها
@@ -196,7 +196,7 @@
         </div>
 
         <div class="df-restore-actions">
-            <form method="post" action="{% url 'admin:backup_backup_restore' backup.pk %}">
+            <form method="post" action="{% url 'dolphin_admin:backup_backup_restore' backup.pk %}">
                 {% csrf_token %}
                 <input type="hidden" name="confirm" value="1">
                 <button type="submit" class="df-restore-submit">
@@ -204,7 +204,7 @@
                 </button>
             </form>
             <a
-                href="{% url 'admin:backup_backup_changelist' %}"
+                href="{% url 'dolphin_admin:backup_backup_changelist' %}"
                 class="df-restore-cancel"
             >
                 انصراف
