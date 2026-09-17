@@ -134,43 +134,86 @@ def _permission_exists(
     return False
 
 
-def _effective_access_rules(queryset, subject_type, subject, role, step):
-    """Resolve field/group access using step-specific then global fallback."""
-    def rule_key(rule):
-        return rule.field_id if isinstance(rule, FieldAccess) else rule.group_id
-
-    def select_by_key(rules):
-        selected = {}
-        for rule in rules:
-            key = rule_key(rule)
-            priority = 0 if rule.step_id == step.pk else 1
-            current = selected.get(key)
-            if current is None or priority < current[0]:
-                selected[key] = (priority, rule)
-        return {key: value[1] for key, value in selected.items()}
-
-    direct_rules = list(queryset.filter(**_subject_filter(subject_type, subject)))
-    direct_by_key = select_by_key(direct_rules)
-
-    if subject_type == "role":
-        global_rules = list(
-            queryset.filter(user__isnull=True, role__isnull=True)
+def _effective_field_access(queryset, subject_type, subject, role):
+    """Resolve FieldAccess exactly as DynamicFormService does."""
+    if subject_type == "user":
+        direct_rules = queryset.filter(
+            user_id=subject,
+            role__isnull=True,
         )
-        global_by_key = select_by_key(global_rules)
-        return {**global_by_key, **direct_by_key}
+        role_rules = (
+            queryset.filter(user__isnull=True, role=role)
+            if role
+            else queryset.none()
+        )
+    else:
+        direct_rules = queryset.none()
+        role_rules = queryset.filter(user__isnull=True, role=subject)
 
-    role_rules = list(queryset.filter(user__isnull=True, role=role)) if role else []
-    role_by_key = select_by_key(role_rules)
+    states = {}
+    for rule in direct_rules.order_by("pk"):
+        states.setdefault(rule.field_id, {
+            "can_view": rule.can_view,
+            "can_edit": rule.can_edit,
+        })
 
-    global_rules = list(
-        queryset.filter(user__isnull=True, role__isnull=True)
-    )
-    global_by_key = select_by_key(global_rules)
+    role_states = {}
+    for rule in role_rules.order_by("pk"):
+        state = role_states.setdefault(rule.field_id, {
+            "can_view": False,
+            "can_edit": False,
+        })
+        state["can_view"] = state["can_view"] or rule.can_view
+        state["can_edit"] = state["can_edit"] or rule.can_edit
 
-    effective = dict(global_by_key)
-    effective.update(role_by_key)
-    effective.update(direct_by_key)
-    return effective
+    for field_id, state in role_states.items():
+        states.setdefault(field_id, state)
+
+    return states
+
+
+def _effective_group_access(queryset, subject_type, subject, role):
+    """Resolve RepeatableGroupAccess exactly as DynamicFormService does."""
+    if subject_type == "user":
+        direct_rules = queryset.filter(
+            user_id=subject,
+            role__isnull=True,
+        )
+        role_rules = (
+            queryset.filter(user__isnull=True, role=role)
+            if role
+            else queryset.none()
+        )
+    else:
+        direct_rules = queryset.none()
+        role_rules = queryset.filter(user__isnull=True, role=subject)
+
+    states = {}
+    for rule in direct_rules.order_by("pk"):
+        states.setdefault(rule.group_id, {
+            "can_view": rule.can_view,
+            "can_edit": rule.can_edit,
+            "can_add": rule.can_add,
+            "can_delete": rule.can_delete,
+        })
+
+    role_states = {}
+    for rule in role_rules.order_by("pk"):
+        state = role_states.setdefault(rule.group_id, {
+            "can_view": False,
+            "can_edit": False,
+            "can_add": False,
+            "can_delete": False,
+        })
+        state["can_view"] = state["can_view"] or rule.can_view
+        state["can_edit"] = state["can_edit"] or rule.can_edit
+        state["can_add"] = state["can_add"] or rule.can_add
+        state["can_delete"] = state["can_delete"] or rule.can_delete
+
+    for group_id, state in role_states.items():
+        states.setdefault(group_id, state)
+
+    return states
 
 
 def _matrix_context(workflow, subject_type, subject, step, role=None):
@@ -223,20 +266,17 @@ def _matrix_context(workflow, subject_type, subject, step, role=None):
         for transition in transitions
     }
 
-    access_steps = [step.pk, None]
-    field_rules = _effective_access_rules(
-        FieldAccess.objects.filter(field__in=fields, step_id__in=access_steps),
+    field_rules = _effective_field_access(
+        FieldAccess.objects.filter(field__in=fields, step=step),
         subject_type,
         subject,
         role,
-        step,
     )
-    group_rules = _effective_access_rules(
-        RepeatableGroupAccess.objects.filter(group__in=groups, step_id__in=access_steps),
+    group_rules = _effective_group_access(
+        RepeatableGroupAccess.objects.filter(group__in=groups, step=step),
         subject_type,
         subject,
         role,
-        step,
     )
 
     return {
@@ -251,18 +291,18 @@ def _matrix_context(workflow, subject_type, subject, step, role=None):
         "field_rows": [
             {
                 "field": field,
-                "view": bool(field_rules.get(field.pk) and field_rules[field.pk].can_view),
-                "edit": bool(field_rules.get(field.pk) and field_rules[field.pk].can_edit),
+                "view": bool(field_rules.get(field.pk, {}).get("can_view")),
+                "edit": bool(field_rules.get(field.pk, {}).get("can_edit")),
             }
             for field in fields
         ],
         "group_rows": [
             {
                 "group": group,
-                "view": bool(group_rules.get(group.pk) and group_rules[group.pk].can_view),
-                "edit": bool(group_rules.get(group.pk) and group_rules[group.pk].can_edit),
-                "add": bool(group_rules.get(group.pk) and group_rules[group.pk].can_add),
-                "delete": bool(group_rules.get(group.pk) and group_rules[group.pk].can_delete),
+                "view": bool(group_rules.get(group.pk, {}).get("can_view")),
+                "edit": bool(group_rules.get(group.pk, {}).get("can_edit")),
+                "add": bool(group_rules.get(group.pk, {}).get("can_add")),
+                "delete": bool(group_rules.get(group.pk, {}).get("can_delete")),
             }
             for group in groups
         ],
