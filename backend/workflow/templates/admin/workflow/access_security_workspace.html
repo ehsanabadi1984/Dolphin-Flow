@@ -1,205 +1,67 @@
 {% extends "admin/base_site.html" %}
 {% block content %}
 <style>
-.df-access{direction:rtl;text-align:right;padding:20px}
-.df-access-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px}
-.df-access-head h1{margin:0 0 6px}.df-access-head p{margin:0;color:var(--body-quiet-color,#888)}
-.df-access-context{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;background:var(--darkened-bg,#f7f7f7);border:1px solid var(--hairline-color,#ddd);border-radius:14px;padding:15px;margin-bottom:18px}
-.df-access-context label{display:block;font-size:12px;font-weight:700;margin-bottom:6px}.df-access-context select{width:100%;box-sizing:border-box;padding:8px}
-.df-access-layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start}
-.df-access-nav,.df-access-panel{background:var(--body-bg,#fff);border:1px solid var(--hairline-color,#ddd);border-radius:14px}
-.df-access-nav{padding:10px;position:sticky;top:20px}.df-access-nav h3{font-size:13px;margin:4px 8px 10px;color:var(--body-quiet-color,#777)}
-.df-access-step{display:block;padding:11px 12px;border-radius:9px;text-decoration:none;color:var(--body-fg,#222);margin-bottom:4px}.df-access-step:hover{background:var(--darkened-bg,#f7f7f7)}
-.df-access-step.active{background:var(--selected-row,#e8e8e8);font-weight:700}.df-access-step small{display:block;color:var(--body-quiet-color,#888);font-size:10px;margin-top:3px}
-.df-access-panel{padding:18px}.df-access-section{border:1px solid var(--hairline-color,#ddd);border-radius:12px;margin-bottom:18px;overflow:hidden}
-.df-access-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 15px;background:var(--darkened-bg,#f7f7f7)}
-.df-access-section-head h2{font-size:16px;margin:0}.df-access-section-head p{margin:3px 0 0;color:var(--body-quiet-color,#888);font-size:11px}
+.df-access{direction:rtl;text-align:right;padding:20px}.df-access-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px}.df-access-head h1{margin:0 0 6px}.df-access-head p{margin:0;color:var(--body-quiet-color,#888)}
+.df-access-context{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;background:var(--darkened-bg,#f7f7f7);border:1px solid var(--hairline-color,#ddd);border-radius:14px;padding:15px;margin-bottom:18px}.df-access-context label{display:block;font-size:12px;font-weight:700;margin-bottom:6px}.df-access-context select{width:100%;box-sizing:border-box;padding:8px}
+.df-access-layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start}.df-access-nav,.df-access-panel{background:var(--body-bg,#fff);border:1px solid var(--hairline-color,#ddd);border-radius:14px}.df-access-nav{padding:10px;position:sticky;top:20px}.df-access-nav h3{font-size:13px;margin:4px 8px 10px;color:var(--body-quiet-color,#777)}
+.df-access-step{display:block;padding:11px 12px;border-radius:9px;text-decoration:none;color:var(--body-fg,#222);margin-bottom:4px}.df-access-step:hover{background:var(--darkened-bg,#f7f7f7)}.df-access-step.active{background:var(--selected-row,#e8e8e8);font-weight:700}.df-access-step small{display:block;color:var(--body-quiet-color,#888);font-size:10px;margin-top:3px}
+.df-access-panel{padding:18px}.df-access-section{border:1px solid var(--hairline-color,#ddd);border-radius:12px;margin-bottom:18px;overflow:hidden}.df-access-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 15px;background:var(--darkened-bg,#f7f7f7)}.df-access-section-head h2{font-size:16px;margin:0}.df-access-section-head p{margin:3px 0 0;color:var(--body-quiet-color,#888);font-size:11px}
 .df-access-actions{display:flex;gap:6px;flex-wrap:wrap}.df-access-btn{border:0;border-radius:7px;padding:6px 9px;cursor:pointer;text-decoration:none;display:inline-block;font-size:12px}.df-access-btn.primary{background:var(--button-bg,#417690);color:#fff}.df-access-btn.secondary{background:var(--darkened-bg,#eee);color:var(--body-fg,#222);border:1px solid var(--hairline-color,#ccc)}
-.df-access-table{width:100%;border-collapse:collapse}.df-access-table th,.df-access-table td{padding:9px 10px;border-bottom:1px solid var(--hairline-color,#ddd);vertical-align:middle}.df-access-table th{font-size:12px;color:var(--body-quiet-color,#777);white-space:nowrap}.df-access-table td.center,.df-access-table th.center{text-align:center}.df-access-table tr:last-child td{border-bottom:0}
-.df-access-check{width:17px;height:17px;cursor:pointer}.df-access-bulk{font-size:10px;margin-right:4px}
-.df-access-save{position:sticky;bottom:12px;display:flex;justify-content:flex-start;padding-top:8px;z-index:3}.df-access-save button{font-size:14px;padding:10px 20px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
-.df-access-empty{padding:18px;color:var(--body-quiet-color,#888)}
-.df-access-message{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:var(--darkened-bg,#f7f7f7);border:1px solid var(--hairline-color,#ddd)}
-.df-access-subject-note{font-size:11px;color:var(--body-quiet-color,#888);margin-top:5px}
-@media(max-width:1000px){.df-access-context{grid-template-columns:repeat(2,minmax(0,1fr))}.df-access-layout{grid-template-columns:1fr}.df-access-nav{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}.df-access-nav h3{grid-column:1/-1}}
-@media(max-width:650px){.df-access-context{grid-template-columns:1fr}.df-access-nav{grid-template-columns:1fr}.df-access-table{font-size:12px}.df-access-table th,.df-access-table td{padding:7px 5px}}
+.df-access-table{width:100%;border-collapse:collapse}.df-access-table th,.df-access-table td{padding:9px 10px;border-bottom:1px solid var(--hairline-color,#ddd);vertical-align:middle}.df-access-table th{font-size:12px;color:var(--body-quiet-color,#777);white-space:nowrap}.df-access-table td.center,.df-access-table th.center{text-align:center}.df-access-table tr:last-child td{border-bottom:0}.df-access-check{width:17px;height:17px;cursor:pointer}
+.df-access-save{position:sticky;bottom:12px;display:flex;justify-content:flex-start;padding-top:8px;z-index:3}.df-access-save button{font-size:14px;padding:10px 20px;box-shadow:0 4px 14px rgba(0,0,0,.12)}.df-access-empty{padding:18px;color:var(--body-quiet-color,#888)}.df-access-message{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:var(--darkened-bg,#f7f7f7);border:1px solid var(--hairline-color,#ddd)}.df-access-subject-note{font-size:11px;color:var(--body-quiet-color,#888);margin-top:5px}
+@media(max-width:1000px){.df-access-context{grid-template-columns:repeat(2,minmax(0,1fr))}.df-access-layout{grid-template-columns:1fr}.df-access-nav{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}.df-access-nav h3{grid-column:1/-1}}@media(max-width:650px){.df-access-context{grid-template-columns:1fr}.df-access-nav{grid-template-columns:1fr}.df-access-table{font-size:12px}.df-access-table th,.df-access-table td{padding:7px 5px}}
 </style>
 
 <div class="df-access">
-    <div class="df-access-head">
-        <div>
-            <h1>Access &amp; Security · {{ workflow.name }}</h1>
-            <p>مدیریت متمرکز دسترسی‌ها بر اساس Subject و Step</p>
-        </div>
-        <a class="button" href="{% url 'admin:workflow_workflow_changelist' %}">بازگشت</a>
-    </div>
-
-    {% if messages %}
-        {% for message in messages %}<div class="df-access-message">{{ message }}</div>{% endfor %}
-    {% endif %}
+    <div class="df-access-head"><div><h1>Access &amp; Security · {{ workflow.name }}</h1><p>مدیریت متمرکز دسترسی‌ها بر اساس Subject و Step</p></div><a class="button" href="{% url 'admin:workflow_workflow_changelist' %}">بازگشت</a></div>
+    {% if messages %}{% for message in messages %}<div class="df-access-message">{{ message }}</div>{% endfor %}{% endif %}
 
     <form method="get" class="df-access-context" id="df-access-context-form">
-        <div>
-            <label>نوع Subject</label>
-            <select name="subject_type" id="id_subject_type">
-                <option value="user" {% if subject_type == 'user' %}selected{% endif %}>کاربر</option>
-                <option value="role" {% if subject_type == 'role' %}selected{% endif %}>Role</option>
-            </select>
-        </div>
+        <div><label>نوع Subject</label><select name="subject_type" id="id_subject_type"><option value="user" {% if subject_type == 'user' %}selected{% endif %}>کاربر</option><option value="role" {% if subject_type == 'role' %}selected{% endif %}>Role</option></select></div>
         <div>
             <label>Subject</label>
-            <select name="subject" id="id_subject_user" {% if subject_type != 'user' %}style="display:none"{% endif %}>
-                {% for membership in memberships %}
-                    <option value="{{ membership.user_id }}" {% if subject_type == 'user' and subject == membership.user_id|stringformat:'s' %}selected{% endif %}>{{ membership.user.get_full_name|default:membership.user.username }} ({{ membership.user.username }})</option>
-                {% empty %}<option value="">عضو فعالی وجود ندارد</option>{% endfor %}
-            </select>
-            <select name="subject" id="id_subject_role" {% if subject_type != 'role' %}style="display:none"{% endif %}>
-                {% for value,label in role_choices %}<option value="{{ value }}" {% if subject_type == 'role' and subject == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-            </select>
+            <select name="subject" id="id_subject_user" {% if subject_type != 'user' %}style="display:none"{% endif %}>{% for membership in memberships %}<option value="{{ membership.user_id }}" {% if subject_type == 'user' and subject == membership.user_id|stringformat:'s' %}selected{% endif %}>{{ membership.user.get_full_name|default:membership.user.username }} ({{ membership.user.username }})</option>{% empty %}<option value="">عضو فعالی وجود ندارد</option>{% endfor %}</select>
+            <select name="subject" id="id_subject_role" {% if subject_type != 'role' %}style="display:none"{% endif %}>{% for value,label in role_choices %}<option value="{{ value }}" {% if subject_type == 'role' and subject == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
             <div class="df-access-subject-note">برای User فقط اعضای فعال همین Workflow نمایش داده می‌شوند.</div>
         </div>
-        <div>
-            <label>Step انتخاب‌شده</label>
-            <select name="step" id="id_context_step">
-                {% for step in steps %}<option value="{{ step.pk }}" {% if selected_step_id == step.pk %}selected{% endif %}>{{ step.name }}</option>{% endfor %}
-            </select>
-        </div>
-        <div style="display:flex;align-items:end;gap:8px">
-            <button class="df-access-btn primary" type="submit">نمایش دسترسی</button>
-            <a class="df-access-btn secondary" href="{{ workflow_url }}">بازنشانی</a>
-        </div>
+        <div><label>Step انتخاب‌شده</label><select name="step" id="id_context_step">{% for step in steps %}<option value="{{ step.pk }}" {% if selected_step_id == step.pk %}selected{% endif %}>{{ step.name }}</option>{% endfor %}</select></div>
+        <div style="display:flex;align-items:end;gap:8px"><button class="df-access-btn primary" type="submit">نمایش دسترسی</button><a class="df-access-btn secondary" href="{{ workflow_url }}">بازنشانی</a></div>
     </form>
 
     {% if matrix %}
-    <form method="post" id="df-access-matrix-form">
-        {% csrf_token %}
-        <input type="hidden" name="workspace_action" value="save_matrix">
-        <input type="hidden" name="subject_type" value="{{ subject_type }}">
-        <input type="hidden" name="subject" value="{{ subject }}">
-        <input type="hidden" name="step" value="{{ selected_step_id }}">
-
+    <form method="post" id="df-access-matrix-form">{% csrf_token %}<input type="hidden" name="workspace_action" value="save_matrix"><input type="hidden" name="subject_type" value="{{ subject_type }}"><input type="hidden" name="subject" value="{{ subject }}"><input type="hidden" name="step" value="{{ selected_step_id }}">
         <div class="df-access-layout">
-            <aside class="df-access-nav">
-                <h3>مراحل فرآیند</h3>
-                {% for step in steps %}
-                    <a class="df-access-step {% if selected_step_id == step.pk %}active{% endif %}" href="?subject_type={{ subject_type }}&subject={{ subject }}&step={{ step.pk }}">
-                        {{ step.name }}
-                        <small>مرحله {{ forloop.counter }}</small>
-                    </a>
-                {% empty %}<div class="df-access-empty">مرحله فعالی وجود ندارد.</div>{% endfor %}
-            </aside>
-
+            <aside class="df-access-nav"><h3>مراحل فرآیند</h3>{% for step in steps %}<a class="df-access-step {% if selected_step_id == step.pk %}active{% endif %}" href="?subject_type={{ subject_type }}&amp;subject={{ subject }}&amp;step={{ step.pk }}">{{ step.name }}<small>مرحله {{ forloop.counter }}</small></a>{% empty %}<div class="df-access-empty">مرحله فعالی وجود ندارد.</div>{% endfor %}</aside>
             <main class="df-access-panel">
                 <div class="df-access-section">
-                    <div class="df-access-section-head">
-                        <div><h2>دسترسی Workflow</h2><p>این دسترسی‌ها مستقل از Step انتخاب‌شده هستند.</p></div>
-                    </div>
-                    <table class="df-access-table">
-                        <thead><tr><th>Action</th><th class="center">دسترسی</th></tr></thead>
-                        <tbody>
-                        {% for value,label in workflow_actions %}
-                            <tr><td>{{ label }}</td><td class="center"><input class="df-access-check" type="checkbox" name="workflow_{{ value }}" value="1" {% if matrix.workflow_permissions|get_item:value %}checked{% endif %}></td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="df-access-section-head"><div><h2>دسترسی Workflow</h2><p>این دسترسی‌ها مستقل از Step انتخاب‌شده هستند.</p></div></div>
+                    <table class="df-access-table"><thead><tr><th>Action</th><th class="center">دسترسی</th></tr></thead><tbody>{% for row in matrix.workflow_permission_rows %}<tr><td>{{ row.label }}</td><td class="center"><input class="df-access-check" type="checkbox" name="workflow_{{ row.value }}" value="1" {% if row.enabled %}checked{% endif %}></td></tr>{% endfor %}</tbody></table>
                 </div>
 
                 <div class="df-access-section">
-                    <div class="df-access-section-head">
-                        <div><h2>دسترسی مرحله: {{ selected_step.name }}</h2><p>مجوزهای مستقیم مربوط به همین Step.</p></div>
-                    </div>
-                    <table class="df-access-table">
-                        <thead><tr><th>Action</th><th class="center">دسترسی</th></tr></thead>
-                        <tbody>
-                        {% for value,label in step_actions %}
-                            <tr><td>{{ label }}</td><td class="center"><input class="df-access-check" type="checkbox" name="step_{{ value }}" value="1" {% if matrix.step_permissions|get_item:value %}checked{% endif %}></td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="df-access-section-head"><div><h2>دسترسی مرحله: {{ selected_step.name }}</h2><p>مجوزهای مستقیم مربوط به همین Step.</p></div></div>
+                    <table class="df-access-table"><thead><tr><th>Action</th><th class="center">دسترسی</th></tr></thead><tbody>{% for row in matrix.step_permission_rows %}<tr><td>{{ row.label }}</td><td class="center"><input class="df-access-check" type="checkbox" name="step_{{ row.value }}" value="1" {% if row.enabled %}checked{% endif %}></td></tr>{% endfor %}</tbody></table>
                 </div>
 
                 <div class="df-access-section">
-                    <div class="df-access-section-head">
-                        <div><h2>Transitions</h2><p>انتقال از {{ selected_step.name }} به مرحله بعد.</p></div>
-                    </div>
-                    {% if matrix.transition_rows %}
-                    <table class="df-access-table">
-                        <thead><tr><th>از</th><th>به</th><th class="center">مجاز</th></tr></thead>
-                        <tbody>
-                        {% for row in matrix.transition_rows %}
-                            <tr><td>{{ row.transition.from_step.name }}</td><td>{% if row.transition.to_step %}{{ row.transition.to_step.name }}{% else %}پایان فرآیند{% endif %}</td><td class="center"><input class="df-access-check" type="checkbox" name="transition_{{ row.transition.pk }}" value="1" {% if row.allowed %}checked{% endif %}></td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}<div class="df-access-empty">برای این Step، Transition فعالی تعریف نشده است.</div>{% endif %}
+                    <div class="df-access-section-head"><div><h2>Transitions</h2><p>انتقال از {{ selected_step.name }} به مرحله بعد.</p></div></div>
+                    {% if matrix.transition_rows %}<table class="df-access-table"><thead><tr><th>از</th><th>به</th><th class="center">مجاز</th></tr></thead><tbody>{% for row in matrix.transition_rows %}<tr><td>{{ row.transition.from_step.name }}</td><td>{% if row.transition.to_step %}{{ row.transition.to_step.name }}{% else %}پایان فرآیند{% endif %}</td><td class="center"><input class="df-access-check" type="checkbox" name="transition_{{ row.transition.pk }}" value="1" {% if row.allowed %}checked{% endif %}></td></tr>{% endfor %}</tbody></table>{% else %}<div class="df-access-empty">برای این Step، Transition فعالی تعریف نشده است.</div>{% endif %}
                 </div>
 
                 <div class="df-access-section">
-                    <div class="df-access-section-head">
-                        <div><h2>Field Access</h2><p>وضعیت فعلی از دیتابیس خوانده شده و بعد از ذخیره باقی می‌ماند.</p></div>
-                        <div class="df-access-actions">
-                            <button type="button" class="df-access-btn secondary" data-bulk="field-view" data-value="1">View همه</button>
-                            <button type="button" class="df-access-btn secondary" data-bulk="field-view" data-value="0">View هیچ‌کدام</button>
-                            <button type="button" class="df-access-btn secondary" data-bulk="field-edit" data-value="1">Edit همه</button>
-                            <button type="button" class="df-access-btn secondary" data-bulk="field-edit" data-value="0">Edit هیچ‌کدام</button>
-                        </div>
-                    </div>
-                    {% if matrix.field_rows %}
-                    <table class="df-access-table">
-                        <thead><tr><th>Section</th><th>Field</th><th class="center">View</th><th class="center">Edit</th></tr></thead>
-                        <tbody>
-                        {% for row in matrix.field_rows %}
-                            <tr>
-                                <td>{{ row.field.section.name }}</td>
-                                <td>{{ row.field.label }}</td>
-                                <td class="center"><input class="df-access-check" data-bulk-key="field-view" type="checkbox" name="field_{{ row.field.pk }}_view" value="1" {% if row.view %}checked{% endif %}></td>
-                                <td class="center"><input class="df-access-check" data-bulk-key="field-edit" type="checkbox" name="field_{{ row.field.pk }}_edit" value="1" {% if row.edit %}checked{% endif %}></td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}<div class="df-access-empty">Field فعالی برای این Workflow وجود ندارد.</div>{% endif %}
+                    <div class="df-access-section-head"><div><h2>Field Access</h2><p>وضعیت فعلی از دیتابیس خوانده شده و بعد از ذخیره باقی می‌ماند.</p></div><div class="df-access-actions"><button type="button" class="df-access-btn secondary" data-bulk="field-view" data-value="1">View همه</button><button type="button" class="df-access-btn secondary" data-bulk="field-view" data-value="0">View هیچ‌کدام</button><button type="button" class="df-access-btn secondary" data-bulk="field-edit" data-value="1">Edit همه</button><button type="button" class="df-access-btn secondary" data-bulk="field-edit" data-value="0">Edit هیچ‌کدام</button></div></div>
+                    {% if matrix.field_rows %}<table class="df-access-table"><thead><tr><th>Section</th><th>Field</th><th class="center">View</th><th class="center">Edit</th></tr></thead><tbody>{% for row in matrix.field_rows %}<tr><td>{{ row.field.section.name }}</td><td>{{ row.field.label }}</td><td class="center"><input class="df-access-check" data-bulk-key="field-view" type="checkbox" name="field_{{ row.field.pk }}_view" value="1" {% if row.view %}checked{% endif %}></td><td class="center"><input class="df-access-check" data-bulk-key="field-edit" type="checkbox" name="field_{{ row.field.pk }}_edit" value="1" {% if row.edit %}checked{% endif %}></td></tr>{% endfor %}</tbody></table>{% else %}<div class="df-access-empty">Field فعالی برای این Workflow وجود ندارد.</div>{% endif %}
                 </div>
 
                 <div class="df-access-section">
-                    <div class="df-access-section-head">
-                        <div><h2>Repeatable Groups</h2><p>دسترسی گروه‌های تکرارشونده در Step انتخاب‌شده.</p></div>
-                        <div class="df-access-actions">
-                            <button type="button" class="df-access-btn secondary" data-bulk="group-view" data-value="1">View همه</button>
-                            <button type="button" class="df-access-btn secondary" data-bulk="group-view" data-value="0">View هیچ‌کدام</button>
-                            <button type="button" class="df-access-btn secondary" data-bulk="group-edit" data-value="1">Edit همه</button>
-                            <button type="button" class="df-access-btn secondary" data-bulk="group-edit" data-value="0">Edit هیچ‌کدام</button>
-                            <button type="button" class="df-access-btn secondary" data-bulk="group-add" data-value="1">Add همه</button>
-                            <button type="button" class="df-access-btn secondary" data-bulk="group-add" data-value="0">Add هیچ‌کدام</button>
-                        </div>
-                    </div>
-                    {% if matrix.group_rows %}
-                    <table class="df-access-table">
-                        <thead><tr><th>Section</th><th>Group</th><th class="center">View</th><th class="center">Edit</th><th class="center">Add</th></tr></thead>
-                        <tbody>
-                        {% for row in matrix.group_rows %}
-                            <tr>
-                                <td>{{ row.group.section.name }}</td>
-                                <td>{{ row.group.name }}</td>
-                                <td class="center"><input class="df-access-check" data-bulk-key="group-view" type="checkbox" name="group_{{ row.group.pk }}_view" value="1" {% if row.view %}checked{% endif %}></td>
-                                <td class="center"><input class="df-access-check" data-bulk-key="group-edit" type="checkbox" name="group_{{ row.group.pk }}_edit" value="1" {% if row.edit %}checked{% endif %}></td>
-                                <td class="center"><input class="df-access-check" data-bulk-key="group-add" type="checkbox" name="group_{{ row.group.pk }}_add" value="1" {% if row.add %}checked{% endif %}></td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}<div class="df-access-empty">گروه تکرارشونده فعالی وجود ندارد.</div>{% endif %}
+                    <div class="df-access-section-head"><div><h2>Repeatable Groups</h2><p>دسترسی گروه‌های تکرارشونده در Step انتخاب‌شده.</p></div><div class="df-access-actions"><button type="button" class="df-access-btn secondary" data-bulk="group-view" data-value="1">View همه</button><button type="button" class="df-access-btn secondary" data-bulk="group-view" data-value="0">View هیچ‌کدام</button><button type="button" class="df-access-btn secondary" data-bulk="group-edit" data-value="1">Edit همه</button><button type="button" class="df-access-btn secondary" data-bulk="group-edit" data-value="0">Edit هیچ‌کدام</button><button type="button" class="df-access-btn secondary" data-bulk="group-add" data-value="1">Add همه</button><button type="button" class="df-access-btn secondary" data-bulk="group-add" data-value="0">Add هیچ‌کدام</button></div></div>
+                    {% if matrix.group_rows %}<table class="df-access-table"><thead><tr><th>Section</th><th>Group</th><th class="center">View</th><th class="center">Edit</th><th class="center">Add</th></tr></thead><tbody>{% for row in matrix.group_rows %}<tr><td>{{ row.group.section.name }}</td><td>{{ row.group.name }}</td><td class="center"><input class="df-access-check" data-bulk-key="group-view" type="checkbox" name="group_{{ row.group.pk }}_view" value="1" {% if row.view %}checked{% endif %}></td><td class="center"><input class="df-access-check" data-bulk-key="group-edit" type="checkbox" name="group_{{ row.group.pk }}_edit" value="1" {% if row.edit %}checked{% endif %}></td><td class="center"><input class="df-access-check" data-bulk-key="group-add" type="checkbox" name="group_{{ row.group.pk }}_add" value="1" {% if row.add %}checked{% endif %}></td></tr>{% endfor %}</tbody></table>{% else %}<div class="df-access-empty">گروه تکرارشونده فعالی وجود ندارد.</div>{% endif %}
                 </div>
-
-                <div class="df-access-save">
-                    <button type="submit" class="df-access-btn primary">ذخیره تغییرات</button>
-                </div>
+                <div class="df-access-save"><button type="submit" class="df-access-btn primary">ذخیره تغییرات</button></div>
             </main>
         </div>
     </form>
-    {% else %}
-        <div class="df-access-panel"><div class="df-access-empty">برای این Workflow هنوز User/Role یا Step قابل انتخاب وجود ندارد.</div></div>
-    {% endif %}
+    {% else %}<div class="df-access-panel"><div class="df-access-empty">برای این Workflow هنوز User/Role یا Step قابل انتخاب وجود ندارد.</div></div>{% endif %}
 </div>
 
 <script>
@@ -207,28 +69,19 @@
     const typeSelect = document.getElementById('id_subject_type');
     const userSelect = document.getElementById('id_subject_user');
     const roleSelect = document.getElementById('id_subject_role');
-    if (typeSelect) {
-        typeSelect.addEventListener('change', function () {
-            const isUser = this.value === 'user';
-            userSelect.style.display = isUser ? '' : 'none';
-            roleSelect.style.display = isUser ? 'none' : '';
-            if (isUser) {
-                roleSelect.removeAttribute('name');
-                userSelect.setAttribute('name', 'subject');
-            } else {
-                userSelect.removeAttribute('name');
-                roleSelect.setAttribute('name', 'subject');
-            }
-        });
+    function syncSubjectInputs() {
+        const isUser = typeSelect.value === 'user';
+        userSelect.style.display = isUser ? '' : 'none';
+        roleSelect.style.display = isUser ? 'none' : '';
+        if (isUser) { roleSelect.removeAttribute('name'); userSelect.setAttribute('name', 'subject'); }
+        else { userSelect.removeAttribute('name'); roleSelect.setAttribute('name', 'subject'); }
     }
-
+    if (typeSelect) typeSelect.addEventListener('change', syncSubjectInputs);
     document.querySelectorAll('[data-bulk]').forEach(function (button) {
         button.addEventListener('click', function () {
             const key = this.dataset.bulk;
             const value = this.dataset.value === '1';
-            document.querySelectorAll('[data-bulk-key="' + key + '"]').forEach(function (checkbox) {
-                checkbox.checked = value;
-            });
+            document.querySelectorAll('[data-bulk-key="' + key + '"]').forEach(function (checkbox) { checkbox.checked = value; });
         });
     });
 })();
