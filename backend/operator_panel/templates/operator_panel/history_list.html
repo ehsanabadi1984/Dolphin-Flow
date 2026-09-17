@@ -1,0 +1,52 @@
+{% extends "operator_panel/base.html" %}
+
+{% block title %}تاریخچه | Dolphin Flow{% endblock %}
+
+{% block content %}
+<section class="df-content">
+    <div class="df-welcome">
+        <h1>تاریخچه</h1>
+        <p>سوابق ثبت‌شده فرآیندهایی که مجوز مشاهده آن‌ها را دارید.</p>
+    </div>
+
+    <section class="df-card df-panel">
+        <div class="df-panel-header">
+            <div class="df-panel-title">سوابق فرآیندها</div>
+            <span class="df-panel-link">{{ history|length }} مورد</span>
+        </div>
+
+        {% if history %}
+            <div class="df-saved-table-wrapper">
+                <table class="df-saved-table">
+                    <thead>
+                        <tr>
+                            <th>فرآیند</th>
+                            <th>نمونه</th>
+                            <th>مرحله</th>
+                            <th>ثبت‌شده در</th>
+                            <th>کاربر</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in history %}
+                            <tr>
+                                <td>{{ entry.execution.instance.workflow.name }}</td>
+                                <td>#{{ entry.execution.instance.pk }}</td>
+                                <td>{{ entry.execution.workflow_step.name }}</td>
+                                <td>{{ entry.execution.submitted_at|date:"Y/m/d H:i" }}</td>
+                                <td>{{ entry.execution.performed_by }}</td>
+                                <td>
+                                    <a href="{% url 'operator_panel:workflow_history' entry.execution.instance.pk %}" class="df-status df-status-info">مشاهده تاریخچه</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="df-dashboard-empty">در حال حاضر سابقه قابل مشاهده‌ای وجود ندارد.</div>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}
