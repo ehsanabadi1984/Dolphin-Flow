@@ -72,15 +72,7 @@ def _set_permission(
         qs.delete()
 
 
-def _set_field_access(
-    subject_type,
-    subject_value,
-    step,
-    field,
-    *,
-    can_view,
-    can_edit,
-):
+def _set_field_access(subject_type, subject_value, step, field, *, can_view, can_edit):
     qs = FieldAccess.objects.filter(
         field=field,
         step=step,
@@ -115,13 +107,14 @@ def _set_group_access(
     can_view,
     can_edit,
     can_add,
+    can_delete,
 ):
     qs = RepeatableGroupAccess.objects.filter(
         group=group,
         step=step,
         **_subject_kwargs(subject_type, subject_value),
     )
-    if not can_view and not can_edit and not can_add:
+    if not can_view and not can_edit and not can_add and not can_delete:
         qs.delete()
         return
 
@@ -133,13 +126,15 @@ def _set_group_access(
             can_view=can_view,
             can_edit=can_edit,
             can_add=can_add,
+            can_delete=can_delete,
             **_subject_kwargs(subject_type, subject_value),
         )
     else:
         obj.can_view = can_view
         obj.can_edit = can_edit
         obj.can_add = can_add
-        obj.save(update_fields=["can_view", "can_edit", "can_add"])
+        obj.can_delete = can_delete
+        obj.save(update_fields=["can_view", "can_edit", "can_add", "can_delete"])
         qs.exclude(pk=obj.pk).delete()
 
 
@@ -147,10 +142,8 @@ def _set_group_access(
 def save_access_matrix(*, workflow, subject_type, subject_value, step, post_data):
     if subject_type not in {"user", "role"}:
         raise ValueError("نوع Subject نامعتبر است.")
-
     if subject_type == "user":
         int(subject_value)
-
     if step.workflow_id != workflow.pk:
         raise ValueError("مرحله انتخاب‌شده متعلق به این Workflow نیست.")
 
@@ -215,4 +208,5 @@ def save_access_matrix(*, workflow, subject_type, subject_value, step, post_data
             can_view=post_data.get(f"group_{group.pk}_view") == "1",
             can_edit=post_data.get(f"group_{group.pk}_edit") == "1",
             can_add=post_data.get(f"group_{group.pk}_add") == "1",
+            can_delete=post_data.get(f"group_{group.pk}_delete") == "1",
         )
