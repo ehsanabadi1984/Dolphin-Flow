@@ -3,6 +3,7 @@ import logging
 from celery import shared_task
 from django.core.management import call_command
 from django.db import connection
+from django.utils import timezone
 
 from .models import Backup, Restore
 from .restore_services import RestoreError, RestoreService
@@ -30,6 +31,36 @@ class MigratingRestoreService(RestoreService):
                 "اجرای migrationهای Django پس از بازیابی پایگاه داده ناموفق بود: "
                 + str(exc)
             ) from exc
+
+        self._normalize_restored_backup_states()
+
+    def _normalize_restored_backup_states(self):
+        """Mark RUNNING backups restored from another system as failed.
+
+        A RUNNING backup record restored from an archive has no corresponding
+        Celery worker on this destination and therefore cannot legitimately
+        remain RUNNING.
+        """
+        now = timezone.now()
+
+        updated = Backup.objects.filter(
+            status=Backup.Status.RUNNING,
+        ).update(
+            status=Backup.Status.FAILED,
+            completed_at=now,
+            error_message=(
+                "این پشتیبان‌گیری در سیستم مبدأ در وضعیت RUNNING بوده و "
+                "پس از بازیابی، Worker مربوط به آن وجود ندارد."
+            ),
+            updated_at=now,
+        )
+
+        if updated:
+            logger.info(
+                "Restore #%s: normalized %s stale RUNNING backup(s)",
+                self.restore.pk,
+                updated,
+            )
 
     def _recreate_safety_backup_row(self):
         super()._recreate_safety_backup_row()
