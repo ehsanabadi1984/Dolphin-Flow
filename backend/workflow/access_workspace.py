@@ -44,10 +44,18 @@ def _resolve_context(workflow, request):
     steps = WorkflowStep.objects.filter(workflow=workflow, is_active=True).order_by("order")
 
     subject_type = request.GET.get("subject_type", "user").strip()
-    subject = request.GET.get("subject", "").strip()
-    step_id = request.GET.get("step", "").strip()
+    subject_values = [value.strip() for value in request.GET.getlist("subject") if value.strip()]
     if subject_type not in {"user", "role"}:
         subject_type = "user"
+
+    if subject_type == "user":
+        valid_subjects = {str(membership.user_id) for membership in memberships}
+        subject = next((value for value in subject_values if value in valid_subjects), "")
+    else:
+        valid_roles = set(dict(WorkflowMembership.Role.choices))
+        subject = next((value for value in subject_values if value in valid_roles), "")
+
+    step_id = request.GET.get("step", "").strip()
 
     if not subject:
         if subject_type == "user":
