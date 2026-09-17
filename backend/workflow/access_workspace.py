@@ -27,17 +27,12 @@ def _workspace_url(workflow, *, subject_type="", subject="", step=""):
 
 def access_security_workspace_list(request):
     workflows = Workflow.objects.order_by("name")
-    return render(
-        request,
-        "admin/workflow/access_security_workspace_list.html",
-        {"title": "Access & Security Workspace", "workflows": workflows},
-    )
+    return render(request, "admin/workflow/access_security_workspace_list.html", {"title": "Access & Security Workspace", "workflows": workflows})
 
 
 def _resolve_context(workflow, request):
     memberships = (
-        workflow.memberships
-        .filter(is_active=True, user__is_active=True)
+        workflow.memberships.filter(is_active=True, user__is_active=True)
         .select_related("user")
         .order_by("user__username")
     )
@@ -55,8 +50,6 @@ def _resolve_context(workflow, request):
         valid_roles = set(dict(WorkflowMembership.Role.choices))
         subject = next((value for value in subject_values if value in valid_roles), "")
 
-    step_id = request.GET.get("step", "").strip()
-
     if not subject:
         if subject_type == "user":
             membership = memberships.first()
@@ -64,6 +57,7 @@ def _resolve_context(workflow, request):
         else:
             subject = WorkflowMembership.Role.VIEWER
 
+    step_id = request.GET.get("step", "").strip()
     selected_step = steps.filter(pk=step_id).first() if step_id else steps.first()
     if selected_step is None and steps.exists():
         selected_step = steps.first()
@@ -78,112 +72,61 @@ def _resolve_context(workflow, request):
     return memberships, steps, subject_type, subject, selected_step, selected_user
 
 
-def _subject_filter(subject_type, subject):
-    if subject_type == "user":
-        return {"user_id": subject, "role__isnull": True}
-    return {"user__isnull": True, "role": subject}
-
-
-def _permission_exists(
-    workflow,
-    subject_type,
-    subject_value,
-    *,
-    action,
-    step=None,
-    transition=None,
-    role=None,
-):
-    scope = {
-        "workflow": workflow,
-        "action": action,
-        "step": step,
-        "transition": transition,
-    }
+def _permission_exists(workflow, subject_type, subject_value, *, action, step=None, transition=None, role=None):
+    scope = {"workflow": workflow, "action": action, "step": step, "transition": transition}
 
     if subject_type == "role":
-        role_permissions = WorkflowPermission.objects.filter(
-            **scope,
-            user__isnull=True,
-            role=subject_value,
-        )
-        if role_permissions.filter(effect=WorkflowPermission.Effect.DENY).exists():
-            return False
-        return role_permissions.filter(effect=WorkflowPermission.Effect.ALLOW).exists()
+        permissions = WorkflowPermission.objects.filter(**scope, user__isnull=True, role=subject_value)
+    else:
+        permissions = WorkflowPermission.objects.filter(**scope, user_id=subject_value)
 
-    user_permissions = WorkflowPermission.objects.filter(
-        **scope,
-        user_id=subject_value,
-        role__isnull=True,
-    )
-    if user_permissions.filter(effect=WorkflowPermission.Effect.DENY).exists():
+    if permissions.filter(effect=WorkflowPermission.Effect.DENY).exists():
         return False
-    if user_permissions.filter(effect=WorkflowPermission.Effect.ALLOW).exists():
+    if permissions.filter(effect=WorkflowPermission.Effect.ALLOW).exists():
         return True
 
-    if role:
-        role_permissions = WorkflowPermission.objects.filter(
+    if subject_type == "user" and role:
+        permissions = WorkflowPermission.objects.filter(
             **scope,
             user__isnull=True,
             role=role,
         )
-        if role_permissions.filter(effect=WorkflowPermission.Effect.DENY).exists():
+        if permissions.filter(effect=WorkflowPermission.Effect.DENY).exists():
             return False
-        return role_permissions.filter(effect=WorkflowPermission.Effect.ALLOW).exists()
+        return permissions.filter(effect=WorkflowPermission.Effect.ALLOW).exists()
 
     return False
 
 
 def _effective_field_access(queryset, subject_type, subject, role):
-    """Resolve FieldAccess exactly as DynamicFormService does."""
+    """Mirror DynamicFormService: user rules are selected by user only; role rules are fallback."""
     if subject_type == "user":
-        direct_rules = queryset.filter(
-            user_id=subject,
-            role__isnull=True,
-        )
-        role_rules = (
-            queryset.filter(user__isnull=True, role=role)
-            if role
-            else queryset.none()
-        )
+        direct_rules = queryset.filter(user_id=subject)
+        role_rules = queryset.filter(user__isnull=True, role=role) if role else queryset.none()
     else:
         direct_rules = queryset.none()
         role_rules = queryset.filter(user__isnull=True, role=subject)
 
     states = {}
     for rule in direct_rules.order_by("pk"):
-        states.setdefault(rule.field_id, {
-            "can_view": rule.can_view,
-            "can_edit": rule.can_edit,
-        })
+        states.setdefault(rule.field_id, {"can_view": rule.can_view, "can_edit": rule.can_edit})
 
     role_states = {}
     for rule in role_rules.order_by("pk"):
-        state = role_states.setdefault(rule.field_id, {
-            "can_view": False,
-            "can_edit": False,
-        })
+        state = role_states.setdefault(rule.field_id, {"can_view": False, "can_edit": False})
         state["can_view"] = state["can_view"] or rule.can_view
         state["can_edit"] = state["can_edit"] or rule.can_edit
 
     for field_id, state in role_states.items():
         states.setdefault(field_id, state)
-
     return states
 
 
 def _effective_group_access(queryset, subject_type, subject, role):
-    """Resolve RepeatableGroupAccess exactly as DynamicFormService does."""
+    """Mirror DynamicFormService for all repeatable-group capabilities."""
     if subject_type == "user":
-        direct_rules = queryset.filter(
-            user_id=subject,
-            role__isnull=True,
-        )
-        role_rules = (
-            queryset.filter(user__isnull=True, role=role)
-            if role
-            else queryset.none()
-        )
+        direct_rules = queryset.filter(user_id=subject)
+        role_rules = queryset.filter(user__isnull=True, role=role) if role else queryset.none()
     else:
         direct_rules = queryset.none()
         role_rules = queryset.filter(user__isnull=True, role=subject)
@@ -212,7 +155,6 @@ def _effective_group_access(queryset, subject_type, subject, role):
 
     for group_id, state in role_states.items():
         states.setdefault(group_id, state)
-
     return states
 
 
@@ -233,104 +175,41 @@ def _matrix_context(workflow, subject_type, subject, step, role=None):
         .order_by("to_step__order", "id")
     )
 
-    workflow_permissions = {
-        action: _permission_exists(
-            workflow,
-            subject_type,
-            subject,
-            action=action,
-            role=role,
-        )
-        for action, _label in WORKFLOW_ACTIONS
-    }
-    step_permissions = {
-        action: _permission_exists(
-            workflow,
-            subject_type,
-            subject,
-            action=action,
-            step=step,
-            role=role,
-        )
-        for action, _label in STEP_ACTIONS
-    }
+    workflow_permissions = {action: _permission_exists(workflow, subject_type, subject, action=action, role=role) for action, _label in WORKFLOW_ACTIONS}
+    step_permissions = {action: _permission_exists(workflow, subject_type, subject, action=action, step=step, role=role) for action, _label in STEP_ACTIONS}
     transition_permissions = {
-        transition.pk: _permission_exists(
-            workflow,
-            subject_type,
-            subject,
-            action=WorkflowPermission.Action.TRANSITION,
-            transition=transition,
-            role=role,
-        )
+        transition.pk: _permission_exists(workflow, subject_type, subject, action=WorkflowPermission.Action.TRANSITION, transition=transition, role=role)
         for transition in transitions
     }
 
-    field_rules = _effective_field_access(
-        FieldAccess.objects.filter(field__in=fields, step=step),
-        subject_type,
-        subject,
-        role,
-    )
-    group_rules = _effective_group_access(
-        RepeatableGroupAccess.objects.filter(group__in=groups, step=step),
-        subject_type,
-        subject,
-        role,
-    )
+    field_rules = _effective_field_access(FieldAccess.objects.filter(field__in=fields, step=step), subject_type, subject, role)
+    group_rules = _effective_group_access(RepeatableGroupAccess.objects.filter(group__in=groups, step=step), subject_type, subject, role)
 
     return {
-        "workflow_permission_rows": [
-            {"value": action, "label": label, "enabled": workflow_permissions[action]}
-            for action, label in WORKFLOW_ACTIONS
-        ],
-        "step_permission_rows": [
-            {"value": action, "label": label, "enabled": step_permissions[action]}
-            for action, label in STEP_ACTIONS
-        ],
+        "workflow_permission_rows": [{"value": action, "label": label, "enabled": workflow_permissions[action]} for action, label in WORKFLOW_ACTIONS],
+        "step_permission_rows": [{"value": action, "label": label, "enabled": step_permissions[action]} for action, label in STEP_ACTIONS],
         "field_rows": [
-            {
-                "field": field,
-                "view": bool(field_rules.get(field.pk, {}).get("can_view")),
-                "edit": bool(field_rules.get(field.pk, {}).get("can_edit")),
-            }
+            {"field": field, "view": bool(field_rules.get(field.pk, {}).get("can_view")), "edit": bool(field_rules.get(field.pk, {}).get("can_edit"))}
             for field in fields
         ],
         "group_rows": [
-            {
-                "group": group,
-                "view": bool(group_rules.get(group.pk, {}).get("can_view")),
-                "edit": bool(group_rules.get(group.pk, {}).get("can_edit")),
-                "add": bool(group_rules.get(group.pk, {}).get("can_add")),
-                "delete": bool(group_rules.get(group.pk, {}).get("can_delete")),
-            }
+            {"group": group, "view": bool(group_rules.get(group.pk, {}).get("can_view")), "edit": bool(group_rules.get(group.pk, {}).get("can_edit")), "add": bool(group_rules.get(group.pk, {}).get("can_add")), "delete": bool(group_rules.get(group.pk, {}).get("can_delete"))}
             for group in groups
         ],
-        "transition_rows": [
-            {"transition": transition, "allowed": transition_permissions[transition.pk]}
-            for transition in transitions
-        ],
+        "transition_rows": [{"transition": transition, "allowed": transition_permissions[transition.pk]} for transition in transitions],
     }
 
 
 def access_security_workspace(request, workflow_id):
     workflow = get_object_or_404(Workflow, pk=workflow_id)
-    memberships, steps, subject_type, subject, selected_step, selected_user = _resolve_context(
-        workflow,
-        request,
-    )
+    memberships, steps, subject_type, subject, selected_step, selected_user = _resolve_context(workflow, request)
 
     if request.method == "POST" and request.POST.get("workspace_action") == "save_matrix":
         post_subject_type = request.POST.get("subject_type", subject_type)
         post_subject = request.POST.get("subject", subject)
         post_step = request.POST.get("step", str(selected_step.pk) if selected_step else "")
         step = steps.filter(pk=post_step).first()
-        valid_subject = (
-            post_subject_type == "user" and memberships.filter(user_id=post_subject).exists()
-        ) or (
-            post_subject_type == "role"
-            and post_subject in dict(WorkflowMembership.Role.choices)
-        )
+        valid_subject = (post_subject_type == "user" and memberships.filter(user_id=post_subject).exists()) or (post_subject_type == "role" and post_subject in dict(WorkflowMembership.Role.choices))
 
         if step is None:
             messages.error(request, "مرحله انتخاب‌شده معتبر نیست.")
@@ -338,49 +217,27 @@ def access_security_workspace(request, workflow_id):
             messages.error(request, "Subject انتخاب‌شده معتبر نیست.")
         else:
             try:
-                save_access_matrix(
-                    workflow=workflow,
-                    subject_type=post_subject_type,
-                    subject_value=post_subject,
-                    step=step,
-                    post_data=request.POST,
-                )
+                save_access_matrix(workflow=workflow, subject_type=post_subject_type, subject_value=post_subject, step=step, post_data=request.POST)
                 messages.success(request, "دسترسی‌ها با موفقیت ذخیره شدند.")
             except (TypeError, ValueError):
                 messages.error(request, "اطلاعات دسترسی معتبر نیست.")
-
-        return redirect(
-            _workspace_url(
-                workflow,
-                subject_type=post_subject_type,
-                subject=post_subject,
-                step=post_step,
-            )
-        )
+        return redirect(_workspace_url(workflow, subject_type=post_subject_type, subject=post_subject, step=post_step))
 
     role = selected_user.role if selected_user is not None else subject if subject_type == "role" else None
-    matrix = (
-        _matrix_context(workflow, subject_type, subject, selected_step, role=role)
-        if selected_step and subject
-        else None
-    )
+    matrix = _matrix_context(workflow, subject_type, subject, selected_step, role=role) if selected_step and subject else None
 
-    return render(
-        request,
-        "admin/workflow/access_security_workspace.html",
-        {
-            "workflow": workflow,
-            "memberships": memberships,
-            "steps": steps,
-            "selected_step": selected_step,
-            "selected_step_id": selected_step.pk if selected_step else "",
-            "subject_type": subject_type,
-            "subject": subject,
-            "selected_user": selected_user,
-            "role_choices": WorkflowMembership.Role.choices,
-            "workflow_actions": WORKFLOW_ACTIONS,
-            "step_actions": STEP_ACTIONS,
-            "matrix": matrix,
-            "workflow_url": _workspace_url(workflow),
-        },
-    )
+    return render(request, "admin/workflow/access_security_workspace.html", {
+        "workflow": workflow,
+        "memberships": memberships,
+        "steps": steps,
+        "selected_step": selected_step,
+        "selected_step_id": selected_step.pk if selected_step else "",
+        "subject_type": subject_type,
+        "subject": subject,
+        "selected_user": selected_user,
+        "role_choices": WorkflowMembership.Role.choices,
+        "workflow_actions": WORKFLOW_ACTIONS,
+        "step_actions": STEP_ACTIONS,
+        "matrix": matrix,
+        "workflow_url": _workspace_url(workflow),
+    })
