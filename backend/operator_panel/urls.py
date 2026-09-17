@@ -18,6 +18,7 @@ from .views import (
     mark_notification_as_read,
 )
 from .history_views import device_history, workflow_history
+from .history_list_views import history_list
 from workflow.form_file_services import (
     file_field_definitions,
     open_form_file,
@@ -32,6 +33,7 @@ app_name = "operator_panel"
 urlpatterns = [
     path("", dashboard, name="dashboard"),
     path("dashboard/realtime/", dashboard_realtime, name="dashboard_realtime"),
+    path("history/", history_list, name="history_list"),
     path("my-processes/", my_processes, name="my_processes"),
     path("assigned-tasks/", assigned_tasks, name="assigned_tasks"),
     path("unfinished-processes/", unfinished_processes, name="unfinished_processes"),
