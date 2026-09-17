@@ -56,7 +56,7 @@ def _set_permission(workflow, subject_type, subject_value, *, action, step=None,
             )
         else:
             obj.effect = WorkflowPermission.Effect.ALLOW
-            if subject_type == "user" and obj.role_id is not None:
+            if subject_type == "user" and obj.role is not None:
                 obj.role = None
                 obj.save(update_fields=["effect", "role", "updated_at"])
             else:
@@ -85,7 +85,7 @@ def _set_field_access(subject_type, subject_value, step, field, *, can_view, can
         obj.can_view = can_view
         obj.can_edit = can_edit
         update_fields = ["can_view", "can_edit"]
-        if subject_type == "user" and obj.role_id is not None:
+        if subject_type == "user" and obj.role is not None:
             obj.role = None
             update_fields.append("role")
         obj.save(update_fields=update_fields)
@@ -115,7 +115,7 @@ def _set_group_access(subject_type, subject_value, step, group, *, can_view, can
         obj.can_add = can_add
         obj.can_delete = can_delete
         update_fields = ["can_view", "can_edit", "can_add", "can_delete"]
-        if subject_type == "user" and obj.role_id is not None:
+        if subject_type == "user" and obj.role is not None:
             obj.role = None
             update_fields.append("role")
         obj.save(update_fields=update_fields)
