@@ -67,8 +67,8 @@ class MigratingRestoreService(RestoreService):
         if not self._safety_snapshot:
             return
         if not Backup.objects.filter(
-            pk=self._safety_backup_pk,
             filename=self._safety_snapshot["filename"],
+            storage_path=self._safety_snapshot["storage_path"],
         ).exists():
             raise RestoreError(
                 "رکورد پشتیبان امنیتی پس از بازیابی قابل بازسازی نبود."
