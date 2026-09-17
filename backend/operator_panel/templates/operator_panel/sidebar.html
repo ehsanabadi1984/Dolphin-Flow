@@ -38,9 +38,9 @@
         </a>
 
         <div class="df-nav-label">فرآیندها</div>
-        <a href="{% url 'operator_panel:my_processes' %}" class="df-nav-link{% if request.resolver_match.url_name == 'my_processes' %} active{% endif %}" data-tooltip="فرآیندهای من">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"></path><path d="M8 9h8"></path><path d="M8 13h6"></path><path d="M8 17h4"></path></svg>
-            <span>فرآیندهای من</span><span class="df-nav-badge" id="df-sidebar-active-count"{% if not sidebar_counts.active %} hidden{% endif %}>{{ sidebar_counts.active }}</span>
+        <a href="{% url 'operator_panel:history_list' %}" class="df-nav-link{% if request.resolver_match.url_name == 'history_list' %} active{% endif %}" data-tooltip="تاریخچه">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 7v5l3 2"></path><path d="M4 12a8 8 0 0 1 2.3-5.6"></path></svg>
+            <span>تاریخچه</span>
         </a>
 
         <div class="df-nav-label df-nav-label-workflows">شروع فرآیند</div>
