@@ -134,32 +134,43 @@ def _permission_exists(
     return False
 
 
-def _effective_access_rules(queryset, subject_type, subject, role):
-    """Return effective FieldAccess/RepeatableGroupAccess rules keyed by object id."""
+def _effective_access_rules(queryset, subject_type, subject, role, step):
+    """Resolve field/group access using step-specific then global fallback."""
+    def rule_key(rule):
+        return rule.field_id if isinstance(rule, FieldAccess) else rule.group_id
+
+    def select_by_key(rules):
+        selected = {}
+        for rule in rules:
+            key = rule_key(rule)
+            priority = 0 if rule.step_id == step.pk else 1
+            current = selected.get(key)
+            if current is None or priority < current[0]:
+                selected[key] = (priority, rule)
+        return {key: value[1] for key, value in selected.items()}
+
     direct_rules = list(queryset.filter(**_subject_filter(subject_type, subject)))
+    direct_by_key = select_by_key(direct_rules)
 
-    if subject_type != "user" or not role:
-        return {
-            (rule.field_id if isinstance(rule, FieldAccess) else rule.group_id): rule
-            for rule in direct_rules
-        }
+    if subject_type == "role":
+        global_rules = list(
+            queryset.filter(user__isnull=True, role__isnull=True)
+        )
+        global_by_key = select_by_key(global_rules)
+        return {**global_by_key, **direct_by_key}
 
-    role_rules = list(queryset.filter(user__isnull=True, role=role))
+    role_rules = list(queryset.filter(user__isnull=True, role=role)) if role else []
+    role_by_key = select_by_key(role_rules)
 
-    direct_by_key = {
-        (rule.field_id if isinstance(rule, FieldAccess) else rule.group_id): rule
-        for rule in direct_rules
-    }
-    role_by_key = {
-        (rule.field_id if isinstance(rule, FieldAccess) else rule.group_id): rule
-        for rule in role_rules
-    }
+    global_rules = list(
+        queryset.filter(user__isnull=True, role__isnull=True)
+    )
+    global_by_key = select_by_key(global_rules)
 
-    keys = set(direct_by_key) | set(role_by_key)
-    return {
-        key: direct_by_key[key] if key in direct_by_key else role_by_key[key]
-        for key in keys
-    }
+    effective = dict(global_by_key)
+    effective.update(role_by_key)
+    effective.update(direct_by_key)
+    return effective
 
 
 def _matrix_context(workflow, subject_type, subject, step, role=None):
@@ -212,17 +223,20 @@ def _matrix_context(workflow, subject_type, subject, step, role=None):
         for transition in transitions
     }
 
+    access_steps = [step.pk, None]
     field_rules = _effective_access_rules(
-        FieldAccess.objects.filter(field__in=fields, step=step),
+        FieldAccess.objects.filter(field__in=fields, step_id__in=access_steps),
         subject_type,
         subject,
         role,
+        step,
     )
     group_rules = _effective_access_rules(
-        RepeatableGroupAccess.objects.filter(group__in=groups, step=step),
+        RepeatableGroupAccess.objects.filter(group__in=groups, step_id__in=access_steps),
         subject_type,
         subject,
         role,
+        step,
     )
 
     return {
