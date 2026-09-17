@@ -32,22 +32,12 @@ def _subject_kwargs(subject_type, subject_value):
 
 
 def _permission_scope_qs(workflow, subject_type, subject_value):
-    return WorkflowPermission.objects.filter(
-        workflow=workflow,
-        **_subject_kwargs(subject_type, subject_value),
-    )
+    if subject_type == "user":
+        return WorkflowPermission.objects.filter(workflow=workflow, user_id=int(subject_value))
+    return WorkflowPermission.objects.filter(workflow=workflow, user__isnull=True, role=subject_value)
 
 
-def _set_permission(
-    workflow,
-    subject_type,
-    subject_value,
-    *,
-    action,
-    step=None,
-    transition=None,
-    enabled=False,
-):
+def _set_permission(workflow, subject_type, subject_value, *, action, step=None, transition=None, enabled=False):
     qs = _permission_scope_qs(workflow, subject_type, subject_value).filter(
         action=action,
         step=step,
@@ -66,54 +56,44 @@ def _set_permission(
             )
         else:
             obj.effect = WorkflowPermission.Effect.ALLOW
-            obj.save(update_fields=["effect", "updated_at"])
+            if subject_type == "user" and obj.role_id is not None:
+                obj.role = None
+                obj.save(update_fields=["effect", "role", "updated_at"])
+            else:
+                obj.save(update_fields=["effect", "updated_at"])
             qs.exclude(pk=obj.pk).delete()
     else:
         qs.delete()
 
 
+def _access_scope_qs(model, subject_type, subject_value, **filters):
+    if subject_type == "user":
+        return model.objects.filter(user_id=int(subject_value), **filters)
+    return model.objects.filter(user__isnull=True, role=subject_value, **filters)
+
+
 def _set_field_access(subject_type, subject_value, step, field, *, can_view, can_edit):
-    qs = FieldAccess.objects.filter(
-        field=field,
-        step=step,
-        **_subject_kwargs(subject_type, subject_value),
-    )
+    qs = _access_scope_qs(FieldAccess, subject_type, subject_value, field=field, step=step)
     if not can_view and not can_edit:
         qs.delete()
         return
 
     obj = qs.order_by("pk").first()
     if obj is None:
-        FieldAccess.objects.create(
-            field=field,
-            step=step,
-            can_view=can_view,
-            can_edit=can_edit,
-            **_subject_kwargs(subject_type, subject_value),
-        )
+        FieldAccess.objects.create(field=field, step=step, can_view=can_view, can_edit=can_edit, **_subject_kwargs(subject_type, subject_value))
     else:
         obj.can_view = can_view
         obj.can_edit = can_edit
-        obj.save(update_fields=["can_view", "can_edit"])
+        update_fields = ["can_view", "can_edit"]
+        if subject_type == "user" and obj.role_id is not None:
+            obj.role = None
+            update_fields.append("role")
+        obj.save(update_fields=update_fields)
         qs.exclude(pk=obj.pk).delete()
 
 
-def _set_group_access(
-    subject_type,
-    subject_value,
-    step,
-    group,
-    *,
-    can_view,
-    can_edit,
-    can_add,
-    can_delete,
-):
-    qs = RepeatableGroupAccess.objects.filter(
-        group=group,
-        step=step,
-        **_subject_kwargs(subject_type, subject_value),
-    )
+def _set_group_access(subject_type, subject_value, step, group, *, can_view, can_edit, can_add, can_delete):
+    qs = _access_scope_qs(RepeatableGroupAccess, subject_type, subject_value, group=group, step=step)
     if not can_view and not can_edit and not can_add and not can_delete:
         qs.delete()
         return
@@ -134,7 +114,11 @@ def _set_group_access(
         obj.can_edit = can_edit
         obj.can_add = can_add
         obj.can_delete = can_delete
-        obj.save(update_fields=["can_view", "can_edit", "can_add", "can_delete"])
+        update_fields = ["can_view", "can_edit", "can_add", "can_delete"]
+        if subject_type == "user" and obj.role_id is not None:
+            obj.role = None
+            update_fields.append("role")
+        obj.save(update_fields=update_fields)
         qs.exclude(pk=obj.pk).delete()
 
 
@@ -148,29 +132,12 @@ def save_access_matrix(*, workflow, subject_type, subject_value, step, post_data
         raise ValueError("مرحله انتخاب‌شده متعلق به این Workflow نیست.")
 
     for action, _label in WORKFLOW_ACTIONS:
-        _set_permission(
-            workflow,
-            subject_type,
-            subject_value,
-            action=action,
-            enabled=post_data.get(f"workflow_{action}") == "1",
-        )
+        _set_permission(workflow, subject_type, subject_value, action=action, enabled=post_data.get(f"workflow_{action}") == "1")
 
     for action, _label in STEP_ACTIONS:
-        _set_permission(
-            workflow,
-            subject_type,
-            subject_value,
-            action=action,
-            step=step,
-            enabled=post_data.get(f"step_{action}") == "1",
-        )
+        _set_permission(workflow, subject_type, subject_value, action=action, step=step, enabled=post_data.get(f"step_{action}") == "1")
 
-    transitions = WorkflowTransition.objects.filter(
-        workflow=workflow,
-        from_step=step,
-        is_active=True,
-    )
+    transitions = WorkflowTransition.objects.filter(workflow=workflow, from_step=step, is_active=True)
     for transition in transitions:
         _set_permission(
             workflow,
@@ -181,10 +148,7 @@ def save_access_matrix(*, workflow, subject_type, subject_value, step, post_data
             enabled=post_data.get(f"transition_{transition.pk}") == "1",
         )
 
-    fields = FormField.objects.filter(
-        section__form__workflow=workflow,
-        is_active=True,
-    )
+    fields = FormField.objects.filter(section__form__workflow=workflow, is_active=True)
     for field in fields:
         _set_field_access(
             subject_type,
@@ -195,10 +159,7 @@ def save_access_matrix(*, workflow, subject_type, subject_value, step, post_data
             can_edit=post_data.get(f"field_{field.pk}_edit") == "1",
         )
 
-    groups = FormRepeatableGroup.objects.filter(
-        section__form__workflow=workflow,
-        is_active=True,
-    )
+    groups = FormRepeatableGroup.objects.filter(section__form__workflow=workflow, is_active=True)
     for group in groups:
         _set_group_access(
             subject_type,
