@@ -160,6 +160,7 @@ def _matrix_context(workflow, subject_type, subject, step):
                 "view": bool(group_rules.get(group.pk) and group_rules[group.pk].can_view),
                 "edit": bool(group_rules.get(group.pk) and group_rules[group.pk].can_edit),
                 "add": bool(group_rules.get(group.pk) and group_rules[group.pk].can_add),
+                "delete": bool(group_rules.get(group.pk) and group_rules[group.pk].can_delete),
             }
             for group in groups
         ],
