@@ -84,18 +84,72 @@ def _subject_filter(subject_type, subject):
     return {"user__isnull": True, "role": subject}
 
 
-def _permission_exists(workflow, subject_type, subject_value, *, action, step=None, transition=None):
-    return WorkflowPermission.objects.filter(
-        workflow=workflow,
-        action=action,
-        effect=WorkflowPermission.Effect.ALLOW,
-        step=step,
-        transition=transition,
-        **_subject_filter(subject_type, subject_value),
-    ).exists()
+def _permission_exists(
+    workflow,
+    subject_type,
+    subject_value,
+    *,
+    action,
+    step=None,
+    transition=None,
+    role=None,
+):
+    scope = {
+        "workflow": workflow,
+        "action": action,
+        "step": step,
+        "transition": transition,
+    }
+
+    if subject_type == "role":
+        role_permissions = WorkflowPermission.objects.filter(
+            **scope,
+            user__isnull=True,
+            role=subject_value,
+        )
+        if role_permissions.filter(effect=WorkflowPermission.Effect.DENY).exists():
+            return False
+        return role_permissions.filter(effect=WorkflowPermission.Effect.ALLOW).exists()
+
+    user_permissions = WorkflowPermission.objects.filter(
+        **scope,
+        user_id=subject_value,
+        role__isnull=True,
+    )
+    if user_permissions.filter(effect=WorkflowPermission.Effect.DENY).exists():
+        return False
+    if user_permissions.filter(effect=WorkflowPermission.Effect.ALLOW).exists():
+        return True
+
+    if role:
+        role_permissions = WorkflowPermission.objects.filter(
+            **scope,
+            user__isnull=True,
+            role=role,
+        )
+        if role_permissions.filter(effect=WorkflowPermission.Effect.DENY).exists():
+            return False
+        return role_permissions.filter(effect=WorkflowPermission.Effect.ALLOW).exists()
+
+    return False
 
 
-def _matrix_context(workflow, subject_type, subject, step):
+def _effective_access_rules(queryset, subject_type, subject, role):
+    direct_rules = list(queryset.filter(**_subject_filter(subject_type, subject)))
+    if subject_type != "user" or not role:
+        return {rule.pk: rule for rule in direct_rules}
+
+    role_rules = list(queryset.filter(user__isnull=True, role=role))
+    direct_by_key = {rule.field_id if hasattr(rule, "field_id") else rule.group_id: rule for rule in direct_rules}
+    role_by_key = {rule.field_id if hasattr(rule, "field_id") else rule.group_id: rule for rule in role_rules}
+    keys = set(direct_by_key) | set(role_by_key)
+    return {
+        key: direct_by_key.get(key) or role_by_key[key]
+        for key in keys
+    }
+
+
+def _matrix_context(workflow, subject_type, subject, step, role=None):
     fields = list(
         FormField.objects.filter(section__form__workflow=workflow, is_active=True)
         .select_related("section", "repeatable_group")
@@ -113,11 +167,24 @@ def _matrix_context(workflow, subject_type, subject, step):
     )
 
     workflow_permissions = {
-        action: _permission_exists(workflow, subject_type, subject, action=action)
+        action: _permission_exists(
+            workflow,
+            subject_type,
+            subject,
+            action=action,
+            role=role,
+        )
         for action, _label in WORKFLOW_ACTIONS
     }
     step_permissions = {
-        action: _permission_exists(workflow, subject_type, subject, action=action, step=step)
+        action: _permission_exists(
+            workflow,
+            subject_type,
+            subject,
+            action=action,
+            step=step,
+            role=role,
+        )
         for action, _label in STEP_ACTIONS
     }
     transition_permissions = {
@@ -127,23 +194,23 @@ def _matrix_context(workflow, subject_type, subject, step):
             subject,
             action=WorkflowPermission.Action.TRANSITION,
             transition=transition,
+            role=role,
         )
         for transition in transitions
     }
 
-    field_rules = FieldAccess.objects.filter(
-        field__in=fields,
-        step=step,
-        **_subject_filter(subject_type, subject),
+    field_rules = _effective_access_rules(
+        FieldAccess.objects.filter(field__in=fields, step=step),
+        subject_type,
+        subject,
+        role,
     )
-    field_rules = {rule.field_id: rule for rule in field_rules}
-
-    group_rules = RepeatableGroupAccess.objects.filter(
-        group__in=groups,
-        step=step,
-        **_subject_filter(subject_type, subject),
+    group_rules = _effective_access_rules(
+        RepeatableGroupAccess.objects.filter(group__in=groups, step=step),
+        subject_type,
+        subject,
+        role,
     )
-    group_rules = {rule.group_id: rule for rule in group_rules}
 
     return {
         "workflow_permission_rows": [
@@ -224,7 +291,12 @@ def access_security_workspace(request, workflow_id):
             )
         )
 
-    matrix = _matrix_context(workflow, subject_type, subject, selected_step) if selected_step and subject else None
+    role = selected_user.role if selected_user is not None else subject if subject_type == "role" else None
+    matrix = (
+        _matrix_context(workflow, subject_type, subject, selected_step, role=role)
+        if selected_step and subject
+        else None
+    )
 
     return render(
         request,
