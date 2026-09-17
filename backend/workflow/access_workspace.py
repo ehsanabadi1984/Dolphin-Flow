@@ -135,16 +135,29 @@ def _permission_exists(
 
 
 def _effective_access_rules(queryset, subject_type, subject, role):
+    """Return effective FieldAccess/RepeatableGroupAccess rules keyed by object id."""
     direct_rules = list(queryset.filter(**_subject_filter(subject_type, subject)))
+
     if subject_type != "user" or not role:
-        return {rule.pk: rule for rule in direct_rules}
+        return {
+            (rule.field_id if isinstance(rule, FieldAccess) else rule.group_id): rule
+            for rule in direct_rules
+        }
 
     role_rules = list(queryset.filter(user__isnull=True, role=role))
-    direct_by_key = {rule.field_id if hasattr(rule, "field_id") else rule.group_id: rule for rule in direct_rules}
-    role_by_key = {rule.field_id if hasattr(rule, "field_id") else rule.group_id: rule for rule in role_rules}
+
+    direct_by_key = {
+        (rule.field_id if isinstance(rule, FieldAccess) else rule.group_id): rule
+        for rule in direct_rules
+    }
+    role_by_key = {
+        (rule.field_id if isinstance(rule, FieldAccess) else rule.group_id): rule
+        for rule in role_rules
+    }
+
     keys = set(direct_by_key) | set(role_by_key)
     return {
-        key: direct_by_key.get(key) or role_by_key[key]
+        key: direct_by_key[key] if key in direct_by_key else role_by_key[key]
         for key in keys
     }
 
