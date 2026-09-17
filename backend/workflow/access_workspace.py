@@ -20,11 +20,7 @@ from .models import (
 
 def _workspace_url(workflow, *, subject_type="", subject="", step=""):
     url = reverse("access_security_workspace", kwargs={"workflow_id": workflow.pk})
-    params = {
-        "subject_type": subject_type,
-        "subject": subject,
-        "step": step,
-    }
+    params = {"subject_type": subject_type, "subject": subject, "step": step}
     query = urlencode({key: value for key, value in params.items() if value not in (None, "")})
     return f"{url}?{query}" if query else url
 
@@ -50,7 +46,6 @@ def _resolve_context(workflow, request):
     subject_type = request.GET.get("subject_type", "user").strip()
     subject = request.GET.get("subject", "").strip()
     step_id = request.GET.get("step", "").strip()
-
     if subject_type not in {"user", "role"}:
         subject_type = "user"
 
@@ -94,27 +89,17 @@ def _permission_exists(workflow, subject_type, subject_value, *, action, step=No
 
 def _matrix_context(workflow, subject_type, subject, step):
     fields = list(
-        FormField.objects.filter(
-            section__form__workflow=workflow,
-            is_active=True,
-        )
+        FormField.objects.filter(section__form__workflow=workflow, is_active=True)
         .select_related("section", "repeatable_group")
         .order_by("section__order", "repeatable_group__order", "order", "id")
     )
     groups = list(
-        FormRepeatableGroup.objects.filter(
-            section__form__workflow=workflow,
-            is_active=True,
-        )
+        FormRepeatableGroup.objects.filter(section__form__workflow=workflow, is_active=True)
         .select_related("section")
         .order_by("section__order", "order", "id")
     )
     transitions = list(
-        WorkflowTransition.objects.filter(
-            workflow=workflow,
-            from_step=step,
-            is_active=True,
-        )
+        WorkflowTransition.objects.filter(workflow=workflow, from_step=step, is_active=True)
         .select_related("from_step", "to_step")
         .order_by("to_step__order", "id")
     )
@@ -124,13 +109,7 @@ def _matrix_context(workflow, subject_type, subject, step):
         for action, _label in WORKFLOW_ACTIONS
     }
     step_permissions = {
-        action: _permission_exists(
-            workflow,
-            subject_type,
-            subject,
-            action=action,
-            step=step,
-        )
+        action: _permission_exists(workflow, subject_type, subject, action=action, step=step)
         for action, _label in STEP_ACTIONS
     }
     transition_permissions = {
@@ -158,37 +137,36 @@ def _matrix_context(workflow, subject_type, subject, step):
     )
     group_rules = {rule.group_id: rule for rule in group_rules}
 
-    field_rows = [
-        {
-            "field": field,
-            "view": bool(field_rules.get(field.pk) and field_rules[field.pk].can_view),
-            "edit": bool(field_rules.get(field.pk) and field_rules[field.pk].can_edit),
-        }
-        for field in fields
-    ]
-    group_rows = [
-        {
-            "group": group,
-            "view": bool(group_rules.get(group.pk) and group_rules[group.pk].can_view),
-            "edit": bool(group_rules.get(group.pk) and group_rules[group.pk].can_edit),
-            "add": bool(group_rules.get(group.pk) and group_rules[group.pk].can_add),
-        }
-        for group in groups
-    ]
-    transition_rows = [
-        {
-            "transition": transition,
-            "allowed": transition_permissions[transition.pk],
-        }
-        for transition in transitions
-    ]
-
     return {
-        "field_rows": field_rows,
-        "group_rows": group_rows,
-        "transition_rows": transition_rows,
-        "workflow_permissions": workflow_permissions,
-        "step_permissions": step_permissions,
+        "workflow_permission_rows": [
+            {"value": action, "label": label, "enabled": workflow_permissions[action]}
+            for action, label in WORKFLOW_ACTIONS
+        ],
+        "step_permission_rows": [
+            {"value": action, "label": label, "enabled": step_permissions[action]}
+            for action, label in STEP_ACTIONS
+        ],
+        "field_rows": [
+            {
+                "field": field,
+                "view": bool(field_rules.get(field.pk) and field_rules[field.pk].can_view),
+                "edit": bool(field_rules.get(field.pk) and field_rules[field.pk].can_edit),
+            }
+            for field in fields
+        ],
+        "group_rows": [
+            {
+                "group": group,
+                "view": bool(group_rules.get(group.pk) and group_rules[group.pk].can_view),
+                "edit": bool(group_rules.get(group.pk) and group_rules[group.pk].can_edit),
+                "add": bool(group_rules.get(group.pk) and group_rules[group.pk].can_add),
+            }
+            for group in groups
+        ],
+        "transition_rows": [
+            {"transition": transition, "allowed": transition_permissions[transition.pk]}
+            for transition in transitions
+        ],
     }
 
 
@@ -204,10 +182,8 @@ def access_security_workspace(request, workflow_id):
         post_subject = request.POST.get("subject", subject)
         post_step = request.POST.get("step", str(selected_step.pk) if selected_step else "")
         step = steps.filter(pk=post_step).first()
-
         valid_subject = (
-            post_subject_type == "user"
-            and memberships.filter(user_id=post_subject).exists()
+            post_subject_type == "user" and memberships.filter(user_id=post_subject).exists()
         ) or (
             post_subject_type == "role"
             and post_subject in dict(WorkflowMembership.Role.choices)
