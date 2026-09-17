@@ -293,6 +293,38 @@ def formula_definitions(request, instance_id):
             required_source_ids.update(FormulaService.referenced_field_ids(config))
             changed = changed or len(required_source_ids) != before
 
+    # Hidden formula dependencies must be sent as formula definitions too.
+    # They are used only by the calculation engine and are never rendered.
+    visible_formula_ids = {item["field_id"] for item in formulas}
+    for field_id, config in formula_configs.items():
+        if field_id in visible_formula_ids:
+            continue
+        field = next((item for item in all_formula_fields if item.pk == field_id), None)
+        if field is None:
+            continue
+        if field.repeatable_group_id:
+            group = field.repeatable_group
+            visible_columns = group_visible_columns.get(group.pk, [])
+            scope = "ROW"
+            group_code = group.code
+        else:
+            visible_columns = []
+            scope = "FORM"
+            group_code = None
+        formulas.append(
+            {
+                "field_id": field.pk,
+                "code": field.code,
+                "label": field.label,
+                "group_code": group_code,
+                "scope": scope,
+                "decimal_places": config.get("decimal_places", 2),
+                "tokens": config.get("tokens", []),
+                "visible_columns": visible_columns,
+                "calculation_only": True,
+            }
+        )
+
     # Formula resolution must know every numeric/formula source field even
     # when the current workflow step hides that field. These entries are used
     # only by the calculation engine; they are not rendered by this endpoint.
