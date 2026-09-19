@@ -1,8 +1,9 @@
 from unittest import mock
 
 from django.test import TestCase
+from django.utils import timezone
 
-from backup.models import Backup, Restore
+from backup.models import Backup, BackupSchedule, Restore
 from backup.tasks import run_backup, run_restore
 
 
@@ -28,6 +29,24 @@ class BackupTaskTests(TestCase):
 
         mocked_run.assert_called_once_with()
         self.assertEqual(result["status"], Backup.Status.SUCCESS)
+
+
+    def test_process_backup_schedules_queues_due_schedule(self):
+        schedule = BackupSchedule.objects.create(
+            name="Immediate backup",
+            frequency=BackupSchedule.Frequency.ONCE,
+            run_at=timezone.now() - timezone.timedelta(minutes=1),
+        )
+
+        with mock.patch("backup.tasks.run_backup.delay") as mocked_delay:
+            from backup.tasks import process_backup_schedules
+            result = process_backup_schedules()
+
+        schedule.refresh_from_db()
+        self.assertEqual(result["queued_backup_ids"], [schedule.backups.get().pk])
+        self.assertFalse(schedule.enabled)
+        self.assertIsNone(schedule.next_run_at)
+        mocked_delay.assert_called_once_with(schedule.backups.get().pk)
 
     def test_missing_restore_returns_missing_status(self):
         result = run_restore(999_999)
