@@ -145,3 +145,8 @@ class NetworkBackupStorage:
             raise BackupStorageError(f"نام فایل شبکه ناامن است: {filename!r}")
         self.ensure_root()
         return self.root / filename
+
+    def delete(self, filename):
+        path = self.target_path(filename)
+        if path.exists():
+            path.unlink()
