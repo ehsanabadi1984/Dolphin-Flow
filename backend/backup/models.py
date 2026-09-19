@@ -1,4 +1,8 @@
+from calendar import monthrange
+from datetime import timedelta
+
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -23,12 +27,230 @@ def humanize_duration(duration):
     return f"{seconds} ثانیه"
 
 
+class BackupSchedule(models.Model):
+    class Frequency(models.TextChoices):
+        ONCE = "ONCE", "یک‌بار"
+        DAILY = "DAILY", "روزانه"
+        WEEKLY = "WEEKLY", "هفتگی"
+        MONTHLY = "MONTHLY", "ماهانه"
+        INTERVAL = "INTERVAL", "دوره‌ای"
+
+    class Destination(models.TextChoices):
+        LOCAL = "LOCAL", "محلی"
+        NETWORK = "NETWORK", "شبکه"
+        BOTH = "BOTH", "محلی + شبکه"
+
+    class Weekday(models.IntegerChoices):
+        MONDAY = 0, "دوشنبه"
+        TUESDAY = 1, "سه‌شنبه"
+        WEDNESDAY = 2, "چهارشنبه"
+        THURSDAY = 3, "پنج‌شنبه"
+        FRIDAY = 4, "جمعه"
+        SATURDAY = 5, "شنبه"
+        SUNDAY = 6, "یکشنبه"
+
+    name = models.CharField(max_length=150, verbose_name="نام زمان‌بندی")
+    enabled = models.BooleanField(default=True, verbose_name="فعال")
+    frequency = models.CharField(
+        max_length=20,
+        choices=Frequency.choices,
+        verbose_name="نوع زمان‌بندی",
+    )
+    run_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="زمان اجرا",
+        help_text="برای اجرای یک‌باره استفاده می‌شود.",
+    )
+    time_of_day = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name="ساعت اجرا",
+    )
+    weekday = models.PositiveSmallIntegerField(
+        choices=Weekday.choices,
+        null=True,
+        blank=True,
+        verbose_name="روز هفته",
+    )
+    day_of_month = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="روز ماه",
+    )
+    interval_minutes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="فاصله اجرا (دقیقه)",
+    )
+    starts_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="شروع دوره‌ای",
+        help_text="برای زمان‌بندی دوره‌ای، نقطه شروع محاسبه فاصله اجرا.",
+    )
+    include_media = models.BooleanField(
+        default=True,
+        verbose_name="شامل فایل‌های رسانه",
+    )
+    destination = models.CharField(
+        max_length=20,
+        choices=Destination.choices,
+        default=Destination.LOCAL,
+        verbose_name="مقصد",
+    )
+    last_run_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="آخرین اجرا",
+        editable=False,
+    )
+    next_run_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="اجرای بعدی",
+        editable=False,
+    )
+    last_status = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="وضعیت آخرین اجرا",
+        editable=False,
+    )
+    last_error = models.TextField(
+        blank=True,
+        verbose_name="خطای آخرین اجرا",
+        editable=False,
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="ایجاد شده")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="آخرین تغییر")
+
+    class Meta:
+        ordering = ["name", "-created_at"]
+        verbose_name = "زمان‌بندی پشتیبان‌گیری"
+        verbose_name_plural = "زمان‌بندی‌های پشتیبان‌گیری"
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        super().clean()
+
+        if not self.name.strip():
+            raise ValidationError({"name": "نام زمان‌بندی الزامی است."})
+
+        required = {
+            self.Frequency.ONCE: ("run_at", self.run_at, "زمان اجرا"),
+            self.Frequency.DAILY: ("time_of_day", self.time_of_day, "ساعت اجرا"),
+            self.Frequency.WEEKLY: ("time_of_day", self.time_of_day, "ساعت اجرا"),
+            self.Frequency.MONTHLY: ("time_of_day", self.time_of_day, "ساعت اجرا"),
+            self.Frequency.INTERVAL: ("interval_minutes", self.interval_minutes, "فاصله اجرا"),
+        }
+        field_name, value, label = required[self.frequency]
+        if value is None:
+            raise ValidationError({field_name: f"{label} برای این نوع زمان‌بندی الزامی است."})
+
+        if self.frequency == self.Frequency.WEEKLY and self.weekday is None:
+            raise ValidationError({"weekday": "روز هفته برای زمان‌بندی هفتگی الزامی است."})
+
+        if self.frequency == self.Frequency.MONTHLY:
+            if self.day_of_month is None:
+                raise ValidationError({"day_of_month": "روز ماه برای زمان‌بندی ماهانه الزامی است."})
+            if not 1 <= self.day_of_month <= 31:
+                raise ValidationError({"day_of_month": "روز ماه باید بین ۱ تا ۳۱ باشد."})
+
+        if self.frequency == self.Frequency.INTERVAL:
+            if self.interval_minutes is None or self.interval_minutes < 1:
+                raise ValidationError({"interval_minutes": "فاصله اجرا باید حداقل ۱ دقیقه باشد."})
+            if self.starts_at is None:
+                raise ValidationError({"starts_at": "زمان شروع برای زمان‌بندی دوره‌ای الزامی است."})
+
+    def calculate_next_run(self, now=None):
+        """Return the next occurrence for this schedule."""
+        now = now or timezone.now()
+        local_now = timezone.localtime(now)
+        current_tz = timezone.get_current_timezone()
+
+        if self.frequency == self.Frequency.ONCE:
+            return self.run_at if self.run_at and self.run_at > now else None
+
+        if self.frequency == self.Frequency.DAILY:
+            candidate = local_now.replace(
+                hour=self.time_of_day.hour,
+                minute=self.time_of_day.minute,
+                second=0,
+                microsecond=0,
+            )
+            if candidate <= local_now:
+                candidate += timedelta(days=1)
+            return candidate.astimezone(current_tz)
+
+        if self.frequency == self.Frequency.WEEKLY:
+            days_ahead = (self.weekday - local_now.weekday()) % 7
+            candidate = local_now + timedelta(days=days_ahead)
+            candidate = candidate.replace(
+                hour=self.time_of_day.hour,
+                minute=self.time_of_day.minute,
+                second=0,
+                microsecond=0,
+            )
+            if candidate <= local_now:
+                candidate += timedelta(days=7)
+            return candidate.astimezone(current_tz)
+
+        if self.frequency == self.Frequency.MONTHLY:
+            year, month = local_now.year, local_now.month
+            for _ in range(24):
+                last_day = monthrange(year, month)[1]
+                day = min(self.day_of_month, last_day)
+                candidate = local_now.replace(
+                    year=year,
+                    month=month,
+                    day=day,
+                    hour=self.time_of_day.hour,
+                    minute=self.time_of_day.minute,
+                    second=0,
+                    microsecond=0,
+                )
+                if candidate > local_now:
+                    return candidate.astimezone(current_tz)
+                if month == 12:
+                    year, month = year + 1, 1
+                else:
+                    month += 1
+            return None
+
+        if self.frequency == self.Frequency.INTERVAL:
+            anchor = self.starts_at
+            if anchor is None:
+                return None
+            if anchor > now:
+                return anchor
+            return now + timedelta(minutes=self.interval_minutes)
+
+        return None
+
+    def prepare_next_run(self, now=None):
+        self.next_run_at = self.calculate_next_run(now or timezone.now())
+
+
 class Backup(models.Model):
     class Status(models.TextChoices):
         QUEUED = "QUEUED", "در صف"
         RUNNING = "RUNNING", "در حال اجرا"
         SUCCESS = "SUCCESS", "موفق"
         FAILED = "FAILED", "ناموفق"
+
+    class Destination(models.TextChoices):
+        LOCAL = "LOCAL", "محلی"
+        NETWORK = "NETWORK", "شبکه"
+        BOTH = "BOTH", "محلی + شبکه"
+
+    class NetworkStatus(models.TextChoices):
+        NOT_REQUESTED = "NOT_REQUESTED", "بدون انتقال شبکه"
+        PENDING = "PENDING", "در انتظار انتقال"
+        SUCCESS = "SUCCESS", "انتقال موفق"
+        FAILED = "FAILED", "انتقال ناموفق"
 
     filename = models.CharField(max_length=255, blank=True, help_text="نام فایل نهایی بایگانی (بدون مسیر).")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
@@ -42,6 +264,32 @@ class Backup(models.Model):
     checksum = models.CharField(max_length=64, blank=True, help_text="SHA-256 فایل نهایی بایگانی.")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="created_backups")
     is_pre_restore_backup = models.BooleanField(default=False, help_text="پشتیبان امنیتی خودکار پیش از بازیابی.")
+
+    schedule = models.ForeignKey(
+        BackupSchedule,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="backups",
+        verbose_name="زمان‌بندی",
+    )
+    destination = models.CharField(
+        max_length=20,
+        choices=Destination.choices,
+        default=Destination.LOCAL,
+        verbose_name="مقصد",
+    )
+    network_status = models.CharField(
+        max_length=20,
+        choices=NetworkStatus.choices,
+        default=NetworkStatus.NOT_REQUESTED,
+        verbose_name="وضعیت انتقال شبکه",
+    )
+    network_storage_path = models.CharField(max_length=512, blank=True, verbose_name="مسیر شبکه")
+    network_size = models.BigIntegerField(null=True, blank=True, verbose_name="حجم فایل شبکه")
+    network_checksum = models.CharField(max_length=64, blank=True, verbose_name="SHA-256 شبکه")
+    network_copied_at = models.DateTimeField(null=True, blank=True, verbose_name="زمان انتقال شبکه")
+    network_error = models.TextField(blank=True, verbose_name="خطای انتقال شبکه")
 
     class SourceType(models.TextChoices):
         LOCAL_CREATED = "LOCAL_CREATED", "ایجاد محلی"
