@@ -341,3 +341,55 @@ class RestoreAdmin(ModelAdmin):
         return TemplateResponse(request, "admin/backup/restore/change_list.html", {
             **self.admin_site.each_context(request), **extra_context,
         })
+
+@admin.register(BackupSchedule, site=dolphin_admin_site)
+class BackupScheduleAdmin(ModelAdmin):
+    admin_category = "system"
+    admin_section = "backups"
+
+    list_display = (
+        "name", "enabled", "frequency", "destination", "include_media",
+        "next_run_at", "last_run_at", "last_status",
+    )
+    list_filter = ("enabled", "frequency", "destination", "include_media")
+    search_fields = ("name",)
+    ordering = ("name",)
+    readonly_fields = (
+        "last_run_at", "next_run_at", "last_status", "last_error",
+        "created_at", "updated_at",
+    )
+    fieldsets = (
+        (
+            "تنظیمات زمان‌بندی",
+            {"fields": ("name", "enabled", "frequency", "destination", "include_media")},
+        ),
+        (
+            "تنظیمات زمان اجرا",
+            {
+                "fields": (
+                    "run_at", "time_of_day", "weekday", "day_of_month",
+                    "interval_minutes", "starts_at",
+                ),
+                "description": "فیلدهای زمان اجرا بر اساس نوع زمان‌بندی استفاده می‌شوند: یک‌بار، روزانه، هفتگی، ماهانه یا دوره‌ای.",
+            },
+        ),
+        (
+            "وضعیت اجرا",
+            {"fields": ("last_run_at", "next_run_at", "last_status", "last_error")},
+        ),
+        (
+            "اطلاعات سیستمی",
+            {"fields": ("created_at", "updated_at")},
+        ),
+    )
+
+    def save_model(self, request, obj, form, change):
+        if obj.enabled:
+            obj.prepare_next_run()
+        else:
+            obj.next_run_at = None
+        super().save_model(request, obj, form, change)
+
+    def delete_model(self, request, obj):
+        # Deleting a schedule never deletes backups already created by it.
+        super().delete_model(request, obj)
