@@ -15,7 +15,7 @@ from workflow.admin import dolphin_admin_site
 from .import_service import BackupImportService
 from .models import Backup, BackupSchedule, Restore, generate_backup_filename
 from .restore_services import RestoreError, read_manifest
-from .storage import BackupImportError, BackupStorageError, LocalBackupStorage
+from .storage import BackupImportError, BackupStorageError, LocalBackupStorage, NetworkBackupStorage
 from .tasks import run_backup, run_restore
 
 logger = logging.getLogger(__name__)
@@ -293,8 +293,16 @@ class BackupAdmin(ModelAdmin):
             try:
                 LocalBackupStorage().delete(obj.storage_path)
             except BackupStorageError as exc:
-                logger.error("Refusing to remove file for backup #%s: %s", obj.pk, exc)
+                logger.error("Refusing to remove local file for backup #%s: %s", obj.pk, exc)
                 raise
+
+        if obj.network_storage_path:
+            try:
+                NetworkBackupStorage().delete(obj.network_storage_path)
+            except BackupStorageError as exc:
+                logger.error("Refusing to remove network file for backup #%s: %s", obj.pk, exc)
+                raise
+
         super().delete_model(request, obj)
 
 
