@@ -235,6 +235,15 @@ class BackupSchedule(models.Model):
     def prepare_next_run(self, now=None):
         self.next_run_at = self.calculate_next_run(now or timezone.now())
 
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.next_run_at is None:
+            self.next_run_at = (
+                self.calculate_next_run()
+                if self.enabled
+                else None
+            )
+        super().save(*args, **kwargs)
+
 
 class Backup(models.Model):
     class Status(models.TextChoices):
