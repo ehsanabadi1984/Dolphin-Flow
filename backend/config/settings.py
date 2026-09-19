@@ -148,6 +148,10 @@ BACKUP_ROOT = Path(
     env("BACKUP_ROOT", default=str(BASE_DIR / "backups"))
 )
 
+# Optional network backup destination. The path should be an OS-mounted
+# SMB/NFS share; credentials and mount lifecycle are managed outside Django.
+BACKUP_NETWORK_ROOT = env("BACKUP_NETWORK_ROOT", default="")
+
 # Include the MEDIA_ROOT archive in each backup.
 BACKUP_INCLUDE_MEDIA = env.bool(
     "BACKUP_INCLUDE_MEDIA",
@@ -196,6 +200,10 @@ CELERY_BROKER_URL = (
 CELERY_BEAT_SCHEDULE = {
     "process-sla-monitor-every-minute": {
         "task": "workflow.tasks.process_sla_monitor",
+        "schedule": 60.0,
+    },
+    "process-backup-schedules-every-minute": {
+        "task": "backup.tasks.process_backup_schedules",
         "schedule": 60.0,
     },
 }
