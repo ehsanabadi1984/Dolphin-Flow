@@ -1,13 +1,16 @@
+import hashlib
 import logging
+import shutil
 
 from celery import shared_task
 from django.core.management import call_command
-from django.db import connection
+from django.db import connection, transaction
 from django.utils import timezone
 
-from .models import Backup, Restore
+from .models import Backup, BackupSchedule, Restore, generate_backup_filename
 from .restore_services import RestoreError, RestoreService
-from .services import BackupService
+from .services import BackupService, sanitize_message
+from .storage import BackupStorageError, LocalBackupStorage, NetworkBackupStorage
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +19,7 @@ class MigratingRestoreService(RestoreService):
     """Run pending Django migrations after replacing the database dump.
 
     The dump may have been created before the current application schema.
-    ``pg_restore`` restores that historical schema, so migrations must run
+    pg_restore restores that historical schema, so migrations must run
     before post-restore model operations such as recreating the safety-backup
     row.
     """
@@ -35,12 +38,7 @@ class MigratingRestoreService(RestoreService):
         self._normalize_restored_backup_states()
 
     def _normalize_restored_backup_states(self):
-        """Mark RUNNING backups restored from another system as failed.
-
-        A RUNNING backup record restored from an archive has no corresponding
-        Celery worker on this destination and therefore cannot legitimately
-        remain RUNNING.
-        """
+        """Mark RUNNING backups restored from another system as failed."""
         now = timezone.now()
 
         updated = Backup.objects.filter(
@@ -76,28 +74,190 @@ class MigratingRestoreService(RestoreService):
 
 
 @shared_task
-def run_backup(backup_id):
-    """Execute the backup pipeline for the given ``Backup`` record.
+def process_backup_schedules():
+    """Create due Backup rows and dispatch their asynchronous execution."""
+    now = timezone.now()
+    queued = []
 
-    Returns a small status dict for observability. All heavy work (pg_dump,
-    media archiving, validation) happens here, never in the HTTP request.
+    with transaction.atomic():
+        schedules = list(
+            BackupSchedule.objects.select_for_update()
+            .filter(
+                enabled=True,
+                next_run_at__isnull=False,
+                next_run_at__lte=now,
+            )
+            .order_by("next_run_at", "pk")[:20]
+        )
+
+        for schedule in schedules:
+            backup = Backup.objects.create(
+                filename=generate_backup_filename(),
+                includes_media=schedule.include_media,
+                schedule=schedule,
+                destination=schedule.destination,
+                network_status=(
+                    Backup.NetworkStatus.PENDING
+                    if schedule.destination in (
+                        Backup.Destination.NETWORK,
+                        Backup.Destination.BOTH,
+                    )
+                    else Backup.NetworkStatus.NOT_REQUESTED
+                ),
+            )
+
+            schedule.last_run_at = now
+            schedule.last_status = Backup.Status.QUEUED
+            schedule.last_error = ""
+
+            if schedule.frequency == BackupSchedule.Frequency.ONCE:
+                schedule.enabled = False
+                schedule.next_run_at = None
+            else:
+                schedule.next_run_at = schedule.calculate_next_run(now)
+
+            schedule.save(
+                update_fields=[
+                    "enabled",
+                    "last_run_at",
+                    "last_status",
+                    "last_error",
+                    "next_run_at",
+                    "updated_at",
+                ]
+            )
+            queued.append(backup.pk)
+
+    for backup_id in queued:
+        run_backup.delay(backup_id)
+
+    return {"status": "ok", "queued_backup_ids": queued}
+
+
+def _sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+@shared_task
+def replicate_backup_to_network(backup_id):
+    """Copy a completed local archive to the mounted network destination.
+
+    Network replication is independent from the local backup result:
+    a local backup remains SUCCESS even if the network copy fails.
     """
+    try:
+        backup = Backup.objects.get(pk=backup_id)
+    except Backup.DoesNotExist:
+        logger.warning(
+            "replicate_backup_to_network called for missing backup #%s",
+            backup_id,
+        )
+        return {"status": "missing", "backup_id": backup_id}
+
+    if backup.destination not in (
+        Backup.Destination.NETWORK,
+        Backup.Destination.BOTH,
+    ):
+        return {"status": "not_requested", "backup_id": backup_id}
+
+    if backup.status != Backup.Status.SUCCESS:
+        return {"status": "not_ready", "backup_id": backup_id}
+
+    local_storage = LocalBackupStorage()
+    try:
+        source = local_storage.path_for(backup.storage_path)
+        if not source.is_file():
+            raise BackupStorageError("فایل پشتیبان محلی برای انتقال شبکه یافت نشد.")
+
+        network_storage = NetworkBackupStorage()
+        target = network_storage.target_path(backup.filename)
+        temp_target = target.with_name(f".{target.name}.{backup.pk}.copying")
+
+        shutil.copy2(source, temp_target)
+        source_checksum = backup.checksum or _sha256(source)
+        copied_checksum = _sha256(temp_target)
+
+        if copied_checksum != source_checksum:
+            temp_target.unlink(missing_ok=True)
+            raise BackupStorageError(
+                "تأیید checksum فایل پشتیبان در مقصد شبکه ناموفق بود."
+            )
+
+        temp_target.replace(target)
+
+        backup.network_status = Backup.NetworkStatus.SUCCESS
+        backup.network_storage_path = target.name
+        backup.network_size = target.stat().st_size
+        backup.network_checksum = copied_checksum
+        backup.network_copied_at = timezone.now()
+        backup.network_error = ""
+        backup.save(
+            update_fields=[
+                "network_status",
+                "network_storage_path",
+                "network_size",
+                "network_checksum",
+                "network_copied_at",
+                "network_error",
+                "updated_at",
+            ]
+        )
+
+        return {"status": "success", "backup_id": backup_id}
+
+    except Exception as exc:
+        logger.exception("Network replication failed for backup #%s", backup_id)
+        backup.network_status = Backup.NetworkStatus.FAILED
+        backup.network_error = sanitize_message(str(exc))[:1000]
+        backup.save(
+            update_fields=[
+                "network_status",
+                "network_error",
+                "updated_at",
+            ]
+        )
+        return {"status": "failed", "backup_id": backup_id}
+
+
+@shared_task
+def run_backup(backup_id):
+    """Execute the backup pipeline for the given Backup record."""
     try:
         backup = Backup.objects.get(pk=backup_id)
     except Backup.DoesNotExist:
         logger.warning("run_backup called for missing backup #%s", backup_id)
         return {"status": "missing", "backup_id": backup_id}
 
-    return BackupService(backup).run()
+    result = BackupService(backup).run()
+
+    backup.refresh_from_db()
+    if backup.schedule_id:
+        schedule = backup.schedule
+        schedule.last_status = backup.status
+        schedule.last_error = backup.error_message
+        schedule.save(
+            update_fields=["last_status", "last_error", "updated_at"]
+        )
+
+    if (
+        backup.status == Backup.Status.SUCCESS
+        and backup.destination in (
+            Backup.Destination.NETWORK,
+            Backup.Destination.BOTH,
+        )
+    ):
+        replicate_backup_to_network.delay(backup.pk)
+
+    return result
 
 
 @shared_task
 def run_restore(restore_id):
-    """Execute the restore pipeline for the given ``Restore`` record.
-
-    Returns a small status dict for observability. The destructive steps
-    (pg_restore, migrations, media extraction) happen here, never in the HTTP request.
-    """
+    """Execute the restore pipeline for the given Restore record."""
     try:
         restore = Restore.objects.get(pk=restore_id)
     except Restore.DoesNotExist:
