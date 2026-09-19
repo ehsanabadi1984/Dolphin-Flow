@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.admin import ModelAdmin
+from django import forms
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse, Http404, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect
@@ -12,7 +13,7 @@ from django.urls import path
 from workflow.admin import dolphin_admin_site
 
 from .import_service import BackupImportService
-from .models import Backup, Restore, generate_backup_filename
+from .models import Backup, BackupSchedule, Restore, generate_backup_filename
 from .restore_services import RestoreError, read_manifest
 from .storage import BackupImportError, BackupStorageError, LocalBackupStorage
 from .tasks import run_backup, run_restore
@@ -25,11 +26,22 @@ class BackupAdmin(ModelAdmin):
     admin_category = "system"
     admin_section = "backups"
 
-    list_display = ("filename", "status", "size", "created_at", "created_by")
+    list_display = (
+        "filename",
+        "status",
+        "destination",
+        "network_status",
+        "size",
+        "created_at",
+        "created_by",
+    )
     readonly_fields = (
         "filename", "status", "started_at", "completed_at", "storage_path",
         "size", "database_size", "media_size", "includes_media", "checksum",
-        "created_by", "error_message", "created_at", "updated_at",
+        "created_by", "schedule", "destination", "network_status",
+        "network_storage_path", "network_size", "network_checksum",
+        "network_copied_at", "network_error", "error_message",
+        "created_at", "updated_at",
     )
 
     def has_add_permission(self, request):
