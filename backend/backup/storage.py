@@ -113,3 +113,35 @@ class LocalBackupStorage(BackupStorage):
             raise BackupStorageError(f"a backup file already exists: {filename!r}")
         tmp_path.replace(final_path)
         return final_path
+
+class NetworkBackupStorage:
+    """Filesystem-backed network storage rooted at BACKUP_NETWORK_ROOT.
+
+    The root is expected to be an SMB/NFS share mounted by the operating
+    system. Dolphin-Flow deliberately does not handle SMB/NFS credentials
+    itself; the operating system owns that connection.
+    """
+
+    def __init__(self, root=None):
+        configured = root if root is not None else getattr(settings, "BACKUP_NETWORK_ROOT", "")
+        if not configured:
+            raise BackupStorageError(
+                "مسیر ذخیره‌سازی شبکه در BACKUP_NETWORK_ROOT تنظیم نشده است."
+            )
+        self.root = Path(configured).resolve()
+
+    def ensure_root(self):
+        if not self.root.exists():
+            raise BackupStorageError(
+                f"مسیر ذخیره‌سازی شبکه وجود ندارد: {self.root}"
+            )
+        if not self.root.is_dir():
+            raise BackupStorageError(
+                f"مسیر ذخیره‌سازی شبکه پوشه نیست: {self.root}"
+            )
+
+    def target_path(self, filename):
+        if not filename or Path(filename).is_absolute() or ".." in Path(filename).parts:
+            raise BackupStorageError(f"نام فایل شبکه ناامن است: {filename!r}")
+        self.ensure_root()
+        return self.root / filename
