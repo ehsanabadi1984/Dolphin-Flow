@@ -172,7 +172,9 @@ class BackupSchedule(models.Model):
         current_tz = timezone.get_current_timezone()
 
         if self.frequency == self.Frequency.ONCE:
-            return self.run_at if self.run_at and self.run_at > now else None
+            return self.run_at if self.run_at and self.run_at > now else (
+                now if self.run_at else None
+            )
 
         if self.frequency == self.Frequency.DAILY:
             candidate = local_now.replace(
