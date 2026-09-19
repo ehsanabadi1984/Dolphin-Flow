@@ -52,7 +52,11 @@ from .services import (
     BackupService,
     sanitize_message,
 )
-from .storage import BackupStorageError, LocalBackupStorage
+from .storage import (
+    BackupStorageError,
+    LocalBackupStorage,
+    NetworkBackupStorage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -353,6 +357,18 @@ class RestoreService:
                 path = self.storage.path_for(backup.storage_path)
             except BackupStorageError as exc:
                 raise RestoreError(str(exc)) from exc
+
+            if not path.exists() or not path.is_file():
+                if not backup.network_storage_path:
+                    raise RestoreError(
+                        "فایل بایگانی بازیابی یافت نشد."
+                    )
+                try:
+                    path = NetworkBackupStorage().path_for(
+                        backup.network_storage_path
+                    )
+                except BackupStorageError as exc:
+                    raise RestoreError(str(exc)) from exc
 
         if not path.exists() or not path.is_file():
             raise RestoreError(
