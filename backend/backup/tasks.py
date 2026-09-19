@@ -87,7 +87,7 @@ def process_backup_schedules():
                 next_run_at__isnull=False,
                 next_run_at__lte=now,
             )
-            .order_by("next_run_at", "pk")[:20]
+            .order_by("next_run_at", "pk")[:1]
         )
 
         for schedule in schedules:
