@@ -108,22 +108,53 @@ class BackupAdmin(ModelAdmin):
         if backup.status != Backup.Status.SUCCESS:
             raise Http404("پشتیبان هنوز آماده دانلود نیست.")
         storage = LocalBackupStorage()
+        path = None
         try:
             path = storage.path_for(backup.storage_path)
+            if not storage.exists(path):
+                path = None
         except BackupStorageError:
+            path = None
+
+        if path is None and backup.network_storage_path:
+            try:
+                network_storage = NetworkBackupStorage()
+                path = network_storage.path_for(backup.network_storage_path)
+                if not path.is_file():
+                    path = None
+            except BackupStorageError:
+                path = None
+
+        if path is None:
             raise Http404("فایل پشتیبان یافت نشد.")
-        if not storage.exists(path):
-            raise Http404("فایل پشتیبان یافت نشد.")
-        return FileResponse(storage.open(backup.storage_path, "rb"), as_attachment=True, filename=backup.filename)
+
+        return FileResponse(
+            open(path, "rb"),
+            as_attachment=True,
+            filename=backup.filename,
+        )
 
     def _read_manifest_for_backup(self, backup):
         storage = LocalBackupStorage()
+        path = None
         try:
             path = storage.path_for(backup.storage_path)
-        except BackupStorageError as exc:
-            raise RestoreError(str(exc)) from exc
-        if not storage.exists(path):
+            if not storage.exists(path):
+                path = None
+        except BackupStorageError:
+            path = None
+
+        if path is None and backup.network_storage_path:
+            try:
+                path = NetworkBackupStorage().path_for(
+                    backup.network_storage_path
+                )
+            except BackupStorageError as exc:
+                raise RestoreError(str(exc)) from exc
+
+        if path is None or not path.is_file():
             raise RestoreError("فایل پشتیبان یافت نشد.")
+
         return read_manifest(path)
 
     def _active_operation_message(self):
