@@ -146,6 +146,9 @@ class NetworkBackupStorage:
         self.ensure_root()
         return self.root / filename
 
+    def path_for(self, relpath):
+        return self.target_path(relpath)
+
     def delete(self, filename):
         path = self.target_path(filename)
         if path.exists():
