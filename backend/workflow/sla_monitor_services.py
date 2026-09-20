@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from .sla_services import SLAService
@@ -7,6 +7,7 @@ from .realtime_services import WorkflowRealtimeService
 
 from .models import (
     WorkflowStepExecution,
+    WorkflowInstance,
     Notification,
 )
 
@@ -19,19 +20,13 @@ class SLAMonitorService:
         step_execution,
         notification_type,
     ):
-        workflow = step_execution.workflow_step.workflow
+        responsible_user = step_execution.workflow_step.assigned_to
 
-        memberships = (
-            workflow.memberships
-            .filter(
-                is_active=True,
-                role__in=[
-                    "EXECUTOR",
-                    "MANAGER",
-                ],
-            )
-            .select_related("user")
-        )
+        if (
+            responsible_user is None
+            or not responsible_user.is_active
+        ):
+            return 0
 
         if notification_type == Notification.NotificationType.SLA_WARNING:
             title = "هشدار SLA"
@@ -52,20 +47,16 @@ class SLAMonitorService:
         else:
             return 0
 
-        count = 0
+        NotificationService.create(
+            recipient=responsible_user,
+            notification_type=notification_type,
+            title=title,
+            message=message,
+            workflow_instance=step_execution.instance,
+            workflow_step=step_execution.workflow_step,
+        )
 
-        for membership in memberships:
-            NotificationService.create(
-                recipient=membership.user,
-                notification_type=notification_type,
-                title=title,
-                message=message,
-                workflow_instance=step_execution.instance,
-                workflow_step=step_execution.workflow_step,
-            )
-            count += 1
-
-        return count
+        return 1
 
     @staticmethod
     def process_active_slas(*, now=None):
@@ -75,12 +66,17 @@ class SLAMonitorService:
         executions = (
             WorkflowStepExecution.objects
             .filter(
+                instance__isnull=False,
+                instance__status=WorkflowInstance.Status.ACTIVE,
+                instance__current_step_id=models.F("workflow_step_id"),
                 sla_started_at__isnull=False,
                 sla_completed_at__isnull=True,
+                is_submitted=False,
             )
             .select_related(
                 "workflow_step",
                 "workflow_step__workflow",
+                "workflow_step__assigned_to",
                 "instance",
             )
         )
@@ -90,13 +86,34 @@ class SLAMonitorService:
 
         for execution in executions:
             with transaction.atomic():
+                # WorkflowExecutionService locks the instance first and then
+                # the step execution when a transition is executed. Lock in
+                # the same order here so a transition finishing at the SLA
+                # boundary cannot race the monitor into sending a notification.
+                instance = (
+                    WorkflowInstance.objects
+                    .select_for_update()
+                    .get(pk=execution.instance_id)
+                )
+
                 execution = (
                     WorkflowStepExecution.objects
                     .select_for_update()
+                    .select_related(
+                        "workflow_step",
+                        "workflow_step__workflow",
+                        "workflow_step__assigned_to",
+                        "instance",
+                    )
                     .get(pk=execution.pk)
                 )
 
-                if execution.sla_completed_at is not None:
+                if (
+                    instance.status != WorkflowInstance.Status.ACTIVE
+                    or instance.current_step_id != execution.workflow_step_id
+                    or execution.is_submitted
+                    or execution.sla_completed_at is not None
+                ):
                     continue
 
                 if SLAService.is_warning_due(
