@@ -27,6 +27,7 @@ import os
 import shutil
 import subprocess
 import tarfile
+import tempfile
 from pathlib import Path
 
 from django.conf import settings
@@ -291,6 +292,16 @@ class BackupService:
     # ----------------------------------------------------------
 
     def _make_temp_dir(self):
+        # NETWORK-only backups must never stage their archive under
+        # BACKUP_ROOT. They use the operating system temporary directory
+        # instead, so no backup artifact is created in local backup storage.
+        if self.backup.destination == Backup.Destination.NETWORK:
+            return Path(
+                tempfile.mkdtemp(
+                    prefix=f"dolphin-flow-backup-{self.backup.pk}-"
+                )
+            )
+
         self.storage.ensure_root()
         root = Path(self.storage.root)
         tmp_root = root / "tmp"
