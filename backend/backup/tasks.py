@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import shutil
+from datetime import timedelta
 
 from celery import shared_task
 from django.core.management import call_command
@@ -278,7 +279,7 @@ def run_backup_retention():
 
     cutoff = None
     if policy.keep_days:
-        cutoff = timezone.now() - timezone.timedelta(days=policy.keep_days)
+        cutoff = timezone.now() - timedelta(days=policy.keep_days)
 
     deleted = []
     skipped = []
