@@ -199,9 +199,17 @@ class BackupAdmin(ModelAdmin):
 
         if path is None and backup.network_storage_path:
             try:
-                network_storage = NetworkBackupStorage(root=backup.network_storage.root_path if backup.network_storage_id else None)
-                path = network_storage.path_for(backup.network_storage_path)
-                if not path.is_file():
+                if backup.network_storage_id:
+                    import tempfile
+                    network_storage = NetworkBackupStorage(backup.network_storage)
+                    fd, temp_name = tempfile.mkstemp(suffix=".dfbak")
+                    import os
+                    os.close(fd)
+                    path = network_storage.download_to_local(
+                        backup.network_storage_path,
+                        temp_name,
+                    )
+                else:
                     path = None
             except BackupStorageError:
                 path = None
@@ -227,8 +235,15 @@ class BackupAdmin(ModelAdmin):
 
         if path is None and backup.network_storage_path:
             try:
-                path = NetworkBackupStorage(root=backup.network_storage.root_path if backup.network_storage_id else None).path_for(
-                    backup.network_storage_path
+                if not backup.network_storage_id:
+                    raise RestoreError("مقصد شبکه برای این پشتیبان مشخص نیست.")
+                import tempfile
+                fd, temp_name = tempfile.mkstemp(suffix=".dfbak")
+                import os
+                os.close(fd)
+                path = NetworkBackupStorage(backup.network_storage).download_to_local(
+                    backup.network_storage_path,
+                    temp_name,
                 )
             except BackupStorageError as exc:
                 raise RestoreError(str(exc)) from exc
@@ -410,7 +425,8 @@ class BackupAdmin(ModelAdmin):
 
         if obj.network_storage_path:
             try:
-                NetworkBackupStorage(root=obj.network_storage.root_path if obj.network_storage_id else None).delete(obj.network_storage_path)
+                if obj.network_storage_id:
+                    NetworkBackupStorage(obj.network_storage).delete(obj.network_storage_path)
             except BackupStorageError as exc:
                 logger.error("Refusing to remove network file for backup #%s: %s", obj.pk, exc)
                 raise
