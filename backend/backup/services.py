@@ -34,7 +34,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import Backup, Restore
-from .storage import BackupStorageError, LocalBackupStorage
+from .storage import BackupStorageError, LocalBackupStorage, NetworkBackupStorage
 
 logger = logging.getLogger(__name__)
 
@@ -143,17 +143,27 @@ class BackupService:
             checksum = self._calculate_checksum(archive_path)
             self._validate_archive(archive_path)
 
-            final_path = self.storage.finalize(
-                archive_path,
-                self.backup.filename,
-            )
+            database_size = database_path.stat().st_size
 
-            self._mark_success(
-                final_path=final_path,
-                checksum=checksum,
-                database_size=database_path.stat().st_size,
-                media_size=media_size,
-            )
+            if self.backup.destination == Backup.Destination.NETWORK:
+                self._store_network_only(
+                    archive_path=archive_path,
+                    checksum=checksum,
+                    database_size=database_size,
+                    media_size=media_size,
+                )
+            else:
+                final_path = self.storage.finalize(
+                    archive_path,
+                    self.backup.filename,
+                )
+
+                self._mark_success(
+                    final_path=final_path,
+                    checksum=checksum,
+                    database_size=database_size,
+                    media_size=media_size,
+                )
 
         except BackupError as exc:
             logger.warning(
@@ -161,7 +171,7 @@ class BackupService:
                 self.backup.pk,
                 exc,
             )
-            self._mark_failed(str(exc))
+            self._mark_destination_failed(str(exc))
 
         except BackupStorageError as exc:
             logger.warning(
@@ -169,11 +179,11 @@ class BackupService:
                 self.backup.pk,
                 exc,
             )
-            self._mark_failed(str(exc))
+            self._mark_destination_failed(str(exc))
 
         except Exception as exc:  # report any unexpected failure
             logger.exception("Backup #%s failed unexpectedly", self.backup.pk)
-            self._mark_failed(self._sanitize_message(str(exc)))
+            self._mark_destination_failed(self._sanitize_message(str(exc)))
 
         finally:
             self._cleanup_temp_dir(tmp_dir)
@@ -538,6 +548,82 @@ class BackupService:
                 "updated_at",
             ]
         )
+
+    def _store_network_only(
+        self,
+        *,
+        archive_path,
+        checksum,
+        database_size,
+        media_size,
+    ):
+        """Upload the validated archive without creating a final local copy."""
+        if not self.backup.network_storage_id:
+            raise BackupStorageError(
+                "برای این پشتیبان مقصد شبکه‌ای ثبت نشده است."
+            )
+
+        network_storage = NetworkBackupStorage(self.backup.network_storage)
+        remote_path, remote_size = network_storage.copy_from_local(
+            archive_path,
+            self.backup.filename,
+        )
+
+        self.backup.status = Backup.Status.SUCCESS
+        self.backup.completed_at = timezone.now()
+        self.backup.storage_path = ""
+        self.backup.size = remote_size
+        self.backup.database_size = database_size
+        self.backup.media_size = media_size
+        self.backup.checksum = checksum
+        self.backup.error_message = ""
+        self.backup.network_status = Backup.NetworkStatus.SUCCESS
+        self.backup.network_storage_path = remote_path
+        self.backup.network_size = remote_size
+        self.backup.network_checksum = checksum
+        self.backup.network_copied_at = timezone.now()
+        self.backup.network_error = ""
+        self.backup.save(
+            update_fields=[
+                "status",
+                "completed_at",
+                "storage_path",
+                "size",
+                "database_size",
+                "media_size",
+                "checksum",
+                "error_message",
+                "network_status",
+                "network_storage_path",
+                "network_size",
+                "network_checksum",
+                "network_copied_at",
+                "network_error",
+                "updated_at",
+            ]
+        )
+
+    def _mark_destination_failed(self, message):
+        if self.backup.destination == Backup.Destination.NETWORK:
+            sanitized = self._sanitize_message(message)[:1000]
+            self.backup.status = Backup.Status.FAILED
+            self.backup.completed_at = timezone.now()
+            self.backup.error_message = sanitized
+            self.backup.network_status = Backup.NetworkStatus.FAILED
+            self.backup.network_error = sanitized
+            self.backup.save(
+                update_fields=[
+                    "status",
+                    "completed_at",
+                    "error_message",
+                    "network_status",
+                    "network_error",
+                    "updated_at",
+                ]
+            )
+            return
+
+        self._mark_failed(message)
 
     def _mark_failed(self, message):
         self.backup.status = Backup.Status.FAILED
