@@ -164,6 +164,11 @@ class BackupRetentionPolicy(models.Model):
                 "حداقل یکی از «تعداد نسخه‌های اخیر» یا «مدت نگهداری» باید بزرگ‌تر از صفر باشد."
             )
 
+    def save(self, *args, **kwargs):
+        # This model represents one global policy for the whole system.
+        self.pk = 1
+        super().save(*args, **kwargs)
+
     @classmethod
     def get_solo(cls):
         obj = cls.objects.order_by("pk").first()
