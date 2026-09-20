@@ -180,26 +180,17 @@ def replicate_backup_to_network(backup_id):
         if not backup.network_storage_id:
             raise BackupStorageError("برای این پشتیبان مقصد شبکه‌ای ثبت نشده است.")
 
-        network_storage = NetworkBackupStorage(root=backup.network_storage.root_path)
-        target = network_storage.target_path(backup.filename)
-        temp_target = target.with_name(f".{target.name}.{backup.pk}.copying")
-
-        shutil.copy2(source, temp_target)
+        network_storage = NetworkBackupStorage(backup.network_storage)
         source_checksum = backup.checksum or _sha256(source)
-        copied_checksum = _sha256(temp_target)
-
-        if copied_checksum != source_checksum:
-            temp_target.unlink(missing_ok=True)
-            raise BackupStorageError(
-                "تأیید checksum فایل پشتیبان در مقصد شبکه ناموفق بود."
-            )
-
-        temp_target.replace(target)
+        remote_path, remote_size = network_storage.copy_from_local(
+            source,
+            backup.filename,
+        )
 
         backup.network_status = Backup.NetworkStatus.SUCCESS
-        backup.network_storage_path = target.name
-        backup.network_size = target.stat().st_size
-        backup.network_checksum = copied_checksum
+        backup.network_storage_path = remote_path
+        backup.network_size = remote_size
+        backup.network_checksum = source_checksum
         backup.network_copied_at = timezone.now()
         backup.network_error = ""
         backup.save(
