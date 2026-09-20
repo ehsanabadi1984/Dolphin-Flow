@@ -2,8 +2,11 @@
 Backup storage abstraction.
 """
 
-from pathlib import Path
+import base64
+import hashlib
+import shutil
 import uuid
+from pathlib import Path
 
 from django.conf import settings
 
@@ -16,9 +19,35 @@ class BackupImportError(Exception):
     """Raised when an imported backup file fails validation or staging."""
 
 
-class BackupStorage:
-    """Interface for the storage backend that holds final backup archives."""
+def _credential_fernet():
+    try:
+        from cryptography.fernet import Fernet
+    except ImportError as exc:
+        raise BackupStorageError("کتابخانه cryptography نصب نیست.") from exc
+    key = base64.urlsafe_b64encode(
+        hashlib.sha256(settings.SECRET_KEY.encode("utf-8")).digest()
+    )
+    return Fernet(key)
 
+
+def encrypt_storage_secret(value):
+    if not value:
+        return ""
+    return _credential_fernet().encrypt(value.encode("utf-8")).decode("ascii")
+
+
+def decrypt_storage_secret(value):
+    if not value:
+        return ""
+    try:
+        return _credential_fernet().decrypt(value.encode("ascii")).decode("utf-8")
+    except Exception as exc:
+        raise BackupStorageError(
+            "رمز ذخیره‌شده مقصد شبکه قابل رمزگشایی نیست."
+        ) from exc
+
+
+class BackupStorage:
     IMPORT_STAGING_SUFFIX = ".importing"
     root = None
 
@@ -45,7 +74,7 @@ class BackupStorage:
 
 
 class LocalBackupStorage(BackupStorage):
-    """Filesystem-backed storage rooted at ``settings.BACKUP_ROOT``."""
+    """Filesystem-backed storage rooted at settings.BACKUP_ROOT."""
 
     def __init__(self, root=None):
         self.root = Path(root or settings.BACKUP_ROOT).resolve()
@@ -68,7 +97,6 @@ class LocalBackupStorage(BackupStorage):
         staging = Path(staging_path)
         if not staging.exists():
             raise BackupStorageError(f"staging file does not exist: {staging}")
-
         final_path = self.root / target_name
         if final_path.exists():
             suffix = Path(target_name).suffix
@@ -114,42 +142,182 @@ class LocalBackupStorage(BackupStorage):
         tmp_path.replace(final_path)
         return final_path
 
+
 class NetworkBackupStorage:
-    """Filesystem-backed network storage rooted at BACKUP_NETWORK_ROOT.
+    """Transfer completed backup archives to an SMB or SFTP destination."""
 
-    The root is expected to be an SMB/NFS share mounted by the operating
-    system. Dolphin-Flow deliberately does not handle SMB/NFS credentials
-    itself; the operating system owns that connection.
-    """
+    def __init__(self, destination):
+        self.destination = destination
 
-    def __init__(self, root=None):
-        configured = root if root is not None else getattr(settings, "BACKUP_NETWORK_ROOT", "")
-        if not configured:
-            raise BackupStorageError(
-                "مسیر ذخیره‌سازی شبکه در BACKUP_NETWORK_ROOT تنظیم نشده است."
-            )
-        self.root = Path(configured).resolve()
-
-    def ensure_root(self):
-        if not self.root.exists():
-            raise BackupStorageError(
-                f"مسیر ذخیره‌سازی شبکه وجود ندارد: {self.root}"
-            )
-        if not self.root.is_dir():
-            raise BackupStorageError(
-                f"مسیر ذخیره‌سازی شبکه پوشه نیست: {self.root}"
-            )
-
-    def target_path(self, filename):
-        if not filename or Path(filename).is_absolute() or ".." in Path(filename).parts:
+    @staticmethod
+    def _safe_filename(filename):
+        if (
+            not filename
+            or Path(filename).is_absolute()
+            or ".." in Path(filename).parts
+            or Path(filename).name != filename
+        ):
             raise BackupStorageError(f"نام فایل شبکه ناامن است: {filename!r}")
-        self.ensure_root()
-        return self.root / filename
+        return filename
 
-    def path_for(self, relpath):
-        return self.target_path(relpath)
+    def _remote_relative_path(self, filename):
+        filename = self._safe_filename(filename)
+        relative = (self.destination.remote_path or "").strip("/\\")
+        return f"{relative}/{filename}" if relative else filename
 
-    def delete(self, filename):
-        path = self.target_path(filename)
-        if path.exists():
-            path.unlink()
+    def _smb_path(self, filename):
+        share = self.destination.share.strip("/\\")
+        if not share:
+            raise BackupStorageError("نام Share برای SMB تنظیم نشده است.")
+        relative = self._remote_relative_path(filename).replace("/", "\\")
+        return f"\\\\{self.destination.host}\\{share}\\{relative}"
+
+    def copy_from_local(self, source_path, filename):
+        backend = self.destination.backend_type
+        if backend == self.destination.BackendType.SMB:
+            return self._copy_smb(source_path, filename)
+        if backend == self.destination.BackendType.SFTP:
+            return self._copy_sftp(source_path, filename)
+        if backend == self.destination.BackendType.MOUNTED_FOLDER:
+            return self._copy_mounted(source_path, filename)
+        raise BackupStorageError("نوع مقصد شبکه پشتیبانی نمی‌شود.")
+
+    def _copy_mounted(self, source_path, filename):
+        root = Path(self.destination.remote_path).resolve()
+        root.mkdir(parents=True, exist_ok=True)
+        target = root / self._safe_filename(filename)
+        temp = root / f".{target.name}.copying"
+        shutil.copy2(source_path, temp)
+        temp.replace(target)
+        return str(target), target.stat().st_size
+
+    def _copy_smb(self, source_path, filename):
+        try:
+            import smbclient
+        except ImportError as exc:
+            raise BackupStorageError(
+                "کتابخانه SMB نصب نیست؛ وابستگی smbprotocol را نصب کنید."
+            ) from exc
+
+        try:
+            smbclient.register_session(
+                self.destination.host.strip(),
+                username=self.destination.username,
+                password=self.destination.get_password(),
+                port=self.destination.port or 445,
+            )
+            remote = self._smb_path(filename)
+            remote_dir = remote.rsplit("\\", 1)[0]
+            smbclient.makedirs(remote_dir, exist_ok=True)
+            temp = f"{remote}.copying"
+            with open(source_path, "rb") as source, smbclient.open_file(
+                temp, mode="wb"
+            ) as target:
+                shutil.copyfileobj(source, target, length=1024 * 1024)
+            try:
+                smbclient.remove(remote)
+            except OSError:
+                pass
+            smbclient.rename(temp, remote)
+            return remote, smbclient.stat(remote).st_size
+        except Exception as exc:
+            raise BackupStorageError(
+                f"انتقال فایل به مقصد SMB ناموفق بود: {exc}"
+            ) from exc
+
+    def _copy_sftp(self, source_path, filename):
+        try:
+            import paramiko
+        except ImportError as exc:
+            raise BackupStorageError(
+                "کتابخانه SFTP نصب نیست؛ وابستگی paramiko را نصب کنید."
+            ) from exc
+
+        remote = "/" + self._remote_relative_path(filename)
+        temp = f"{remote}.copying"
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        try:
+            client.connect(
+                hostname=self.destination.host.strip(),
+                port=self.destination.port or 22,
+                username=self.destination.username,
+                password=self.destination.get_password(),
+                timeout=15,
+                banner_timeout=15,
+                auth_timeout=15,
+            )
+            sftp = client.open_sftp()
+            try:
+                self._sftp_mkdirs(sftp, remote.rsplit("/", 1)[0])
+                sftp.put(str(source_path), temp)
+                try:
+                    sftp.remove(remote)
+                except OSError:
+                    pass
+                sftp.rename(temp, remote)
+                size = sftp.stat(remote).st_size
+            finally:
+                sftp.close()
+            return remote, size
+        except Exception as exc:
+            raise BackupStorageError(
+                f"انتقال فایل به مقصد SFTP ناموفق بود: {exc}"
+            ) from exc
+        finally:
+            client.close()
+
+    @staticmethod
+    def _sftp_mkdirs(sftp, path):
+        parts = [part for part in path.split("/") if part]
+        current = ""
+        for part in parts:
+            current += "/" + part
+            try:
+                sftp.stat(current)
+            except OSError:
+                sftp.mkdir(current)
+
+    def delete(self, remote_path):
+        if not remote_path:
+            return
+        backend = self.destination.backend_type
+        try:
+            if backend == self.destination.BackendType.SMB:
+                import smbclient
+                smbclient.register_session(
+                    self.destination.host.strip(),
+                    username=self.destination.username,
+                    password=self.destination.get_password(),
+                    port=self.destination.port or 445,
+                )
+                smbclient.remove(remote_path)
+            elif backend == self.destination.BackendType.SFTP:
+                import paramiko
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.RejectPolicy())
+                client.connect(
+                    hostname=self.destination.host.strip(),
+                    port=self.destination.port or 22,
+                    username=self.destination.username,
+                    password=self.destination.get_password(),
+                    timeout=15,
+                    banner_timeout=15,
+                    auth_timeout=15,
+                )
+                try:
+                    sftp = client.open_sftp()
+                    try:
+                        sftp.remove(remote_path)
+                    finally:
+                        sftp.close()
+                finally:
+                    client.close()
+            elif backend == self.destination.BackendType.MOUNTED_FOLDER:
+                Path(remote_path).unlink(missing_ok=True)
+        except FileNotFoundError:
+            return
+        except Exception as exc:
+            raise BackupStorageError(
+                f"حذف فایل از مقصد شبکه ناموفق بود: {exc}"
+            ) from exc
