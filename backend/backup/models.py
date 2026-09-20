@@ -135,7 +135,7 @@ class BackupRetentionPolicy(models.Model):
     """Global retention policy for successfully created backups."""
 
     enabled = models.BooleanField(
-        default=True,
+        default=False,
         verbose_name="فعال",
     )
     keep_last = models.PositiveIntegerField(
