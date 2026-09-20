@@ -363,9 +363,15 @@ class RestoreService:
                     raise RestoreError(
                         "فایل بایگانی بازیابی یافت نشد."
                     )
+                if not backup.network_storage_id:
+                    raise RestoreError("مقصد شبکه برای این پشتیبان مشخص نیست.")
+                if self._tmp_dir is None:
+                    self._tmp_dir = self._make_temp_dir()
+                path = self._tmp_dir / "network-archive.dfbak"
                 try:
-                    path = NetworkBackupStorage(root=backup.network_storage.root_path if backup.network_storage_id else None).path_for(
-                        backup.network_storage_path
+                    NetworkBackupStorage(backup.network_storage).download_to_local(
+                        backup.network_storage_path,
+                        path,
                     )
                 except BackupStorageError as exc:
                     raise RestoreError(str(exc)) from exc
