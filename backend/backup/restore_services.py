@@ -364,7 +364,7 @@ class RestoreService:
                         "فایل بایگانی بازیابی یافت نشد."
                     )
                 try:
-                    path = NetworkBackupStorage().path_for(
+                    path = NetworkBackupStorage(root=backup.network_storage.root_path if backup.network_storage_id else None).path_for(
                         backup.network_storage_path
                     )
                 except BackupStorageError as exc:
