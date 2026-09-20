@@ -21,26 +21,80 @@ from .tasks import run_backup, run_restore
 logger = logging.getLogger(__name__)
 
 
+class BackupStorageDestinationForm(forms.ModelForm):
+    password = forms.CharField(
+        label="رمز عبور",
+        widget=forms.PasswordInput(render_value=False),
+        required=False,
+        help_text="در ویرایش، خالی گذاشتن این فیلد رمز فعلی را حفظ می‌کند.",
+    )
+
+    class Meta:
+        model = BackupStorageDestination
+        fields = (
+            "name",
+            "backend_type",
+            "host",
+            "port",
+            "share",
+            "remote_path",
+            "username",
+            "password",
+            "enabled",
+            "description",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            self.fields["password"].required = True
+
+    def clean(self):
+        cleaned = super().clean()
+        password = cleaned.get("password")
+        if password:
+            self.instance.set_password(password)
+        return cleaned
+
+
 @admin.register(BackupStorageDestination, site=dolphin_admin_site)
 class BackupStorageDestinationAdmin(ModelAdmin):
     admin_category = "system"
     admin_section = "backups"
+    form = BackupStorageDestinationForm
 
-    list_display = ("name", "backend_type", "root_path", "enabled", "updated_at")
+    list_display = ("name", "backend_type", "host", "share", "remote_path", "enabled", "updated_at")
     list_filter = ("backend_type", "enabled")
-    search_fields = ("name", "root_path", "description")
+    search_fields = ("name", "host", "share", "remote_path", "username", "description")
     ordering = ("name",)
     fieldsets = (
         (
             "تنظیمات مقصد شبکه",
-            {"fields": ("name", "backend_type", "root_path", "enabled", "description")},
+            {
+                "fields": (
+                    "name",
+                    "backend_type",
+                    "host",
+                    "port",
+                    "share",
+                    "remote_path",
+                    "username",
+                    "password",
+                    "enabled",
+                    "description",
+                )
+            },
+        ),
+        (
+            "وضعیت اعتبار",
+            {"fields": ("password_configured",)},
         ),
         (
             "اطلاعات سیستمی",
             {"fields": ("created_at", "updated_at")},
         ),
     )
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("password_configured", "created_at", "updated_at")
 
     def has_delete_permission(self, request, obj=None):
         if obj and (obj.schedules.exists() or obj.backups.exists()):
