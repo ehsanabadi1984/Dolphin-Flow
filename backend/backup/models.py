@@ -27,6 +27,46 @@ def humanize_duration(duration):
     return f"{seconds} ثانیه"
 
 
+class BackupStorageDestination(models.Model):
+    class BackendType(models.TextChoices):
+        MOUNTED_FOLDER = "MOUNTED_FOLDER", "پوشه Mount شده"
+        SMB = "SMB", "SMB"
+        NFS = "NFS", "NFS"
+
+    name = models.CharField(max_length=150, unique=True, verbose_name="نام مقصد")
+    backend_type = models.CharField(
+        max_length=20,
+        choices=BackendType.choices,
+        default=BackendType.MOUNTED_FOLDER,
+        verbose_name="نوع مقصد",
+    )
+    root_path = models.CharField(
+        max_length=512,
+        verbose_name="مسیر Mount",
+        help_text="مسیر محلی Mount شده روی سرور؛ اتصال SMB/NFS خارج از Django مدیریت می‌شود.",
+    )
+    enabled = models.BooleanField(default=True, verbose_name="فعال")
+    description = models.TextField(blank=True, verbose_name="توضیحات")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="ایجاد شده")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="آخرین تغییر")
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "مقصد ذخیره‌سازی شبکه"
+        verbose_name_plural = "مقصدهای ذخیره‌سازی شبکه"
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        super().clean()
+        if not self.name.strip():
+            raise ValidationError({"name": "نام مقصد الزامی است."})
+        if not self.root_path.strip():
+            raise ValidationError({"root_path": "مسیر Mount الزامی است."})
+        if not Path(self.root_path).is_absolute():
+            raise ValidationError({"root_path": "مسیر مقصد باید یک مسیر مطلق باشد."})
+
 class BackupSchedule(models.Model):
     class Frequency(models.TextChoices):
         ONCE = "ONCE", "یک‌بار"
@@ -99,6 +139,14 @@ class BackupSchedule(models.Model):
         default=Destination.LOCAL,
         verbose_name="مقصد",
     )
+    network_storage = models.ForeignKey(
+        BackupStorageDestination,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="schedules",
+        verbose_name="مقصد شبکه",
+    )
     last_run_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -164,6 +212,14 @@ class BackupSchedule(models.Model):
                 raise ValidationError({"interval_minutes": "فاصله اجرا باید حداقل ۱ دقیقه باشد."})
             if self.starts_at is None:
                 raise ValidationError({"starts_at": "زمان شروع برای زمان‌بندی دوره‌ای الزامی است."})
+
+        if self.destination in (self.Destination.NETWORK, self.Destination.BOTH):
+            if self.network_storage_id is None:
+                raise ValidationError({"network_storage": "برای مقصد شبکه باید یک مقصد ذخیره‌سازی انتخاب شود."})
+            if self.network_storage is not None and not self.network_storage.enabled:
+                raise ValidationError({"network_storage": "مقصد ذخیره‌سازی انتخاب‌شده غیرفعال است."})
+        elif self.network_storage_id is not None:
+            raise ValidationError({"network_storage": "برای مقصد محلی، مقصد شبکه نباید انتخاب شود."})
 
     def calculate_next_run(self, now=None):
         """Return the next occurrence for this schedule."""
@@ -289,6 +345,14 @@ class Backup(models.Model):
         choices=Destination.choices,
         default=Destination.LOCAL,
         verbose_name="مقصد",
+    )
+    network_storage = models.ForeignKey(
+        BackupStorageDestination,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="backups",
+        verbose_name="مقصد شبکه",
     )
     network_status = models.CharField(
         max_length=20,
