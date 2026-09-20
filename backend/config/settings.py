@@ -148,9 +148,8 @@ BACKUP_ROOT = Path(
     env("BACKUP_ROOT", default=str(BASE_DIR / "backups"))
 )
 
-# Optional network backup destination. The path should be an OS-mounted
-# SMB/NFS share; credentials and mount lifecycle are managed outside Django.
-BACKUP_NETWORK_ROOT = env("BACKUP_NETWORK_ROOT", default="")
+# Network backup destinations are configured per destination in the admin.
+# SMB/SFTP credentials are encrypted before they are stored in the database.
 
 # Include the MEDIA_ROOT archive in each backup.
 BACKUP_INCLUDE_MEDIA = env.bool(
