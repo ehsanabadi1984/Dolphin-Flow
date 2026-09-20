@@ -13,12 +13,39 @@ from django.urls import path
 from workflow.admin import dolphin_admin_site
 
 from .import_service import BackupImportService
-from .models import Backup, BackupSchedule, Restore, generate_backup_filename
+from .models import Backup, BackupSchedule, BackupStorageDestination, Restore, generate_backup_filename
 from .restore_services import RestoreError, read_manifest
 from .storage import BackupImportError, BackupStorageError, LocalBackupStorage, NetworkBackupStorage
 from .tasks import run_backup, run_restore
 
 logger = logging.getLogger(__name__)
+
+
+@admin.register(BackupStorageDestination, site=dolphin_admin_site)
+class BackupStorageDestinationAdmin(ModelAdmin):
+    admin_category = "system"
+    admin_section = "backups"
+
+    list_display = ("name", "backend_type", "root_path", "enabled", "updated_at")
+    list_filter = ("backend_type", "enabled")
+    search_fields = ("name", "root_path", "description")
+    ordering = ("name",)
+    fieldsets = (
+        (
+            "تنظیمات مقصد شبکه",
+            {"fields": ("name", "backend_type", "root_path", "enabled", "description")},
+        ),
+        (
+            "اطلاعات سیستمی",
+            {"fields": ("created_at", "updated_at")},
+        ),
+    )
+    readonly_fields = ("created_at", "updated_at")
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and (obj.schedules.exists() or obj.backups.exists()):
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 @admin.register(Backup, site=dolphin_admin_site)
@@ -38,7 +65,7 @@ class BackupAdmin(ModelAdmin):
     readonly_fields = (
         "filename", "status", "started_at", "completed_at", "storage_path",
         "size", "database_size", "media_size", "includes_media", "checksum",
-        "created_by", "schedule", "destination", "network_status",
+        "created_by", "schedule", "destination", "network_storage", "network_status",
         "network_storage_path", "network_size", "network_checksum",
         "network_copied_at", "network_error", "error_message",
         "created_at", "updated_at",
@@ -392,7 +419,7 @@ class BackupScheduleAdmin(ModelAdmin):
     fieldsets = (
         (
             "تنظیمات زمان‌بندی",
-            {"fields": ("name", "enabled", "frequency", "destination", "include_media")},
+            {"fields": ("name", "enabled", "frequency", "destination", "network_storage", "include_media")},
         ),
         (
             "تنظیمات زمان اجرا",
@@ -413,6 +440,11 @@ class BackupScheduleAdmin(ModelAdmin):
             {"fields": ("created_at", "updated_at")},
         ),
     )
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.base_fields["network_storage"].queryset = BackupStorageDestination.objects.filter(enabled=True).order_by("name")
+        return form
 
     def save_model(self, request, obj, form, change):
         if obj.enabled:
