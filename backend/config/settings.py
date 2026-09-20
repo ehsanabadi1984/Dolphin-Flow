@@ -205,4 +205,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "backup.tasks.process_backup_schedules",
         "schedule": 60.0,
     },
+    "process-backup-retention-hourly": {
+        "task": "backup.tasks.run_backup_retention",
+        "schedule": 3600.0,
+    },
 }
