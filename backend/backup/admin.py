@@ -13,10 +13,17 @@ from django.urls import path
 from workflow.admin import dolphin_admin_site
 
 from .import_service import BackupImportService
-from .models import Backup, BackupSchedule, BackupStorageDestination, Restore, generate_backup_filename
+from .models import (
+    Backup,
+    BackupRetentionPolicy,
+    BackupSchedule,
+    BackupStorageDestination,
+    Restore,
+    generate_backup_filename,
+)
 from .restore_services import RestoreError, read_manifest
 from .storage import BackupImportError, BackupStorageError, LocalBackupStorage, NetworkBackupStorage
-from .tasks import run_backup, run_restore
+from .tasks import run_backup, run_backup_retention, run_restore
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +146,7 @@ class BackupAdmin(ModelAdmin):
             path("import/confirm/", self.admin_site.admin_view(self.import_confirm_view), name="backup_backup_import_confirm"),
             path("<path:object_id>/download/", self.admin_site.admin_view(self.download_backup_view), name="backup_backup_download"),
             path("<path:object_id>/restore/", self.admin_site.admin_view(self.restore_view), name="backup_backup_restore"),
+            path("retention/run/", self.admin_site.admin_view(self.run_retention_view), name="backup_backup_retention_run"),
         ]
         return custom_urls + urls
 
@@ -159,6 +167,8 @@ class BackupAdmin(ModelAdmin):
             "can_delete_backup": self._has_perm(request, "delete_backup"),
             "can_restore_backup": self._has_perm(request, "restore_backup"),
             "has_active_restore": Restore.objects.filter(status__in=(Restore.Status.QUEUED, Restore.Status.RESTORING)).exists(),
+            "can_manage_retention": request.user.has_perm("backup.change_backupretentionpolicy"),
+            "retention_policy": BackupRetentionPolicy.get_solo(),
             "title": "پشتیبان‌گیری",
         })
         return TemplateResponse(request, "admin/backup/backup/change_list.html", {
@@ -181,6 +191,16 @@ class BackupAdmin(ModelAdmin):
         run_backup.delay(backup.pk)
         messages.success(request, f"پشتیبان‌گیری «{backup.filename}» در صف اجرا قرار گرفت.")
         return redirect("admin:backup_backup_changelist")
+
+    def run_retention_view(self, request):
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+        if not request.user.has_perm("backup.change_backupretentionpolicy"):
+            raise PermissionDenied
+
+        run_backup_retention.delay()
+        messages.success(request, "اجرای Retention در صف قرار گرفت.")
+        return redirect("dolphin_admin:backup_backup_changelist")
 
     def download_backup_view(self, request, object_id):
         if not self._has_perm(request, "download_backup"):
@@ -433,6 +453,46 @@ class BackupAdmin(ModelAdmin):
 
         super().delete_model(request, obj)
 
+
+
+@admin.register(BackupRetentionPolicy, site=dolphin_admin_site)
+class BackupRetentionPolicyAdmin(ModelAdmin):
+    admin_category = "system"
+    admin_section = "backups"
+
+    list_display = ("enabled", "keep_last", "keep_days", "updated_at")
+    readonly_fields = ("updated_at",)
+
+    fieldsets = (
+        (
+            "سیاست نگهداری سراسری",
+            {
+                "fields": ("enabled", "keep_last", "keep_days"),
+                "description": (
+                    "پشتیبان فقط زمانی حذف می‌شود که هم از تعداد نسخه‌های اخیر خارج "
+                    "شده باشد و هم از مدت نگهداری عبور کرده باشد. مقدار صفر هر شرط را "
+                    "غیرفعال می‌کند."
+                ),
+            },
+        ),
+        ("اطلاعات سیستمی", {"fields": ("updated_at",)}),
+    )
+
+    def has_add_permission(self, request):
+        return not BackupRetentionPolicy.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        policy = BackupRetentionPolicy.get_solo()
+        return redirect(
+            "dolphin_admin:backup_backupretentionpolicy_change",
+            object_id=policy.pk,
+        )
+
+    def response_change(self, request, obj):
+        return super().response_change(request, obj)
 
 @admin.register(Restore, site=dolphin_admin_site)
 class RestoreAdmin(ModelAdmin):
