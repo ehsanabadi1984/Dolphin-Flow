@@ -18,6 +18,13 @@
     <div class="df-backup-header">
         <h1>پشتیبان‌گیری</h1>
         <div class="df-backup-actions">
+            {% if can_manage_retention %}
+            <a href="{% url 'dolphin_admin:backup_backupretentionpolicy_changelist' %}" class="df-backup-import">تنظیم Retention</a>
+            <form method="post" action="{% url 'dolphin_admin:backup_backup_retention_run' %}">
+                {% csrf_token %}
+                <button type="submit" class="df-backup-import">اجرای Retention</button>
+            </form>
+            {% endif %}
             {% if can_create_backup %}
             <form method="post" action="{% url 'dolphin_admin:backup_backup_create' %}">{% csrf_token %}<button type="submit" class="df-backup-create" {% if has_active_backup %}disabled{% endif %}>ایجاد پشتیبان</button></form>
             {% endif %}
