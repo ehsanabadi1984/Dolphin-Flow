@@ -243,10 +243,7 @@ def run_backup(backup_id):
 
     if (
         backup.status == Backup.Status.SUCCESS
-        and backup.destination in (
-            Backup.Destination.NETWORK,
-            Backup.Destination.BOTH,
-        )
+        and backup.destination == Backup.Destination.BOTH
     ):
         replicate_backup_to_network.delay(backup.pk)
 
