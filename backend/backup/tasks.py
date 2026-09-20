@@ -96,6 +96,10 @@ def process_backup_schedules():
                 includes_media=schedule.include_media,
                 schedule=schedule,
                 destination=schedule.destination,
+                network_storage=schedule.network_storage if schedule.destination in (
+                    Backup.Destination.NETWORK,
+                    Backup.Destination.BOTH,
+                ) else None,
                 network_status=(
                     Backup.NetworkStatus.PENDING
                     if schedule.destination in (
@@ -173,7 +177,10 @@ def replicate_backup_to_network(backup_id):
         if not source.is_file():
             raise BackupStorageError("فایل پشتیبان محلی برای انتقال شبکه یافت نشد.")
 
-        network_storage = NetworkBackupStorage()
+        if not backup.network_storage_id:
+            raise BackupStorageError("برای این پشتیبان مقصد شبکه‌ای ثبت نشده است.")
+
+        network_storage = NetworkBackupStorage(root=backup.network_storage.root_path)
         target = network_storage.target_path(backup.filename)
         temp_target = target.with_name(f".{target.name}.{backup.pk}.copying")
 
