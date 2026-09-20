@@ -131,6 +131,47 @@ class BackupStorageDestination(models.Model):
             if not self.encrypted_password:
                 raise ValidationError({"username": "رمز عبور مقصد هنوز تنظیم نشده است."})
 
+class BackupRetentionPolicy(models.Model):
+    """Global retention policy for successfully created backups."""
+
+    enabled = models.BooleanField(
+        default=True,
+        verbose_name="فعال",
+    )
+    keep_last = models.PositiveIntegerField(
+        default=10,
+        verbose_name="تعداد نسخه‌های اخیر",
+        help_text="تعداد آخرین پشتیبان‌های موفق که همیشه حفظ می‌شوند. صفر یعنی غیرفعال.",
+    )
+    keep_days = models.PositiveIntegerField(
+        default=30,
+        verbose_name="مدت نگهداری (روز)",
+        help_text="پشتیبان‌های جدیدتر از این مدت حذف نمی‌شوند. صفر یعنی غیرفعال.",
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="آخرین تغییر")
+
+    class Meta:
+        verbose_name = "سیاست نگهداری پشتیبان"
+        verbose_name_plural = "سیاست نگهداری پشتیبان"
+
+    def __str__(self):
+        return "سیاست نگهداری سراسری"
+
+    def clean(self):
+        super().clean()
+        if not self.keep_last and not self.keep_days:
+            raise ValidationError(
+                "حداقل یکی از «تعداد نسخه‌های اخیر» یا «مدت نگهداری» باید بزرگ‌تر از صفر باشد."
+            )
+
+    @classmethod
+    def get_solo(cls):
+        obj = cls.objects.order_by("pk").first()
+        if obj is None:
+            obj = cls.objects.create()
+        return obj
+
+
 class BackupSchedule(models.Model):
     class Frequency(models.TextChoices):
         ONCE = "ONCE", "یک‌بار"
