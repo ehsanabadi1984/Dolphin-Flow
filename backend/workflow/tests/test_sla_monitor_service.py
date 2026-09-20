@@ -103,6 +103,7 @@ class SLAMonitorServiceTests(TestCase):
             code="MONITOR_STEP",
             order=1,
             is_active=True,
+            assigned_to=self.executor,
         )
 
         WorkflowStepSLA.objects.create(
@@ -238,6 +239,62 @@ class SLAMonitorServiceTests(TestCase):
             execution.sla_breached_at,
         )
 
+    def test_ignores_submitted_current_step_even_without_sla_completion_timestamp(self):
+        execution = self.create_execution(
+            started_at=self.make_datetime(10),
+            warning_at=self.make_datetime(12),
+            due_at=self.make_datetime(14),
+        )
+        execution.is_submitted = True
+        execution.submitted_at = self.make_datetime(13)
+        execution.save(update_fields=["is_submitted", "submitted_at"])
+
+        result = SLAMonitorService.process_active_slas(
+            now=self.make_datetime(16),
+        )
+
+        self.assertEqual(result["warning_count"], 0)
+        self.assertEqual(result["breach_count"], 0)
+        self.assertEqual(
+            Notification.objects.filter(
+                workflow_instance=execution.instance,
+                workflow_step=self.step,
+            ).count(),
+            0,
+        )
+
+    def test_ignores_completed_previous_step_of_active_instance(self):
+        previous_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Previous Step",
+            code="PREVIOUS_STEP",
+            order=0,
+            is_active=True,
+            assigned_to=self.executor,
+        )
+        execution = WorkflowStepExecution.objects.create(
+            instance=WorkflowInstance.objects.create(
+                workflow=self.workflow,
+                current_step=self.step,
+                started_by=self.user,
+                status=WorkflowInstance.Status.ACTIVE,
+            ),
+            workflow_step=previous_step,
+            performed_by=self.user,
+            sla_started_at=self.make_datetime(10),
+            sla_warning_at=self.make_datetime(12),
+            sla_due_at=self.make_datetime(14),
+            is_submitted=True,
+            submitted_at=self.make_datetime(13),
+        )
+
+        result = SLAMonitorService.process_active_slas(
+            now=self.make_datetime(16),
+        )
+
+        self.assertEqual(result["warning_count"], 0)
+        self.assertEqual(result["breach_count"], 0)
+
     def test_does_not_repeat_warning(self):
         execution = self.create_execution(
             started_at=self.make_datetime(10),
@@ -280,8 +337,8 @@ class SLAMonitorServiceTests(TestCase):
             workflow_step=self.step,
         ).count()
 
-        self.assertEqual(first_count, 2)
-        self.assertEqual(second_count, 2)
+        self.assertEqual(first_count, 1)
+        self.assertEqual(second_count, 1)
 
     def test_does_not_repeat_breach(self):
         execution = self.create_execution(
@@ -359,7 +416,6 @@ class SLAMonitorServiceTests(TestCase):
                 )
             ),
             {
-                self.manager.id,
                 self.executor.id,
             },
         )
@@ -400,7 +456,7 @@ class SLAMonitorServiceTests(TestCase):
             },
         )
 
-    def test_warning_notifies_only_active_executor_and_manager(self):
+    def test_warning_notifies_only_assigned_executor(self):
         viewer = get_user_model().objects.create_user(
             username="sla_viewer",
             password="test-password",
@@ -473,7 +529,7 @@ class SLAMonitorServiceTests(TestCase):
             notification_type=Notification.NotificationType.SLA_BREACHED,
             workflow_instance=execution.instance,
             workflow_step=self.step,
-            recipient=self.manager,
+            recipient=self.executor,
         )
 
         self.assertEqual(
