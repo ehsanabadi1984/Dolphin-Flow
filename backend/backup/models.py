@@ -30,21 +30,50 @@ def humanize_duration(duration):
 
 class BackupStorageDestination(models.Model):
     class BackendType(models.TextChoices):
-        MOUNTED_FOLDER = "MOUNTED_FOLDER", "پوشه Mount شده"
         SMB = "SMB", "SMB"
-        NFS = "NFS", "NFS"
+        SFTP = "SFTP", "SFTP"
+        MOUNTED_FOLDER = "MOUNTED_FOLDER", "پوشه Mount شده (Legacy)"
 
     name = models.CharField(max_length=150, unique=True, verbose_name="نام مقصد")
     backend_type = models.CharField(
         max_length=20,
         choices=BackendType.choices,
-        default=BackendType.MOUNTED_FOLDER,
-        verbose_name="نوع مقصد",
+        default=BackendType.SMB,
+        verbose_name="نوع اتصال",
     )
-    root_path = models.CharField(
+    host = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="آدرس سرور",
+        help_text="IP یا نام DNS مقصد؛ مثلاً 192.168.1.50",
+    )
+    port = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="پورت",
+        help_text="در صورت خالی بودن، پورت پیش‌فرض پروتکل استفاده می‌شود.",
+    )
+    share = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="نام Share",
+        help_text="برای SMB؛ مثلاً DolphinBackup",
+    )
+    remote_path = models.CharField(
         max_length=512,
-        verbose_name="مسیر Mount",
-        help_text="مسیر محلی Mount شده روی سرور؛ اتصال SMB/NFS خارج از Django مدیریت می‌شود.",
+        blank=True,
+        verbose_name="مسیر مقصد",
+        help_text="مسیر داخل Share در SMB یا مسیر پوشه در SFTP.",
+    )
+    username = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="نام کاربری",
+    )
+    encrypted_password = models.TextField(
+        blank=True,
+        editable=False,
+        verbose_name="رمزنگاری‌شده",
     )
     enabled = models.BooleanField(default=True, verbose_name="فعال")
     description = models.TextField(blank=True, verbose_name="توضیحات")
@@ -59,14 +88,48 @@ class BackupStorageDestination(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def password_configured(self):
+        return bool(self.encrypted_password)
+
+    def set_password(self, raw_password):
+        from .storage import encrypt_storage_secret
+        self.encrypted_password = encrypt_storage_secret(raw_password or "")
+
+    def get_password(self):
+        from .storage import decrypt_storage_secret
+        return decrypt_storage_secret(self.encrypted_password)
+
     def clean(self):
         super().clean()
         if not self.name.strip():
             raise ValidationError({"name": "نام مقصد الزامی است."})
-        if not self.root_path.strip():
-            raise ValidationError({"root_path": "مسیر Mount الزامی است."})
-        if not Path(self.root_path).is_absolute():
-            raise ValidationError({"root_path": "مسیر مقصد باید یک مسیر مطلق باشد."})
+
+        if self.backend_type == self.BackendType.MOUNTED_FOLDER:
+            if not self.remote_path.strip():
+                raise ValidationError({"remote_path": "مسیر مقصد الزامی است."})
+            if not Path(self.remote_path).is_absolute():
+                raise ValidationError({"remote_path": "مسیر مقصد باید یک مسیر مطلق باشد."})
+            return
+
+        if not self.host.strip():
+            raise ValidationError({"host": "آدرس سرور الزامی است."})
+
+        if self.backend_type == self.BackendType.SMB:
+            if not self.share.strip():
+                raise ValidationError({"share": "نام Share برای SMB الزامی است."})
+            if not self.username.strip():
+                raise ValidationError({"username": "نام کاربری برای SMB الزامی است."})
+            if not self.encrypted_password:
+                raise ValidationError({"username": "رمز عبور مقصد هنوز تنظیم نشده است."})
+
+        elif self.backend_type == self.BackendType.SFTP:
+            if not self.remote_path.strip():
+                raise ValidationError({"remote_path": "مسیر مقصد برای SFTP الزامی است."})
+            if not self.username.strip():
+                raise ValidationError({"username": "نام کاربری برای SFTP الزامی است."})
+            if not self.encrypted_password:
+                raise ValidationError({"username": "رمز عبور مقصد هنوز تنظیم نشده است."})
 
 class BackupSchedule(models.Model):
     class Frequency(models.TextChoices):
