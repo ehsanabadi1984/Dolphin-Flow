@@ -7,7 +7,13 @@ from django.core.management import call_command
 from django.db import connection, transaction
 from django.utils import timezone
 
-from .models import Backup, BackupSchedule, Restore, generate_backup_filename
+from .models import (
+    Backup,
+    BackupRetentionPolicy,
+    BackupSchedule,
+    Restore,
+    generate_backup_filename,
+)
 from .restore_services import RestoreError, RestoreService
 from .services import BackupService, sanitize_message
 from .storage import BackupStorageError, LocalBackupStorage, NetworkBackupStorage
@@ -248,6 +254,77 @@ def run_backup(backup_id):
         replicate_backup_to_network.delay(backup.pk)
 
     return result
+
+
+
+@shared_task
+def run_backup_retention():
+    """Apply the global retention policy to eligible successful backups."""
+    policy = BackupRetentionPolicy.get_solo()
+
+    if not policy.enabled:
+        return {"status": "disabled", "deleted_backup_ids": []}
+
+    successful = Backup.objects.filter(
+        status=Backup.Status.SUCCESS,
+        is_pre_restore_backup=False,
+    ).order_by("-completed_at", "-created_at", "-pk")
+
+    keep_ids = set()
+    if policy.keep_last:
+        keep_ids.update(
+            successful.values_list("pk", flat=True)[:policy.keep_last]
+        )
+
+    cutoff = None
+    if policy.keep_days:
+        cutoff = timezone.now() - timezone.timedelta(days=policy.keep_days)
+
+    deleted = []
+    skipped = []
+
+    for backup in successful.iterator():
+        if backup.pk in keep_ids:
+            continue
+        if cutoff is not None and (
+            (backup.completed_at or backup.created_at) >= cutoff
+        ):
+            continue
+
+        # BOTH backups are not eligible until the network copy is complete.
+        # Otherwise retention could delete the local copy while the network
+        # destination is still pending or failed.
+        if backup.destination == Backup.Destination.BOTH and (
+            backup.network_status != Backup.NetworkStatus.SUCCESS
+            or not backup.network_storage_path
+        ):
+            skipped.append(backup.pk)
+            continue
+
+        try:
+            if backup.storage_path:
+                LocalBackupStorage().delete(backup.storage_path)
+
+            if backup.network_storage_path and backup.network_storage_id:
+                NetworkBackupStorage(
+                    backup.network_storage
+                ).delete(backup.network_storage_path)
+
+            backup_id = backup.pk
+            backup.delete()
+            deleted.append(backup_id)
+        except Exception as exc:
+            logger.exception(
+                "Retention failed for backup #%s",
+                backup.pk,
+            )
+            skipped.append(backup.pk)
+
+    return {
+        "status": "ok",
+        "deleted_backup_ids": deleted,
+        "skipped_backup_ids": skipped,
+    }
 
 
 @shared_task
