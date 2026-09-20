@@ -278,6 +278,58 @@ class NetworkBackupStorage:
             except OSError:
                 sftp.mkdir(current)
 
+    def download_to_local(self, remote_path, local_path):
+        if not remote_path:
+            raise BackupStorageError("مسیر فایل شبکه خالی است.")
+        destination = Path(local_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            if self.destination.backend_type == self.destination.BackendType.SMB:
+                import smbclient
+                smbclient.register_session(
+                    self.destination.host.strip(),
+                    username=self.destination.username,
+                    password=self.destination.get_password(),
+                    port=self.destination.port or 445,
+                )
+                with smbclient.open_file(remote_path, mode="rb") as source, open(
+                    destination, "wb"
+                ) as target:
+                    shutil.copyfileobj(source, target, length=1024 * 1024)
+            elif self.destination.backend_type == self.destination.BackendType.SFTP:
+                import paramiko
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.RejectPolicy())
+                client.connect(
+                    hostname=self.destination.host.strip(),
+                    port=self.destination.port or 22,
+                    username=self.destination.username,
+                    password=self.destination.get_password(),
+                    timeout=15,
+                    banner_timeout=15,
+                    auth_timeout=15,
+                )
+                try:
+                    sftp = client.open_sftp()
+                    try:
+                        sftp.get(remote_path, str(destination))
+                    finally:
+                        sftp.close()
+                finally:
+                    client.close()
+            elif self.destination.backend_type == self.destination.BackendType.MOUNTED_FOLDER:
+                shutil.copy2(remote_path, destination)
+            else:
+                raise BackupStorageError("نوع مقصد شبکه پشتیبانی نمی‌شود.")
+        except Exception as exc:
+            destination.unlink(missing_ok=True)
+            raise BackupStorageError(
+                f"دریافت فایل از مقصد شبکه ناموفق بود: {exc}"
+            ) from exc
+
+        return destination
+
     def delete(self, remote_path):
         if not remote_path:
             return
