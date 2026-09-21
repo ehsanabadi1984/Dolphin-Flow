@@ -6,7 +6,6 @@ from workflow.form_draft_device_create_apply_services import (
 )
 from workflow.form_draft_diff_services import (
     FormDraftDiffService,
-    RowChangeAction,
 )
 from workflow.form_draft_payloads import (
     NormalizedFormPayload,
@@ -174,8 +173,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
                         fields[FormField.SystemKey.IMEI].code: "111111111111111",
                         fields[FormField.SystemKey.DEVICE_TYPE].code: self.device_type.pk,
                         fields[FormField.SystemKey.DEVICE_MODEL].code: self.device_model.pk,
-                        fields[fields["custom"].system_key].code
-                        if False else fields["custom"].code: "Black",
+                        fields["custom"].code: "Black",
                     },
                 ),
             ],
@@ -202,7 +200,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
         self.assertEqual(value.text_value, "Black")
 
     def test_new_imei_creates_unresolved_draft_device(self):
-        group, fields = self.create_device_group()
+        _, fields = self.create_device_group()
 
         diff = self.build_diff(
             devices=[
@@ -221,8 +219,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
             diff=diff,
         )
 
-        row = next(iter(created.values()))
-        instance_device = row.instance_device
+        instance_device = next(iter(created.values())).instance_device
 
         self.assertIsNone(instance_device.device_id)
         self.assertEqual(instance_device.draft_imei, "222222222222222")
@@ -236,7 +233,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
         )
 
     def test_blank_imei_creates_unidentified_device_without_lookup(self):
-        group, fields = self.create_device_group()
+        _, fields = self.create_device_group()
 
         diff = self.build_diff(
             devices=[
@@ -255,8 +252,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
             diff=diff,
         )
 
-        row = next(iter(created.values()))
-        instance_device = row.instance_device
+        instance_device = next(iter(created.values())).instance_device
 
         self.assertIsNone(instance_device.device_id)
         self.assertEqual(instance_device.draft_imei, "")
@@ -270,7 +266,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
         )
 
     def test_system_fields_are_persisted_on_instance_device(self):
-        group, fields = self.create_device_group()
+        _, fields = self.create_device_group()
 
         diff = self.build_diff(
             devices=[
@@ -306,7 +302,6 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
             code="LAPTOP",
             is_active=True,
         )
-
         group, fields = self.create_device_group()
 
         diff = self.build_diff(
