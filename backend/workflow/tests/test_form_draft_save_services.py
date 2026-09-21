@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from unittest.mock import patch
 
 from workflow.form_draft_diff_services import RowChangeAction
 from workflow.form_draft_save_services import (
@@ -110,7 +111,7 @@ class FormDraftSaveServiceContractTests(TestCase):
         )
 
         self.assertIsInstance(result, FormDraftSaveResult)
-        self.assertFalse(result.saved)
+        self.assertTrue(result.saved)
         self.assertTrue(result.is_draft)
         self.assertIsNotNone(result.permission_context)
         self.assertEqual(
@@ -180,14 +181,14 @@ class FormDraftSaveServiceContractTests(TestCase):
             group.pk,
         )
 
-        self.assertTrue(
-            RepeatableRow.objects.filter(pk=existing_row.pk).exists()
-        )
-        self.assertTrue(
-            RepeatableRow.objects.filter(pk=deleted_row.pk).exists()
-        )
+        self.assertTrue(RepeatableRow.objects.filter(pk=existing_row.pk).exists())
+        self.assertFalse(RepeatableRow.objects.filter(pk=deleted_row.pk).exists())
+        created_row = RepeatableRow.objects.get(instance=self.instance, group=group, row_order=1)
+        self.assertEqual(created_row.values.get(field=field).text_value, "New")
+        existing_row.refresh_from_db()
+        self.assertEqual(existing_row.values.get(field=field).text_value, "Updated")
 
-    def test_save_diff_does_not_persist_changes(self):
+    def test_save_applies_repeatable_diff(self):
         group = FormRepeatableGroup.objects.create(
             section=self.section,
             name="Items",
@@ -219,11 +220,33 @@ class FormDraftSaveServiceContractTests(TestCase):
             [change.action for change in result.diff.groups[0].changes],
             [RowChangeAction.CREATE],
         )
-        self.assertEqual(
-            RepeatableRow.objects.filter(instance=self.instance).count(),
-            0,
-        )
+        created_row = RepeatableRow.objects.get(instance=self.instance, group=group)
+        self.assertEqual(created_row.values.get(field=field).text_value, "New")
 
+    def test_save_rolls_back_all_repeatable_changes_when_apply_fails(self):
+        group = FormRepeatableGroup.objects.create(section=self.section, name="Items", code="items_atomic", order=1)
+        field = FormField.objects.create(section=self.section, repeatable_group=group, name="Item Name", code="item_name_atomic", label="Item Name", field_type=FormField.FieldType.TEXT)
+        self.grant_repeatable_write_permissions(group, field)
+        existing_row = RepeatableRow.objects.create(instance=self.instance, group=group, row_order=0)
+
+        with patch(
+            "workflow.form_draft_save_services.FormDraftDeleteApplyService.apply",
+            side_effect=ValidationError("forced failure"),
+        ):
+            with self.assertRaises(ValidationError):
+                self.call(submitted_data={
+                    "items_atomic": [
+                        {"row_id": existing_row.pk, "item_name_atomic": "Updated"},
+                        {"row_id": None, "item_name_atomic": "New"},
+                    ],
+                })
+
+        existing_row.refresh_from_db()
+        self.assertFalse(existing_row.values.filter(field=field).exists())
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=group).count(),
+            1,
+        )
     def test_save_requires_edit_mode(self):
         with self.assertRaises(ValidationError):
             self.call(edit_mode=False)
