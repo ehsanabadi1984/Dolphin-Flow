@@ -9,6 +9,8 @@ from workflow.form_draft_save_services import (
     FormDraftSaveService,
 )
 from workflow.models import (
+    Device,
+    DeviceIdentifier,
     DeviceModel,
     DeviceType,
     FormDefinition,
@@ -367,12 +369,12 @@ class FormDraftSaveServiceContractTests(TestCase):
             code="PHONE_X_UPDATE_INTEGRATION",
             is_active=True,
         )
-        device = __import__("workflow.models", fromlist=["Device"]).Device.objects.create(
+        device = Device.objects.create(
             device_model=device_model,
         )
-        __import__("workflow.models", fromlist=["DeviceIdentifier"]).DeviceIdentifier.objects.create(
+        DeviceIdentifier.objects.create(
             device=device,
-            identifier_type=__import__("workflow.models", fromlist=["DeviceIdentifier"]).DeviceIdentifier.IdentifierType.IMEI,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
             value="777777777777777",
         )
         instance_device = InstanceDevice.objects.create(
