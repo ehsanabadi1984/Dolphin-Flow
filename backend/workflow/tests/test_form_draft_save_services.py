@@ -289,6 +289,7 @@ class FormDraftSaveServiceContractTests(TestCase):
             label="Item Name",
             field_type=FormField.FieldType.TEXT,
         )
+        self.grant_repeatable_write_permissions(group, field)
 
         existing_row = RepeatableRow.objects.create(
             instance=self.instance,
@@ -372,7 +373,7 @@ class FormDraftSaveServiceContractTests(TestCase):
             code="children",
             order=2,
         )
-        FormField.objects.create(
+        parent_field = FormField.objects.create(
             section=self.section,
             repeatable_group=parent,
             name="Parent Name",
@@ -380,7 +381,7 @@ class FormDraftSaveServiceContractTests(TestCase):
             label="Parent Name",
             field_type=FormField.FieldType.TEXT,
         )
-        FormField.objects.create(
+        child_field = FormField.objects.create(
             section=self.section,
             repeatable_group=child,
             name="Child Name",
@@ -388,6 +389,8 @@ class FormDraftSaveServiceContractTests(TestCase):
             label="Child Name",
             field_type=FormField.FieldType.TEXT,
         )
+        self.grant_repeatable_write_permissions(parent, parent_field)
+        self.grant_repeatable_write_permissions(child, child_field)
 
         parent_row_db = RepeatableRow.objects.create(
             instance=self.instance,
