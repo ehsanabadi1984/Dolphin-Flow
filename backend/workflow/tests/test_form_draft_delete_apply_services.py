@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
@@ -11,6 +9,7 @@ from workflow.models import (
     FormField,
     FormRepeatableGroup,
     FormSection,
+    InstanceDevice,
     RepeatableRow,
     RepeatableRowValue,
     Workflow,
@@ -132,19 +131,44 @@ class FormDraftDeleteApplyServiceTests(TestCase):
         self.assertFalse(RepeatableRow.objects.filter(pk=first.pk).exists())
         self.assertTrue(RepeatableRow.objects.filter(pk=second.pk).exists())
 
-    def test_device_delete_is_not_supported(self):
-        group, _ = self.create_group(
-            code="devices", group_type=FormRepeatableGroup.GroupType.DEVICE
+    def test_device_delete_removes_row_and_preserves_instance_device(self):
+        group, field = self.create_group(
+            code="devices",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
         )
-        row = RepeatableRow.objects.create(instance=self.instance, group=group, row_order=0)
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            draft_imei="DRAFT-IMEI",
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+            instance_device=instance_device,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=field,
+            text_value="Delete device row",
+        )
 
-        with self.assertRaises(ValidationError):
-            FormDraftDeleteApplyService.apply(
-                instance=self.instance,
-                diff=self.build_diff(devices=[]),
-            )
+        deleted = FormDraftDeleteApplyService.apply(
+            instance=self.instance,
+            diff=self.build_diff(devices=[]),
+        )
 
-        self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
+        self.assertEqual(deleted, (row.pk,))
+        self.assertFalse(RepeatableRow.objects.filter(pk=row.pk).exists())
+        self.assertFalse(RepeatableRowValue.objects.filter(row_id=row.pk).exists())
+        self.assertTrue(
+            InstanceDevice.objects.filter(pk=instance_device.pk).exists()
+        )
+        self.assertTrue(
+            InstanceDevice.objects.filter(
+                pk=instance_device.pk,
+                draft_imei="DRAFT-IMEI",
+            ).exists()
+        )
 
     def test_failed_delete_rolls_back_previous_deletes(self):
         group, field = self.create_group(code="items")
@@ -164,17 +188,3 @@ class FormDraftDeleteApplyServiceTests(TestCase):
         self.assertTrue(RepeatableRow.objects.filter(pk=first.pk).exists())
         self.assertTrue(RepeatableRow.objects.filter(pk=second.pk).exists())
 
-    def test_delete_with_instance_device_is_rejected_and_atomic(self):
-        group, _ = self.create_group(code="items")
-        row = RepeatableRow.objects.create(instance=self.instance, group=group, row_order=0)
-
-        diff = self.build_diff(items=[])
-
-        with patch(
-            "workflow.form_draft_delete_apply_services.RepeatableRowService.delete_row",
-            side_effect=ValidationError("instance device"),
-        ):
-            with self.assertRaises(ValidationError):
-                FormDraftDeleteApplyService.apply(instance=self.instance, diff=diff)
-
-        self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
