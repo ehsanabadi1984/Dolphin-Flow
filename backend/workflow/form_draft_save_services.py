@@ -4,7 +4,10 @@ from typing import Mapping
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from .form_draft_create_apply_services import FormDraftCreateApplyService
+from .form_draft_delete_apply_services import FormDraftDeleteApplyService
 from .form_draft_diff_services import FormDraftDiff, FormDraftDiffService
+from .form_draft_update_apply_services import FormDraftUpdateApplyService
 from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
 from .form_draft_permission_services import FormDraftPermissionService
 from .models import FormData, FormDefinition, RepeatableRow
@@ -283,10 +286,22 @@ class FormDraftSaveService:
         normalized_payload,
         diff,
     ):
-        del instance, step, user, form
+        del step, user, form
+        FormDraftCreateApplyService.apply(
+            instance=instance,
+            diff=diff,
+        )
+        FormDraftUpdateApplyService.apply(
+            instance=instance,
+            diff=diff,
+        )
+        FormDraftDeleteApplyService.apply(
+            instance=instance,
+            diff=diff,
+        )
         return FormDraftSaveResult(
             form_data=None,
-            saved=False,
+            saved=True,
             is_draft=True,
             permission_context=permission_context,
             normalized_payload=normalized_payload,
