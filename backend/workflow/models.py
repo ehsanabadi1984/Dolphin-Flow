@@ -2,7 +2,6 @@ import re
 import uuid
 from django.conf import settings
 from django.db import models
-from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 
 
