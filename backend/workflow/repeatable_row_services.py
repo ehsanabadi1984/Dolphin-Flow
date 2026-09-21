@@ -93,7 +93,7 @@ class RepeatableRowService:
 
         locked_row = (
             RepeatableRow.objects
-            .select_for_update()
+            .select_for_update(of=("self",))
             .select_related(
                 "instance",
                 "group",
