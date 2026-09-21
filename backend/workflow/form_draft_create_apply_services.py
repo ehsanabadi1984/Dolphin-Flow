@@ -48,9 +48,7 @@ class FormDraftCreateApplyService:
         group = change.group
 
         if group.group_type != FormRepeatableGroup.GroupType.NORMAL:
-            raise ValidationError(
-                "Apply CREATE برای گروه‌های DEVICE در این مرحله پشتیبانی نمی‌شود."
-            )
+            return None
 
         parent_row = cls._resolve_parent(
             instance=instance,
