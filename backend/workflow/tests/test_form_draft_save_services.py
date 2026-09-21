@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from workflow.form_draft_diff_services import RowChangeAction
 from workflow.form_draft_save_services import (
     FormDraftSaveResult,
     FormDraftSaveService,
@@ -94,6 +95,110 @@ class FormDraftSaveServiceContractTests(TestCase):
         self.assertEqual(
             result.normalized_payload.normal_fields,
             {"customer_name": "Ehsan"},
+        )
+        self.assertEqual(result.diff.groups, ())
+
+    def test_save_builds_repeatable_diff(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Items",
+            code="items",
+            order=1,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Item Name",
+            code="item_name",
+            label="Item Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        existing_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+        )
+        deleted_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=1,
+        )
+
+        result = self.call(
+            submitted_data={
+                "items": [
+                    {
+                        "row_id": existing_row.pk,
+                        "item_name": "Updated",
+                    },
+                    {
+                        "row_id": None,
+                        "item_name": "New",
+                    },
+                ],
+            },
+        )
+
+        self.assertEqual(len(result.diff.groups), 1)
+        changes = result.diff.groups[0].changes
+        self.assertEqual(
+            [change.action for change in changes],
+            [
+                RowChangeAction.UPDATE,
+                RowChangeAction.CREATE,
+                RowChangeAction.DELETE,
+            ],
+        )
+        self.assertEqual(changes[0].row_id, existing_row.pk)
+        self.assertIsNone(changes[1].row_id)
+        self.assertEqual(changes[2].row_id, deleted_row.pk)
+
+        self.assertEqual(
+            result.diff.groups[0].group.pk,
+            group.pk,
+        )
+
+        self.assertTrue(
+            RepeatableRow.objects.filter(pk=existing_row.pk).exists()
+        )
+        self.assertTrue(
+            RepeatableRow.objects.filter(pk=deleted_row.pk).exists()
+        )
+
+    def test_save_diff_does_not_persist_changes(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Items",
+            code="items",
+            order=1,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Item Name",
+            code="item_name",
+            label="Item Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+
+        result = self.call(
+            submitted_data={
+                "items": [
+                    {
+                        "row_id": None,
+                        "item_name": "New",
+                    },
+                ],
+            },
+        )
+
+        self.assertEqual(
+            [change.action for change in result.diff.groups[0].changes],
+            [RowChangeAction.CREATE],
+        )
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance).count(),
+            0,
         )
 
     def test_save_requires_edit_mode(self):
@@ -197,7 +302,7 @@ class FormDraftSaveServiceContractTests(TestCase):
         self.assertEqual(field.repeatable_group_id, group.pk)
 
     def test_invalid_repeatable_payload_shape_is_rejected(self):
-        group = FormRepeatableGroup.objects.create(
+        FormRepeatableGroup.objects.create(
             section=self.section,
             name="Items",
             code="items",
@@ -212,7 +317,7 @@ class FormDraftSaveServiceContractTests(TestCase):
             )
 
     def test_invalid_row_identity_is_rejected(self):
-        group = FormRepeatableGroup.objects.create(
+        FormRepeatableGroup.objects.create(
             section=self.section,
             name="Items",
             code="items",
@@ -298,7 +403,6 @@ class FormDraftSaveServiceContractTests(TestCase):
         self.assertEqual(child_row.row_id, child_row_db.pk)
         self.assertEqual(child_row.fields, {"child_name": "Child"})
 
-
     def test_existing_row_id_must_belong_to_same_instance_and_group(self):
         group = FormRepeatableGroup.objects.create(
             section=self.section, name="Items", code="items_identity", order=1,
@@ -336,7 +440,7 @@ class FormDraftSaveServiceContractTests(TestCase):
             self.call(submitted_data={"items_other_instance": [{"row_id": row.pk}]})
 
     def test_unknown_existing_row_id_is_rejected(self):
-        group = FormRepeatableGroup.objects.create(
+        FormRepeatableGroup.objects.create(
             section=self.section, name="Items", code="items_unknown", order=1,
         )
         with self.assertRaises(ValidationError):
