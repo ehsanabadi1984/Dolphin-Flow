@@ -4,7 +4,15 @@ from django.test import TestCase
 from workflow.form_draft_device_create_apply_services import (
     FormDraftDeviceCreateApplyService,
 )
-from workflow.form_draft_diff_services import (\n    FormDraftDiff,\n    FormDraftDiffService,\n    RepeatableGroupDiff,\n    RowChange,\n    RowChangeAction,\n    RowReference,\n    RowReferenceKind,\n)
+from workflow.form_draft_diff_services import (
+    FormDraftDiff,
+    FormDraftDiffService,
+    RepeatableGroupDiff,
+    RowChange,
+    RowChangeAction,
+    RowReference,
+    RowReferenceKind,
+)
 from workflow.form_draft_payloads import NormalizedFormPayload, NormalizedRow
 from workflow.models import (
     Device,
