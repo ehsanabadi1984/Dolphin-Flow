@@ -4,7 +4,7 @@ from django.test import TestCase
 from workflow.form_draft_device_create_apply_services import (
     FormDraftDeviceCreateApplyService,
 )
-from workflow.form_draft_diff_services import FormDraftDiffService
+from workflow.form_draft_diff_services import (\n    FormDraftDiff,\n    FormDraftDiffService,\n    RepeatableGroupDiff,\n    RowChange,\n    RowChangeAction,\n    RowReference,\n    RowReferenceKind,\n)
 from workflow.form_draft_payloads import NormalizedFormPayload, NormalizedRow
 from workflow.models import (
     Device,
@@ -293,49 +293,50 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
             group_type=FormRepeatableGroup.GroupType.NORMAL,
             order=1,
         )
-        parent_field = FormField.objects.create(
-            section=self.section,
-            repeatable_group=parent_group,
-            name="Parent Name",
-            code="parent_name",
-            label="Parent Name",
-            field_type=FormField.FieldType.TEXT,
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent_group,
+            row_order=0,
         )
         child_group, fields = self.create_device_group(
             code="devices",
             parent_group=parent_group,
             order=2,
         )
-        parent_row = RepeatableRow.objects.create(
-            instance=self.instance,
-            group=parent_group,
-            row_order=0,
-        )
-        parent_ref = self.build_diff(
-            parents=[self.row(fields={parent_field.code: "Parent"})],
-        ).groups[0].changes[0].row_reference
-        # Use the persisted parent explicitly in the child diff.
-        child_diff = self.build_diff(
-            devices=[self.row(fields={
-                fields[FormField.SystemKey.IMEI].code: "",
-                fields[FormField.SystemKey.DEVICE_TYPE].code: self.device_type.pk,
-                fields[FormField.SystemKey.DEVICE_MODEL].code: self.device_model.pk,
-            }, row_id=None)],
-        )
-        change = child_diff.groups[0].changes[0]
-        from dataclasses import replace
-        change = replace(
-            change,
-            parent_reference=type(change.parent_reference)(
-                kind="existing",
+
+        desired_row = self.row(fields={
+            fields[FormField.SystemKey.IMEI].code: "",
+            fields[FormField.SystemKey.DEVICE_TYPE].code: self.device_type.pk,
+            fields[FormField.SystemKey.DEVICE_MODEL].code: self.device_model.pk,
+        })
+        change = RowChange(
+            action=RowChangeAction.CREATE,
+            group=child_group,
+            row_id=None,
+            desired_row=desired_row,
+            row_reference=RowReference(
+                kind=RowReferenceKind.CREATE,
+                value="child-create",
+            ),
+            parent_reference=RowReference(
+                kind=RowReferenceKind.EXISTING,
                 value=parent_row.pk,
             ),
         )
-        from workflow.form_draft_diff_services import FormDraftDiff, RepeatableGroupDiff
-        diff = FormDraftDiff(groups=(RepeatableGroupDiff(group=child_group, changes=(change,)),))
-        created = FormDraftDeviceCreateApplyService.apply(
-            instance=self.instance, diff=diff,
+        diff = FormDraftDiff(
+            groups=(
+                RepeatableGroupDiff(
+                    group=child_group,
+                    changes=(change,),
+                ),
+            ),
         )
+
+        created = FormDraftDeviceCreateApplyService.apply(
+            instance=self.instance,
+            diff=diff,
+        )
+
         child_row = next(iter(created.values()))
         self.assertEqual(child_row.parent_row_id, parent_row.pk)
         self.assertIsNotNone(child_row.instance_device_id)
