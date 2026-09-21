@@ -31,6 +31,12 @@ class FormDraftUpdateApplyService:
                 if change.action != RowChangeAction.UPDATE:
                     continue
 
+                if (
+                    change.group.group_type
+                    == FormRepeatableGroup.GroupType.DEVICE
+                ):
+                    continue
+
                 row = cls._update_row(
                     instance=instance,
                     change=change,
