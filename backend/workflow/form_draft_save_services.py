@@ -12,6 +12,7 @@ from .form_draft_diff_services import FormDraftDiff, FormDraftDiffService
 from .form_draft_update_apply_services import FormDraftUpdateApplyService
 from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
 from .form_draft_permission_services import FormDraftPermissionService
+from .form_draft_structural_validation_services import FormDraftStructuralValidationService
 from .models import FormData, FormDefinition, RepeatableRow
 from .permission_context import PermissionContext
 
@@ -42,14 +43,14 @@ class FormDraftSaveService:
                 step=step,
                 user=user,
             )
-            normalized_payload = cls._normalize_submitted_data(
+            FormDraftStructuralValidationService.validate_payload(
+                instance=instance,
                 form=form,
                 submitted_data=submitted_data,
             )
-            cls._validate_row_identities(
-                instance=instance,
+            normalized_payload = cls._normalize_submitted_data(
                 form=form,
-                normalized_payload=normalized_payload,
+                submitted_data=submitted_data,
             )
             diff = FormDraftDiffService.build(
                 instance=instance,
@@ -194,88 +195,6 @@ class FormDraftSaveService:
             fields=fields,
             child_groups=child_groups,
         )
-
-    @classmethod
-    def _validate_row_identities(cls, *, instance, form, normalized_payload):
-        seen_row_ids = set()
-        groups_by_code = {
-            group.code: group
-            for section in form.sections.filter(is_active=True)
-            for group in section.repeatable_groups.filter(
-                is_active=True,
-                parent_group__isnull=True,
-            )
-        }
-
-        for group_code, rows in normalized_payload.repeatable_groups.items():
-            group = groups_by_code[group_code]
-            cls._validate_rows_recursive(
-                instance=instance,
-                group=group,
-                rows=rows,
-                seen_row_ids=seen_row_ids,
-            )
-
-    @classmethod
-    def _validate_rows_recursive(
-        cls,
-        *,
-        instance,
-        group,
-        rows,
-        seen_row_ids,
-        parent_row_id=None,
-    ):
-        for normalized_row in rows:
-            row_id = normalized_row.row_id
-
-            if row_id is not None:
-                if row_id in seen_row_ids:
-                    raise ValidationError(
-                        f"Row با شناسه «{row_id}» بیش از یک بار در Payload ارسال شده است."
-                    )
-
-                try:
-                    row = (
-                        RepeatableRow.objects
-                        .select_related("group", "parent_row")
-                        .get(pk=row_id)
-                    )
-                except RepeatableRow.DoesNotExist:
-                    raise ValidationError(
-                        f"Row با شناسه «{row_id}» وجود ندارد."
-                    )
-
-                if row.instance_id != instance.pk:
-                    raise ValidationError(
-                        f"Row با شناسه «{row_id}» متعلق به این WorkflowInstance نیست."
-                    )
-
-                if row.group_id != group.pk:
-                    raise ValidationError(
-                        f"Row با شناسه «{row_id}» متعلق به گروه «{group.name}» نیست."
-                    )
-
-                if parent_row_id is not None and row.parent_row_id != parent_row_id:
-                    raise ValidationError(
-                        f"Row فرزند «{row_id}» متعلق به Row والد ارسال‌شده نیست."
-                    )
-
-                seen_row_ids.add(row_id)
-
-            next_parent_row_id = row_id
-            for child_group_code, child_rows in normalized_row.child_groups.items():
-                child_group = group.child_groups.get(
-                    code=child_group_code,
-                    is_active=True,
-                )
-                cls._validate_rows_recursive(
-                    instance=instance,
-                    group=child_group,
-                    rows=child_rows,
-                    seen_row_ids=seen_row_ids,
-                    parent_row_id=next_parent_row_id,
-                )
 
     @staticmethod
     def _save_draft(
