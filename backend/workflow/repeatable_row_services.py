@@ -21,6 +21,8 @@ class RepeatableRowService:
     is intentionally a later phase.
     """
 
+    _UNSET = object()
+
     @staticmethod
     @transaction.atomic
     def create_row(
@@ -31,6 +33,12 @@ class RepeatableRowService:
         row_order=None,
         instance_device=None,
     ):
+        instance = (
+            WorkflowInstance.objects
+            .select_for_update()
+            .get(pk=instance.pk)
+        )
+
         RepeatableRowService._validate_context(
             instance=instance,
             group=group,
@@ -76,9 +84,9 @@ class RepeatableRowService:
     def update_row(
         *,
         row,
-        parent_row=None,
+        parent_row=_UNSET,
         row_order=None,
-        instance_device=None,
+        instance_device=_UNSET,
     ):
         if row is None or row.pk is None:
             raise ValidationError("RepeatableRow مشخص نشده است.")
@@ -96,16 +104,20 @@ class RepeatableRowService:
             .get(pk=row.pk)
         )
 
-        locked_row.parent_row = parent_row
+        if parent_row is not RepeatableRowService._UNSET:
+            locked_row.parent_row = parent_row
+
         if row_order is not None:
             locked_row.row_order = row_order
-        locked_row.instance_device = instance_device
+
+        if instance_device is not RepeatableRowService._UNSET:
+            locked_row.instance_device = instance_device
 
         RepeatableRowService._validate_context(
             instance=locked_row.instance,
             group=locked_row.group,
-            parent_row=parent_row,
-            instance_device=instance_device,
+            parent_row=locked_row.parent_row,
+            instance_device=locked_row.instance_device,
             row=locked_row,
         )
 
