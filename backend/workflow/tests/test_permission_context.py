@@ -147,9 +147,6 @@ class PermissionContextTests(TestCase):
         self.add_membership(
             WorkflowMembership.Role.EXECUTOR,
         )
-        self.add_membership(
-            WorkflowMembership.Role.MANAGER,
-        )
         FieldAccess.objects.create(
             field=self.normal_field,
             step=self.step,
@@ -160,7 +157,7 @@ class PermissionContextTests(TestCase):
         FieldAccess.objects.create(
             field=self.normal_field,
             step=self.step,
-            role=WorkflowMembership.Role.MANAGER,
+            role=WorkflowMembership.Role.EXECUTOR,
             can_view=True,
             can_edit=True,
         )
@@ -232,9 +229,6 @@ class PermissionContextTests(TestCase):
         self.add_membership(
             WorkflowMembership.Role.EXECUTOR,
         )
-        self.add_membership(
-            WorkflowMembership.Role.MANAGER,
-        )
         RepeatableGroupAccess.objects.create(
             group=self.group,
             step=self.step,
@@ -247,7 +241,7 @@ class PermissionContextTests(TestCase):
         RepeatableGroupAccess.objects.create(
             group=self.group,
             step=self.step,
-            role=WorkflowMembership.Role.MANAGER,
+            role=WorkflowMembership.Role.EXECUTOR,
             can_view=False,
             can_edit=True,
             can_add=True,
