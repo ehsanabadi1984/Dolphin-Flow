@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 
 from workflow.models import (
@@ -14,6 +15,10 @@ from workflow.models import (
     RepeatableRowValue,
     StaticChoiceItem,
     StaticChoiceSet,
+    LookupItem,
+    LookupList,
+    DeviceType,
+    DeviceModel,
     Workflow,
     WorkflowInstance,
 )
@@ -344,6 +349,171 @@ class RepeatableRowValueModelTests(TestCase):
         value.save()
 
         self.assertEqual(value.static_choice_item_id, choice.id)
+
+    def test_textarea_uses_text_value(self):
+        field = self.make_field("NOTES", FormField.FieldType.TEXTAREA)
+        value = RepeatableRowValue(
+            row=self.row,
+            field=field,
+            text_value="multi-line note",
+        )
+
+        value.full_clean()
+
+    def test_datetime_value(self):
+        field = self.make_field("CHECKED_AT", FormField.FieldType.DATETIME)
+        from datetime import datetime, timezone
+
+        value = RepeatableRowValue(
+            row=self.row,
+            field=field,
+            datetime_value=datetime(2026, 9, 21, 12, 30, tzinfo=timezone.utc),
+        )
+
+        value.full_clean()
+
+    def test_select_lookup_value(self):
+        lookup_list = LookupList.objects.create(
+            name="Priorities",
+            code="PRIORITIES",
+        )
+        item = LookupItem.objects.create(
+            lookup_list=lookup_list,
+            value="HIGH",
+            label="High",
+            order=0,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="PRIORITY",
+            code="PRIORITY",
+            label="Priority",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.LOOKUP,
+            choice_lookup_list=lookup_list,
+            order=0,
+        )
+        value = RepeatableRowValue(
+            row=self.row,
+            field=field,
+            lookup_item=item,
+        )
+
+        value.full_clean()
+
+    def test_select_model_value_must_exist_in_configured_model(self):
+        device_type = DeviceType.objects.create(
+            name="Phone",
+            code="PHONE",
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Model X",
+            code="MODEL_X",
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="DEVICE_MODEL",
+            code="DEVICE_MODEL",
+            label="Device Model",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.MODEL,
+            choice_model=ContentType.objects.get_for_model(DeviceModel),
+            choice_value_field="code",
+            choice_label_field="name",
+            order=0,
+        )
+
+        value = RepeatableRowValue(
+            row=self.row,
+            field=field,
+            reference_id=device_model.code,
+        )
+        value.full_clean()
+
+    def test_select_model_rejects_unknown_reference(self):
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="DEVICE_MODEL",
+            code="DEVICE_MODEL",
+            label="Device Model",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.MODEL,
+            choice_model=ContentType.objects.get_for_model(DeviceModel),
+            choice_value_field="code",
+            choice_label_field="name",
+            order=0,
+        )
+        value = RepeatableRowValue(
+            row=self.row,
+            field=field,
+            reference_id="DOES_NOT_EXIST",
+        )
+
+        with self.assertRaises(ValidationError):
+            value.full_clean()
+
+    def test_select_model_requires_value_field(self):
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="DEVICE_MODEL",
+            code="DEVICE_MODEL",
+            label="Device Model",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.MODEL,
+            choice_model=ContentType.objects.get_for_model(DeviceModel),
+            order=0,
+        )
+        value = RepeatableRowValue(
+            row=self.row,
+            field=field,
+            reference_id="MODEL_X",
+        )
+
+        with self.assertRaises(ValidationError):
+            value.full_clean()
+
+    def test_select_requires_a_valid_choice_source(self):
+        field = self.make_field("STATUS", FormField.FieldType.SELECT)
+        value = RepeatableRowValue(
+            row=self.row,
+            field=field,
+            reference_id="ANY",
+        )
+
+        with self.assertRaises(ValidationError):
+            value.full_clean()
+
+    def test_system_field_cannot_be_stored_as_row_value(self):
+        field = self.make_field("IMEI", FormField.FieldType.TEXT)
+        field.system_key = FormField.SystemKey.IMEI
+        field.save(update_fields=["system_key"])
+
+        value = RepeatableRowValue(
+            row=self.row,
+            field=field,
+            text_value="123456789012345",
+        )
+
+        with self.assertRaises(ValidationError):
+            value.full_clean()
+
+    def test_file_and_formula_types_are_not_supported_as_row_values(self):
+        for field_type in ("FILE", "FORMULA"):
+            field = self.make_field(f"FIELD_{field_type}", field_type)
+            value = RepeatableRowValue(
+                row=self.row,
+                field=field,
+                text_value="invalid",
+            )
+
+            with self.assertRaises(ValidationError):
+                value.full_clean()
 
     def test_only_one_value_is_allowed_for_a_field(self):
         field = self.make_field("DESCRIPTION", FormField.FieldType.TEXT)
