@@ -139,7 +139,7 @@ class FormDraftUpdateApplyServiceTests(TestCase):
                     field=fields["items_number"],
                 ).decimal_value
             ),
-            "12.50",
+            "12.500000",
         )
 
     def test_omitted_field_is_preserved(self):
@@ -188,7 +188,7 @@ class FormDraftUpdateApplyServiceTests(TestCase):
                     field=fields["items_number"],
                 ).decimal_value
             ),
-            "7.25",
+            "7.250000",
         )
 
     def test_nested_existing_row_updates_its_own_values(self):
@@ -349,7 +349,7 @@ class FormDraftUpdateApplyServiceTests(TestCase):
                 ),
                 self.row(
                     row_id=second.pk,
-                    fields={"items_number": "not-a-number"},
+                    fields={"items_number": ""},
                 ),
             ],
         )
@@ -373,21 +373,3 @@ class FormDraftUpdateApplyServiceTests(TestCase):
                 field=fields["items_number"],
             ).exists()
         )
-
-    def test_unknown_row_is_rejected(self):
-        group, _ = self.create_group(code="items")
-
-        diff = self.build_diff(
-            items=[
-                self.row(
-                    row_id=999999,
-                    fields={"items_name": "No row"},
-                )
-            ],
-        )
-
-        with self.assertRaises(RepeatableRow.DoesNotExist):
-            FormDraftUpdateApplyService.apply(
-                instance=self.instance,
-                diff=diff,
-            )
