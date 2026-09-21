@@ -25,8 +25,9 @@ class FormDraftCreateApplyService:
 
     @classmethod
     @transaction.atomic
-    def apply(cls, *, instance, diff: FormDraftDiff):
-        created_rows = {}
+    def apply(cls, *, instance, diff: FormDraftDiff, created_rows=None):
+        if created_rows is None:
+            created_rows = {}
 
         for group_diff in diff.groups:
             for change in group_diff.changes:
