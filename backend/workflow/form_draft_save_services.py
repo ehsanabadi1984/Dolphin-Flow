@@ -4,6 +4,7 @@ from typing import Any, Mapping
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from .form_draft_diff_services import FormDraftDiff, FormDraftDiffService
 from .models import FormData, FormDefinition, RepeatableRow
 from .permission_context import PermissionContext
 
@@ -28,6 +29,7 @@ class FormDraftSaveResult:
     is_draft: bool
     permission_context: PermissionContext
     normalized_payload: NormalizedFormPayload
+    diff: FormDraftDiff
 
 
 class FormDraftSaveService:
@@ -55,6 +57,11 @@ class FormDraftSaveService:
                 form=form,
                 normalized_payload=normalized_payload,
             )
+            diff = FormDraftDiffService.build(
+                instance=instance,
+                form=form,
+                normalized_payload=normalized_payload,
+            )
             return cls._save_draft(
                 instance=instance,
                 step=step,
@@ -62,6 +69,7 @@ class FormDraftSaveService:
                 form=form,
                 permission_context=permission_context,
                 normalized_payload=normalized_payload,
+                diff=diff,
             )
 
     @staticmethod
@@ -280,6 +288,7 @@ class FormDraftSaveService:
         form,
         permission_context,
         normalized_payload,
+        diff,
     ):
         del instance, step, user, form
         return FormDraftSaveResult(
@@ -288,4 +297,5 @@ class FormDraftSaveService:
             is_draft=True,
             permission_context=permission_context,
             normalized_payload=normalized_payload,
+            diff=diff,
         )
