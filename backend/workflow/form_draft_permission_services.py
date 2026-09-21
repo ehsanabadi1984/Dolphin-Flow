@@ -6,7 +6,7 @@ from .form_draft_diff_services import (
     FormDraftDiff,
     RowChangeAction,
 )
-from .models import FormField
+from .models import FormField, RepeatableRow
 from .permission_context import PermissionContext
 from .repeatable_row_read_services import RepeatableRowReadService
 
@@ -121,13 +121,8 @@ class FormDraftPermissionService:
 
     @staticmethod
     def _get_persisted_values(*, row_id):
-        reconstructed = RepeatableRowReadService.reconstruct_row(
-            row=type(
-                "RowReference",
-                (),
-                {"pk": row_id},
-            )()
-        )
+        row = RepeatableRow.objects.get(pk=row_id)
+        reconstructed = RepeatableRowReadService.reconstruct_row(row=row)
         return {
             item["code"]: item["value"]
             for item in reconstructed["fields"]
