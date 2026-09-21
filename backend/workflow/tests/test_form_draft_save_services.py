@@ -162,12 +162,18 @@ class FormDraftSaveServiceContractTests(TestCase):
             field_type=FormField.FieldType.TEXT,
         )
 
+        existing_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+        )
+
         result = self.call(
             submitted_data={
                 "customer_name": "Ehsan",
                 "items": [
                     {
-                        "row_id": 12,
+                        "row_id": existing_row.pk,
                         "item_name": "First",
                     },
                     {
@@ -180,7 +186,7 @@ class FormDraftSaveServiceContractTests(TestCase):
 
         rows = result.normalized_payload.repeatable_groups["items"]
         self.assertEqual(len(rows), 2)
-        self.assertEqual(rows[0].row_id, 12)
+        self.assertEqual(rows[0].row_id, existing_row.pk)
         self.assertEqual(rows[0].fields, {"item_name": "First"})
         self.assertIsNone(rows[1].row_id)
         self.assertEqual(rows[1].fields, {"item_name": "Second"})
@@ -255,15 +261,27 @@ class FormDraftSaveServiceContractTests(TestCase):
             field_type=FormField.FieldType.TEXT,
         )
 
+        parent_row_db = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent,
+            row_order=0,
+        )
+        child_row_db = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child,
+            parent_row=parent_row_db,
+            row_order=0,
+        )
+
         result = self.call(
             submitted_data={
                 "parents": [
                     {
-                        "row_id": 7,
+                        "row_id": parent_row_db.pk,
                         "parent_name": "Parent",
                         "children": [
                             {
-                                "row_id": 8,
+                                "row_id": child_row_db.pk,
                                 "child_name": "Child",
                             },
                         ],
@@ -275,9 +293,9 @@ class FormDraftSaveServiceContractTests(TestCase):
         parent_row = result.normalized_payload.repeatable_groups["parents"][0]
         child_row = parent_row.child_groups["children"][0]
 
-        self.assertEqual(parent_row.row_id, 7)
+        self.assertEqual(parent_row.row_id, parent_row_db.pk)
         self.assertEqual(parent_row.fields, {"parent_name": "Parent"})
-        self.assertEqual(child_row.row_id, 8)
+        self.assertEqual(child_row.row_id, child_row_db.pk)
         self.assertEqual(child_row.fields, {"child_name": "Child"})
 
 
