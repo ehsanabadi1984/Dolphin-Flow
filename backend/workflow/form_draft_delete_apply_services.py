@@ -3,16 +3,19 @@ from django.db import transaction
 
 from .form_draft_diff_services import FormDraftDiff, RowChangeAction
 from .models import FormRepeatableGroup, RepeatableRow
-from .repeatable_row_services import RepeatableRowService
 
 
 class FormDraftDeleteApplyService:
     """
     Apply DELETE changes from a validated draft diff.
 
-    This stage handles NORMAL repeatable groups only. DELETE changes are
-    expected to be ordered bottom-up by FormDraftDiffService so child rows
-    are removed before their parents.
+    DELETE is row-centric and applies to both NORMAL and DEVICE repeatable
+    groups. DELETE changes are expected to be ordered bottom-up by
+    FormDraftDiffService so child rows are removed before their parents.
+
+    For DEVICE rows, only the draft row and its row values are removed.
+    InstanceDevice, Device, and any device history are intentionally left
+    untouched.
 
     Permission validation is intentionally owned by
     FormDraftPermissionService and must run before this service.
@@ -40,9 +43,12 @@ class FormDraftDeleteApplyService:
     def _delete_row(cls, *, instance, change):
         group = change.group
 
-        if group.group_type != FormRepeatableGroup.GroupType.NORMAL:
+        if group.group_type not in (
+            FormRepeatableGroup.GroupType.NORMAL,
+            FormRepeatableGroup.GroupType.DEVICE,
+        ):
             raise ValidationError(
-                "Apply DELETE برای گروه‌های DEVICE در این مرحله پشتیبانی نمی‌شود."
+                "نوع گروه RepeatableRow برای DELETE معتبر نیست."
             )
 
         if change.row_id is None:
@@ -66,4 +72,10 @@ class FormDraftDeleteApplyService:
                 "Row موردنظر متعلق به گروه این تغییر نیست."
             )
 
-        RepeatableRowService.delete_row(row=row)
+        # Draft DELETE is intentionally row-centric. Do not delegate to
+        # RepeatableRowService.delete_row() because that generic service
+        # protects rows linked to InstanceDevice. In the draft lifecycle,
+        # deleting a DEVICE row must not delete or deactivate its
+        # InstanceDevice/Device/history.
+        row.values.all().delete()
+        row.delete()
