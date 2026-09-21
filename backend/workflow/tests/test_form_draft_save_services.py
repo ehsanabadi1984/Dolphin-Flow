@@ -9,6 +9,8 @@ from workflow.form_draft_save_services import (
     FormDraftSaveService,
 )
 from workflow.models import (
+    DeviceModel,
+    DeviceType,
     FormDefinition,
     FormField,
     FormRepeatableGroup,
@@ -19,6 +21,7 @@ from workflow.models import (
     WorkflowInstance,
     WorkflowStep,
     WorkflowStepExecution,
+    InstanceDevice,
     RepeatableRow,
 )
 
@@ -226,6 +229,103 @@ class FormDraftSaveServiceContractTests(TestCase):
         )
         created_row = RepeatableRow.objects.get(instance=self.instance, group=group)
         self.assertEqual(created_row.values.get(field=field).text_value, "New")
+
+    def test_save_applies_device_create_with_new_normal_parent(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Parents",
+            code="parents_device_integration",
+            order=1,
+        )
+        parent_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Parent Name",
+            code="parent_name_device_integration",
+            label="Parent Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="Devices",
+            code="devices_device_integration",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=2,
+        )
+        device_fields = {}
+        definitions = (
+            (FormField.SystemKey.IMEI, "device_imei", FormField.FieldType.TEXT),
+            (FormField.SystemKey.DEVICE_TYPE, "device_type", FormField.FieldType.SELECT),
+            (FormField.SystemKey.DEVICE_MODEL, "device_model", FormField.FieldType.SELECT),
+        )
+        for field_order, (system_key, code, field_type) in enumerate(definitions):
+            device_fields[system_key] = FormField.objects.create(
+                section=self.section,
+                repeatable_group=device_group,
+                name=code,
+                code=code,
+                label=code,
+                field_type=field_type,
+                system_key=system_key,
+                order=field_order,
+            )
+
+        device_type = DeviceType.objects.create(
+            name="Phone",
+            code="PHONE_INTEGRATION",
+            is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Phone X",
+            code="PHONE_X_INTEGRATION",
+            is_active=True,
+        )
+
+        self.grant_repeatable_write_permissions(parent_group, parent_field)
+        for field in device_fields.values():
+            self.grant_repeatable_write_permissions(device_group, field)
+
+        result = self.call(
+            submitted_data={
+                "parents_device_integration": [
+                    {
+                        "parent_name_device_integration": "Parent",
+                        "devices_device_integration": [
+                            {
+                                "device_imei": "",
+                                "device_type": device_type.pk,
+                                "device_model": device_model.pk,
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+
+        parent_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=parent_group,
+        )
+        child_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=device_group,
+        )
+        instance_device = InstanceDevice.objects.get(
+            instance=self.instance,
+            device=None,
+        )
+
+        self.assertEqual(parent_row.values.get(field=parent_field).text_value, "Parent")
+        self.assertEqual(child_row.parent_row_id, parent_row.pk)
+        self.assertEqual(child_row.instance_device_id, instance_device.pk)
+        self.assertEqual(instance_device.draft_device_model_id, device_model.pk)
+        self.assertEqual(instance_device.draft_device_type_id, device_type.pk)
+        self.assertTrue(result.saved)
 
     def test_save_rolls_back_all_repeatable_changes_when_apply_fails(self):
         group = FormRepeatableGroup.objects.create(section=self.section, name="Items", code="items_atomic", order=1)
