@@ -8,6 +8,8 @@ from workflow.form_draft_save_services import (
 )
 from workflow.models import (
     FormDefinition,
+    FormField,
+    FormRepeatableGroup,
     FormSection,
     Workflow,
     WorkflowInstance,
@@ -38,11 +40,24 @@ class FormDraftSaveServiceContractTests(TestCase):
             workflow=self.workflow,
             name="Draft Form",
         )
-        FormSection.objects.create(
+        self.section = FormSection.objects.create(
             form=self.form,
             name="Draft Section",
             code="DRAFT_SECTION",
             order=1,
+        )
+        self.form_field = FormField.objects.create(
+            section=self.section,
+            name="Customer Name",
+            code="customer_name",
+            label="Customer Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        FormSection.objects.create(
+            form=self.form,
+            name="Draft Section 2",
+            code="DRAFT_SECTION_2",
+            order=2,
         )
         self.instance = WorkflowInstance.objects.create(
             workflow=self.workflow,
@@ -67,12 +82,18 @@ class FormDraftSaveServiceContractTests(TestCase):
         return FormDraftSaveService.save(**params)
 
     def test_valid_context_builds_permission_snapshot(self):
-        result = self.call()
+        result = self.call(
+            submitted_data={"customer_name": "Ehsan"},
+        )
 
         self.assertIsInstance(result, FormDraftSaveResult)
         self.assertFalse(result.saved)
         self.assertTrue(result.is_draft)
         self.assertIsNotNone(result.permission_context)
+        self.assertEqual(
+            result.normalized_payload.normal_fields,
+            {"customer_name": "Ehsan"},
+        )
 
     def test_save_requires_edit_mode(self):
         with self.assertRaises(ValidationError):
@@ -123,3 +144,137 @@ class FormDraftSaveServiceContractTests(TestCase):
 
         with self.assertRaises(ValidationError):
             self.call()
+
+    def test_repeatable_payload_is_normalized_with_stable_row_identity(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Items",
+            code="items",
+            order=1,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Item Name",
+            code="item_name",
+            label="Item Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+
+        result = self.call(
+            submitted_data={
+                "customer_name": "Ehsan",
+                "items": [
+                    {
+                        "row_id": 12,
+                        "item_name": "First",
+                    },
+                    {
+                        "row_id": None,
+                        "item_name": "Second",
+                    },
+                ],
+            },
+        )
+
+        rows = result.normalized_payload.repeatable_groups["items"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0].row_id, 12)
+        self.assertEqual(rows[0].fields, {"item_name": "First"})
+        self.assertIsNone(rows[1].row_id)
+        self.assertEqual(rows[1].fields, {"item_name": "Second"})
+        self.assertEqual(
+            result.normalized_payload.normal_fields,
+            {"customer_name": "Ehsan"},
+        )
+        self.assertEqual(field.repeatable_group_id, group.pk)
+
+    def test_invalid_repeatable_payload_shape_is_rejected(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Items",
+            code="items",
+            order=1,
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={
+                    "items": {"row_id": 1},
+                },
+            )
+
+    def test_invalid_row_identity_is_rejected(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Items",
+            code="items",
+            order=1,
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={
+                    "items": [
+                        {
+                            "row_id": "12",
+                        },
+                    ],
+                },
+            )
+
+    def test_nested_repeatable_groups_are_normalized_recursively(self):
+        parent = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Parents",
+            code="parents",
+            order=1,
+        )
+        child = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent,
+            name="Children",
+            code="children",
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent,
+            name="Parent Name",
+            code="parent_name",
+            label="Parent Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child,
+            name="Child Name",
+            code="child_name",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+
+        result = self.call(
+            submitted_data={
+                "parents": [
+                    {
+                        "row_id": 7,
+                        "parent_name": "Parent",
+                        "children": [
+                            {
+                                "row_id": 8,
+                                "child_name": "Child",
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+
+        parent_row = result.normalized_payload.repeatable_groups["parents"][0]
+        child_row = parent_row.child_groups["children"][0]
+
+        self.assertEqual(parent_row.row_id, 7)
+        self.assertEqual(parent_row.fields, {"parent_name": "Parent"})
+        self.assertEqual(child_row.row_id, 8)
+        self.assertEqual(child_row.fields, {"child_name": "Child"})
