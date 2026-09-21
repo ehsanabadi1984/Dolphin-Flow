@@ -442,19 +442,19 @@ class RepeatableRowReadServiceTests(TestCase):
             parent.pk,
         )
         self.assertEqual(
-            root["child_groups"][0]["code"],
+            root["items"][0]["child_groups"][0]["code"],
             "PARTS",
         )
         self.assertEqual(
-            root["child_groups"][0]["items"][0]["row_id"],
+            root["items"][0]["child_groups"][0]["items"][0]["row_id"],
             child.pk,
         )
         self.assertEqual(
-            root["child_groups"][0]["child_groups"][0]["code"],
+            root["items"][0]["child_groups"][0]["items"][0]["child_groups"][0]["code"],
             "CHECKS",
         )
         self.assertEqual(
-            root["child_groups"][0]["child_groups"][0]["items"][0]["row_id"],
+            root["items"][0]["child_groups"][0]["items"][0]["child_groups"][0]["items"][0]["row_id"],
             grandchild.pk,
         )
 
