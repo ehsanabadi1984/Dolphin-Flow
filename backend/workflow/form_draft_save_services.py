@@ -13,7 +13,7 @@ from .form_draft_update_apply_services import FormDraftUpdateApplyService
 from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
 from .form_draft_permission_services import FormDraftPermissionService
 from .form_draft_structural_validation_services import FormDraftStructuralValidationService
-from .models import FormData, FormDefinition, RepeatableRow
+from .models import FormData, FormDefinition
 from .permission_context import PermissionContext
 
 
