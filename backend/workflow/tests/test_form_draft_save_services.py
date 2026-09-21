@@ -183,8 +183,12 @@ class FormDraftSaveServiceContractTests(TestCase):
 
         self.assertTrue(RepeatableRow.objects.filter(pk=existing_row.pk).exists())
         self.assertFalse(RepeatableRow.objects.filter(pk=deleted_row.pk).exists())
-        created_row = RepeatableRow.objects.get(instance=self.instance, group=group, row_order=1)
-        self.assertEqual(created_row.values.get(field=field).text_value, "New")
+        created_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=group,
+            values__field=field,
+            values__text_value="New",
+        )
         existing_row.refresh_from_db()
         self.assertEqual(existing_row.values.get(field=field).text_value, "Updated")
 
