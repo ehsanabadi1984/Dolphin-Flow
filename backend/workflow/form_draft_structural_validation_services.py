@@ -30,11 +30,6 @@ class FormDraftStructuralValidationService:
                     f"فیلد یا گروه «{key}» در ساختار فعال این فرم وجود ندارد."
                 )
 
-        cls._validate_normal_fields(
-            submitted_data=submitted_data,
-            normal_fields=normal_fields,
-        )
-
         seen_row_ids = set()
         for group_code in root_groups:
             if group_code not in submitted_data:
