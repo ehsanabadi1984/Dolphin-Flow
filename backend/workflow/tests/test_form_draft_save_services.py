@@ -118,7 +118,8 @@ class FormDraftSaveServiceContractTests(TestCase):
             self.call()
 
     def test_missing_form_is_rejected(self):
-        self.form.delete()
+        self.form.is_active = False
+        self.form.save(update_fields=["is_active"])
 
         with self.assertRaises(ValidationError):
             self.call()
