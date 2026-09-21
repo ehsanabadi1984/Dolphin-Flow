@@ -6,6 +6,7 @@ from django.db import transaction
 
 from .form_draft_diff_services import FormDraftDiff, FormDraftDiffService
 from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
+from .form_draft_permission_services import FormDraftPermissionService
 from .models import FormData, FormDefinition, RepeatableRow
 from .permission_context import PermissionContext
 
@@ -49,6 +50,10 @@ class FormDraftSaveService:
                 instance=instance,
                 form=form,
                 normalized_payload=normalized_payload,
+            )
+            FormDraftPermissionService.validate(
+                diff=diff,
+                permission_context=permission_context,
             )
             return cls._save_draft(
                 instance=instance,
