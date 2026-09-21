@@ -12,6 +12,8 @@ from workflow.models import (
     FormField,
     FormRepeatableGroup,
     FormSection,
+    FieldAccess,
+    RepeatableGroupAccess,
     Workflow,
     WorkflowInstance,
     WorkflowStep,
@@ -83,6 +85,25 @@ class FormDraftSaveServiceContractTests(TestCase):
         params.update(overrides)
         return FormDraftSaveService.save(**params)
 
+
+    def grant_repeatable_write_permissions(self, group, field):
+        RepeatableGroupAccess.objects.create(
+            group=group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
     def test_valid_context_builds_permission_snapshot(self):
         result = self.call(
             submitted_data={"customer_name": "Ehsan"},
@@ -105,7 +126,7 @@ class FormDraftSaveServiceContractTests(TestCase):
             code="items",
             order=1,
         )
-        FormField.objects.create(
+        field = FormField.objects.create(
             section=self.section,
             repeatable_group=group,
             name="Item Name",
@@ -113,6 +134,7 @@ class FormDraftSaveServiceContractTests(TestCase):
             label="Item Name",
             field_type=FormField.FieldType.TEXT,
         )
+        self.grant_repeatable_write_permissions(group, field)
         existing_row = RepeatableRow.objects.create(
             instance=self.instance,
             group=group,
@@ -172,7 +194,7 @@ class FormDraftSaveServiceContractTests(TestCase):
             code="items",
             order=1,
         )
-        FormField.objects.create(
+        field = FormField.objects.create(
             section=self.section,
             repeatable_group=group,
             name="Item Name",
@@ -180,6 +202,7 @@ class FormDraftSaveServiceContractTests(TestCase):
             label="Item Name",
             field_type=FormField.FieldType.TEXT,
         )
+        self.grant_repeatable_write_permissions(group, field)
 
         result = self.call(
             submitted_data={
