@@ -2,6 +2,7 @@ import re
 import uuid
 from django.conf import settings
 from django.db import models
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 
 
@@ -1991,6 +1992,36 @@ class RepeatableRowValue(models.Model):
                     raise ValidationError({"lookup_item": "گزینه انتخاب‌شده متعلق به لیست داده‌ای این فیلد نیست."})
             elif self.field.choice_source == FormField.ChoiceSource.MODEL:
                 expected = ["reference_id"]
+
+                if not self.field.choice_model_id:
+                    raise ValidationError({"field": "برای SELECT با منبع MODEL باید مدل انتخاب شود."})
+                if not self.field.choice_value_field:
+                    raise ValidationError({"field": "برای SELECT با منبع MODEL باید فیلد مقدار مشخص شود."})
+
+                model_class = self.field.choice_model.model_class()
+                if model_class is None:
+                    raise ValidationError({"field": "مدل انتخاب‌شده برای SELECT معتبر نیست."})
+
+                try:
+                    model_field = model_class._meta.get_field(
+                        self.field.choice_value_field
+                    )
+                except Exception:
+                    raise ValidationError({
+                        "reference_id": "فیلد مقدار انتخاب‌شده برای مدل معتبر نیست."
+                    })
+
+                if not getattr(model_field, "concrete", False):
+                    raise ValidationError({
+                        "reference_id": "فیلد مقدار انتخاب‌شده باید یک فیلد concrete باشد."
+                    })
+
+                if not model_class.objects.filter(
+                    **{self.field.choice_value_field: self.reference_id}
+                ).exists():
+                    raise ValidationError({
+                        "reference_id": "مقدار انتخاب‌شده در مدل مقصد وجود ندارد."
+                    })
             else:
                 raise ValidationError({"field": "فیلد SELECT باید منبع گزینه معتبر داشته باشد."})
         else:
