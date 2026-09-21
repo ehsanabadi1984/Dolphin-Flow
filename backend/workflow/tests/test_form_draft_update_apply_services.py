@@ -288,7 +288,7 @@ class FormDraftUpdateApplyServiceTests(TestCase):
         self.assertEqual(refreshed.parent_row_id, parent_row.pk)
         self.assertEqual(refreshed.row_order, 5)
 
-    def test_device_update_is_not_supported_in_this_stage(self):
+    def test_device_update_is_skipped_for_device_groups(self):
         group, fields = self.create_group(
             code="devices",
             group_type=FormRepeatableGroup.GroupType.DEVICE,
@@ -308,12 +308,12 @@ class FormDraftUpdateApplyServiceTests(TestCase):
             ],
         )
 
-        with self.assertRaises(ValidationError):
-            FormDraftUpdateApplyService.apply(
-                instance=self.instance,
-                diff=diff,
-            )
+        updated = FormDraftUpdateApplyService.apply(
+            instance=self.instance,
+            diff=diff,
+        )
 
+        self.assertEqual(updated, {})
         self.assertFalse(
             RepeatableRowValue.objects.filter(row=row).exists()
         )
