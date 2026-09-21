@@ -6,6 +6,7 @@ from django.db import transaction
 
 from .form_draft_create_apply_services import FormDraftCreateApplyService
 from .form_draft_delete_apply_services import FormDraftDeleteApplyService
+from .form_draft_device_create_apply_services import FormDraftDeviceCreateApplyService
 from .form_draft_diff_services import FormDraftDiff, FormDraftDiffService
 from .form_draft_update_apply_services import FormDraftUpdateApplyService
 from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
@@ -287,9 +288,16 @@ class FormDraftSaveService:
         diff,
     ):
         del step, user, form
+        created_rows = {}
         FormDraftCreateApplyService.apply(
             instance=instance,
             diff=diff,
+            created_rows=created_rows,
+        )
+        FormDraftDeviceCreateApplyService.apply(
+            instance=instance,
+            diff=diff,
+            created_rows=created_rows,
         )
         FormDraftUpdateApplyService.apply(
             instance=instance,
