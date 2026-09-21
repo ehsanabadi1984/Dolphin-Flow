@@ -1,25 +1,13 @@
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Mapping
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from .form_draft_diff_services import FormDraftDiff, FormDraftDiffService
+from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
 from .models import FormData, FormDefinition, RepeatableRow
 from .permission_context import PermissionContext
-
-
-@dataclass(frozen=True)
-class NormalizedRow:
-    row_id: int | None
-    fields: dict[str, Any]
-    child_groups: dict[str, tuple["NormalizedRow", ...]]
-
-
-@dataclass(frozen=True)
-class NormalizedFormPayload:
-    normal_fields: dict[str, Any]
-    repeatable_groups: dict[str, tuple[NormalizedRow, ...]]
 
 
 @dataclass(frozen=True)
