@@ -274,7 +274,7 @@ class FormDraftCreateApplyServiceTests(TestCase):
             ).exists()
         )
 
-    def test_device_create_is_not_supported_in_this_stage(self):
+    def test_device_create_is_skipped_for_device_groups(self):
         group, _ = self.create_group(
             code="devices",
             group_type=FormRepeatableGroup.GroupType.DEVICE,
@@ -286,11 +286,11 @@ class FormDraftCreateApplyServiceTests(TestCase):
             ],
         )
 
-        with self.assertRaises(ValidationError):
-            FormDraftCreateApplyService.apply(
-                instance=self.instance,
-                diff=diff,
-            )
+        FormDraftCreateApplyService.apply(
+            instance=self.instance,
+            diff=diff,
+        )
+
 
         self.assertFalse(
             RepeatableRow.objects.filter(
