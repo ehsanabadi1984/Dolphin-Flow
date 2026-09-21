@@ -53,9 +53,11 @@ class FormDraftUpdateApplyServiceTests(TestCase):
             order=order,
         )
         fields = {}
-        for field_code, field_type in (
-            (f"{code}_name", FormField.FieldType.TEXT),
-            (f"{code}_number", FormField.FieldType.NUMBER),
+        for field_order, (field_code, field_type) in enumerate(
+            (
+                (f"{code}_name", FormField.FieldType.TEXT),
+                (f"{code}_number", FormField.FieldType.NUMBER),
+            )
         ):
             fields[field_code] = FormField.objects.create(
                 section=self.section,
@@ -64,6 +66,7 @@ class FormDraftUpdateApplyServiceTests(TestCase):
                 code=field_code,
                 label=field_code,
                 field_type=field_type,
+                order=field_order,
             )
         return group, fields
 
