@@ -932,6 +932,14 @@ class FormRepeatableGroup(models.Model):
         related_name="repeatable_groups",
     )
 
+    parent_group = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="child_groups",
+    )
+
     name = models.CharField(
         max_length=150,
     )
@@ -981,6 +989,31 @@ class FormRepeatableGroup(models.Model):
                 name="unique_repeatable_group_order",
             ),
         ]
+
+    def clean(self):
+        super().clean()
+
+        if not self.parent_group_id:
+            return
+
+        if self.parent_group_id == self.pk:
+            raise ValidationError({"parent_group": "یک گروه نمی‌تواند والد خودش باشد."})
+
+        parent = self.parent_group
+
+        if parent.section_id != self.section_id:
+            raise ValidationError({"parent_group": "گروه والد باید متعلق به همان Section باشد."})
+
+        current = parent
+        visited = set()
+
+        while current is not None:
+            if current.pk in visited:
+                raise ValidationError({"parent_group": "زنجیره گروه‌های تکرارشونده دارای چرخه است."})
+            visited.add(current.pk)
+            if current.pk == self.pk:
+                raise ValidationError({"parent_group": "انتخاب این گروه باعث ایجاد چرخه می‌شود."})
+            current = current.parent_group
 
     def __str__(self):
         return (
@@ -1758,6 +1791,207 @@ class FormField(models.Model):
 
     def __str__(self):
         return f"{self.section.name} - {self.label}"
+
+
+class RepeatableRow(models.Model):
+    instance = models.ForeignKey(
+        WorkflowInstance,
+        on_delete=models.PROTECT,
+        related_name="repeatable_rows",
+    )
+
+    group = models.ForeignKey(
+        FormRepeatableGroup,
+        on_delete=models.PROTECT,
+        related_name="rows",
+    )
+
+    parent_row = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="child_rows",
+    )
+
+    row_order = models.PositiveIntegerField(default=0)
+
+    instance_device = models.OneToOneField(
+        InstanceDevice,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="repeatable_row",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+
+        if self.group_id and self.instance_id:
+            if self.group.section.form.workflow_id != self.instance.workflow_id:
+                raise ValidationError(
+                    "گروه تکرارشونده و WorkflowInstance باید متعلق به یک Workflow باشند."
+                )
+
+        if self.parent_row_id:
+            if self.parent_row_id == self.pk:
+                raise ValidationError({"parent_row": "یک Row نمی‌تواند والد خودش باشد."})
+
+            parent = self.parent_row
+            if parent.instance_id != self.instance_id:
+                raise ValidationError({"parent_row": "Row والد باید متعلق به همان WorkflowInstance باشد."})
+
+            if not self.group.parent_group_id:
+                raise ValidationError({"parent_row": "این گروه parent_group ندارد و نمی‌تواند زیر یک Row دیگر قرار بگیرد."})
+
+            if parent.group_id != self.group.parent_group_id:
+                raise ValidationError({"parent_row": "Row والد باید متعلق به parent_group همین گروه باشد."})
+
+            current = parent
+            visited = set()
+            while current is not None:
+                if current.pk in visited:
+                    raise ValidationError({"parent_row": "زنجیره Rowهای والد دارای چرخه است."})
+                visited.add(current.pk)
+                if current.pk == self.pk:
+                    raise ValidationError({"parent_row": "انتخاب این Row باعث ایجاد چرخه می‌شود."})
+                current = current.parent_row
+
+        if self.instance_device_id:
+            if self.group.group_type != FormRepeatableGroup.GroupType.DEVICE:
+                raise ValidationError({"instance_device": "InstanceDevice فقط می‌تواند به Row گروه DEVICE متصل شود."})
+            if self.instance_device.instance_id != self.instance_id:
+                raise ValidationError({"instance_device": "InstanceDevice باید متعلق به همان WorkflowInstance باشد."})
+
+    class Meta:
+        ordering = ["group", "row_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["instance", "group", "row_order"],
+                condition=models.Q(parent_row__isnull=True),
+                name="unique_repeatable_root_row_order",
+            ),
+            models.UniqueConstraint(
+                fields=["instance", "group", "parent_row", "row_order"],
+                condition=models.Q(parent_row__isnull=False),
+                name="unique_repeatable_child_row_order",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.group.name} - Row #{self.pk or 'new'}"
+
+
+class RepeatableRowValue(models.Model):
+    row = models.ForeignKey(
+        RepeatableRow,
+        on_delete=models.PROTECT,
+        related_name="values",
+    )
+
+    field = models.ForeignKey(
+        FormField,
+        on_delete=models.PROTECT,
+        related_name="repeatable_row_values",
+    )
+
+    text_value = models.TextField(null=True, blank=True)
+    decimal_value = models.DecimalField(max_digits=20, decimal_places=6, null=True, blank=True)
+    date_value = models.DateField(null=True, blank=True)
+    datetime_value = models.DateTimeField(null=True, blank=True)
+    boolean_value = models.BooleanField(null=True, blank=True)
+
+    static_choice_item = models.ForeignKey(
+        StaticChoiceItem,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="repeatable_row_values",
+    )
+
+    lookup_item = models.ForeignKey(
+        LookupItem,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="repeatable_row_values",
+    )
+
+    reference_id = models.CharField(max_length=150, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+
+        if not self.row_id or not self.field_id:
+            return
+
+        if self.field.repeatable_group_id != self.row.group_id:
+            raise ValidationError({"field": "فیلد باید متعلق به همان RepeatableGroup ردیف باشد."})
+
+        if self.field.system_key != FormField.SystemKey.NONE:
+            raise ValidationError({"field": "فیلدهای سیستمی نباید به‌صورت RepeatableRowValue ذخیره شوند."})
+
+        value_fields = {
+            "text_value": self.text_value,
+            "decimal_value": self.decimal_value,
+            "date_value": self.date_value,
+            "datetime_value": self.datetime_value,
+            "boolean_value": self.boolean_value,
+            "static_choice_item": self.static_choice_item_id,
+            "lookup_item": self.lookup_item_id,
+            "reference_id": self.reference_id,
+        }
+
+        if self.field.field_type in (FormField.FieldType.TEXT, FormField.FieldType.TEXTAREA):
+            expected = ["text_value"]
+        elif self.field.field_type == FormField.FieldType.NUMBER:
+            expected = ["decimal_value"]
+        elif self.field.field_type == FormField.FieldType.DATE:
+            expected = ["date_value"]
+        elif self.field.field_type == FormField.FieldType.DATETIME:
+            expected = ["datetime_value"]
+        elif self.field.field_type == FormField.FieldType.BOOLEAN:
+            expected = ["boolean_value"]
+        elif self.field.field_type == FormField.FieldType.SELECT:
+            if self.field.choice_source == FormField.ChoiceSource.STATIC:
+                expected = ["static_choice_item"]
+                if self.static_choice_item_id and self.static_choice_item.choice_set_id != self.field.choice_static_set_id:
+                    raise ValidationError({"static_choice_item": "گزینه انتخاب‌شده متعلق به مجموعه گزینه این فیلد نیست."})
+            elif self.field.choice_source == FormField.ChoiceSource.LOOKUP:
+                expected = ["lookup_item"]
+                if self.lookup_item_id and self.lookup_item.lookup_list_id != self.field.choice_lookup_list_id:
+                    raise ValidationError({"lookup_item": "گزینه انتخاب‌شده متعلق به لیست داده‌ای این فیلد نیست."})
+            elif self.field.choice_source == FormField.ChoiceSource.MODEL:
+                expected = ["reference_id"]
+            else:
+                raise ValidationError({"field": "فیلد SELECT باید منبع گزینه معتبر داشته باشد."})
+        else:
+            raise ValidationError({"field": "این نوع FormField هنوز برای RepeatableRowValue پشتیبانی نمی‌شود."})
+
+        for name, value in value_fields.items():
+            if name in expected:
+                if value is None:
+                    raise ValidationError({name: "مقدار این فیلد باید مشخص شود."})
+            elif value is not None:
+                raise ValidationError({name: "برای این نوع FormField نباید مقدار ذخیره شود."})
+
+    class Meta:
+        ordering = ["field__order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["row", "field"],
+                name="unique_repeatable_row_field_value",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.row} - {self.field.label}"
 
 
 class FieldAccess(models.Model):
