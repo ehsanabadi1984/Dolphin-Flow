@@ -151,26 +151,27 @@ class RepeatableRowReadService:
             parent_row=parent_row,
         )
 
-        items = [
-            RepeatableRowReadService._reconstruct_prefetched_row(
-                row=row,
-            )
-            for row in rows
-        ]
-
-        child_groups = [
-            RepeatableRowReadService.reconstruct_group(
-                instance=instance,
-                group=child_group,
-                parent_row=None,
-            )
-            for child_group in group.child_groups.filter(
+        child_groups = list(
+            group.child_groups.filter(
                 is_active=True,
             ).order_by("order", "id")
-        ]
+        )
 
-        if parent_row is not None:
-            child_groups = []
+        items = []
+
+        for row in rows:
+            item = RepeatableRowReadService._reconstruct_prefetched_row(
+                row=row,
+            )
+            item["child_groups"] = [
+                RepeatableRowReadService.reconstruct_group(
+                    instance=instance,
+                    group=child_group,
+                    parent_row=row,
+                )
+                for child_group in child_groups
+            ]
+            items.append(item)
 
         return {
             "code": group.code,
@@ -180,7 +181,6 @@ class RepeatableRowReadService:
             "display_type": group.display_type,
             "parent_group_id": group.parent_group_id,
             "items": items,
-            "child_groups": child_groups,
         }
 
     @staticmethod
