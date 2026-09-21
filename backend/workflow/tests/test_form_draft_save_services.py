@@ -15,6 +15,7 @@ from workflow.models import (
     WorkflowInstance,
     WorkflowStep,
     WorkflowStepExecution,
+    RepeatableRow,
 )
 
 
@@ -278,3 +279,89 @@ class FormDraftSaveServiceContractTests(TestCase):
         self.assertEqual(parent_row.fields, {"parent_name": "Parent"})
         self.assertEqual(child_row.row_id, 8)
         self.assertEqual(child_row.fields, {"child_name": "Child"})
+
+
+    def test_existing_row_id_must_belong_to_same_instance_and_group(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section, name="Items", code="items_identity", order=1,
+        )
+        other_group = FormRepeatableGroup.objects.create(
+            section=self.section, name="Other", code="other_identity", order=2,
+        )
+        FormField.objects.create(
+            section=self.section, repeatable_group=group,
+            name="Item", code="item_name", label="Item",
+            field_type=FormField.FieldType.TEXT,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance, group=other_group, row_order=0,
+        )
+        with self.assertRaises(ValidationError):
+            self.call(submitted_data={"items_identity": [{"row_id": row.pk, "item_name": "x"}]})
+
+    def test_existing_row_id_from_another_instance_is_rejected(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section, name="Items", code="items_other_instance", order=1,
+        )
+        FormField.objects.create(
+            section=self.section, repeatable_group=group,
+            name="Item", code="item_name", label="Item",
+            field_type=FormField.FieldType.TEXT,
+        )
+        other_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow, current_step=self.step, started_by=self.user,
+        )
+        row = RepeatableRow.objects.create(
+            instance=other_instance, group=group, row_order=0,
+        )
+        with self.assertRaises(ValidationError):
+            self.call(submitted_data={"items_other_instance": [{"row_id": row.pk}]})
+
+    def test_unknown_existing_row_id_is_rejected(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section, name="Items", code="items_unknown", order=1,
+        )
+        with self.assertRaises(ValidationError):
+            self.call(submitted_data={"items_unknown": [{"row_id": 999999}]})
+
+    def test_duplicate_row_id_in_payload_is_rejected(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section, name="Items", code="items_duplicate", order=1,
+        )
+        FormField.objects.create(
+            section=self.section, repeatable_group=group,
+            name="Item", code="item_name", label="Item",
+            field_type=FormField.FieldType.TEXT,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance, group=group, row_order=0,
+        )
+        with self.assertRaises(ValidationError):
+            self.call(submitted_data={"items_duplicate": [
+                {"row_id": row.pk, "item_name": "a"},
+                {"row_id": row.pk, "item_name": "b"},
+            ]})
+
+    def test_existing_nested_row_must_have_submitted_parent(self):
+        parent = FormRepeatableGroup.objects.create(
+            section=self.section, name="Parents", code="parents_identity", order=1,
+        )
+        child = FormRepeatableGroup.objects.create(
+            section=self.section, parent_group=parent,
+            name="Children", code="children_identity", order=2,
+        )
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance, group=parent, row_order=0,
+        )
+        other_parent_row = RepeatableRow.objects.create(
+            instance=self.instance, group=parent, row_order=1,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance, group=child,
+            parent_row=other_parent_row, row_order=0,
+        )
+        with self.assertRaises(ValidationError):
+            self.call(submitted_data={"parents_identity": [{
+                "row_id": parent_row.pk,
+                "children_identity": [{"row_id": child_row.pk}],
+            }]})
