@@ -73,7 +73,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
             order=order,
         )
         fields = {}
-        for system_key, field_code, field_type in (
+        field_definitions = (
             (FormField.SystemKey.IMEI, f"{code}_imei", FormField.FieldType.TEXT),
             (FormField.SystemKey.DEVICE_TYPE, f"{code}_type", FormField.FieldType.SELECT),
             (FormField.SystemKey.DEVICE_MODEL, f"{code}_model", FormField.FieldType.SELECT),
@@ -81,7 +81,8 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
             (FormField.SystemKey.DESCRIPTION, f"{code}_description", FormField.FieldType.TEXTAREA),
             (FormField.SystemKey.WARRANTY_STATUS, f"{code}_warranty", FormField.FieldType.SELECT),
             (FormField.SystemKey.STATUS, f"{code}_status", FormField.FieldType.SELECT),
-        ):
+        )
+        for field_order, (system_key, field_code, field_type) in enumerate(field_definitions):
             fields[system_key] = FormField.objects.create(
                 section=self.section,
                 repeatable_group=group,
@@ -90,6 +91,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
                 label=field_code,
                 field_type=field_type,
                 system_key=system_key,
+                order=field_order,
             )
         fields["custom"] = FormField.objects.create(
             section=self.section,
@@ -99,6 +101,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
             label="Color",
             field_type=FormField.FieldType.TEXT,
             system_key=FormField.SystemKey.NONE,
+            order=len(field_definitions),
         )
         return group, fields
 
