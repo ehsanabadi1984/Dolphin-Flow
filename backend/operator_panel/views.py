@@ -11,6 +11,7 @@ from workflow.history_permissions import HISTORY_ACTION
 
 from workflow.notification_services import NotificationService
 from workflow.form_services import DynamicFormService
+from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.models import (
     Device,
@@ -34,6 +35,7 @@ from workflow.models import (
 
 from workflow.services import WorkflowExecutionService
 from workflow.instance_device_services import InstanceDeviceService
+from .form_post_adapter import OperatorPanelFormPostAdapter
 
 
 def formfield_model_fields(request):
@@ -398,10 +400,19 @@ def workflow_instance(request, instance_id):
 
         try:
 
-            DynamicFormService.save_form_for_step(
-                instance=instance,
-                user=request.user,
+            payload = OperatorPanelFormPostAdapter.adapt(
+                form=FormDefinition.objects.get(
+                    workflow=instance.workflow,
+                    is_active=True,
+                ),
                 submitted_data=request.POST,
+                instance=instance,
+            )
+            FormDraftSaveService.save(
+                instance=instance,
+                step=instance.current_step,
+                user=request.user,
+                submitted_data=payload,
                 edit_mode=edit_mode,
             )
 
