@@ -89,6 +89,8 @@ class DependentFieldOptionsAuthorizationTests(TestCase):
             label="Child 1",
             order=0,
         )
+        self.child_field.choice_lookup_list = self.lookup_list
+        self.child_field.save(update_fields=["choice_lookup_list"])
         WorkflowMembership.objects.create(
             workflow=self.workflow,
             user=self.user,
