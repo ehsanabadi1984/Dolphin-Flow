@@ -2,7 +2,15 @@ from django.http import QueryDict
 from django.test import TestCase
 
 from operator_panel.form_post_adapter import OperatorPanelFormPostAdapter
-from workflow.models import FormDefinition, FormField, FormRepeatableGroup, FormSection, Workflow
+from workflow.models import (
+    FormDefinition,
+    FormField,
+    FormRepeatableGroup,
+    FormSection,
+    RepeatableRow,
+    Workflow,
+    WorkflowInstance,
+)
 
 
 class FormPostAdapterTests(TestCase):
@@ -118,3 +126,53 @@ class FormPostAdapterTests(TestCase):
         payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
 
         self.assertNotIn("items", payload)
+
+
+    def test_existing_device_instance_id_is_resolved_to_repeatable_row_id(self):
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Devices",
+            code="devices",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=device_group,
+            name="Label",
+            code="label",
+            label="Label",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+        )
+        row = RepeatableRow.objects.create(
+            instance=instance,
+            group=device_group,
+            instance_device_id=123,
+            row_order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "devices_0_label": "Existing device",
+            "devices_0_instance_device_id": "123",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+            instance=instance,
+        )
+
+        self.assertEqual(
+            payload["devices"],
+            [
+                {
+                    "label": "Existing device",
+                    "row_id": row.pk,
+                }
+            ],
+        )
