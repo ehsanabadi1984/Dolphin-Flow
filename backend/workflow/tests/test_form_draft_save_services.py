@@ -79,6 +79,13 @@ class FormDraftSaveServiceContractTests(TestCase):
             workflow_step=self.step,
             performed_by=self.user,
         )
+        FieldAccess.objects.create(
+            field=self.form_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
 
     def call(self, **overrides):
         params = {
