@@ -143,6 +143,11 @@
                   {% elif item.field.field_type == "BOOLEAN" %}
 
                     <input
+                      type="hidden"
+                      name="{{ item.field.code }}"
+                      value="false"
+                    />
+                    <input
                       id="field-{{ item.field.code }}"
                       type="checkbox"
                       name="{{ item.field.code }}"
