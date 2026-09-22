@@ -4,6 +4,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 from .sla_services import SLAService
+from .permission_context import PermissionContext
 
 from .instance_device_services import InstanceDeviceService
 from .device_services import DeviceService
@@ -1129,14 +1130,11 @@ class DynamicFormService:
             bool(data)
             or has_saved_device_data
         )
-        roles = set(
-            workflow.memberships.filter(
-                user=user,
-                is_active=True,
-            ).values_list(
-                "role",
-                flat=True,
-            )
+        permission_context = PermissionContext.build(
+            workflow=workflow,
+            form=form,
+            step=step,
+            user=user,
         )
 
         sections = []
@@ -1154,34 +1152,10 @@ class DynamicFormService:
                 is_active=True,
                 repeatable_group__isnull=True,
             ):
-                access_rules = field.access_rules.filter(
-                    step=step,
-                )
+                field_permission = permission_context.field(field)
 
-                can_view = False
-                can_edit = False
-
-                user_rule = access_rules.filter(
-                    user=user,
-                ).first()
-
-                if user_rule:
-                    can_view = user_rule.can_view
-                    permission_can_edit = user_rule.can_edit
-
-                else:
-                    role_rules = access_rules.filter(
-                        role__in=roles,
-                        user__isnull=True,
-                    )
-
-                    can_view = role_rules.filter(
-                        can_view=True,
-                    ).exists()
-
-                    permission_can_edit = role_rules.filter(
-                        can_edit=True,
-                    ).exists()
+                can_view = field_permission.can_view
+                permission_can_edit = field_permission.can_edit
 
                 if not can_view:
                     continue
@@ -1278,47 +1252,12 @@ class DynamicFormService:
                 # Repeatable Group Access
                 # -------------------------------------------------
 
-                group_access_rules = group.access_rules.filter(
-                    group=group,
-                    step=step,
-                )
+                group_permission = permission_context.group(group)
 
-                group_can_view = False
-                group_can_edit = False
-                group_can_add = False
-                group_can_delete = False
-
-                user_rule = group_access_rules.filter(
-                    user=user,
-                ).first()
-
-                if user_rule:
-                    group_can_view = user_rule.can_view
-                    group_can_edit = user_rule.can_edit
-                    group_can_add = user_rule.can_add
-                    group_can_delete = user_rule.can_delete
-
-                else:
-                    role_rules = group_access_rules.filter(
-                        role__in=roles,
-                        user__isnull=True,
-                    )
-
-                    group_can_view = role_rules.filter(
-                        can_view=True,
-                    ).exists()
-
-                    group_can_edit = role_rules.filter(
-                        can_edit=True,
-                    ).exists()
-
-                    group_can_add = role_rules.filter(
-                        can_add=True,
-                    ).exists()
-
-                    group_can_delete = role_rules.filter(
-                        can_delete=True,
-                    ).exists()
+                group_can_view = group_permission.can_view
+                group_can_edit = group_permission.can_edit
+                group_can_add = group_permission.can_add
+                group_can_delete = group_permission.can_delete
 
                 # Submitted step is always read-only.
                 if is_submitted:
@@ -1338,34 +1277,10 @@ class DynamicFormService:
                 for field in group.fields.filter(
                     is_active=True,
                 ):
-                    access_rules = field.access_rules.filter(
-                        step=step,
-                    )
+                    field_permission = permission_context.field(field)
 
-                    can_view = False
-                    can_edit = False
-
-                    user_rule = access_rules.filter(
-                        user=user,
-                    ).first()
-
-                    if user_rule:
-                        can_view = user_rule.can_view
-                        can_edit = user_rule.can_edit
-
-                    else:
-                        role_rules = access_rules.filter(
-                            role__in=roles,
-                            user__isnull=True,
-                        )
-
-                        can_view = role_rules.filter(
-                            can_view=True,
-                        ).exists()
-
-                        can_edit = role_rules.filter(
-                            can_edit=True,
-                        ).exists()
+                    can_view = field_permission.can_view
+                    can_edit = field_permission.can_edit
 
                     #---------------Debug-------------
                     #------------End-Debug------------
@@ -1504,36 +1419,10 @@ class DynamicFormService:
                         Return effective field permissions and metadata.
                         """
 
-                        access_rules = field.access_rules.filter(
-                            step=step,
-                        )
+                        field_permission = permission_context.field(field)
 
-                        can_view = False
-                        permission_can_edit = False
-
-                        user_rule = access_rules.filter(
-                            user=user,
-                        ).first()
-
-                        if user_rule:
-
-                            can_view = user_rule.can_view
-                            permission_can_edit = user_rule.can_edit
-
-                        else:
-
-                            role_rules = access_rules.filter(
-                                role__in=roles,
-                                user__isnull=True,
-                            )
-
-                            can_view = role_rules.filter(
-                                can_view=True,
-                            ).exists()
-
-                            permission_can_edit = role_rules.filter(
-                                can_edit=True,
-                            ).exists()
+                        can_view = field_permission.can_view
+                        permission_can_edit = field_permission.can_edit
 
                         effective_can_edit = (
                             can_view
