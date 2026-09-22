@@ -12,6 +12,7 @@ from workflow.models import (
     FormRepeatableGroup,
     FormSection,
     RepeatableRow,
+    RepeatableRowValue,
     Workflow,
     WorkflowInstance,
 )
@@ -95,10 +96,16 @@ class FormDraftDiffServiceTests(TestCase):
 
     def test_existing_row_is_update(self):
         group = self.create_group(code="items")
+        field = group.fields.get(code="items_name")
         persisted = RepeatableRow.objects.create(
             instance=self.instance,
             group=group,
             row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=persisted,
+            field=field,
+            text_value="old",
         )
 
         diff = FormDraftDiffService.build(
@@ -122,6 +129,93 @@ class FormDraftDiffServiceTests(TestCase):
             changes[0].row_reference.value,
             persisted.pk,
         )
+
+    def test_existing_unchanged_row_is_not_update(self):
+        group = self.create_group(code="items")
+        field = group.fields.get(code="items_name")
+        persisted = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=persisted,
+            field=field,
+            text_value="same",
+        )
+
+        diff = FormDraftDiffService.build(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=self.payload(
+                items=[
+                    self.row(
+                        row_id=persisted.pk,
+                        fields={"items_name": "same"},
+                    )
+                ],
+            ),
+        )
+
+        self.assertEqual(diff.groups[0].changes, ())
+
+    def test_existing_row_with_only_nested_change_is_not_update(self):
+        parent = self.create_group(code="parents", order=1)
+        child = self.create_group(
+            code="children",
+            parent_group=parent,
+            order=2,
+        )
+        parent_field = parent.fields.get(code="parents_name")
+        child_field = child.fields.get(code="children_name")
+
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent,
+            row_order=0,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=parent_field,
+            text_value="parent",
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=child_field,
+            text_value="old child",
+        )
+
+        diff = FormDraftDiffService.build(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=self.payload(
+                parents=[
+                    self.row(
+                        row_id=parent_row.pk,
+                        fields={"parents_name": "parent"},
+                        child_groups={
+                            "children": (
+                                self.row(
+                                    row_id=child_row.pk,
+                                    fields={"children_name": "new child"},
+                                ),
+                            )
+                        },
+                    )
+                ],
+            ),
+        )
+
+        changes = diff.groups[0].changes
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0].action, RowChangeAction.UPDATE)
+        self.assertEqual(changes[0].row_id, child_row.pk)
 
     def test_omitted_existing_row_is_delete(self):
         group = self.create_group(code="items")
@@ -244,7 +338,7 @@ class FormDraftDiffServiceTests(TestCase):
         changes = diff.groups[0].changes
         self.assertEqual(
             [change.action for change in changes],
-            [RowChangeAction.UPDATE, RowChangeAction.UPDATE],
+            [],
         )
         self.assertEqual(
             changes[1].parent_reference.value,
