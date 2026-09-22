@@ -317,6 +317,16 @@ class FormDraftDiffServiceTests(TestCase):
             parent_row=parent_row,
             row_order=0,
         )
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=parent.fields.get(code="parents_name"),
+            text_value="parent",
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=child.fields.get(code="children_name"),
+            text_value="old child",
+        )
 
         diff = FormDraftDiffService.build(
             instance=self.instance,
@@ -327,7 +337,10 @@ class FormDraftDiffServiceTests(TestCase):
                         row_id=parent_row.pk,
                         child_groups={
                             "children": (
-                                self.row(row_id=child_row.pk),
+                                self.row(
+                                row_id=child_row.pk,
+                                fields={"children_name": "new child"},
+                            ),
                             )
                         },
                     )
@@ -338,10 +351,11 @@ class FormDraftDiffServiceTests(TestCase):
         changes = diff.groups[0].changes
         self.assertEqual(
             [change.action for change in changes],
-            [],
+            [RowChangeAction.UPDATE],
         )
+        self.assertEqual(changes[0].row_id, child_row.pk)
         self.assertEqual(
-            changes[1].parent_reference.value,
+            changes[0].parent_reference.value,
             parent_row.pk,
         )
 
