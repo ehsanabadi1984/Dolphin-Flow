@@ -214,6 +214,36 @@ class FormDraftStructuralValidationServiceTests(TestCase):
                 },
             )
 
+    def test_accepts_new_nested_row_under_existing_parent(self):
+        group = self.create_group(code="items_existing_parent")
+        child_group = self.create_group(
+            code="children_existing_parent",
+            parent_group=group,
+        )
+        self.create_field(group=group, code="name")
+        self.create_field(group=child_group, code="name")
+        parent = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+        )
+
+        FormDraftStructuralValidationService.validate_payload(
+            instance=self.instance,
+            form=self.form,
+            submitted_data={
+                "items_existing_parent": [
+                    {
+                        "row_id": parent.pk,
+                        "name": "existing parent",
+                        "children_existing_parent": [
+                            {"name": "new child"},
+                        ],
+                    }
+                ]
+            },
+        )
+
     def test_accepts_new_nested_row_tree(self):
         group = self.create_group(code="items")
         child_group = self.create_group(code="children", parent_group=group)
