@@ -46,6 +46,10 @@ class FormDraftCurrentStatePayloadServiceTests(TestCase):
         field_type=FormField.FieldType.TEXT,
         system_key=FormField.SystemKey.NONE,
     ):
+        existing_fields = FormField.objects.filter(
+            section=self.section,
+            repeatable_group=group,
+        ).count()
         return FormField.objects.create(
             section=self.section,
             repeatable_group=group,
@@ -54,7 +58,7 @@ class FormDraftCurrentStatePayloadServiceTests(TestCase):
             label=code.title(),
             field_type=field_type,
             system_key=system_key,
-            order=1,
+            order=existing_fields + 1,
         )
 
     def create_group(
