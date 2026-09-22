@@ -22,7 +22,7 @@ class FormDraftStructuralValidationService:
             raise ValidationError("داده‌های فرم باید به صورت یک شیء ارسال شوند.")
 
         normal_fields, root_groups = cls._active_root_definitions(form=form)
-        allowed_root_keys = normal_fields | root_groups
+        allowed_root_keys = normal_fields | set(root_groups)
 
         for key in submitted_data:
             if key not in allowed_root_keys:
