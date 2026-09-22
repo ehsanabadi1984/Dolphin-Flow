@@ -7,6 +7,7 @@ from workflow.models import (
     FormField,
     FormRepeatableGroup,
     FormSection,
+    InstanceDevice,
     RepeatableRow,
     Workflow,
     WorkflowInstance,
@@ -148,17 +149,20 @@ class FormPostAdapterTests(TestCase):
         instance = WorkflowInstance.objects.create(
             workflow=self.workflow,
         )
+        instance_device = InstanceDevice.objects.create(
+            instance=instance,
+        )
         row = RepeatableRow.objects.create(
             instance=instance,
             group=device_group,
-            instance_device_id=123,
+            instance_device=instance_device,
             row_order=0,
         )
 
         post = QueryDict("", mutable=True)
         post.update({
             "devices_0_label": "Existing device",
-            "devices_0_instance_device_id": "123",
+            "devices_0_instance_device_id": str(instance_device.pk),
         })
 
         payload = OperatorPanelFormPostAdapter.adapt(
