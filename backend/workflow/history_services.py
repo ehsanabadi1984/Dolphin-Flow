@@ -207,56 +207,60 @@ class HistoryService:
 
         items = []
 
-        def collect_rows(current_group, parent_row=None):
-            rows = RepeatableRowReadService.get_rows(
-                instance=instance,
-                group=current_group,
-                parent_row=parent_row,
-            )
-
-            for row in rows:
-                reconstructed = RepeatableRowReadService.reconstruct_row(
-                    row=row,
+        def get_rows_for_group(current_group):
+            parent_group = current_group.parent_group
+            if parent_group is None:
+                return RepeatableRowReadService.get_rows(
+                    instance=instance,
+                    group=current_group,
                 )
-                reconstructed_fields = {
-                    field["code"]: field
-                    for field in reconstructed["fields"]
-                }
 
-                item_fields = []
-                for code, config in field_by_code.items():
-                    field = config["form_field"]
-                    value_data = reconstructed_fields.get(code)
-                    if value_data is None:
-                        continue
-
-                    serialized = HistoryService._serialize_field(
-                        field=field,
-                        value=value_data["value"],
-                        display_label=config["display_label"],
-                        display_order=config["display_order"],
-                        history_field_id=config["history_field_id"],
+            parent_rows = get_rows_for_group(parent_group)
+            rows = []
+            for parent_row in parent_rows:
+                rows.extend(
+                    RepeatableRowReadService.get_rows(
+                        instance=instance,
+                        group=current_group,
+                        parent_row=parent_row,
                     )
-                    serialized["display_value"] = value_data["display_value"]
-                    item_fields.append(serialized)
+                )
+            return rows
 
-                if item_fields:
-                    items.append(
-                        {
-                            "row_id": row.pk,
-                            "fields": item_fields,
-                        }
-                    )
+        for row in get_rows_for_group(group):
+            reconstructed = RepeatableRowReadService.reconstruct_row(
+                row=row,
+            )
+            reconstructed_fields = {
+                field["code"]: field
+                for field in reconstructed["fields"]
+            }
 
-                for child_group in current_group.child_groups.filter(
-                    is_active=True,
-                ).order_by("order", "id"):
-                    collect_rows(
-                        child_group,
-                        parent_row=row,
-                    )
+            item_fields = []
+            for code, config in field_by_code.items():
+                field = config["form_field"]
+                value_data = reconstructed_fields.get(code)
+                if value_data is None:
+                    continue
 
-        collect_rows(group)
+                serialized = HistoryService._serialize_field(
+                    field=field,
+                    value=value_data["value"],
+                    display_label=config["display_label"],
+                    display_order=config["display_order"],
+                    history_field_id=config["history_field_id"],
+                )
+                serialized["display_value"] = value_data["display_value"]
+                item_fields.append(serialized)
+
+            if item_fields:
+                items.append(
+                    {
+                        "row_id": row.pk,
+                        "fields": item_fields,
+                    }
+                )
+
         return items
 
     @staticmethod
