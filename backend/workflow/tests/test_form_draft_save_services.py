@@ -26,6 +26,7 @@ from workflow.models import (
     WorkflowStepExecution,
     InstanceDevice,
     RepeatableRow,
+    RepeatableRowValue,
 )
 
 
@@ -502,7 +503,6 @@ class FormDraftSaveServiceContractTests(TestCase):
             group=group,
             row_order=0,
         )
-        from workflow.models import RepeatableRowValue
         RepeatableRowValue.objects.create(
             row=row,
             field=field,
