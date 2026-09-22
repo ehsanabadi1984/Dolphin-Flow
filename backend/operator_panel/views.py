@@ -259,7 +259,7 @@ def dashboard(request):
 
 
 @login_required
-def workflow_instance(request, instance_id):
+def workflow_instance(request, instance_id, _return_save_result=False):
     """
     Display and save a workflow instance form.
 
@@ -436,7 +436,7 @@ def workflow_instance(request, instance_id):
                 submitted_data=request.POST,
                 instance=instance,
             )
-            FormDraftSaveService.save(
+            save_result = FormDraftSaveService.save(
                 instance=instance,
                 step=instance.current_step,
                 user=request.user,
@@ -577,10 +577,13 @@ def workflow_instance(request, instance_id):
         # The operator must explicitly press Edit to continue.
         # -----------------------------------------------------
 
-        return redirect(
+        response = redirect(
             "operator_panel:workflow_instance",
             instance_id=instance.pk,
         )
+        if _return_save_result:
+            return response, save_result
+        return response
 
     # =========================================================
     # BUILD DYNAMIC FORM
