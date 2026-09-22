@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
         formulasById: new Map(),
         sourceDataById: new Map(),
         formulaResultsById: new Map(),
+        suppressFormulaObserver: false,
         loading: false,
     };
 
@@ -343,6 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function applyServerResults() {
+        state.suppressFormulaObserver = true;
         for (const formula of state.formulasById.values()) {
             if (formula.calculation_only) continue;
             const result = state.formulaResultsById.get(Number(formula.field_id));
@@ -371,6 +373,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             });
         }
+        window.setTimeout(() => {
+            state.suppressFormulaObserver = false;
+        }, 0);
     }
 
     async function recalculate() {
@@ -441,7 +446,9 @@ document.addEventListener("DOMContentLoaded", () => {
     form.addEventListener("input", scheduleRecalculate);
     form.addEventListener("change", scheduleRecalculate);
 
-    const observer = new MutationObserver(scheduleRecalculate);
+    const observer = new MutationObserver(() => {
+        if (!state.suppressFormulaObserver) scheduleRecalculate();
+    });
     observer.observe(form, { childList: true, subtree: true });
 
     loadDefinitions();
