@@ -29,6 +29,26 @@ def _build_context_data(*, instance, submitted_data):
     ) or {}
     data = dict(stored)
 
+    # Repeatable groups are now persisted in the canonical
+    # RepeatableRow/RepeatableRowValue store, not FormData.data.
+    # Formula calculation must reconstruct that state before evaluating
+    # row formulas and form-level aggregates.
+    from .repeatable_row_read_services import RepeatableRowReadService
+
+    reconstructed = RepeatableRowReadService.reconstruct_instance(
+        instance=instance,
+    )
+    for group in reconstructed.get("groups", []):
+        rows = []
+        for item in group.get("items", []):
+            row_data = {
+                field["code"]: field["value"]
+                for field in item.get("fields", [])
+            }
+            row_data["_id"] = str(item["row_id"])
+            rows.append(row_data)
+        data[group["code"]] = rows
+
     if submitted_data is None:
         return data
 
