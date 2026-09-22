@@ -77,9 +77,10 @@ class OperatorPanelFormPostAdapter:
 
             index = int(index)
             items.setdefault(index, {})
-            items[index][field_code] = cls._value(
-                submitted_data,
-                key,
+            items[index][field_code] = cls._field_value(
+                submitted_data=submitted_data,
+                key=key,
+                field=field,
             )
 
         id_prefix = f"{group.code}_"
@@ -100,7 +101,7 @@ class OperatorPanelFormPostAdapter:
                 try:
                     items.setdefault(index, {})["row_id"] = int(row_id)
                 except (TypeError, ValueError):
-                    items.setdefault(index, {})["row_id"] = row_id
+                    items.setdefault(index, {})["row_id"] = None
 
         instance_device_prefix = f"{group.code}_"
         if instance is not None:
@@ -149,6 +150,20 @@ class OperatorPanelFormPostAdapter:
             items[index]
             for index in sorted(items)
         ]
+
+    @staticmethod
+    def _field_value(*, submitted_data, key, field):
+        if field.field_type == FormField.FieldType.BOOLEAN:
+            values = (
+                submitted_data.getlist(key)
+                if hasattr(submitted_data, "getlist")
+                else [submitted_data.get(key, "")]
+            )
+            return any(
+                str(value).strip().lower() in {"1", "true", "on", "yes"}
+                for value in values
+            )
+        return OperatorPanelFormPostAdapter._value(submitted_data, key)
 
     @staticmethod
     def _value(submitted_data, key):
