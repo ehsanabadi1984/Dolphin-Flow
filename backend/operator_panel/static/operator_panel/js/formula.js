@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
         fieldsById: new Map(),
         formulasById: new Map(),
         sourceDataById: new Map(),
+        formulaResultsById: new Map(),
         loading: false,
     };
 
@@ -341,20 +342,23 @@ document.addEventListener("DOMContentLoaded", () => {
         return form.dataset.editMode === "1";
     }
 
-    function recalculate() {
-        if (!isEditMode()) return;
+    function applyServerResults() {
         for (const formula of state.formulasById.values()) {
+            if (formula.calculation_only) continue;
+            const result = state.formulaResultsById.get(Number(formula.field_id));
+            if (!result) continue;
             if (formula.scope === "FORM") {
-                setNormalFormulaValue(formula, evaluateFormula(formula));
+                setNormalFormulaValue(formula, toNumber(result.value));
                 continue;
             }
             const group = form.querySelector(`[data-repeatable-group="${CSS.escape(formula.group_code)}"]`);
             if (!group) continue;
             const rows = group.querySelectorAll("[data-repeatable-item]:not([data-repeatable-template])");
+            const values = Array.isArray(result.values) ? result.values : [];
             rows.forEach((row, index) => {
-                const value = evaluateFormula(formula, row, index, new Set());
+                const value = values[index] === undefined ? "" : values[index];
                 if (group.classList.contains("df-table-group")) {
-                    setRowFormulaValue(formula, row, value);
+                    setRowFormulaValue(formula, row, toNumber(value));
                 } else {
                     let output = row.querySelector(`.df-formula-value[data-formula-id="${formula.field_id}"]`);
                     if (!output) {
@@ -363,10 +367,43 @@ document.addEventListener("DOMContentLoaded", () => {
                         output.dataset.formulaId = String(formula.field_id);
                         row.appendChild(output);
                     }
-                    output.textContent = `${formula.label}: ${formatNumber(value, formula.decimal_places)}`;
+                    output.textContent = `${formula.label}: ${formatNumber(toNumber(value), formula.decimal_places)}`;
                 }
             });
         }
+    }
+
+    async function recalculate() {
+        if (!isEditMode() || state.loading) return;
+        state.loading = true;
+        try {
+            const response = await fetch(`${endpoint}?instance_id=${encodeURIComponent(instanceId)}`, {
+                method: "POST",
+                body: new FormData(form),
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-CSRFToken": getCsrfToken(),
+                },
+            });
+            if (!response.ok) return;
+            const payload = await response.json();
+            state.formulaResultsById.clear();
+            for (const [fieldId, result] of Object.entries(payload.formula_results || {})) {
+                state.formulaResultsById.set(Number(fieldId), result);
+            }
+            applyServerResults();
+        } catch (error) {
+            console.warn("Formula calculation could not be loaded:", error);
+        } finally {
+            state.loading = false;
+        }
+    }
+
+    function getCsrfToken() {
+        const input = form.querySelector('input[name="csrfmiddlewaretoken"]');
+        if (input && input.value) return input.value;
+        const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : "";
     }
 
     async function loadDefinitions() {
@@ -381,12 +418,13 @@ document.addEventListener("DOMContentLoaded", () => {
             state.fieldsById.clear();
             state.formulasById.clear();
             state.sourceDataById.clear();
+            state.formulaResultsById.clear();
             for (const field of payload.fields || []) state.fieldsById.set(Number(field.id), field);
             for (const formula of payload.formulas || []) state.formulasById.set(Number(formula.field_id), formula);
-            for (const [fieldId, source] of Object.entries(payload.source_data || {})) {
-                state.sourceDataById.set(Number(fieldId), source);
+            for (const [fieldId, result] of Object.entries(payload.formula_results || {})) {
+                state.formulaResultsById.set(Number(fieldId), result);
             }
-            recalculate();
+            applyServerResults();
         } catch (error) {
             console.warn("Formula definitions could not be loaded:", error);
         } finally {
