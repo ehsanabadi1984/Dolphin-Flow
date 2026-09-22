@@ -13,6 +13,7 @@ from workflow.models import (
     DeviceIdentifier,
     DeviceModel,
     DeviceType,
+    FormData,
     FormDefinition,
     FormField,
     FormRepeatableGroup,
@@ -443,6 +444,44 @@ class FormDraftSaveServiceContractTests(TestCase):
             RepeatableRow.objects.filter(instance=self.instance, group=group).count(),
             1,
         )
+    def test_changed_normal_field_is_rejected_before_persistence_without_edit_permission(self):
+        FormData.objects.create(
+            instance=self.instance,
+            data={"customer_name": "Original"},
+        )
+        FieldAccess.objects.filter(
+            field=self.form_field,
+            step=self.step,
+            user=self.user,
+        ).update(can_edit=False)
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={"customer_name": "Changed"},
+            )
+
+        form_data = FormData.objects.get(instance=self.instance)
+        self.assertEqual(form_data.data, {"customer_name": "Original"})
+
+    def test_unchanged_normal_field_is_allowed_without_edit_permission(self):
+        FormData.objects.create(
+            instance=self.instance,
+            data={"customer_name": "Original"},
+        )
+        FieldAccess.objects.filter(
+            field=self.form_field,
+            step=self.step,
+            user=self.user,
+        ).update(can_edit=False)
+
+        result = self.call(
+            submitted_data={"customer_name": "Original"},
+        )
+
+        self.assertTrue(result.saved)
+        form_data = FormData.objects.get(instance=self.instance)
+        self.assertEqual(form_data.data, {"customer_name": "Original"})
+
     def test_save_requires_edit_mode(self):
         with self.assertRaises(ValidationError):
             self.call(edit_mode=False)
