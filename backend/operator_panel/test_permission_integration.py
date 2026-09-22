@@ -1,5 +1,4 @@
 from django.contrib.auth import get_user_model
-from django.core.exceptions import PermissionDenied
 from django.test import TestCase
 from django.urls import reverse
 
@@ -10,6 +9,7 @@ from workflow.models import (
     WorkflowPermission,
     WorkflowStep,
     WorkflowTransition,
+    WorkflowStepExecution,
 )
 
 
@@ -80,12 +80,18 @@ class PermissionIntegrationTests(TestCase):
         )
 
     def create_instance(self):
-        return WorkflowInstance.objects.create(
+        instance = WorkflowInstance.objects.create(
             workflow=self.workflow,
             current_step=self.step_one,
             started_by=self.other_user,
             status=WorkflowInstance.Status.ACTIVE,
         )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_one,
+            performed_by=self.other_user,
+        )
+        return instance
 
     def test_instance_endpoint_enforces_view_permission(self):
         instance = self.create_instance()
