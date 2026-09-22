@@ -579,7 +579,7 @@ class FormulaPersistenceTestCase(TestCase):
             edit_mode=True,
         )
         self.assertEqual(
-            self.persisted_rows(instance),
+            FormData.objects.get(instance=instance).data,
             {"city": "Tehran"},
         )
 
