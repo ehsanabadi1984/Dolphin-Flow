@@ -482,6 +482,166 @@ class FormDraftSaveServiceContractTests(TestCase):
         form_data = FormData.objects.get(instance=self.instance)
         self.assertEqual(form_data.data, {"customer_name": "Original"})
 
+    def test_repeatable_row_update_is_rejected_before_persistence_without_group_edit_permission(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Items Row Edit Permission",
+            code="items_row_edit_permission",
+            order=10,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Item Name",
+            code="item_name_row_edit_permission",
+            label="Item Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+        )
+        from workflow.models import RepeatableRowValue
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=field,
+            text_value="Original",
+        )
+        RepeatableGroupAccess.objects.create(
+            group=group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={
+                    "items_row_edit_permission": [
+                        {
+                            "row_id": row.pk,
+                            "item_name_row_edit_permission": "Changed",
+                        },
+                    ],
+                },
+            )
+
+        row.refresh_from_db()
+        self.assertEqual(
+            row.values.get(field=field).text_value,
+            "Original",
+        )
+
+    def test_repeatable_row_create_is_rejected_without_group_add_permission(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Items Row Add Permission",
+            code="items_row_add_permission",
+            order=11,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Item Name",
+            code="item_name_row_add_permission",
+            label="Item Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=False,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={
+                    "items_row_add_permission": [
+                        {
+                            "row_id": None,
+                            "item_name_row_add_permission": "New",
+                        },
+                    ],
+                },
+            )
+
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=group,
+            ).exists()
+        )
+
+    def test_repeatable_row_delete_is_rejected_without_group_delete_permission(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Items Row Delete Permission",
+            code="items_row_delete_permission",
+            order=12,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Item Name",
+            code="item_name_row_delete_permission",
+            label="Item Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=False,
+        )
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={
+                    "items_row_delete_permission": [],
+                },
+            )
+
+        self.assertTrue(
+            RepeatableRow.objects.filter(pk=row.pk).exists()
+        )
+
     def test_save_requires_edit_mode(self):
         with self.assertRaises(ValidationError):
             self.call(edit_mode=False)
