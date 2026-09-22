@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from django.core.signals import request_started
 from django.dispatch import receiver
-from django.db import transaction
 
 
 _BOOTSTRAPPED = False
@@ -245,85 +244,6 @@ def bootstrap_formula_system():
         )
         DynamicFormService._formula_get_patched = True
 
-    if not getattr(DynamicFormService, "_formula_save_patched", False):
-        original_save = DynamicFormService.save_form_for_step
-
-        def save_form_with_formulas(
-            *,
-            instance,
-            user,
-            submitted_data,
-            edit_mode=False,
-        ):
-            from .models import FormDefinition
-            form = (
-                FormDefinition.objects
-                .filter(workflow=instance.workflow, is_active=True)
-                .first()
-            )
-            formula_fields = []
-            if form is not None:
-                formula_fields = list(
-                    FormField.objects.filter(
-                        section__form=form,
-                        field_type=FormulaService.FIELD_TYPE,
-                        is_active=True,
-                    ).select_related("repeatable_group")
-                )
-
-            if formula_fields:
-                editable = submitted_data.copy()
-
-                for field in formula_fields:
-                    if field.repeatable_group_id is None:
-                        editable.pop(field.code, None)
-                        continue
-
-                    prefix = f"{field.repeatable_group.code}_"
-                    suffix = f"_{field.code}"
-                    for key in list(editable.keys()):
-                        if str(key).startswith(prefix) and str(key).endswith(suffix):
-                            del editable[key]
-
-                submitted_data = editable
-
-            with transaction.atomic():
-                result = original_save(
-                    instance=instance,
-                    user=user,
-                    submitted_data=submitted_data,
-                    edit_mode=edit_mode,
-                )
-
-                saved_form_data = (
-                    FormData.objects
-                    .filter(instance=instance)
-                    .values_list("data", flat=True)
-                    .first()
-                )
-
-                if form is None or not formula_fields:
-                    return result
-
-                form_data = (
-                    FormData.objects
-                    .select_for_update()
-                    .get(instance=instance)
-                )
-                calculated = FormulaService.calculate_context_data(
-                    form=form,
-                    data=form_data.data or {},
-                )
-
-                form_data.data = calculated
-                form_data.save()
-
-                return result
-
-        DynamicFormService.save_form_for_step = staticmethod(
-            save_form_with_formulas
-        )
-        DynamicFormService._formula_save_patched = True
 
     _BOOTSTRAPPED = True
 
