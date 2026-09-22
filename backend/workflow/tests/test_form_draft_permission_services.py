@@ -258,6 +258,7 @@ class FormDraftPermissionServiceTests(TestCase):
             code="editable_normal",
             label="Editable",
             field_type=FormField.FieldType.TEXT,
+            order=1,
         )
         locked = FormField.objects.create(
             section=self.section,
@@ -265,6 +266,7 @@ class FormDraftPermissionServiceTests(TestCase):
             code="locked_normal",
             label="Locked",
             field_type=FormField.FieldType.TEXT,
+            order=2,
         )
         FormData.objects.create(
             instance=self.instance,
