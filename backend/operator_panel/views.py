@@ -18,6 +18,7 @@ from workflow.models import (
     DeviceModel,
     DeviceIdentifier,
     FormData,
+    FormDefinition,
     FormField,
     FormRepeatableGroup,
     InstanceDevice,
