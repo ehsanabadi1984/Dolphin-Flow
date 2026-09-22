@@ -13,6 +13,7 @@ from workflow.models import (
     FormSection,
     InstanceDevice,
     RepeatableRow,
+    RepeatableRowValue,
     Workflow,
     WorkflowInstance,
 )
@@ -119,11 +120,16 @@ class FormDraftSubmitValidationServiceTests(TestCase):
 
     def test_required_group_accepts_omitted_group_when_rows_persist(self):
         group = self.create_group(code="items", required=True)
-        self.create_field(code="name", group=group, required=True)
-        RepeatableRow.objects.create(
+        field = self.create_field(code="name", group=group, required=True)
+        row = RepeatableRow.objects.create(
             instance=self.instance,
             group=group,
             row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=field,
+            text_value="saved",
         )
 
         FormDraftSubmitValidationService.validate_payload(
@@ -167,8 +173,6 @@ class FormDraftSubmitValidationServiceTests(TestCase):
             group=group,
             row_order=0,
         )
-        from workflow.models import RepeatableRowValue
-
         RepeatableRowValue.objects.create(
             row=row,
             field=field,
