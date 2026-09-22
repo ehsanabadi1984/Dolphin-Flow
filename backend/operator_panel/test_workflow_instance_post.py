@@ -344,23 +344,35 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             step=self.step,
             user=self.user,
         ).update(can_edit=False)
-        device_type = DeviceType.objects.create(
+        original_type = DeviceType.objects.create(
             name="Phone",
             code="OP_POST_PHONE_TYPE",
             is_active=True,
         )
-        device_model = DeviceModel.objects.create(
-            device_type=device_type,
+        target_type = DeviceType.objects.create(
+            name="Tablet",
+            code="OP_POST_TABLET_TYPE",
+            is_active=True,
+        )
+        original_model = DeviceModel.objects.create(
+            device_type=original_type,
             brand="Test",
             name="Phone X",
             code="OP_POST_PHONE_MODEL",
             is_active=True,
         )
+        target_model = DeviceModel.objects.create(
+            device_type=target_type,
+            brand="Test",
+            name="Tablet X",
+            code="OP_POST_TABLET_MODEL",
+            is_active=True,
+        )
         instance_device = InstanceDevice.objects.create(
             instance=self.instance,
             device=None,
-            draft_device_model=device_model,
-            draft_device_type=device_type,
+            draft_device_model=original_model,
+            draft_device_type=original_type,
         )
         row = RepeatableRow.objects.create(
             instance=self.instance,
@@ -372,16 +384,16 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         response = self.client.post(
             reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
             {
-                "system_devices_0_system_type": str(device_type.pk),
-                "system_devices_0_system_model": str(device_model.pk),
+                "system_devices_0_system_type": str(target_type.pk),
+                "system_devices_0_system_model": str(target_model.pk),
                 "system_devices_0_instance_device_id": str(instance_device.pk),
             },
         )
 
         self.assertEqual(response.status_code, 400)
         instance_device.refresh_from_db()
-        self.assertEqual(instance_device.draft_device_type_id, device_type.pk)
-        self.assertEqual(instance_device.draft_device_model_id, device_model.pk)
+        self.assertEqual(instance_device.draft_device_type_id, original_type.pk)
+        self.assertEqual(instance_device.draft_device_model_id, original_model.pk)
         self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
 
     def test_workflow_instance_post_rejects_changed_device_model_without_field_edit_permission(self):
