@@ -132,7 +132,7 @@ def formula_definitions(request, instance_id):
                 "form_id": form.pk if form else None,
                 "fields": [],
                 "formulas": [],
-                "source_data": {},
+                "formula_results": {},
             }
         )
 
