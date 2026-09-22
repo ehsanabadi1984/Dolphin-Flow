@@ -127,6 +127,115 @@ def _execute_annotations(user):
     }
 
 
+def _view_annotations(user):
+    """
+    Resolve VIEW with the same precedence as WorkflowAuthorizationService.
+
+    Active dashboard instances normally have a current step, so step-scoped
+    permissions are the primary path. The workflow-scoped fallback mirrors
+    has_permission when current_step is NULL. The instance starter's implicit
+    VIEW applies only when no explicit permission has already denied/allowed
+    the request.
+    """
+    return {
+        "_df_view_user_allow": _user_permission_exists(
+            user,
+            WorkflowPermission.Action.VIEW,
+            WorkflowPermission.Effect.ALLOW,
+            step_scope=True,
+        ),
+        "_df_view_user_deny": _user_permission_exists(
+            user,
+            WorkflowPermission.Action.VIEW,
+            WorkflowPermission.Effect.DENY,
+            step_scope=True,
+        ),
+        "_df_view_role_allow": _role_permission_exists(
+            user,
+            WorkflowPermission.Action.VIEW,
+            WorkflowPermission.Effect.ALLOW,
+            step_scope=True,
+        ),
+        "_df_view_role_deny": _role_permission_exists(
+            user,
+            WorkflowPermission.Action.VIEW,
+            WorkflowPermission.Effect.DENY,
+            step_scope=True,
+        ),
+        "_df_view_wf_user_allow": _user_permission_exists(
+            user,
+            WorkflowPermission.Action.VIEW,
+            WorkflowPermission.Effect.ALLOW,
+            wf_scope=True,
+        ),
+        "_df_view_wf_user_deny": _user_permission_exists(
+            user,
+            WorkflowPermission.Action.VIEW,
+            WorkflowPermission.Effect.DENY,
+            wf_scope=True,
+        ),
+        "_df_view_wf_role_allow": _role_permission_exists(
+            user,
+            WorkflowPermission.Action.VIEW,
+            WorkflowPermission.Effect.ALLOW,
+            wf_scope=True,
+        ),
+        "_df_view_wf_role_deny": _role_permission_exists(
+            user,
+            WorkflowPermission.Action.VIEW,
+            WorkflowPermission.Effect.DENY,
+            wf_scope=True,
+        ),
+    }
+
+
+def _can_view_q(user):
+    """Return the database-side VIEW permission predicate."""
+    step_scope = (
+        Q(
+            _df_view_user_deny=False,
+            _df_view_user_allow=True,
+        )
+        | Q(
+            _df_view_user_deny=False,
+            _df_view_user_allow=False,
+            _df_view_role_deny=False,
+            _df_view_role_allow=True,
+        )
+        | Q(
+            _df_view_user_deny=False,
+            _df_view_user_allow=False,
+            _df_view_role_deny=False,
+            _df_view_role_allow=False,
+            started_by=user,
+        )
+    )
+
+    workflow_scope = (
+        Q(
+            _df_view_wf_user_deny=False,
+            _df_view_wf_user_allow=True,
+        )
+        | Q(
+            _df_view_wf_user_deny=False,
+            _df_view_wf_user_allow=False,
+            _df_view_wf_role_deny=False,
+            _df_view_wf_role_allow=True,
+        )
+        | Q(
+            _df_view_wf_user_deny=False,
+            _df_view_wf_user_allow=False,
+            _df_view_wf_role_deny=False,
+            _df_view_wf_role_allow=False,
+            started_by=user,
+        )
+    )
+
+    return Q(current_step__isnull=False) & step_scope | Q(
+        current_step__isnull=True
+    ) & workflow_scope
+
+
 def _can_take_action_q(user):
     """Return the database-side EXECUTE permission predicate."""
     return Q(
@@ -145,27 +254,27 @@ class DashboardService:
         self.user = user
 
     def _accessible_active_queryset(self):
-        annotations = _execute_annotations(self.user)
+        """
+        Return active instances the user is actually allowed to VIEW.
+
+        Membership is a prerequisite for workflow authorization, not an
+        implicit VIEW grant. EXECUTE is intentionally resolved later by
+        _can_take_action_q() for actionable/task lists.
+        """
+        annotations = {
+            **_view_annotations(self.user),
+            **_execute_annotations(self.user),
+        }
         return (
             WorkflowInstance.objects
-            .filter(status=WorkflowInstance.Status.ACTIVE)
-            .annotate(**annotations)
             .filter(
-                Q(_df_execute_user_deny=False),
-                Q(_df_execute_user_allow=True)
-                | Q(
-                    _df_execute_user_allow=False,
-                    _df_execute_role_deny=False,
-                    _df_execute_role_allow=True,
-                )
-                | Q(
-                    _df_execute_user_allow=False,
-                    _df_execute_role_deny=False,
-                    _df_execute_role_allow=False,
-                    workflow__memberships__user=self.user,
-                    workflow__memberships__is_active=True,
-                ),
+                status=WorkflowInstance.Status.ACTIVE,
+                workflow__is_active=True,
+                workflow__memberships__user=self.user,
+                workflow__memberships__is_active=True,
             )
+            .annotate(**annotations)
+            .filter(_can_view_q(self.user))
             .distinct()
         )
 
