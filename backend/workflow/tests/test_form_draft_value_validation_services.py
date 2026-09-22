@@ -56,6 +56,10 @@ class FormDraftValueValidationServiceTests(TestCase):
         group=None,
         **kwargs,
     ):
+        existing_fields = FormField.objects.filter(
+            section=self.section,
+            repeatable_group=group,
+        ).count()
         return FormField.objects.create(
             section=self.section,
             repeatable_group=group,
@@ -63,6 +67,7 @@ class FormDraftValueValidationServiceTests(TestCase):
             code=code,
             label=code.title(),
             field_type=field_type,
+            order=existing_fields + 1,
             **kwargs,
         )
 
