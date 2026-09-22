@@ -403,6 +403,88 @@ class WorkflowExecutionTests(TestCase):
             self.step_one.pk,
         )
 
+    def test_execute_permission_alone_does_not_authorize_transition(self):
+        """EXECUTE is task/action capability, not transition mutation permission."""
+        self.grant_execute_permission()
+        self.grant_start_permission()
+
+        instance = self.start_instance()
+
+        with self.assertRaises(PermissionDenied):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            )
+
+        instance.refresh_from_db()
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_one.pk,
+        )
+
+    def test_transition_permission_works_without_execute_permission(self):
+        """TRANSITION authorizes mutation independently from EXECUTE."""
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+
+        instance = self.start_instance()
+
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+
+        instance.refresh_from_db()
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_two.pk,
+        )
+
+    def test_assigned_to_does_not_grant_transition_permission(self):
+        """Step assignment is routing, not authorization."""
+        self.grant_start_permission()
+        self.step_one.assigned_to = self.user
+        self.step_one.save(update_fields=["assigned_to"])
+
+        instance = self.start_instance()
+
+        with self.assertRaises(PermissionDenied):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            )
+
+        instance.refresh_from_db()
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_one.pk,
+        )
+
+    def test_transition_permission_does_not_require_step_assignment(self):
+        """A user may execute an authorized transition when not assigned to the step."""
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+
+        self.step_one.assigned_to = self.destination_user
+        self.step_one.save(update_fields=["assigned_to"])
+
+        instance = self.start_instance()
+
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+
+        instance.refresh_from_db()
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_two.pk,
+        )
+
     def test_transition_creates_notification_for_destination_executors(self):
         self.grant_execute_permission()
         self.grant_start_permission()
