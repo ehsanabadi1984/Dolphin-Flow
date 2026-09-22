@@ -271,6 +271,7 @@ def file_field_definitions(request, instance_id):
     if form is None or instance.current_step_id is None:
         return JsonResponse({"fields": [], "groups": []})
 
+    step = instance.current_step
     permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=step, user=request.user)
 
     form_data = FormData.objects.filter(instance=instance).first()
