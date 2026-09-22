@@ -3,7 +3,7 @@ from enum import StrEnum
 from uuid import uuid4
 
 from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
-from .models import FormRepeatableGroup, RepeatableRow
+from .models import FormData, FormRepeatableGroup, RepeatableRow
 
 
 class RowChangeAction(StrEnum):
@@ -40,7 +40,16 @@ class RepeatableGroupDiff:
 
 
 @dataclass(frozen=True)
+class NormalFieldChange:
+    field: object
+    submitted_value: object
+    persisted_value: object
+    changed: bool
+
+
+@dataclass(frozen=True)
 class FormDraftDiff:
+    normal_fields: tuple[NormalFieldChange, ...]
     groups: tuple[RepeatableGroupDiff, ...]
 
 
@@ -77,6 +86,12 @@ class FormDraftDiffService:
             )
         }
 
+        normal_field_changes = cls._diff_normal_fields(
+            instance=instance,
+            form=form,
+            normalized_payload=normalized_payload,
+        )
+
         group_diffs = []
 
         for group_code, desired_rows in normalized_payload.repeatable_groups.items():
@@ -96,7 +111,56 @@ class FormDraftDiffService:
                 )
             )
 
-        return FormDraftDiff(groups=tuple(group_diffs))
+        return FormDraftDiff(
+            normal_fields=tuple(normal_field_changes),
+            groups=tuple(group_diffs),
+        )
+
+    @classmethod
+    def _diff_normal_fields(
+        cls,
+        *,
+        instance,
+        form,
+        normalized_payload,
+    ):
+        form_data = (
+            FormData.objects
+            .filter(instance=instance)
+            .first()
+        )
+        persisted_data = (
+            form_data.data
+            if form_data is not None and isinstance(form_data.data, dict)
+            else {}
+        )
+
+        fields = [
+            field
+            for section in form.sections.filter(is_active=True)
+            for field in section.fields.filter(
+                is_active=True,
+                repeatable_group__isnull=True,
+            )
+        ]
+
+        changes = []
+        for field in fields:
+            if field.code not in normalized_payload.normal_fields:
+                continue
+
+            submitted_value = normalized_payload.normal_fields[field.code]
+            persisted_value = persisted_data.get(field.code)
+            changes.append(
+                NormalFieldChange(
+                    field=field,
+                    submitted_value=submitted_value,
+                    persisted_value=persisted_value,
+                    changed=submitted_value != persisted_value,
+                )
+            )
+
+        return changes
 
     @classmethod
     def _diff_group(
