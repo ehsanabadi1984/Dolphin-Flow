@@ -1176,6 +1176,8 @@ class FormField(models.Model):
         DATETIME = "DATETIME", "تاریخ و زمان"
         BOOLEAN = "BOOLEAN", "بله/خیر"
         SELECT = "SELECT", "انتخابی"
+        FORMULA = "FORMULA", "فرمول"
+        FILE = "FILE", "بارگذاری فایل"
 
     class SystemKey(models.TextChoices):
         NONE = "NONE", "بدون اتصال سیستمی"
