@@ -1,8 +1,10 @@
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from unittest.mock import patch
 
 from workflow.form_draft_delete_apply_services import FormDraftDeleteApplyService
+from workflow.form_file_models import FormFile
 from workflow.form_draft_diff_services import FormDraftDiffService
 from workflow.form_draft_payloads import NormalizedFormPayload, NormalizedRow
 from workflow.models import (
@@ -76,6 +78,56 @@ class FormDraftDeleteApplyServiceTests(TestCase):
             form=self.form,
             normalized_payload=payload,
         )
+
+    def test_delete_removes_row_values_and_file_sidecars(self):
+        group, field = self.create_group(code="items")
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=field,
+            text_value="Delete me",
+        )
+        from workflow.models import FormData
+        form_data = FormData.objects.create(
+            instance=self.instance,
+            data={},
+        )
+        file_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="attachment",
+            code="attachment",
+            label="Attachment",
+            field_type=FormField.FieldType.FILE,
+            order=1,
+        )
+        form_file = FormFile.objects.create(
+            form_data=form_data,
+            field=file_field,
+            row_id=str(row.pk),
+            file=SimpleUploadedFile(
+                "delete.txt",
+                b"file-content",
+                content_type="text/plain",
+            ),
+            original_name="delete.txt",
+        )
+
+        with patch.object(form_file.file, "delete") as file_delete:
+            deleted = FormDraftDeleteApplyService.apply(
+                instance=self.instance,
+                diff=self.build_diff(items=[]),
+            )
+
+        self.assertEqual(deleted, (row.pk,))
+        self.assertFalse(RepeatableRow.objects.filter(pk=row.pk).exists())
+        self.assertFalse(RepeatableRowValue.objects.filter(row_id=row.pk).exists())
+        self.assertFalse(FormFile.objects.filter(pk=form_file.pk).exists())
+        file_delete.assert_called_once_with(save=False)
 
     def test_delete_removes_row_and_values(self):
         group, field = self.create_group(code="items")
