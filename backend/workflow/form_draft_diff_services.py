@@ -6,6 +6,7 @@ from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
 from decimal import Decimal, InvalidOperation
 
 from .models import FormData, FormField, FormRepeatableGroup, RepeatableRow
+from .repeatable_row_read_services import RepeatableRowReadService
 
 
 class RowChangeAction(StrEnum):
@@ -278,16 +279,21 @@ class FormDraftDiffService:
                 kind=RowReferenceKind.EXISTING,
                 value=persisted_row.pk,
             )
-            changes.append(
-                RowChange(
-                    action=RowChangeAction.UPDATE,
-                    group=group,
-                    row_id=persisted_row.pk,
-                    desired_row=desired_row,
-                    row_reference=existing_reference,
-                    parent_reference=parent_reference,
+            if cls._row_fields_changed(
+                row=persisted_row,
+                desired_row=desired_row,
+            ):
+                changes.append(
+                    RowChange(
+                        action=RowChangeAction.UPDATE,
+                        group=group,
+                        row_id=persisted_row.pk,
+                        desired_row=desired_row,
+                        row_reference=existing_reference,
+                        parent_reference=parent_reference,
+                    )
                 )
-            )
+
             cls._diff_child_groups(
                 instance=instance,
                 group=group,
@@ -304,6 +310,36 @@ class FormDraftDiffService:
                 row=persisted_row,
                 changes=changes,
             )
+
+    @classmethod
+    def _row_fields_changed(cls, *, row, desired_row):
+        if not desired_row.fields:
+            return False
+
+        persisted_row = RepeatableRowReadService.reconstruct_row(row=row)
+        persisted_values = {
+            field["code"]: field["value"]
+            for field in persisted_row["fields"]
+        }
+        fields_by_code = {
+            field.code: field
+            for field in row.group.fields.filter(is_active=True)
+        }
+
+        for field_code, submitted_value in desired_row.fields.items():
+            field = fields_by_code.get(field_code)
+            if field is None:
+                continue
+
+            persisted_value = persisted_values.get(field_code)
+            if not cls._values_equal(
+                field=field,
+                submitted_value=submitted_value,
+                persisted_value=persisted_value,
+            ):
+                return True
+
+        return False
 
     @classmethod
     def _diff_child_groups(
