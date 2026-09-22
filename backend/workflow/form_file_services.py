@@ -11,6 +11,7 @@ from django.urls import reverse
 from .authorization import WorkflowAuthorizationService
 from .form_file_models import FormFile
 from .form_services import DynamicFormService
+from .permission_context import PermissionContext
 from .models import (
     FormData,
     FormDefinition,
@@ -27,10 +28,7 @@ def _current_form(instance):
     return (
         FormDefinition.objects
         .filter(workflow=instance.workflow, is_active=True)
-        .prefetch_related(
-            "sections__fields__access_rules",
-            "sections__repeatable_groups__fields__access_rules",
-        )
+        
         .first()
     )
 
@@ -74,70 +72,6 @@ def _validate_upload(upload, field):
     return None
 
 
-def _roles_for_workflow(workflow, user):
-    return set(
-        workflow.memberships
-        .filter(user=user, is_active=True)
-        .values_list("role", flat=True)
-    )
-
-
-def _field_can_edit(field, *, user, step):
-    rules = field.access_rules.filter(step=step)
-    user_rule = rules.filter(user=user).first()
-    if user_rule:
-        return bool(user_rule.can_edit)
-    return rules.filter(
-        role__in=_roles_for_workflow(field.section.form.workflow, user),
-        user__isnull=True,
-        can_edit=True,
-    ).exists()
-
-
-def _field_can_view(field, *, user, step):
-    if user.is_superuser:
-        return True
-    if step is None:
-        return False
-    rules = field.access_rules.filter(step=step)
-    user_rule = rules.filter(user=user).first()
-    if user_rule:
-        return bool(user_rule.can_view)
-    return rules.filter(
-        role__in=_roles_for_workflow(field.section.form.workflow, user),
-        user__isnull=True,
-        can_view=True,
-    ).exists()
-
-
-def _group_can_edit(group, *, user, step):
-    rules = group.access_rules.filter(step=step)
-    user_rule = rules.filter(user=user).first()
-    if user_rule:
-        return bool(user_rule.can_edit)
-    return rules.filter(
-        role__in=_roles_for_workflow(group.section.form.workflow, user),
-        user__isnull=True,
-        can_edit=True,
-    ).exists()
-
-
-def _group_can_view(group, *, user, step):
-    if user.is_superuser:
-        return True
-    if step is None:
-        return False
-    rules = group.access_rules.filter(step=step)
-    user_rule = rules.filter(user=user).first()
-    if user_rule:
-        return bool(user_rule.can_view)
-    return rules.filter(
-        role__in=_roles_for_workflow(group.section.form.workflow, user),
-        user__isnull=True,
-        can_view=True,
-    ).exists()
-
-
 def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
     """Validate FILE fields before DynamicFormService persists normal form data."""
     if instance.current_step_id is None:
@@ -156,6 +90,7 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
         }
 
     step = instance.current_step
+    permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=step, user=user)
     errors = []
 
     for section in form.sections.filter(is_active=True):
@@ -164,7 +99,7 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
             repeatable_group__isnull=True,
             field_type="FILE",
         ):
-            if not _field_can_edit(field, user=user, step=step):
+            if not permission_context.field(field).can_edit:
                 continue
             upload = submitted_files.get(field.code)
             error = _validate_upload(upload, field)
@@ -187,7 +122,7 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
             is_active=True,
             group_type=FormRepeatableGroup.GroupType.NORMAL,
         ):
-            if not _group_can_edit(group, user=user, step=step):
+            if not permission_context.group(group).can_edit:
                 continue
             rows = DynamicFormService._parse_repeatable_data(
                 submitted_data=submitted_data,
@@ -197,7 +132,7 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
             for index, row in enumerate(rows):
                 row_id = str(row.get("_id", "") or "")
                 for field in file_fields:
-                    if not _field_can_edit(field, user=user, step=step):
+                    if not permission_context.field(field).can_edit:
                         continue
                     key = f"{group.code}_{index}_{field.code}"
                     upload = submitted_files.get(key)
@@ -336,6 +271,8 @@ def file_field_definitions(request, instance_id):
     if form is None or instance.current_step_id is None:
         return JsonResponse({"fields": [], "groups": []})
 
+    permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=step, user=request.user)
+
     form_data = FormData.objects.filter(instance=instance).first()
     existing = {}
     if form_data:
@@ -354,14 +291,14 @@ def file_field_definitions(request, instance_id):
             repeatable_group__isnull=True,
             field_type="FILE",
         ):
-            if not _field_can_view(field, user=request.user, step=step):
+            if not permission_context.field(field).can_view:
                 continue
             fields.append({
                 "field_id": field.pk,
                 "code": field.code,
                 "label": field.label,
                 "scope": "FORM",
-                "editable": _field_can_edit(field, user=request.user, step=step),
+                "editable": permission_context.field(field).can_edit,
                 "required": bool(field.is_required),
                 "input_name": field.code,
                 "file": existing.get((field.pk, "")),
@@ -371,13 +308,13 @@ def file_field_definitions(request, instance_id):
             is_active=True,
             group_type=FormRepeatableGroup.GroupType.NORMAL,
         ):
-            if not _group_can_view(group, user=request.user, step=step):
+            if not permission_context.group(group).can_view:
                 continue
 
             visible_fields = [
                 field
                 for field in group.fields.filter(is_active=True)
-                if _field_can_view(field, user=request.user, step=step)
+                if permission_context.field(field).can_view
             ]
             group_fields = []
             field_ids = set()
@@ -391,8 +328,8 @@ def file_field_definitions(request, instance_id):
                     "code": field.code,
                     "label": field.label,
                     "editable": (
-                        _field_can_edit(field, user=request.user, step=step)
-                        and _group_can_edit(group, user=request.user, step=step)
+                        permission_context.field(field).can_edit
+                        and permission_context.group(group).can_edit
                     ),
                     "required": bool(field.is_required),
                     "column_index": column_index,
@@ -464,14 +401,15 @@ def delete_form_file(request, file_id):
         instance=instance,
     )
 
-    if not _field_can_edit(form_file.field, user=request.user, step=step):
+    form = _current_form(instance)
+    if form is None:
+        raise Http404
+    permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=step, user=request.user)
+
+    if not permission_context.field(form_file.field).can_edit:
         return JsonResponse({"error": "شما اجازه حذف این فایل را ندارید."}, status=403)
 
-    if form_file.field.repeatable_group_id and not _group_can_edit(
-        form_file.field.repeatable_group,
-        user=request.user,
-        step=step,
-    ):
+    if form_file.field.repeatable_group_id and not permission_context.group(form_file.field.repeatable_group).can_edit:
         return JsonResponse({"error": "شما اجازه حذف این فایل را ندارید."}, status=403)
 
     if form_file.file:
@@ -551,14 +489,15 @@ def open_form_file(request, file_id):
         instance=instance,
     )
 
-    if not _field_can_view(form_file.field, user=request.user, step=instance.current_step):
+    form = _current_form(instance)
+    if form is None:
+        raise Http404
+    permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=instance.current_step, user=request.user)
+
+    if not permission_context.field(form_file.field).can_view:
         raise Http404
 
-    if form_file.field.repeatable_group_id and not _group_can_view(
-        form_file.field.repeatable_group,
-        user=request.user,
-        step=instance.current_step,
-    ):
+    if form_file.field.repeatable_group_id and not permission_context.group(form_file.field.repeatable_group).can_view:
         raise Http404
 
     try:
