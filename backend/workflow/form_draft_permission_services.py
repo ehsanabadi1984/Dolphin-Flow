@@ -37,6 +37,11 @@ class FormDraftPermissionService:
         diff: FormDraftDiff,
         permission_context: PermissionContext,
     ):
+        cls._validate_normal_field_permissions(
+            diff=diff,
+            permission_context=permission_context,
+        )
+
         for group_diff in diff.groups:
             for change in group_diff.changes:
                 cls._validate_row_permission(
@@ -51,6 +56,25 @@ class FormDraftPermissionService:
                     change=change,
                     permission_context=permission_context,
                 )
+
+    @classmethod
+    def _validate_normal_field_permissions(
+        cls,
+        *,
+        diff,
+        permission_context,
+    ):
+        for change in diff.normal_fields:
+            if not change.changed:
+                continue
+
+            permission = permission_context.field(change.field)
+            if permission.can_edit:
+                continue
+
+            raise ValidationError(
+                f"شما اجازه ویرایش فیلد «{change.field.label}» را ندارید."
+            )
 
     @staticmethod
     def _validate_row_permission(*, change, permission_context):
