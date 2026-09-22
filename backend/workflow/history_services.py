@@ -11,6 +11,7 @@ from .models import (
     WorkflowStepExecution,
 )
 from .history_models import HistoryConfiguration, HistoryField
+from .repeatable_row_read_services import RepeatableRowReadService
 
 
 class HistoryService:
@@ -148,7 +149,8 @@ class HistoryService:
                 )
             else:
                 items = HistoryService._build_normal_items(
-                    data=data,
+                    instance=instance,
+                    group=group,
                     fields=fields,
                 )
 
@@ -194,42 +196,67 @@ class HistoryService:
         }
 
     @staticmethod
-    def _build_normal_items(*, data, fields):
+    def _build_normal_items(*, instance, group, fields):
         if not fields:
             return []
 
-        group = fields[0]["form_field"].repeatable_group
-        raw_items = data.get(group.code, [])
-        if not isinstance(raw_items, list):
-            return []
+        field_by_code = {
+            item["form_field"].code: item
+            for item in fields
+        }
 
         items = []
-        for raw_item in raw_items:
-            if not isinstance(raw_item, dict):
-                continue
 
-            item_fields = []
-            for item in fields:
-                field = item["form_field"]
-                value = raw_item.get(field.code, "")
-                item_fields.append(
-                    HistoryService._serialize_field(
+        def collect_rows(current_group, parent_row=None):
+            rows = RepeatableRowReadService.get_rows(
+                instance=instance,
+                group=current_group,
+                parent_row=parent_row,
+            )
+
+            for row in rows:
+                reconstructed = RepeatableRowReadService.reconstruct_row(
+                    row=row,
+                )
+                reconstructed_fields = {
+                    field["code"]: field
+                    for field in reconstructed["fields"]
+                }
+
+                item_fields = []
+                for code, config in field_by_code.items():
+                    field = config["form_field"]
+                    value_data = reconstructed_fields.get(code)
+                    if value_data is None:
+                        continue
+
+                    serialized = HistoryService._serialize_field(
                         field=field,
-                        value=value,
-                        display_label=item["display_label"],
-                        display_order=item["display_order"],
-                        history_field_id=item["history_field_id"],
+                        value=value_data["value"],
+                        display_label=config["display_label"],
+                        display_order=config["display_order"],
+                        history_field_id=config["history_field_id"],
                     )
-                )
+                    serialized["display_value"] = value_data["display_value"]
+                    item_fields.append(serialized)
 
-            if item_fields:
-                items.append(
-                    {
-                        "row_id": raw_item.get("_id"),
-                        "fields": item_fields,
-                    }
-                )
+                if item_fields:
+                    items.append(
+                        {
+                            "row_id": row.pk,
+                            "fields": item_fields,
+                        }
+                    )
 
+                for child_group in current_group.child_groups.filter(
+                    is_active=True,
+                ).order_by("order", "id"):
+                    collect_rows(
+                        child_group,
+                        parent_row=row,
+                    )
+
+        collect_rows(group)
         return items
 
     @staticmethod
