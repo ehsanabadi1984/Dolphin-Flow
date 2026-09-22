@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.formula_services import FormulaService
+from workflow.permission_context import PermissionContext
 from workflow.models import (
     FormData,
     FormDefinition,
@@ -17,46 +18,6 @@ from workflow.models import (
     WorkflowInstance,
     WorkflowPermission,
 )
-
-
-def _field_access(field, *, user, step):
-    if user.is_superuser:
-        return True
-
-    roles = set(
-        field.section.form.workflow.memberships
-        .filter(user=user, is_active=True)
-        .values_list("role", flat=True)
-    )
-    rules = field.access_rules.filter(step=step)
-    user_rule = rules.filter(user=user).first()
-    if user_rule:
-        return user_rule.can_view
-    return rules.filter(
-        role__in=roles,
-        user__isnull=True,
-        can_view=True,
-    ).exists()
-
-
-def _group_access(group, *, user, step):
-    if user.is_superuser:
-        return True
-
-    roles = set(
-        group.section.form.workflow.memberships
-        .filter(user=user, is_active=True)
-        .values_list("role", flat=True)
-    )
-    rules = group.access_rules.filter(step=step)
-    user_rule = rules.filter(user=user).first()
-    if user_rule:
-        return user_rule.can_view
-    return rules.filter(
-        role__in=roles,
-        user__isnull=True,
-        can_view=True,
-    ).exists()
 
 
 def _formula_source_fields(*, section_id, group_id, exclude_id=None):
@@ -175,6 +136,13 @@ def formula_definitions(request, instance_id):
             }
         )
 
+    permission_context = PermissionContext.build(
+        workflow=instance.workflow,
+        form=form,
+        step=instance.current_step,
+        user=request.user,
+    )
+
     form_data = FormData.objects.filter(instance=instance).first()
     stored_data = form_data.data if form_data and isinstance(form_data.data, dict) else {}
 
@@ -195,16 +163,16 @@ def formula_definitions(request, instance_id):
             group = field.repeatable_group
             if group.group_type != FormRepeatableGroup.GroupType.NORMAL:
                 continue
-            if not _group_access(group, user=request.user, step=instance.current_step):
+            if not permission_context.group(group).can_view:
                 continue
         else:
-            if _field_access(field, user=request.user, step=instance.current_step):
+            if permission_context.field(field).can_view:
                 field_dom_index = normal_dom_index
                 normal_dom_index += 1
             else:
                 continue
 
-        if not _field_access(field, user=request.user, step=instance.current_step):
+        if not permission_context.field(field).can_view:
             continue
 
         if field.repeatable_group_id:
