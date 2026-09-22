@@ -99,9 +99,16 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
             repeatable_group__isnull=True,
             field_type="FILE",
         ):
-            if not permission_context.field(field).can_edit:
-                continue
             upload = submitted_files.get(field.code)
+            if not permission_context.field(field).can_edit:
+                if _upload_present(upload):
+                    errors.append({
+                        "type": "field",
+                        "code": field.code,
+                        "label": field.label,
+                        "message": f"شما اجازه ویرایش فایل «{field.label}» را ندارید.",
+                    })
+                continue
             error = _validate_upload(upload, field)
             if error:
                 errors.append({
@@ -122,8 +129,7 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
             is_active=True,
             group_type=FormRepeatableGroup.GroupType.NORMAL,
         ):
-            if not permission_context.group(group).can_edit:
-                continue
+            group_can_edit = permission_context.group(group).can_edit
             rows = DynamicFormService._parse_repeatable_data(
                 submitted_data=submitted_data,
                 group_code=group.code,
@@ -132,10 +138,18 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
             for index, row in enumerate(rows):
                 row_id = str(row.get("_id", "") or "")
                 for field in file_fields:
-                    if not permission_context.field(field).can_edit:
-                        continue
                     key = f"{group.code}_{index}_{field.code}"
                     upload = submitted_files.get(key)
+                    if not group_can_edit or not permission_context.field(field).can_edit:
+                        if _upload_present(upload):
+                            errors.append({
+                                "type": "repeatable_field",
+                                "group_code": group.code,
+                                "field_code": field.code,
+                                "item_index": index,
+                                "message": f"شما اجازه ویرایش فایل «{field.label}» را ندارید.",
+                            })
+                        continue
                     error = _validate_upload(upload, field)
                     if error:
                         errors.append({
