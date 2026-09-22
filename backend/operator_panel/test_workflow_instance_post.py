@@ -103,7 +103,16 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             )
         self.client.force_login(self.user)
 
-    def _create_device_group(self):
+    def _create_device_group(
+        self,
+        *,
+        can_view=True,
+        can_edit=True,
+        can_add=True,
+        can_delete=True,
+        field_can_view=True,
+        field_can_edit=True,
+    ):
         group = FormRepeatableGroup.objects.create(
             section=self.section,
             name="Devices",
@@ -124,17 +133,17 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             group=group,
             step=self.step,
             user=self.user,
-            can_view=True,
-            can_edit=True,
-            can_add=True,
-            can_delete=True,
+            can_view=can_view,
+            can_edit=can_edit,
+            can_add=can_add,
+            can_delete=can_delete,
         )
         FieldAccess.objects.create(
             field=label_field,
             step=self.step,
             user=self.user,
-            can_view=True,
-            can_edit=True,
+            can_view=field_can_view,
+            can_edit=field_can_edit,
         )
         return group, label_field
 
@@ -276,4 +285,182 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                 field=label_field,
             ).text_value,
             "Updated device",
+        )
+
+    def test_workflow_instance_post_rejects_new_device_without_group_add_permission(self):
+        group, label_field = self._create_device_group(can_add=False)
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "devices_0_label": "Unauthorized device",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(
+            InstanceDevice.objects.filter(
+                instance=self.instance,
+                is_active=True,
+            ).exists()
+        )
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=group,
+            ).exists()
+        )
+
+    def test_workflow_instance_post_rejects_existing_device_without_group_edit_permission(self):
+        group, label_field = self._create_device_group(can_edit=False)
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+            draft_imei="",
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=label_field,
+            text_value="Original device",
+        )
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "devices_0_label": "Unauthorized update",
+                "devices_0_instance_device_id": str(instance_device.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            InstanceDevice.objects.filter(
+                instance=self.instance,
+                is_active=True,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=row,
+                field=label_field,
+            ).text_value,
+            "Original device",
+        )
+
+    def test_workflow_instance_post_rejects_new_device_field_without_field_edit_permission(self):
+        group, label_field = self._create_device_group(field_can_edit=False)
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "devices_0_label": "Unauthorized field value",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(
+            InstanceDevice.objects.filter(
+                instance=self.instance,
+                is_active=True,
+            ).exists()
+        )
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=group,
+            ).exists()
+        )
+
+    def test_workflow_instance_post_allows_existing_noneditable_device_field_when_unchanged(self):
+        group, label_field = self._create_device_group(field_can_edit=False)
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+            draft_imei="",
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=label_field,
+            text_value="Protected device",
+        )
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "devices_0_label": "Protected device",
+                "devices_0_instance_device_id": str(instance_device.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=row,
+                field=label_field,
+            ).text_value,
+            "Protected device",
+        )
+
+    def test_workflow_instance_post_rejects_existing_noneditable_device_field_when_changed(self):
+        group, label_field = self._create_device_group(field_can_edit=False)
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+            draft_imei="",
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=label_field,
+            text_value="Protected device",
+        )
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "devices_0_label": "Changed protected device",
+                "devices_0_instance_device_id": str(instance_device.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=row,
+                field=label_field,
+            ).text_value,
+            "Protected device",
         )
