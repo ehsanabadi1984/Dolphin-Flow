@@ -12,6 +12,7 @@ from workflow.history_permissions import HISTORY_ACTION
 from workflow.notification_services import NotificationService
 from workflow.form_services import DynamicFormService
 from workflow.form_draft_save_services import FormDraftSaveService
+from workflow.repeatable_row_read_services import RepeatableRowReadService
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.permission_context import PermissionContext
 from workflow.models import (
@@ -386,6 +387,18 @@ def workflow_instance(request, instance_id):
         and bool(form_data.data)
     )
 
+    has_repeatable_data = (
+        RepeatableRowReadService.reconstruct_instance(
+            instance=instance,
+        ).get("groups", [])
+        and any(
+            group.get("items")
+            for group in RepeatableRowReadService.reconstruct_instance(
+                instance=instance,
+            ).get("groups", [])
+        )
+    )
+
     has_device_data = (
         InstanceDevice.objects
         .filter(
@@ -397,6 +410,7 @@ def workflow_instance(request, instance_id):
 
     has_saved_data = (
         has_form_data
+        or has_repeatable_data
         or has_device_data
     )
 
@@ -888,6 +902,18 @@ def _get_edit_mode(*, instance, request):
         and bool(form_data.data)
     )
 
+    has_repeatable_data = (
+        RepeatableRowReadService.reconstruct_instance(
+            instance=instance,
+        ).get("groups", [])
+        and any(
+            group.get("items")
+            for group in RepeatableRowReadService.reconstruct_instance(
+                instance=instance,
+            ).get("groups", [])
+        )
+    )
+
     has_device_data = (
         InstanceDevice.objects
         .filter(
@@ -899,6 +925,7 @@ def _get_edit_mode(*, instance, request):
 
     has_saved_data = (
         form_data_has_data
+        or has_repeatable_data
         or has_device_data
     )
 
