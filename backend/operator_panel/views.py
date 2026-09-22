@@ -628,22 +628,18 @@ def _require_device_group_delete_permission(*, instance, user, group_code, reque
         section__form__workflow=instance.workflow,
         section__form__is_active=True,
     )
-    roles = instance.workflow.memberships.filter(
-        user=user,
-        is_active=True,
-    ).values_list("role", flat=True)
-    rules = RepeatableGroupAccess.objects.filter(
-        group=group,
+
+    form = group.section.form
+    permission_context = PermissionContext.build(
+        workflow=instance.workflow,
+        form=form,
         step=instance.current_step,
+        user=user,
     )
-    user_rule = rules.filter(user=user).first()
-    can_delete = (
-        user_rule.can_delete
-        if user_rule
-        else rules.filter(role__in=roles, user__isnull=True, can_delete=True).exists()
-    )
-    if not can_delete:
+
+    if not permission_context.group(group).can_delete:
         raise PermissionDenied("کاربر اجازه حذف دستگاه را ندارد.")
+
     return group
 
 
