@@ -8,6 +8,11 @@ from workflow.models import (
     FormDefinition,
     FormField,
     FormSection,
+    FormRepeatableGroup,
+    InstanceDevice,
+    RepeatableRow,
+    RepeatableRowValue,
+    RepeatableGroupAccess,
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
@@ -98,6 +103,41 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             )
         self.client.force_login(self.user)
 
+    def _create_device_group(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Devices",
+            code="devices",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=3,
+        )
+        label_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Label",
+            code="label",
+            label="Label",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=label_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+        return group, label_field
+
     def test_workflow_instance_post_uses_draft_pipeline_and_persists_normal_fields(self):
         response = self.client.post(
             reverse(
@@ -156,3 +196,84 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             if item["field"].code == "amount"
         )
         self.assertEqual(amount_item["value"], "not-a-number")
+
+    def test_workflow_instance_post_creates_new_device_row(self):
+        group, label_field = self._create_device_group()
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "devices_0_label": "New device",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        instance_device = InstanceDevice.objects.get(
+            instance=self.instance,
+            is_active=True,
+        )
+        row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=group,
+        )
+
+        self.assertEqual(row.instance_device_id, instance_device.pk)
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=row,
+                field=label_field,
+            ).text_value,
+            "New device",
+        )
+
+    def test_workflow_instance_post_updates_existing_device_row(self):
+        group, label_field = self._create_device_group()
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+            draft_imei="",
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=label_field,
+            text_value="Old device",
+        )
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "devices_0_label": "Updated device",
+                "devices_0_instance_device_id": str(instance_device.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            InstanceDevice.objects.filter(
+                instance=self.instance,
+                is_active=True,
+            ).count(),
+            1,
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=row,
+                field=label_field,
+            ).text_value,
+            "Updated device",
+        )
