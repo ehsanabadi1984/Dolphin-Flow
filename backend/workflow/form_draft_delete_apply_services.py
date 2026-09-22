@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from .form_draft_diff_services import FormDraftDiff, RowChangeAction
+from .form_file_models import FormFile
 from .models import FormRepeatableGroup, RepeatableRow
 
 
@@ -77,5 +78,12 @@ class FormDraftDeleteApplyService:
         # protects rows linked to InstanceDevice. In the draft lifecycle,
         # deleting a DEVICE row must not delete or deactivate its
         # InstanceDevice/Device/history.
+        form_data = getattr(instance, "form_data", None)
+        if form_data is not None:
+            FormFile.delete_for_row(
+                form_data=form_data,
+                row_id=row.pk,
+            )
+
         row.values.all().delete()
         row.delete()
