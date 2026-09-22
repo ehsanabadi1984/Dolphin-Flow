@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.http import QueryDict
 from django.urls import reverse
 
 from workflow.form_file_models import FormFile
@@ -248,11 +249,9 @@ class FormFilePermissionTests(TestCase):
             validate_uploaded_files(
                 instance=self.instance,
                 user=self.user,
-                submitted_data={
-                    self.group.code: [
-                        {"row_id": "row-1"},
-                    ],
-                },
+                submitted_data=QueryDict(
+                    f"{self.group.code}_0__id=row-1"
+                ),
                 submitted_files={
                     f"{self.group.code}_0_{self.repeatable_file.code}": self._upload(),
                 },
