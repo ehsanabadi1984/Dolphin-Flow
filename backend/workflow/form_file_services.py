@@ -247,23 +247,23 @@ def save_uploaded_form_files(*, instance, user, submitted_files, save_result=Non
             row_ids_by_position = {}
 
             if save_result is not None:
+                for index, normalized_row in enumerate(normalized_rows):
+                    if normalized_row.row_id is not None:
+                        row_ids_by_position[index] = str(normalized_row.row_id)
+
                 for group_diff in save_result.diff.groups:
                     if group_diff.group.code != group.code:
                         continue
                     for change in group_diff.changes:
-                        if change.action.value == "CREATE":
-                            row = save_result.created_rows.get(change.row_reference)
-                            if row is None:
-                                continue
-                            for index, normalized_row in enumerate(normalized_rows):
-                                if normalized_row is change.desired_row:
-                                    row_ids_by_position[index] = str(row.pk)
-                                    break
-                        elif change.row_id is not None:
-                            for index, normalized_row in enumerate(normalized_rows):
-                                if normalized_row.row_id == change.row_id:
-                                    row_ids_by_position[index] = str(change.row_id)
-                                    break
+                        if change.action.value != "create":
+                            continue
+                        row = save_result.created_rows.get(change.row_reference)
+                        if row is None:
+                            continue
+                        for index, normalized_row in enumerate(normalized_rows):
+                            if normalized_row is change.desired_row:
+                                row_ids_by_position[index] = str(row.pk)
+                                break
 
             for index, normalized_row in enumerate(normalized_rows):
                 row_id = row_ids_by_position.get(index)
