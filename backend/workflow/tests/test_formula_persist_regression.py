@@ -235,7 +235,10 @@ class FormulaPersistenceTestCase(TestCase):
 
     def save_rows(self, rows, note=""):
         instance = self.make_instance()
-        self.save_draft(instance, self.post_payload(rows, note=note))
+        self.save_draft(
+            instance=instance,
+            submitted_data=self.post_payload(rows, note=note),
+        )
         return instance
 
     def persisted_rows(self, instance):
@@ -318,7 +321,7 @@ class FormulaPersistenceTestCase(TestCase):
 
     def test_second_save_after_editing_quantity_updates_formulas(self):
         instance = self.make_instance()
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload(
@@ -334,7 +337,7 @@ class FormulaPersistenceTestCase(TestCase):
 
         # Second save: keep both rows, edit quantity of row 1 (10 -> 20),
         # change UnitPrice of row 2 (50 -> 60).
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload([
@@ -351,7 +354,7 @@ class FormulaPersistenceTestCase(TestCase):
 
     def test_second_save_editing_only_quantity(self):
         instance = self.make_instance()
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload(
@@ -364,7 +367,7 @@ class FormulaPersistenceTestCase(TestCase):
         )
         ids = [r["_id"] for r in self.persisted_rows(instance)["cunspartTable"]]
         # Change only the quantity of the first row.
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload([
@@ -383,7 +386,7 @@ class FormulaPersistenceTestCase(TestCase):
 
     def test_second_save_editing_only_unit_price(self):
         instance = self.make_instance()
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload(
@@ -396,7 +399,7 @@ class FormulaPersistenceTestCase(TestCase):
         )
         ids = [r["_id"] for r in self.persisted_rows(instance)["cunspartTable"]]
         # Change only the unit price of the second row.
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload([
@@ -414,7 +417,7 @@ class FormulaPersistenceTestCase(TestCase):
 
     def test_second_save_adding_a_new_row(self):
         instance = self.make_instance()
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload(
@@ -425,7 +428,7 @@ class FormulaPersistenceTestCase(TestCase):
         existing_id = self.persisted_rows(instance)["cunspartTable"][0]["_id"]
 
         # Keep existing row and append a brand-new row (no _id).
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload([
@@ -443,7 +446,7 @@ class FormulaPersistenceTestCase(TestCase):
 
     def test_second_save_deleting_a_row_updates_aggregate(self):
         instance = self.make_instance()
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload([
@@ -456,7 +459,7 @@ class FormulaPersistenceTestCase(TestCase):
         ids = [r["_id"] for r in self.persisted_rows(instance)["cunspartTable"]]
 
         # Submit only rows 1 and 3 -> row 2 is deleted.
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload([
@@ -473,7 +476,7 @@ class FormulaPersistenceTestCase(TestCase):
         instance = self.save_rows([
             {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
         ])
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data={"cunspartTable": [], "note": "x"},
@@ -509,7 +512,7 @@ class FormulaPersistenceTestCase(TestCase):
         )
 
         instance = self.make_instance()
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload([
@@ -568,11 +571,12 @@ class FormulaPersistenceTestCase(TestCase):
         WorkflowStepExecution.objects.create(
             instance=instance, workflow_step=step, performed_by=self.user,
         )
-        DynamicFormService.save_form_for_step(
-            instance=instance, user=self.user,
+        FormDraftSaveService.save(
+            instance=instance,
+            step=step,
+            user=self.user,
             submitted_data={"city": "Tehran"},
             edit_mode=True,
-
         )
         self.assertEqual(
             self.persisted_rows(instance),
@@ -581,7 +585,7 @@ class FormulaPersistenceTestCase(TestCase):
 
     def test_normal_non_formula_fields_and_rows_preserved(self):
         instance = self.make_instance()
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data={
