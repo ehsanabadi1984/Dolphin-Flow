@@ -48,5 +48,20 @@ class FormFile(models.Model):
             )
         ]
 
+    @classmethod
+    def delete_for_row(cls, *, form_data, row_id):
+        """Delete all FILE sidecars for one canonical RepeatableRow id."""
+        files = cls.objects.filter(
+            form_data=form_data,
+            row_id=str(row_id),
+        )
+
+        for item in files:
+            if item.file:
+                item.file.delete(save=False)
+            item.delete()
+
+        return len(files)
+
     def __str__(self):
         return self.original_name or os.path.basename(self.file.name)
