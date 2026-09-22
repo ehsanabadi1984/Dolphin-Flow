@@ -70,11 +70,12 @@ class PermissionIntegrationTests(TestCase):
             is_active=True,
         )
 
-    def grant_permission(self, *, user, action, transition=None):
+    def grant_permission(self, *, user, action, transition=None, step=None):
         return WorkflowPermission.objects.create(
             workflow=self.workflow,
             user=user,
             transition=transition,
+            step=step,
             action=action,
             effect=WorkflowPermission.Effect.ALLOW,
         )
@@ -109,6 +110,7 @@ class PermissionIntegrationTests(TestCase):
         self.grant_permission(
             user=self.user,
             action=WorkflowPermission.Action.VIEW,
+            step=self.step_one,
         )
 
         response = self.client.get(
@@ -131,6 +133,7 @@ class PermissionIntegrationTests(TestCase):
         self.grant_permission(
             user=self.user,
             action=WorkflowPermission.Action.EXECUTE,
+            step=self.step_one,
         )
 
         response = self.client.post(
