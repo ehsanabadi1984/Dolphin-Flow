@@ -64,6 +64,14 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             field_type=FormField.FieldType.BOOLEAN,
             order=1,
         )
+        self.number_field = FormField.objects.create(
+            section=self.section,
+            name="Amount",
+            code="amount",
+            label="Amount",
+            field_type=FormField.FieldType.NUMBER,
+            order=2,
+        )
         self.instance = WorkflowInstance.objects.create(
             workflow=self.workflow,
             current_step=self.step,
@@ -80,7 +88,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             role=WorkflowMembership.Role.EXECUTOR,
             is_active=True,
         )
-        for field in (self.name_field, self.enabled_field):
+        for field in (self.name_field, self.enabled_field, self.number_field):
             FieldAccess.objects.create(
                 field=field,
                 step=self.step,
@@ -119,3 +127,32 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                 "enabled": True,
             },
         )
+
+    
+    def test_workflow_instance_post_validation_error_does_not_persist_invalid_value_and_preserves_posted_value(self):
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "customer_name": "Ehsan",
+                "enabled": "on",
+                "amount": "not-a-number",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            FormData.objects.filter(instance=self.instance).count(),
+            0,
+        )
+
+        dynamic_form = response.context["dynamic_form"]
+        amount_item = next(
+            item
+            for section in dynamic_form["sections"]
+            for item in section["fields"]
+            if item["field"].code == "amount"
+        )
+        self.assertEqual(amount_item["value"], "not-a-number")
