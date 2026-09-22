@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
 from django.shortcuts import get_object_or_404
 
 from workflow.authorization import WorkflowAuthorizationService
@@ -141,6 +142,7 @@ def formula_field_options(request):
 
 
 @login_required
+@require_http_methods(["GET", "POST"])
 def formula_definitions(request, instance_id):
     instance = get_object_or_404(
         WorkflowInstance.objects.select_related(
@@ -351,23 +353,40 @@ def formula_definitions(request, instance_id):
             }
         )
 
-    source_data = {}
-    for field in all_fields:
-        if field.pk not in required_source_ids:
+    from workflow.formula_bootstrap import _build_context_data
+
+    calculated_data = FormulaService.calculate_context_data(
+        form=form,
+        data=_build_context_data(
+            instance=instance,
+            submitted_data=request.POST if request.method == "POST" else None,
+        ),
+    )
+
+    visible_formula_ids = {
+        item["field_id"]
+        for item in formulas
+        if not item.get("calculation_only")
+    }
+    formula_results = {}
+    for field in all_formula_fields:
+        if field.pk not in visible_formula_ids:
             continue
         if field.repeatable_group_id:
-            group = field.repeatable_group
-            rows = stored_data.get(group.code, [])
-            source_data[str(field.pk)] = {
-                "code": field.code,
-                "group_code": group.code,
-                "value": rows if isinstance(rows, list) else [],
+            rows = calculated_data.get(field.repeatable_group.code, [])
+            if not isinstance(rows, list):
+                rows = []
+            formula_results[str(field.pk)] = {
+                "group_code": field.repeatable_group.code,
+                "values": [
+                    row.get(field.code, "") if isinstance(row, dict) else ""
+                    for row in rows
+                ],
             }
         else:
-            source_data[str(field.pk)] = {
-                "code": field.code,
+            formula_results[str(field.pk)] = {
                 "group_code": None,
-                "value": stored_data.get(field.code, ""),
+                "value": calculated_data.get(field.code, ""),
             }
 
     return JsonResponse(
@@ -375,6 +394,6 @@ def formula_definitions(request, instance_id):
             "form_id": form.pk,
             "fields": visible_fields,
             "formulas": formulas,
-            "source_data": source_data,
+            "formula_results": formula_results,
         }
     )
