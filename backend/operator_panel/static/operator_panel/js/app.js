@@ -1412,15 +1412,30 @@ const refreshDependentChild = async (childSelect, parentValue) => {
     const fieldId =
         childSelect.dataset.fieldId;
 
-    if (!optionsUrl || !fieldId) {
+    const form =
+        childSelect.closest(
+            "form[data-instance-id]"
+        );
+
+    const instanceId =
+        form?.dataset.instanceId;
+
+    if (!optionsUrl || !fieldId || !instanceId) {
         return;
     }
 
     try {
 
+        const params =
+            new URLSearchParams({
+                instance_id: instanceId,
+                field_id: fieldId,
+                parent_value: parentValue,
+            });
+
         const response =
             await fetch(
-                `${optionsUrl}?field_id=${encodeURIComponent(fieldId)}&parent_value=${encodeURIComponent(parentValue)}`,
+                `${optionsUrl}?${params.toString()}`,
                 {
                     method: "GET",
                     headers: {
