@@ -356,6 +356,100 @@ class DynamicFormServiceTests(TestCase):
             [],
         )
 
+    def test_get_form_for_step_uses_user_field_deny_over_role_allow(self):
+        instance = self.create_instance()
+
+        FieldAccess.objects.create(
+            field=self.phone_field,
+            step=self.step_one,
+            user=self.user,
+            can_view=False,
+            can_edit=False,
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+        )
+
+        field_codes = [
+            item["field"].code
+            for section in result["sections"]
+            for item in section["fields"]
+        ]
+
+        self.assertNotIn(
+            self.phone_field.code,
+            field_codes,
+        )
+
+    def test_get_form_for_step_uses_user_group_deny_over_role_allow(self):
+        instance = self.create_instance()
+
+        RepeatableGroupAccess.objects.create(
+            group=self.device_group,
+            step=self.step_one,
+            user=self.user,
+            can_view=False,
+            can_edit=False,
+            can_add=False,
+            can_delete=False,
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+        )
+
+        device_groups = [
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].pk == self.device_group.pk
+        ]
+
+        self.assertEqual(
+            device_groups,
+            [],
+        )
+
+    def test_get_form_for_step_uses_user_device_field_deny_over_role_allow(self):
+        instance = self.create_instance()
+
+        FieldAccess.objects.create(
+            field=self.device_model_field,
+            step=self.step_one,
+            user=self.user,
+            can_view=False,
+            can_edit=False,
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+        )
+
+        device_group = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].pk == self.device_group.pk
+        )
+
+        field_codes = [
+            item["field"].code
+            for item in device_group["fields"]
+        ]
+
+        self.assertNotIn(
+            self.device_model_field.code,
+            field_codes,
+        )
+        self.assertIn(
+            self.device_imei_field.code,
+            field_codes,
+        )
+
     def test_save_form_saves_normal_fields(self):
         instance = self.create_instance()
 
