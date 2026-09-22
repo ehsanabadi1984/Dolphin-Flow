@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from .form_file_models import FormFile
 from .models import (
     FormField,
     FormRepeatableGroup,
@@ -146,6 +147,13 @@ class RepeatableRowService:
         if locked_row.instance_device_id:
             raise ValidationError(
                 "Row متصل به InstanceDevice را نمی‌توان حذف کرد."
+            )
+
+        form_data = getattr(locked_row.instance, "form_data", None)
+        if form_data is not None:
+            FormFile.delete_for_row(
+                form_data=form_data,
+                row_id=locked_row.pk,
             )
 
         locked_row.values.all().delete()
