@@ -27,6 +27,7 @@ class FormDraftSaveResult:
     permission_context: PermissionContext
     normalized_payload: NormalizedFormPayload
     diff: FormDraftDiff
+    created_rows: dict
 
 
 class FormDraftSaveService:
@@ -219,6 +220,7 @@ class FormDraftSaveService:
         form_data = FormDraftNormalFieldApplyService.apply(
             instance=instance,
             diff=diff,
+            created_rows=created_rows,
         )
         FormDraftCreateApplyService.apply(
             instance=instance,
