@@ -3,7 +3,9 @@ from enum import StrEnum
 from uuid import uuid4
 
 from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
-from .models import FormData, FormRepeatableGroup, RepeatableRow
+from decimal import Decimal, InvalidOperation
+
+from .models import FormData, FormField, FormRepeatableGroup, RepeatableRow
 
 
 class RowChangeAction(StrEnum):
@@ -41,7 +43,7 @@ class RepeatableGroupDiff:
 
 @dataclass(frozen=True)
 class NormalFieldChange:
-    field: object
+    field: FormField
     submitted_value: object
     persisted_value: object
     changed: bool
@@ -62,7 +64,8 @@ class FormDraftDiffService:
     - no validation beyond the identity contract already enforced by
       FormDraftSaveService
     - no persistence
-    - no field-level diffing
+    - normal-field and repeatable-row changes are represented only as
+      immutable diff objects
 
     A repeatable group that is absent from the payload is untouched.
     A group explicitly present with [] means that all persisted rows in
@@ -156,11 +159,72 @@ class FormDraftDiffService:
                     field=field,
                     submitted_value=submitted_value,
                     persisted_value=persisted_value,
-                    changed=submitted_value != persisted_value,
+                    changed=cls._values_equal(
+                        field=field,
+                        submitted_value=submitted_value,
+                        persisted_value=persisted_value,
+                    ) is False,
                 )
             )
 
         return changes
+
+    @staticmethod
+    def _values_equal(*, field, submitted_value, persisted_value):
+        if submitted_value in ("", None) and persisted_value in ("", None):
+            return True
+
+        if field.field_type == FormField.FieldType.NUMBER:
+            try:
+                return Decimal(str(submitted_value)) == Decimal(
+                    str(persisted_value)
+                )
+            except (InvalidOperation, TypeError, ValueError):
+                return str(submitted_value) == str(persisted_value)
+
+        if field.field_type == FormField.FieldType.BOOLEAN:
+            if isinstance(submitted_value, bool):
+                submitted_bool = submitted_value
+            elif submitted_value is None or submitted_value == "":
+                submitted_bool = None
+            elif isinstance(submitted_value, str):
+                normalized = submitted_value.strip().lower()
+                submitted_bool = (
+                    True
+                    if normalized in {"true", "1", "yes", "on"}
+                    else False
+                    if normalized in {"false", "0", "no", "off"}
+                    else submitted_value
+                )
+            else:
+                submitted_bool = submitted_value
+
+            if isinstance(persisted_value, bool):
+                persisted_bool = persisted_value
+            elif persisted_value is None or persisted_value == "":
+                persisted_bool = None
+            elif isinstance(persisted_value, str):
+                normalized = persisted_value.strip().lower()
+                persisted_bool = (
+                    True
+                    if normalized in {"true", "1", "yes", "on"}
+                    else False
+                    if normalized in {"false", "0", "no", "off"}
+                    else persisted_value
+                )
+            else:
+                persisted_bool = persisted_value
+
+            return submitted_bool == persisted_bool
+
+        if field.field_type in (
+            FormField.FieldType.DATE,
+            FormField.FieldType.DATETIME,
+            FormField.FieldType.SELECT,
+        ):
+            return str(submitted_value) == str(persisted_value)
+
+        return submitted_value == persisted_value
 
     @classmethod
     def _diff_group(
