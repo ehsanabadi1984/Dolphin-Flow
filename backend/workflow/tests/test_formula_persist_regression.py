@@ -571,6 +571,49 @@ class FormulaPersistenceTestCase(TestCase):
     # GET rendering: read-only vs edit contexts
     # --------------------------------------------------------------
 
+    def test_formula_definitions_does_not_expose_source_data(self):
+        from django.urls import reverse
+
+        # The formula result remains visible while one of its numeric inputs
+        # is explicitly hidden from the user.
+        FieldAccess.objects.filter(field=self.price, step=self.step).update(can_view=False)
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ])
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("operator_panel:formula_definitions", args=[instance.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertNotIn("source_data", payload)
+        self.assertEqual(payload["formula_results"][str(self.total.pk)]["values"], ["5000"])
+        self.assertEqual(payload["formula_results"][str(self.final.pk)]["value"], "5000.00")
+
+    def test_formula_definitions_calculates_posted_inputs_server_side(self):
+        from django.urls import reverse
+
+        FieldAccess.objects.filter(field=self.price, step=self.step).update(can_view=False)
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ])
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("operator_panel:formula_definitions", args=[instance.pk]),
+            {
+                "cunspartTable_0_quantity": "7",
+                "cunspartTable_0_UnitPrice": "300",
+                "cunspartTable_0_TotalPrice": "999999",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertNotIn("source_data", payload)
+        self.assertEqual(payload["formula_results"][str(self.total.pk)]["values"], ["2100"])
+        self.assertEqual(payload["formula_results"][str(self.final.pk)]["value"], "2100.00")
+
     def test_read_only_get_renders_derived_values(self):
         instance = self.save_rows([
             {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
