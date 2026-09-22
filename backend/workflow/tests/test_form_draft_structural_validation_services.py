@@ -36,13 +36,21 @@ class FormDraftStructuralValidationServiceTests(TestCase):
             workflow=self.workflow,
         )
 
-    def create_group(self, *, code="items", parent_group=None):
+    def create_group(self, *, code="items", parent_group=None, order=None):
+        if order is None:
+            order = (
+                FormRepeatableGroup.objects.filter(
+                    section=self.section,
+                ).count()
+                + 1
+            )
+
         return FormRepeatableGroup.objects.create(
             section=self.section,
             parent_group=parent_group,
             name=code.title(),
             code=code,
-            order=1,
+            order=order,
         )
 
     def create_field(self, *, group=None, code="name"):
