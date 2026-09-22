@@ -387,16 +387,12 @@ def workflow_instance(request, instance_id):
         and bool(form_data.data)
     )
 
-    has_repeatable_data = (
-        RepeatableRowReadService.reconstruct_instance(
-            instance=instance,
-        ).get("groups", [])
-        and any(
-            group.get("items")
-            for group in RepeatableRowReadService.reconstruct_instance(
-                instance=instance,
-            ).get("groups", [])
-        )
+    reconstructed_repeatable = RepeatableRowReadService.reconstruct_instance(
+        instance=instance,
+    )
+    has_repeatable_data = any(
+        group.get("items")
+        for group in reconstructed_repeatable.get("groups", [])
     )
 
     has_device_data = (
@@ -902,16 +898,12 @@ def _get_edit_mode(*, instance, request):
         and bool(form_data.data)
     )
 
-    has_repeatable_data = (
-        RepeatableRowReadService.reconstruct_instance(
-            instance=instance,
-        ).get("groups", [])
-        and any(
-            group.get("items")
-            for group in RepeatableRowReadService.reconstruct_instance(
-                instance=instance,
-            ).get("groups", [])
-        )
+    reconstructed_repeatable = RepeatableRowReadService.reconstruct_instance(
+        instance=instance,
+    )
+    has_repeatable_data = any(
+        group.get("items")
+        for group in reconstructed_repeatable.get("groups", [])
     )
 
     has_device_data = (
