@@ -24,11 +24,13 @@ class FormPostAdapterTests(TestCase):
             section=self.section, repeatable_group=self.group,
             name="Title", code="title", label="Title",
             field_type=FormField.FieldType.TEXT,
+            order=0,
         )
         FormField.objects.create(
             section=self.section, repeatable_group=self.group,
             name="Enabled", code="enabled", label="Enabled",
             field_type=FormField.FieldType.BOOLEAN,
+            order=1,
         )
 
     def test_adapts_normal_field_and_repeatable_rows(self):
