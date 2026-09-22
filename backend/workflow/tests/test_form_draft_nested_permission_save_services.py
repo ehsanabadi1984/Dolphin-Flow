@@ -135,6 +135,10 @@ class NestedRepeatablePermissionSaveIntegrationTests(
             submitted_data=self.nested_payload(
                 child_rows=[
                     {
+                        "row_id": self.child_row.pk,
+                        self.child_field.code: "Old Child",
+                    },
+                    {
                         "row_id": None,
                         self.child_field.code: "New Child",
                     },
