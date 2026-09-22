@@ -25,6 +25,8 @@ from workflow.models import (
     WorkflowStep,
     WorkflowStepExecution,
     InstanceDevice,
+    LookupItem,
+    LookupList,
     RepeatableRow,
     RepeatableRowValue,
 )
@@ -133,6 +135,130 @@ class FormDraftSaveServiceContractTests(TestCase):
             {"customer_name": "Ehsan"},
         )
         self.assertEqual(result.diff.groups, ())
+
+    def test_normal_field_is_created_in_form_data(self):
+        result = self.call(
+            submitted_data={"customer_name": "Ehsan"},
+        )
+
+        form_data = FormData.objects.get(instance=self.instance)
+        self.assertEqual(form_data.data, {"customer_name": "Ehsan"})
+        self.assertEqual(result.form_data.pk, form_data.pk)
+
+    def test_normal_field_is_updated_in_form_data(self):
+        FormData.objects.create(
+            instance=self.instance,
+            data={"customer_name": "Original"},
+        )
+
+        result = self.call(
+            submitted_data={"customer_name": "Updated"},
+        )
+
+        form_data = FormData.objects.get(instance=self.instance)
+        self.assertEqual(form_data.data, {"customer_name": "Updated"})
+        self.assertEqual(result.form_data.pk, form_data.pk)
+
+    def test_invalid_normal_field_value_is_rejected_before_persistence(self):
+        number_field = FormField.objects.create(
+            section=self.section,
+            name="Amount",
+            code="amount",
+            label="Amount",
+            field_type=FormField.FieldType.NUMBER,
+            order=2,
+        )
+        FieldAccess.objects.create(
+            field=number_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+        FormData.objects.create(
+            instance=self.instance,
+            data={"amount": "12.50"},
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={"amount": "not-a-number"},
+            )
+
+        form_data = FormData.objects.get(instance=self.instance)
+        self.assertEqual(form_data.data, {"amount": "12.50"})
+
+    def test_invalid_dependent_select_is_rejected_before_persistence(self):
+        lookup = LookupList.objects.create(
+            name="Regions",
+            code="DRAFT_REGIONS",
+        )
+        parent = LookupItem.objects.create(
+            lookup_list=lookup,
+            value="TEHRAN",
+            label="Tehran",
+        )
+        other_parent = LookupItem.objects.create(
+            lookup_list=lookup,
+            value="TABRIZ",
+            label="Tabriz",
+        )
+        child = LookupItem.objects.create(
+            lookup_list=lookup,
+            parent=other_parent,
+            value="NORTH",
+            label="North",
+        )
+        parent_field = FormField.objects.create(
+            section=self.section,
+            name="Region",
+            code="region",
+            label="Region",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.LOOKUP,
+            choice_lookup_list=lookup,
+            order=2,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            name="Area",
+            code="area",
+            label="Area",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.LOOKUP,
+            choice_lookup_list=lookup,
+            choice_parent_field=parent_field,
+            order=3,
+        )
+        FieldAccess.objects.create(
+            field=parent_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+        FieldAccess.objects.create(
+            field=child_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+        FormData.objects.create(
+            instance=self.instance,
+            data={"region": parent.value, "area": ""},
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={"area": child.value},
+            )
+
+        form_data = FormData.objects.get(instance=self.instance)
+        self.assertEqual(
+            form_data.data,
+            {"region": parent.value, "area": ""},
+        )
 
     def test_save_builds_repeatable_diff(self):
         group = FormRepeatableGroup.objects.create(
