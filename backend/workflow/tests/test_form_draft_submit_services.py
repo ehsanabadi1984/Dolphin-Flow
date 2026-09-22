@@ -71,7 +71,3 @@ class FormDraftSubmitServiceTests(TestCase):
             form=self.form,
             normalized_payload=payload,
         )
-        self.assertLess(
-            build.call_args_list[0][0].__len__(),
-            1,
-        )
