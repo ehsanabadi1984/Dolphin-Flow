@@ -1086,10 +1086,6 @@ class DynamicFormService:
                 workflow=workflow,
                 is_active=True,
             )
-            .prefetch_related(
-                "sections__fields__access_rules",
-                "sections__repeatable_groups__fields__access_rules",
-            )
             .first()
         )
 
