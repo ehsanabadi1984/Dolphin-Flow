@@ -54,11 +54,6 @@ class FormDraftSaveService:
                 form=form,
                 submitted_data=submitted_data,
             )
-            FormDraftValueValidationService.validate_payload(
-                instance=instance,
-                form=form,
-                normalized_payload=normalized_payload,
-            )
             diff = FormDraftDiffService.build(
                 instance=instance,
                 form=form,
@@ -67,6 +62,11 @@ class FormDraftSaveService:
             FormDraftPermissionService.validate(
                 diff=diff,
                 permission_context=permission_context,
+            )
+            FormDraftValueValidationService.validate_payload(
+                instance=instance,
+                form=form,
+                normalized_payload=normalized_payload,
             )
             return cls._save_draft(
                 instance=instance,
