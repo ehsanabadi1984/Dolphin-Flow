@@ -23,7 +23,6 @@ from workflow.models import (
     FormField,
     FormRepeatableGroup,
     InstanceDevice,
-    RepeatableGroupAccess,
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
