@@ -674,3 +674,319 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             ).text_value,
             "Protected device",
         )
+
+
+    def test_workflow_instance_post_resolves_unresolved_device_by_existing_imei(self):
+        group, fields = self._create_device_system_fields()
+        device_type = DeviceType.objects.create(
+            name="Resolution Phone",
+            code="OP_POST_RESOLUTION_TYPE",
+            is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Resolution Phone X",
+            code="OP_POST_RESOLUTION_MODEL",
+            is_active=True,
+        )
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="333333333333333",
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+            draft_imei="999999999999999",
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {
+                "system_devices_0_system_imei": "333333333333333",
+                "system_devices_0_system_type": str(device_type.pk),
+                "system_devices_0_system_model": str(device_model.pk),
+                "system_devices_0_instance_device_id": str(instance_device.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        instance_device.refresh_from_db()
+        self.assertEqual(instance_device.device_id, device.pk)
+        self.assertEqual(instance_device.draft_imei, "")
+        self.assertIsNone(instance_device.draft_device_model_id)
+        self.assertIsNone(instance_device.draft_device_type_id)
+        self.assertEqual(row.refresh_from_db() or row.instance_device_id, device.pk)
+
+    def test_workflow_instance_post_reuses_existing_device_on_create(self):
+        group, fields = self._create_device_system_fields()
+        device_type = DeviceType.objects.create(
+            name="Create Reuse Phone",
+            code="OP_POST_CREATE_REUSE_TYPE",
+            is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Create Reuse Phone X",
+            code="OP_POST_CREATE_REUSE_MODEL",
+            is_active=True,
+        )
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="444444444444444",
+        )
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {
+                "system_devices_0_system_imei": "444444444444444",
+                "system_devices_0_system_type": str(device_type.pk),
+                "system_devices_0_system_model": str(device_model.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            InstanceDevice.objects.filter(instance=self.instance, is_active=True).count(),
+            1,
+        )
+        instance_device = InstanceDevice.objects.get(
+            instance=self.instance,
+            is_active=True,
+        )
+        self.assertEqual(instance_device.device_id, device.pk)
+        self.assertEqual(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=group,
+            ).count(),
+            1,
+        )
+
+    def test_workflow_instance_post_rejects_existing_imei_with_wrong_model(self):
+        group, fields = self._create_device_system_fields()
+        device_type = DeviceType.objects.create(
+            name="Existing IMEI Phone",
+            code="OP_POST_EXISTING_IMEI_TYPE",
+            is_active=True,
+        )
+        other_type = DeviceType.objects.create(
+            name="Other Phone",
+            code="OP_POST_WRONG_MODEL_TYPE",
+            is_active=True,
+        )
+        existing_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Existing Model",
+            code="OP_POST_EXISTING_MODEL",
+            is_active=True,
+        )
+        wrong_model = DeviceModel.objects.create(
+            device_type=other_type,
+            brand="Test",
+            name="Wrong Model",
+            code="OP_POST_WRONG_MODEL",
+            is_active=True,
+        )
+        device = Device.objects.create(device_model=existing_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="555555555555555",
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+            draft_imei="555555555555555",
+            draft_device_model=existing_model,
+            draft_device_type=device_type,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {
+                "system_devices_0_system_imei": "555555555555555",
+                "system_devices_0_system_type": str(other_type.pk),
+                "system_devices_0_system_model": str(wrong_model.pk),
+                "system_devices_0_instance_device_id": str(instance_device.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        instance_device.refresh_from_db()
+        self.assertIsNone(instance_device.device_id)
+        self.assertEqual(instance_device.draft_imei, "555555555555555")
+        self.assertEqual(instance_device.draft_device_model_id, existing_model.pk)
+        self.assertEqual(instance_device.draft_device_type_id, device_type.pk)
+        self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
+
+    def test_workflow_instance_post_allows_resolved_device_model_change_with_permission(self):
+        group, fields = self._create_device_system_fields()
+        device_type = DeviceType.objects.create(
+            name="Model Change Phone",
+            code="OP_POST_MODEL_CHANGE_TYPE",
+            is_active=True,
+        )
+        original_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Original Model",
+            code="OP_POST_MODEL_CHANGE_ORIGINAL",
+            is_active=True,
+        )
+        target_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Target Model",
+            code="OP_POST_MODEL_CHANGE_TARGET",
+            is_active=True,
+        )
+        device = Device.objects.create(device_model=original_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="666666666666666",
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=device,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {
+                "system_devices_0_system_imei": "666666666666666",
+                "system_devices_0_system_type": str(device_type.pk),
+                "system_devices_0_system_model": str(target_model.pk),
+                "system_devices_0_instance_device_id": str(instance_device.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        device.refresh_from_db()
+        self.assertEqual(device.device_model_id, target_model.pk)
+        instance_device.refresh_from_db()
+        self.assertEqual(instance_device.device_id, device.pk)
+        self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
+
+    def test_workflow_instance_post_rejects_device_model_type_mismatch(self):
+        group, fields = self._create_device_system_fields()
+        first_type = DeviceType.objects.create(
+            name="Mismatch Phone",
+            code="OP_POST_MISMATCH_TYPE_A",
+            is_active=True,
+        )
+        second_type = DeviceType.objects.create(
+            name="Mismatch Tablet",
+            code="OP_POST_MISMATCH_TYPE_B",
+            is_active=True,
+        )
+        model = DeviceModel.objects.create(
+            device_type=first_type,
+            brand="Test",
+            name="Mismatch Model",
+            code="OP_POST_MISMATCH_MODEL",
+            is_active=True,
+        )
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {
+                "system_devices_0_system_type": str(second_type.pk),
+                "system_devices_0_system_model": str(model.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(
+            InstanceDevice.objects.filter(
+                instance=self.instance,
+                is_active=True,
+            ).exists()
+        )
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=group,
+            ).exists()
+        )
+
+    def test_workflow_instance_post_rejects_duplicate_existing_device_in_same_instance(self):
+        group, fields = self._create_device_system_fields()
+        device_type = DeviceType.objects.create(
+            name="Duplicate Phone",
+            code="OP_POST_DUPLICATE_TYPE",
+            is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Duplicate Phone X",
+            code="OP_POST_DUPLICATE_MODEL",
+            is_active=True,
+        )
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="777777777777777",
+        )
+        existing_instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=device,
+        )
+        RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=existing_instance_device,
+            row_order=0,
+        )
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {
+                "system_devices_0_system_imei": "777777777777777",
+                "system_devices_0_system_type": str(device_type.pk),
+                "system_devices_0_system_model": str(device_model.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            InstanceDevice.objects.filter(
+                instance=self.instance,
+                is_active=True,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=group,
+            ).count(),
+            1,
+        )
