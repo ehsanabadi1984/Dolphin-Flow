@@ -171,7 +171,3 @@ class RepeatableFilePersistenceTests(TestCase):
             field=self.file_field,
         )
         self.assertEqual(form_file.row_id, str(row.pk))
-        self.assertIn(
-            result.created_rows,
-            ({},),
-        ) if False else None
