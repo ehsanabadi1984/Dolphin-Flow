@@ -143,6 +143,253 @@ class WorkflowExecutionTests(TestCase):
             self.step_two.pk,
         )
 
+    def _create_repeatable_form(
+        self,
+        *,
+        required_child=False,
+    ):
+        form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="Repeatable Execution Form",
+            is_active=True,
+        )
+        section = FormSection.objects.create(
+            form=form,
+            name="Repeatable Section",
+            code="REPEATABLE_SECTION",
+            order=1,
+            is_active=True,
+        )
+        group = FormRepeatableGroup.objects.create(
+            section=section,
+            name="Items",
+            code="items",
+            order=1,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            is_active=True,
+        )
+        field = FormField.objects.create(
+            section=section,
+            repeatable_group=group,
+            name="Item Name",
+            code="item_name",
+            field_type=FormField.FieldType.TEXT,
+            label="Item Name",
+            order=1,
+            is_active=True,
+            is_required=True,
+        )
+
+        child_group = None
+        child_field = None
+        if required_child:
+            child_group = FormRepeatableGroup.objects.create(
+                section=section,
+                parent_group=group,
+                name="Children",
+                code="children",
+                order=2,
+                group_type=FormRepeatableGroup.GroupType.NORMAL,
+                is_active=True,
+                is_required=True,
+            )
+            child_field = FormField.objects.create(
+                section=section,
+                repeatable_group=child_group,
+                name="Child Name",
+                code="child_name",
+                field_type=FormField.FieldType.TEXT,
+                label="Child Name",
+                order=1,
+                is_active=True,
+                is_required=True,
+            )
+
+        for current_group in [group, child_group]:
+            if current_group is None:
+                continue
+            RepeatableGroupAccess.objects.create(
+                group=current_group,
+                step=self.step_one,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+
+        for current_field in [field, child_field]:
+            if current_field is None:
+                continue
+            FieldAccess.objects.create(
+                field=current_field,
+                step=self.step_one,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+            )
+
+        return form, group, field, child_group, child_field
+
+    def test_repeatable_draft_flows_through_transition_submit_and_history(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+
+        form, group, field, child_group, child_field = (
+            self._create_repeatable_form(
+                required_child=True,
+            )
+        )
+
+        instance = self.start_instance()
+
+        FormDraftSaveService.save(
+            instance=instance,
+            step=self.step_one,
+            user=self.user,
+            submitted_data={
+                "items": [
+                    {
+                        "item_name": "Parent",
+                        "children": [
+                            {"child_name": "Child"},
+                        ],
+                    }
+                ],
+            },
+            edit_mode=True,
+        )
+
+        parent_row = RepeatableRow.objects.get(
+            instance=instance,
+            group=group,
+        )
+        child_row = RepeatableRow.objects.get(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_row,
+        )
+
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=parent_row,
+                field=field,
+            ).text_value,
+            "Parent",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=child_row,
+                field=child_field,
+            ).text_value,
+            "Child",
+        )
+
+        transition_execution = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+
+        instance.refresh_from_db()
+        self.assertEqual(instance.current_step_id, self.step_two.pk)
+        self.assertTrue(
+            WorkflowStepExecution.objects.get(
+                instance=instance,
+                workflow_step=self.step_one,
+            ).is_submitted
+        )
+        self.assertTrue(
+            WorkflowTransitionExecution.objects.filter(
+                pk=transition_execution.pk,
+                instance=instance,
+                transition=self.transition_one,
+            ).exists()
+        )
+
+        snapshot = (
+            WorkflowStepExecution.objects.get(
+                instance=instance,
+                workflow_step=self.step_one,
+            ).data["history"]
+        )
+        history_by_code = {
+            group_snapshot["code"]: group_snapshot
+            for group_snapshot in snapshot["repeatable_groups"]
+        }
+        self.assertEqual(
+            history_by_code["items"]["items"][0]["fields"][0]["value"],
+            "Parent",
+        )
+        self.assertEqual(
+            history_by_code["children"]["items"][0]["fields"][0]["value"],
+            "Child",
+        )
+
+    def test_transition_submit_reads_canonical_repeatable_rows(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+
+        form, group, field, child_group, child_field = (
+            self._create_repeatable_form(
+                required_child=True,
+            )
+        )
+
+        instance = self.start_instance()
+
+        # Draft save intentionally allows an incomplete tree. Submit must
+        # validate the canonical relational state instead of the old payload.
+        FormDraftSaveService.save(
+            instance=instance,
+            step=self.step_one,
+            user=self.user,
+            submitted_data={
+                "items": [
+                    {"item_name": "Parent"},
+                ],
+            },
+            edit_mode=True,
+        )
+
+        parent_row = RepeatableRow.objects.get(
+            instance=instance,
+            group=group,
+        )
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                instance=instance,
+                group=child_group,
+            ).exists()
+        )
+
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            )
+
+        instance.refresh_from_db()
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
+        self.assertFalse(
+            WorkflowStepExecution.objects.get(
+                instance=instance,
+                workflow_step=self.step_one,
+            ).is_submitted
+        )
+        self.assertFalse(
+            WorkflowTransitionExecution.objects.filter(
+                instance=instance,
+                transition=self.transition_one,
+            ).exists()
+        )
+        self.assertTrue(
+            RepeatableRow.objects.filter(
+                pk=parent_row.pk,
+            ).exists()
+        )
+
     def test_submit_valid_form_advances_workflow_and_stores_history(self):
         self.grant_execute_permission()
         self.grant_start_permission()
