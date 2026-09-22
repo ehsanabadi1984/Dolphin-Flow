@@ -245,7 +245,7 @@ class FormDraftStructuralValidationServiceTests(TestCase):
                         "row_id": parent.pk,
                         "name": "existing parent",
                         "children_existing_parent": [
-                            {"name": "new child"},
+                            {"child_name": "new child"},
                         ],
                     }
                 ]
@@ -266,7 +266,7 @@ class FormDraftStructuralValidationServiceTests(TestCase):
                     {
                         "name": "new",
                         "children": [
-                            {"name": "child"},
+                            {"child_name": "child"},
                         ],
                     }
                 ]
