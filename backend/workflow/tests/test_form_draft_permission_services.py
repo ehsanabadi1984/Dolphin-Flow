@@ -6,6 +6,7 @@ from workflow.form_draft_payloads import NormalizedFormPayload, NormalizedRow
 from workflow.form_draft_permission_services import FormDraftPermissionService
 from workflow.models import (
     DeviceType,
+    FormData,
     FormDefinition,
     FormField,
     FormRepeatableGroup,
@@ -119,6 +120,190 @@ class FormDraftPermissionServiceTests(TestCase):
             form=self.form,
             normalized_payload=self.payload(group, rows),
         )
+
+    def normal_permission_context(self, fields):
+        return PermissionContext(
+            roles=frozenset(),
+            normal_fields={
+                field.pk: permission
+                for field, permission in fields
+            },
+            repeatable_fields={},
+            groups={},
+        )
+
+    def test_normal_field_change_requires_can_edit(self):
+        field = FormField.objects.create(
+            section=self.section,
+            name="Customer Name",
+            code="customer_name_normal_permission",
+            label="Customer Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        FormData.objects.create(
+            instance=self.instance,
+            data={field.code: "old"},
+        )
+
+        payload = NormalizedFormPayload(
+            normal_fields={field.code: "new"},
+            repeatable_groups={},
+        )
+        diff = FormDraftDiffService.build(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=payload,
+        )
+        context = self.normal_permission_context(
+            [
+                (
+                    field,
+                    FieldPermission(can_view=True, can_edit=False),
+                )
+            ]
+        )
+
+        self.assertEqual(len(diff.normal_fields), 1)
+        self.assertTrue(diff.normal_fields[0].changed)
+
+        with self.assertRaises(ValidationError):
+            FormDraftPermissionService.validate(
+                diff=diff,
+                permission_context=context,
+            )
+
+        self.assertEqual(
+            FormData.objects.get(instance=self.instance).data[field.code],
+            "old",
+        )
+
+    def test_normal_field_same_value_is_allowed_without_edit_permission(self):
+        field = FormField.objects.create(
+            section=self.section,
+            name="Customer Name",
+            code="customer_name_normal_same",
+            label="Customer Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        FormData.objects.create(
+            instance=self.instance,
+            data={field.code: "same"},
+        )
+
+        payload = NormalizedFormPayload(
+            normal_fields={field.code: "same"},
+            repeatable_groups={},
+        )
+        diff = FormDraftDiffService.build(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=payload,
+        )
+        context = self.normal_permission_context(
+            [
+                (
+                    field,
+                    FieldPermission(can_view=True, can_edit=False),
+                )
+            ]
+        )
+
+        self.assertFalse(diff.normal_fields[0].changed)
+
+        FormDraftPermissionService.validate(
+            diff=diff,
+            permission_context=context,
+        )
+
+    def test_normal_field_change_with_can_edit_is_allowed(self):
+        field = FormField.objects.create(
+            section=self.section,
+            name="Customer Name",
+            code="customer_name_normal_editable",
+            label="Customer Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        FormData.objects.create(
+            instance=self.instance,
+            data={field.code: "old"},
+        )
+
+        payload = NormalizedFormPayload(
+            normal_fields={field.code: "new"},
+            repeatable_groups={},
+        )
+        diff = FormDraftDiffService.build(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=payload,
+        )
+        context = self.normal_permission_context(
+            [
+                (
+                    field,
+                    FieldPermission(can_view=True, can_edit=True),
+                )
+            ]
+        )
+
+        FormDraftPermissionService.validate(
+            diff=diff,
+            permission_context=context,
+        )
+
+    def test_multiple_normal_fields_validate_independently(self):
+        editable = FormField.objects.create(
+            section=self.section,
+            name="Editable",
+            code="editable_normal",
+            label="Editable",
+            field_type=FormField.FieldType.TEXT,
+        )
+        locked = FormField.objects.create(
+            section=self.section,
+            name="Locked",
+            code="locked_normal",
+            label="Locked",
+            field_type=FormField.FieldType.TEXT,
+        )
+        FormData.objects.create(
+            instance=self.instance,
+            data={
+                editable.code: "old-editable",
+                locked.code: "old-locked",
+            },
+        )
+
+        payload = NormalizedFormPayload(
+            normal_fields={
+                editable.code: "new-editable",
+                locked.code: "new-locked",
+            },
+            repeatable_groups={},
+        )
+        diff = FormDraftDiffService.build(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=payload,
+        )
+        context = self.normal_permission_context(
+            [
+                (
+                    editable,
+                    FieldPermission(can_view=True, can_edit=True),
+                ),
+                (
+                    locked,
+                    FieldPermission(can_view=True, can_edit=False),
+                ),
+            ]
+        )
+
+        with self.assertRaises(ValidationError):
+            FormDraftPermissionService.validate(
+                diff=diff,
+                permission_context=context,
+            )
 
     def test_create_requires_group_can_add(self):
         group = self.create_group()
