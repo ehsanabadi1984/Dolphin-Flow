@@ -1113,9 +1113,9 @@ class FormDraftSaveServiceContractTests(TestCase):
             submitted_data={
                 group.code: [
                     {
-                        "imei": "810000000000001",
-                        "device_type": device_type.pk,
-                        "device_model": device_model.pk,
+                        "create_reuse_imei": "810000000000001",
+                        "create_reuse_device_type": device_type.pk,
+                        "create_reuse_device_model": device_model.pk,
                     },
                 ],
             },
@@ -1167,9 +1167,9 @@ class FormDraftSaveServiceContractTests(TestCase):
                 group.code: [
                     {
                         "row_id": row.pk,
-                        "imei": "820000000000002",
-                        "device_type": device_type.pk,
-                        "device_model": device_model.pk,
+                        "resolve_imei": "820000000000002",
+                        "resolve_device_type": device_type.pk,
+                        "resolve_device_model": device_model.pk,
                     },
                 ],
             },
@@ -1224,9 +1224,9 @@ class FormDraftSaveServiceContractTests(TestCase):
                 group.code: [
                     {
                         "row_id": row.pk,
-                        "imei": "830000000000003",
-                        "device_type": device_type.pk,
-                        "device_model": target_model.pk,
+                        "model_change_imei": "830000000000003",
+                        "model_change_device_type": device_type.pk,
+                        "model_change_device_model": target_model.pk,
                     },
                 ],
             },
@@ -1273,9 +1273,9 @@ class FormDraftSaveServiceContractTests(TestCase):
                     group.code: [
                         {
                             "row_id": row.pk,
-                            "imei": "840000000000005",
-                            "device_type": device_type.pk,
-                            "device_model": device_model.pk,
+                            "imei_change_imei": "840000000000005",
+                            "imei_change_device_type": device_type.pk,
+                            "imei_change_device_model": device_model.pk,
                         },
                     ],
                 },
@@ -1311,8 +1311,8 @@ class FormDraftSaveServiceContractTests(TestCase):
                     group.code: [
                         {
                             "row_id": None,
-                            "device_type": second_type.pk,
-                            "device_model": model.pk,
+                            "mismatch_device_type": second_type.pk,
+                            "mismatch_device_model": model.pk,
                         },
                     ],
                 },
@@ -1359,9 +1359,9 @@ class FormDraftSaveServiceContractTests(TestCase):
                     group.code: [
                         {
                             "row_id": None,
-                            "imei": "850000000000006",
-                            "device_type": device_type.pk,
-                            "device_model": device_model.pk,
+                            "duplicate_imei": "850000000000006",
+                            "duplicate_device_type": device_type.pk,
+                            "duplicate_device_model": device_model.pk,
                         },
                     ],
                 },
