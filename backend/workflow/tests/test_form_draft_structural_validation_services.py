@@ -149,7 +149,7 @@ class FormDraftStructuralValidationServiceTests(TestCase):
         group = self.create_group(code="items")
         other_group = self.create_group(code="other")
         self.create_field(group=group, code="name")
-        self.create_field(group=other_group, code="name")
+        self.create_field(group=other_group, code="other_name")
         row = RepeatableRow.objects.create(
             instance=self.instance,
             group=other_group,
@@ -169,7 +169,7 @@ class FormDraftStructuralValidationServiceTests(TestCase):
         group = self.create_group(code="items")
         child_group = self.create_group(code="children", parent_group=group)
         self.create_field(group=group, code="name")
-        self.create_field(group=child_group, code="name")
+        self.create_field(group=child_group, code="child_name")
         parent = RepeatableRow.objects.create(
             instance=self.instance,
             group=group,
@@ -195,7 +195,7 @@ class FormDraftStructuralValidationServiceTests(TestCase):
         group = self.create_group(code="items")
         child_group = self.create_group(code="children", parent_group=group)
         self.create_field(group=group, code="name")
-        self.create_field(group=child_group, code="name")
+        self.create_field(group=child_group, code="child_name")
         parent = RepeatableRow.objects.create(
             instance=self.instance,
             group=group,
@@ -229,7 +229,7 @@ class FormDraftStructuralValidationServiceTests(TestCase):
             parent_group=group,
         )
         self.create_field(group=group, code="name")
-        self.create_field(group=child_group, code="name")
+        self.create_field(group=child_group, code="child_name")
         parent = RepeatableRow.objects.create(
             instance=self.instance,
             group=group,
@@ -256,7 +256,7 @@ class FormDraftStructuralValidationServiceTests(TestCase):
         group = self.create_group(code="items")
         child_group = self.create_group(code="children", parent_group=group)
         self.create_field(group=group, code="name")
-        self.create_field(group=child_group, code="name")
+        self.create_field(group=child_group, code="child_name")
 
         FormDraftStructuralValidationService.validate_payload(
             instance=self.instance,
@@ -277,7 +277,7 @@ class FormDraftStructuralValidationServiceTests(TestCase):
         group = self.create_group(code="items")
         child_group = self.create_group(code="children", parent_group=group)
         self.create_field(group=group, code="name")
-        self.create_field(group=child_group, code="name")
+        self.create_field(group=child_group, code="child_name")
         parent = RepeatableRow.objects.create(
             instance=self.instance,
             group=group,
