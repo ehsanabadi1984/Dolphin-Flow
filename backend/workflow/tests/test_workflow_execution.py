@@ -235,6 +235,27 @@ class WorkflowExecutionTests(TestCase):
                 can_edit=True,
             )
 
+        history_configuration = HistoryConfiguration.objects.create(
+            form=form,
+            name="Repeatable Execution History",
+            is_active=True,
+        )
+        HistoryField.objects.create(
+            configuration=history_configuration,
+            form_field=field,
+            display_label=field.label,
+            display_order=1,
+            is_enabled=True,
+        )
+        if child_field is not None:
+            HistoryField.objects.create(
+                configuration=history_configuration,
+                form_field=child_field,
+                display_label=child_field.label,
+                display_order=2,
+                is_enabled=True,
+            )
+
         return form, group, field, child_group, child_field
 
     def test_repeatable_draft_flows_through_transition_submit_and_history(self):
