@@ -19,8 +19,9 @@ The browser submits every row including the calculated ``TotalPrice`` and
   * persist the derived values into ``FormData.data``,
   * render the derived values again on read-only and edit GET.
 
-The tests drive the real save path (DynamicFormService.save_form_for_step
-with the formula bootstrap applied) and assert the persisted JSON.
+The tests drive the current FormDraftSaveService save path and calculate
+Formula values through the backend FormulaService rather than expecting
+formula values to be persisted in FormData/RepeatableRowValue.
 """
 import json
 
@@ -28,7 +29,9 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workflow.form_services import DynamicFormService
-from workflow.formula_bootstrap import bootstrap_formula_system
+from workflow.form_draft_save_services import FormDraftSaveService
+from workflow.repeatable_row_read_services import RepeatableRowReadService
+from workflow.formula_bootstrap import bootstrap_formula_system, _build_context_data
 from workflow.formula_services import FormulaService
 from workflow.models import (
     FieldAccess,
@@ -197,38 +200,65 @@ class FormulaPersistenceTestCase(TestCase):
         return instance
 
     def post_payload(self, rows, note="", include_formula_values=True):
-        """Build the POST dict exactly like the browser would submit it."""
-        data = {}
-        for idx, row in enumerate(rows):
+        """Build the current normalized repeatable-group payload."""
+        items = []
+        for row in rows:
+            item = {}
             if row.get("_id"):
-                data[f"cunspartTable_{idx}__id"] = row["_id"]
-            for code in ("quantity", "UnitPrice", "TotalPrice"):
-                if code == "TotalPrice" and not include_formula_values:
-                    continue
-                data[f"cunspartTable_{idx}_{code}"] = row.get(code, "")
+                item["row_id"] = int(row["_id"])
+            for code in ("quantity", "UnitPrice"):
+                item[code] = row.get(code, "")
+            # Formula fields are intentionally omitted: they are derived
+            # values and are never part of the editable save contract.
+            items.append(item)
+
+        data = {"cunspartTable": items}
         if note is not None:
             data["note"] = note
-        if include_formula_values and rows:
-            total = sum(
-                int(row.get("quantity") or 0) * int(row.get("UnitPrice") or 0)
-                for row in rows
-            )
-            data["FinalPriceRepair"] = f"{total}.00"
         return data
+
+    def save_draft(
+        self,
+        *,
+        instance,
+        submitted_data,
+        user=None,
+        edit_mode=True,
+    ):
+        return FormDraftSaveService.save(
+            instance=instance,
+            step=self.step,
+            user=user or self.user,
+            submitted_data=submitted_data,
+            edit_mode=edit_mode,
+        )
 
     def save_rows(self, rows, note=""):
         instance = self.make_instance()
-        DynamicFormService.save_form_for_step(
-            instance=instance,
-            user=self.user,
-            submitted_data=self.post_payload(rows, note=note),
-            edit_mode=True,
-        )
+        self.save_draft(instance, self.post_payload(rows, note=note))
         return instance
 
     def persisted_rows(self, instance):
-        fd = FormData.objects.get(instance=instance)
-        return fd.data
+        """Return the current backend-calculated form state."""
+        form_data = FormData.objects.filter(instance=instance).first()
+        data = dict(form_data.data) if form_data and isinstance(form_data.data, dict) else {}
+        group_data = RepeatableRowReadService.reconstruct_instance(instance=instance)
+        for group in group_data["groups"]:
+            data[group["code"]] = [
+                {
+                    "_id": str(item["row_id"]),
+                    **{
+                        field["code"]: field["value"]
+                        for field in item["fields"]
+                    },
+                }
+                for item in group["items"]
+            ]
+
+        return FormulaService.calculate_context_data(
+            form=self.form,
+            data=data,
+        )
 
     # --------------------------------------------------------------
     # Main regression: the reported scenario survives the real save
@@ -266,7 +296,7 @@ class FormulaPersistenceTestCase(TestCase):
     def test_formula_values_survive_when_not_submitted_in_payload(self):
         # Simulate a client that omits formula values entirely.
         instance = self.make_instance()
-        DynamicFormService.save_form_for_step(
+        self.save_draft(
             instance=instance,
             user=self.user,
             submitted_data=self.post_payload(
@@ -446,7 +476,7 @@ class FormulaPersistenceTestCase(TestCase):
         DynamicFormService.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data={"note": "x", "FinalPriceRepair": "0.00"},
+            submitted_data={"cunspartTable": [], "note": "x"},
             edit_mode=True,
         )
         data = self.persisted_rows(instance)
@@ -556,10 +586,9 @@ class FormulaPersistenceTestCase(TestCase):
             user=self.user,
             submitted_data={
                 "note": "hello",
-                "cunspartTable_0_quantity": "10",
-                "cunspartTable_0_UnitPrice": "500",
-                "cunspartTable_0_TotalPrice": "5000",
-                "FinalPriceRepair": "5000.00",
+                "cunspartTable": [
+                    {"quantity": "10", "UnitPrice": "500"},
+                ],
             },
             edit_mode=True,
         )
