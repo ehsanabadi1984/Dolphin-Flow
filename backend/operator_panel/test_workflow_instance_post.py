@@ -147,6 +147,52 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         )
         return group, label_field
 
+    def _create_device_system_fields(self, *, field_can_edit=True):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="System Devices",
+            code="system_devices",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=4,
+        )
+        fields = {}
+        definitions = (
+            (FormField.SystemKey.IMEI, "system_imei", FormField.FieldType.TEXT),
+            (FormField.SystemKey.DEVICE_TYPE, "system_type", FormField.FieldType.SELECT),
+            (FormField.SystemKey.DEVICE_MODEL, "system_model", FormField.FieldType.SELECT),
+        )
+        for order, (system_key, code, field_type) in enumerate(definitions):
+            field = FormField.objects.create(
+                section=self.section,
+                repeatable_group=group,
+                name=code,
+                code=code,
+                label=code,
+                field_type=field_type,
+                system_key=system_key,
+                order=order,
+            )
+            fields[system_key] = field
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=field_can_edit,
+            )
+
+        RepeatableGroupAccess.objects.create(
+            group=group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        return group, fields
+
+
     def test_workflow_instance_post_uses_draft_pipeline_and_persists_normal_fields(self):
         response = self.client.post(
             reverse(
@@ -286,6 +332,154 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             ).text_value,
             "Updated device",
         )
+
+    def test_workflow_instance_post_rejects_changed_device_type_without_field_edit_permission(self):
+        group, fields = self._create_device_system_fields()
+        FieldAccess.objects.filter(
+            field=fields[FormField.SystemKey.DEVICE_TYPE],
+            step=self.step,
+            user=self.user,
+        ).update(can_edit=False)
+        device_type = __import__("workflow.models", fromlist=["DeviceType"]).DeviceType.objects.create(
+            name="Phone",
+            code="OP_POST_PHONE_TYPE",
+            is_active=True,
+        )
+        device_model = __import__("workflow.models", fromlist=["DeviceModel"]).DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Phone X",
+            code="OP_POST_PHONE_MODEL",
+            is_active=True,
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+            draft_device_model=device_model,
+            draft_device_type=device_type,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {
+                "system_devices_0_system_type": str(device_type.pk),
+                "system_devices_0_system_model": str(device_model.pk),
+                "system_devices_0_instance_device_id": str(instance_device.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        instance_device.refresh_from_db()
+        self.assertEqual(instance_device.draft_device_type_id, device_type.pk)
+        self.assertEqual(instance_device.draft_device_model_id, device_model.pk)
+        self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
+
+    def test_workflow_instance_post_rejects_changed_device_model_without_field_edit_permission(self):
+        group, fields = self._create_device_system_fields()
+        FieldAccess.objects.filter(
+            field=fields[FormField.SystemKey.DEVICE_MODEL],
+            step=self.step,
+            user=self.user,
+        ).update(can_edit=False)
+        device_type = __import__("workflow.models", fromlist=["DeviceType"]).DeviceType.objects.create(
+            name="Phone",
+            code="OP_POST_MODEL_TYPE",
+            is_active=True,
+        )
+        original_model = __import__("workflow.models", fromlist=["DeviceModel"]).DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Phone Original",
+            code="OP_POST_MODEL_ORIGINAL",
+            is_active=True,
+        )
+        target_model = __import__("workflow.models", fromlist=["DeviceModel"]).DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Phone Target",
+            code="OP_POST_MODEL_TARGET",
+            is_active=True,
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+            draft_device_model=original_model,
+            draft_device_type=device_type,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {
+                "system_devices_0_system_type": str(device_type.pk),
+                "system_devices_0_system_model": str(target_model.pk),
+                "system_devices_0_instance_device_id": str(instance_device.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        instance_device.refresh_from_db()
+        self.assertEqual(instance_device.draft_device_model_id, original_model.pk)
+        self.assertEqual(instance_device.draft_device_type_id, device_type.pk)
+        self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
+
+    def test_workflow_instance_post_rejects_imei_change_on_resolved_device(self):
+        group, fields = self._create_device_system_fields()
+        device_type = __import__("workflow.models", fromlist=["DeviceType"]).DeviceType.objects.create(
+            name="Phone",
+            code="OP_POST_IMEI_TYPE",
+            is_active=True,
+        )
+        device_model = __import__("workflow.models", fromlist=["DeviceModel"]).DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Phone X",
+            code="OP_POST_IMEI_MODEL",
+            is_active=True,
+        )
+        device = __import__("workflow.models", fromlist=["Device"]).Device.objects.create(device_model=device_model)
+        __import__("workflow.models", fromlist=["DeviceIdentifier"]).DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=__import__("workflow.models", fromlist=["DeviceIdentifier"]).DeviceIdentifier.IdentifierType.IMEI,
+            value="111111111111111",
+        )
+        instance_device = InstanceDevice.objects.create(instance=self.instance, device=device)
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {
+                "system_devices_0_system_imei": "222222222222222",
+                "system_devices_0_system_type": str(device_type.pk),
+                "system_devices_0_system_model": str(device_model.pk),
+                "system_devices_0_instance_device_id": str(instance_device.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            __import__("workflow.models", fromlist=["DeviceIdentifier"]).DeviceIdentifier.objects.get(device=device).value,
+            "111111111111111",
+        )
+        instance_device.refresh_from_db()
+        self.assertEqual(instance_device.device_id, device.pk)
+        self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
 
     def test_workflow_instance_post_rejects_new_device_without_group_add_permission(self):
         group, label_field = self._create_device_group(can_add=False)
