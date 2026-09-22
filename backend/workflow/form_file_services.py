@@ -209,7 +209,7 @@ def _replace_file(*, form_data, field, row_id, upload, user):
 
 
 @transaction.atomic
-def save_uploaded_form_files(*, instance, user, submitted_files):
+def save_uploaded_form_files(*, instance, user, submitted_files, save_result=None):
     form_data = FormData.objects.filter(instance=instance).first()
     if form_data is None:
         return
@@ -239,13 +239,34 @@ def save_uploaded_form_files(*, instance, user, submitted_files):
             file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
             if not file_fields:
                 continue
-            rows = form_data.data.get(group.code, []) if isinstance(form_data.data, dict) else []
-            if not isinstance(rows, list):
-                continue
-            for index, row in enumerate(rows):
-                if not isinstance(row, dict):
-                    continue
-                row_id = str(row.get("_id", "") or "")
+            normalized_rows = (
+                save_result.normalized_payload.repeatable_groups.get(group.code, ())
+                if save_result is not None
+                else ()
+            )
+            row_ids_by_position = {}
+
+            if save_result is not None:
+                for group_diff in save_result.diff.groups:
+                    if group_diff.group.code != group.code:
+                        continue
+                    for change in group_diff.changes:
+                        if change.action.value == "CREATE":
+                            row = save_result.created_rows.get(change.row_reference)
+                            if row is None:
+                                continue
+                            for index, normalized_row in enumerate(normalized_rows):
+                                if normalized_row is change.desired_row:
+                                    row_ids_by_position[index] = str(row.pk)
+                                    break
+                        elif change.row_id is not None:
+                            for index, normalized_row in enumerate(normalized_rows):
+                                if normalized_row.row_id == change.row_id:
+                                    row_ids_by_position[index] = str(change.row_id)
+                                    break
+
+            for index, normalized_row in enumerate(normalized_rows):
+                row_id = row_ids_by_position.get(index)
                 if not row_id:
                     continue
                 for field in file_fields:
@@ -466,12 +487,21 @@ def workflow_instance_with_files(request, instance_id):
     )
 
     request._post = submitted_data
-    response = views.workflow_instance(request, instance_id)
+    result = views.workflow_instance(
+        request,
+        instance_id,
+        _return_save_result=True,
+    )
+    if isinstance(result, tuple):
+        response, save_result = result
+    else:
+        response, save_result = result, None
     if 300 <= response.status_code < 400:
         save_uploaded_form_files(
             instance=instance,
             user=request.user,
             submitted_files=request.FILES,
+            save_result=save_result,
         )
     return response
 
