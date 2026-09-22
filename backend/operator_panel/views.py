@@ -138,13 +138,11 @@ def device_models_by_type(request):
     })
 
 @login_required
+@login_required
 def dependent_field_options(request):
     """
-    Return the option list of a dependent SELECT FormField for the
-    given parent value.
-
-    The operator UI calls this whenever the parent SELECT changes so
-    the child options can be refreshed without a full page reload.
+    Return dependent SELECT options only for a field the current user
+    is authorized to view in the workflow instance's current step.
     """
     if request.method != "GET":
         return JsonResponse(
@@ -152,11 +150,28 @@ def dependent_field_options(request):
             status=405,
         )
 
+    instance_id = request.GET.get("instance_id", "").strip()
     field_id = request.GET.get("field_id", "").strip()
     parent_value = request.GET.get("parent_value", "")
 
-    if not field_id:
+    if not instance_id or not field_id:
         return JsonResponse({"options": []})
+
+    instance = get_object_or_404(
+        WorkflowInstance.objects.select_related(
+            "workflow",
+            "current_step",
+        ),
+        pk=instance_id,
+    )
+
+    WorkflowAuthorizationService.require_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=WorkflowPermission.Action.VIEW,
+        step=instance.current_step,
+        instance=instance,
+    )
 
     try:
         field = (
@@ -177,22 +192,21 @@ def dependent_field_options(request):
     except FormField.DoesNotExist:
         return JsonResponse({"options": []})
 
-    workflow = field.section.form.workflow
-
-    # The operator must be an active member of the workflow (or a
-    # superuser) to receive option data for its form fields.
-    is_member = (
-        workflow.memberships
-        .filter(
-            user=request.user,
-            is_active=True,
+    if field.section.form.workflow_id != instance.workflow_id:
+        raise PermissionDenied(
+            "فیلد متعلق به فرآیند جاری نیست."
         )
-        .exists()
+
+    permission_context = PermissionContext.build(
+        workflow=instance.workflow,
+        form=field.section.form,
+        step=instance.current_step,
+        user=request.user,
     )
 
-    if not is_member and not request.user.is_superuser:
+    if not permission_context.field(field).can_view:
         raise PermissionDenied(
-            "کاربر اجازه دسترسی به گزینه‌های این فرم را ندارد."
+            "کاربر اجازه مشاهده این فیلد را ندارد."
         )
 
     options = DynamicFormService._dependent_choices(
