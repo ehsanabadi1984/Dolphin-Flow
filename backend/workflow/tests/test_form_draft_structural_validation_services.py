@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from workflow.form_draft_payloads import NormalizedFormPayload, NormalizedRow
-from workflow.form_draft_validation_services import (
+from workflow.form_draft_structural_validation_services import (
     FormDraftStructuralValidationService,
 )
 from workflow.models import (
