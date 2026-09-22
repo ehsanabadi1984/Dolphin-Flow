@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from .permission_context import PermissionContext
+from .repeatable_row_read_services import RepeatableRowReadService
 
 from .instance_device_services import InstanceDeviceService
 from .device_services import DeviceService
@@ -1090,6 +1091,25 @@ class DynamicFormService:
         ).first()
 
         data = form_data.data if form_data else {}
+
+        # Repeatable groups are persisted in RepeatableRow/RepeatableRowValue,
+        # not in FormData.data. Build the read-side representation once so
+        # normal repeatable groups render from their canonical store on GET.
+        reconstructed = RepeatableRowReadService.reconstruct_instance(
+            instance=instance,
+        )
+        repeatable_data = {}
+        for reconstructed_group in reconstructed.get("groups", []):
+            repeatable_data[reconstructed_group["code"]] = [
+                {
+                    "_id": str(item["row_id"]),
+                    **{
+                        field["code"]: field["value"]
+                        for field in item.get("fields", [])
+                    },
+                }
+                for item in reconstructed_group.get("items", [])
+            ]
 
         current_step_execution = (
             instance.step_executions
@@ -2369,7 +2389,7 @@ class DynamicFormService:
                             )
                         )
                     else:
-                        raw_items = data.get(
+                        raw_items = repeatable_data.get(
                             group.code,
                             [],
                         )
