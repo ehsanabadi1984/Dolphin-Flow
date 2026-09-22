@@ -30,9 +30,10 @@ class OperatorPanelFormPostAdapter:
                     and field.repeatable_group_id is None
                     and field.code in submitted_data
                 ):
-                    payload[field.code] = cls._value(
-                        submitted_data,
-                        field.code,
+                    payload[field.code] = cls._field_value(
+                        submitted_data=submitted_data,
+                        key=field.code,
+                        field=field,
                     )
 
             for group in section.repeatable_groups.filter(
