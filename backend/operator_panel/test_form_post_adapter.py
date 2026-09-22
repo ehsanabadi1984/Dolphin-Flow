@@ -25,6 +25,11 @@ class FormPostAdapterTests(TestCase):
             name="Title", code="title", label="Title",
             field_type=FormField.FieldType.TEXT,
         )
+        FormField.objects.create(
+            section=self.section, repeatable_group=self.group,
+            name="Enabled", code="enabled", label="Enabled",
+            field_type=FormField.FieldType.BOOLEAN,
+        )
 
     def test_adapts_normal_field_and_repeatable_rows(self):
         post = QueryDict("", mutable=True)
@@ -52,6 +57,29 @@ class FormPostAdapterTests(TestCase):
         payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
 
         self.assertEqual(payload, {"name": "Ehsan"})
+
+    def test_new_row_uuid_is_treated_as_create(self):
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "New",
+            "items_0__id": "c43e58e0-8c7f-403f-b1e6-02469b448f02",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
+
+        self.assertEqual(payload["items"], [{"title": "New", "row_id": None}])
+
+    def test_boolean_values_are_normalized(self):
+        post = QueryDict("", mutable=True)
+        post.setlist("items_0_enabled", ["false", "on"])
+        post.setlist("items_1_enabled", ["false"])
+
+        payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
+
+        self.assertEqual(payload["items"], [
+            {"enabled": True},
+            {"enabled": False},
+        ])
 
     def test_repeatable_group_with_no_rows_is_not_created_from_missing_post_keys(self):
         post = QueryDict("", mutable=True)
