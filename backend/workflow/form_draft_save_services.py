@@ -220,7 +220,6 @@ class FormDraftSaveService:
         form_data = FormDraftNormalFieldApplyService.apply(
             instance=instance,
             diff=diff,
-            created_rows=created_rows,
         )
         FormDraftCreateApplyService.apply(
             instance=instance,
@@ -251,4 +250,5 @@ class FormDraftSaveService:
             permission_context=permission_context,
             normalized_payload=normalized_payload,
             diff=diff,
+            created_rows=created_rows,
         )
