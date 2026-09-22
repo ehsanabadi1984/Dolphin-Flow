@@ -991,3 +991,67 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             ).count(),
             1,
         )
+
+    def test_delete_device_rejects_without_group_delete_permission(self):
+        group, fields = self._create_device_group(
+            can_delete=False,
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+        )
+        RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:delete_device",
+                args=[
+                    self.instance.pk,
+                    group.code,
+                    instance_device.pk,
+                ],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 403)
+        instance_device.refresh_from_db()
+        self.assertTrue(instance_device.is_active)
+
+    def test_delete_device_uses_permission_context_group_delete_permission(self):
+        group, fields = self._create_device_group(
+            can_delete=True,
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+        )
+        RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:delete_device",
+                args=[
+                    self.instance.pk,
+                    group.code,
+                    instance_device.pk,
+                ],
+            ),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            302,
+        )
+        instance_device.refresh_from_db()
+        self.assertFalse(instance_device.is_active)
+
