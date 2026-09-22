@@ -1057,3 +1057,318 @@ class FormDraftSaveServiceContractTests(TestCase):
                 "row_id": parent_row.pk,
                 "children_identity": [{"row_id": child_row.pk}],
             }]})
+
+
+    def _create_device_system_fields_for_identity_tests(self, code_prefix):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name=f"Devices {code_prefix}",
+            code=f"devices_{code_prefix.lower()}",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=20,
+        )
+        fields = {}
+        definitions = (
+            (FormField.SystemKey.IMEI, "imei", FormField.FieldType.TEXT),
+            (FormField.SystemKey.DEVICE_TYPE, "device_type", FormField.FieldType.SELECT),
+            (FormField.SystemKey.DEVICE_MODEL, "device_model", FormField.FieldType.SELECT),
+        )
+        for order, (system_key, suffix, field_type) in enumerate(definitions):
+            field = FormField.objects.create(
+                section=self.section,
+                repeatable_group=group,
+                name=f"{code_prefix} {suffix}",
+                code=f"{code_prefix.lower()}_{suffix}",
+                label=f"{code_prefix} {suffix}",
+                field_type=field_type,
+                system_key=system_key,
+                order=order,
+            )
+            fields[system_key] = field
+            self.grant_repeatable_write_permissions(group, field)
+        return group, fields
+
+    def test_save_reuses_existing_device_on_create_by_imei(self):
+        group, fields = self._create_device_system_fields_for_identity_tests(
+            "CREATE_REUSE",
+        )
+        device_type = DeviceType.objects.create(
+            name="Create Reuse Type",
+            code="DRAFT_CREATE_REUSE_TYPE",
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Create Reuse Model",
+            code="DRAFT_CREATE_REUSE_MODEL",
+        )
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="810000000000001",
+        )
+
+        result = self.call(
+            submitted_data={
+                group.code: [
+                    {
+                        "imei": "810000000000001",
+                        "device_type": device_type.pk,
+                        "device_model": device_model.pk,
+                    },
+                ],
+            },
+        )
+
+        instance_device = InstanceDevice.objects.get(instance=self.instance)
+        self.assertEqual(instance_device.device_id, device.pk)
+        self.assertEqual(instance_device.draft_imei, "")
+        self.assertIsNone(instance_device.draft_device_model_id)
+        self.assertIsNone(instance_device.draft_device_type_id)
+        self.assertTrue(result.saved)
+
+    def test_save_resolves_unresolved_device_by_existing_imei(self):
+        group, fields = self._create_device_system_fields_for_identity_tests(
+            "RESOLVE",
+        )
+        device_type = DeviceType.objects.create(
+            name="Resolve Type",
+            code="DRAFT_RESOLVE_TYPE",
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Resolve Model",
+            code="DRAFT_RESOLVE_MODEL",
+        )
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="820000000000002",
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=None,
+            draft_imei="820000000000099",
+            draft_device_model=device_model,
+            draft_device_type=device_type,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        result = self.call(
+            submitted_data={
+                group.code: [
+                    {
+                        "row_id": row.pk,
+                        "imei": "820000000000002",
+                        "device_type": device_type.pk,
+                        "device_model": device_model.pk,
+                    },
+                ],
+            },
+        )
+
+        instance_device.refresh_from_db()
+        self.assertEqual(instance_device.device_id, device.pk)
+        self.assertEqual(instance_device.draft_imei, "")
+        self.assertIsNone(instance_device.draft_device_model_id)
+        self.assertIsNone(instance_device.draft_device_type_id)
+        self.assertTrue(result.saved)
+
+    def test_save_allows_resolved_device_model_change(self):
+        group, fields = self._create_device_system_fields_for_identity_tests(
+            "MODEL_CHANGE",
+        )
+        device_type = DeviceType.objects.create(
+            name="Model Change Type",
+            code="DRAFT_MODEL_CHANGE_TYPE",
+        )
+        original_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Original Model",
+            code="DRAFT_MODEL_CHANGE_ORIGINAL",
+        )
+        target_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Target Model",
+            code="DRAFT_MODEL_CHANGE_TARGET",
+        )
+        device = Device.objects.create(device_model=original_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="830000000000003",
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=device,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        result = self.call(
+            submitted_data={
+                group.code: [
+                    {
+                        "row_id": row.pk,
+                        "imei": "830000000000003",
+                        "device_type": device_type.pk,
+                        "device_model": target_model.pk,
+                    },
+                ],
+            },
+        )
+
+        device.refresh_from_db()
+        self.assertEqual(device.device_model_id, target_model.pk)
+        self.assertTrue(result.saved)
+
+    def test_save_rejects_imei_change_on_resolved_device(self):
+        group, fields = self._create_device_system_fields_for_identity_tests(
+            "IMEI_CHANGE",
+        )
+        device_type = DeviceType.objects.create(
+            name="IMEI Change Type",
+            code="DRAFT_IMEI_CHANGE_TYPE",
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="IMEI Change Model",
+            code="DRAFT_IMEI_CHANGE_MODEL",
+        )
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="840000000000004",
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=device,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={
+                    group.code: [
+                        {
+                            "row_id": row.pk,
+                            "imei": "840000000000005",
+                            "device_type": device_type.pk,
+                            "device_model": device_model.pk,
+                        },
+                    ],
+                },
+            )
+
+        self.assertEqual(
+            DeviceIdentifier.objects.get(device=device).value,
+            "840000000000004",
+        )
+
+    def test_save_rejects_device_model_type_mismatch(self):
+        group, fields = self._create_device_system_fields_for_identity_tests(
+            "MISMATCH",
+        )
+        first_type = DeviceType.objects.create(
+            name="Mismatch Type A",
+            code="DRAFT_MISMATCH_TYPE_A",
+        )
+        second_type = DeviceType.objects.create(
+            name="Mismatch Type B",
+            code="DRAFT_MISMATCH_TYPE_B",
+        )
+        model = DeviceModel.objects.create(
+            device_type=first_type,
+            brand="Test",
+            name="Mismatch Model",
+            code="DRAFT_MISMATCH_MODEL",
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={
+                    group.code: [
+                        {
+                            "row_id": None,
+                            "device_type": second_type.pk,
+                            "device_model": model.pk,
+                        },
+                    ],
+                },
+            )
+
+        self.assertFalse(
+            InstanceDevice.objects.filter(instance=self.instance).exists()
+        )
+
+    def test_save_rejects_duplicate_existing_device_in_same_instance(self):
+        group, fields = self._create_device_system_fields_for_identity_tests(
+            "DUPLICATE",
+        )
+        device_type = DeviceType.objects.create(
+            name="Duplicate Type",
+            code="DRAFT_DUPLICATE_TYPE",
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Duplicate Model",
+            code="DRAFT_DUPLICATE_MODEL",
+        )
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="850000000000006",
+        )
+        existing_instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=device,
+        )
+        RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            instance_device=existing_instance_device,
+            row_order=0,
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={
+                    group.code: [
+                        {
+                            "row_id": None,
+                            "imei": "850000000000006",
+                            "device_type": device_type.pk,
+                            "device_model": device_model.pk,
+                        },
+                    ],
+                },
+            )
+
+        self.assertEqual(
+            InstanceDevice.objects.filter(instance=self.instance, is_active=True).count(),
+            1,
+        )
+
