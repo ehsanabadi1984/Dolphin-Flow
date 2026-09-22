@@ -3,6 +3,10 @@ from django.test import TestCase
 from django.urls import reverse
 
 from workflow.models import (
+    Device,
+    DeviceIdentifier,
+    DeviceModel,
+    DeviceType,
     FieldAccess,
     FormData,
     FormDefinition,
@@ -340,12 +344,12 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             step=self.step,
             user=self.user,
         ).update(can_edit=False)
-        device_type = __import__("workflow.models", fromlist=["DeviceType"]).DeviceType.objects.create(
+        device_type = DeviceType.objects.create(
             name="Phone",
             code="OP_POST_PHONE_TYPE",
             is_active=True,
         )
-        device_model = __import__("workflow.models", fromlist=["DeviceModel"]).DeviceModel.objects.create(
+        device_model = DeviceModel.objects.create(
             device_type=device_type,
             brand="Test",
             name="Phone X",
@@ -392,14 +396,14 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             code="OP_POST_MODEL_TYPE",
             is_active=True,
         )
-        original_model = __import__("workflow.models", fromlist=["DeviceModel"]).DeviceModel.objects.create(
+        original_model = DeviceModel.objects.create(
             device_type=device_type,
             brand="Test",
             name="Phone Original",
             code="OP_POST_MODEL_ORIGINAL",
             is_active=True,
         )
-        target_model = __import__("workflow.models", fromlist=["DeviceModel"]).DeviceModel.objects.create(
+        target_model = DeviceModel.objects.create(
             device_type=device_type,
             brand="Test",
             name="Phone Target",
@@ -448,10 +452,10 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             code="OP_POST_IMEI_MODEL",
             is_active=True,
         )
-        device = __import__("workflow.models", fromlist=["Device"]).Device.objects.create(device_model=device_model)
-        __import__("workflow.models", fromlist=["DeviceIdentifier"]).DeviceIdentifier.objects.create(
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
             device=device,
-            identifier_type=__import__("workflow.models", fromlist=["DeviceIdentifier"]).DeviceIdentifier.IdentifierType.IMEI,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
             value="111111111111111",
         )
         instance_device = InstanceDevice.objects.create(instance=self.instance, device=device)
@@ -474,7 +478,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
-            __import__("workflow.models", fromlist=["DeviceIdentifier"]).DeviceIdentifier.objects.get(device=device).value,
+            DeviceIdentifier.objects.get(device=device).value,
             "111111111111111",
         )
         instance_device.refresh_from_db()
