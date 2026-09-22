@@ -724,7 +724,8 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertEqual(instance_device.draft_imei, "")
         self.assertIsNone(instance_device.draft_device_model_id)
         self.assertIsNone(instance_device.draft_device_type_id)
-        self.assertEqual(row.refresh_from_db() or row.instance_device_id, device.pk)
+        row.refresh_from_db()
+        self.assertEqual(row.instance_device_id, instance_device.pk)
 
     def test_workflow_instance_post_reuses_existing_device_on_create(self):
         group, fields = self._create_device_system_fields()
