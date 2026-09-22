@@ -186,13 +186,10 @@ class FormDraftStructuralValidationService:
         seen_row_ids,
     ):
         if row_id is None:
-            if expected_parent_row_id is None:
-                return
-
-            raise ValidationError(
-                f"Row جدید در گروه «{group.name}» نمی‌تواند فرزند "
-                "یک Row جدید باشد بدون شناسه والد."
-            )
+            # A new row may be nested under either a new or an existing
+            # parent row. Existing child rows still require an existing
+            # parent identity and are validated below.
+            return
 
         if isinstance(row_id, bool) or not isinstance(row_id, int) or row_id <= 0:
             raise ValidationError(
