@@ -52,6 +52,34 @@ class FormPostAdapterTests(TestCase):
             ],
         })
 
+    def test_normal_boolean_values_are_normalized(self):
+        post = QueryDict("", mutable=True)
+        post.setlist("enabled_normal", ["false", "on"])
+
+        boolean_field = FormField.objects.create(
+            section=self.section,
+            name="Normal Enabled",
+            code="enabled_normal",
+            label="Normal Enabled",
+            field_type=FormField.FieldType.BOOLEAN,
+            order=2,
+        )
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertTrue(payload["enabled_normal"])
+
+        post.setlist("enabled_normal", ["false"])
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertFalse(payload["enabled_normal"])
+
     def test_omitted_normal_field_and_group_remain_omitted(self):
         post = QueryDict("", mutable=True)
         post["name"] = "Ehsan"
