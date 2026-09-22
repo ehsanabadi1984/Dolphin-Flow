@@ -1,8 +1,13 @@
 from django.contrib.auth import get_user_model
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 
+from workflow.history_models import HistoryConfiguration, HistoryField
 from workflow.models import (
+    FormData,
+    FormDefinition,
+    FormField,
+    FormSection,
     Notification,
     Workflow,
     WorkflowInstance,
@@ -136,6 +141,218 @@ class WorkflowExecutionTests(TestCase):
         self.assertEqual(
             instance.current_step_id,
             self.step_two.pk,
+        )
+
+    def test_submit_valid_form_advances_workflow_and_stores_history(self):
+        self.grant_execute_permission()
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+
+        form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="Execution Submit Form",
+            is_active=True,
+        )
+
+        section = FormSection.objects.create(
+            form=form,
+            name="Main Section",
+            code="MAIN",
+            order=1,
+            is_active=True,
+        )
+
+        field = FormField.objects.create(
+            section=section,
+            name="Customer Name",
+            code="customer_name",
+            field_type=FormField.FieldType.TEXT,
+            label="Customer Name",
+            is_required=True,
+            order=1,
+            is_active=True,
+        )
+
+        history_configuration = HistoryConfiguration.objects.create(
+            form=form,
+            name="Execution History",
+            is_active=True,
+        )
+
+        HistoryField.objects.create(
+            configuration=history_configuration,
+            form_field=field,
+            display_label="Customer Name",
+            display_order=1,
+            is_enabled=True,
+        )
+
+        instance = self.start_instance()
+
+        FormData.objects.create(
+            instance=instance,
+            data={
+                "customer_name": "Ehsan",
+            },
+        )
+
+        step_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_one,
+        )
+
+        transition_execution = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+
+        instance.refresh_from_db()
+        step_execution.refresh_from_db()
+
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_two.pk,
+        )
+
+        self.assertIsNotNone(
+            transition_execution,
+        )
+
+        self.assertTrue(
+            step_execution.is_submitted,
+        )
+
+        self.assertIsNotNone(
+            step_execution.submitted_at,
+        )
+
+        self.assertIn(
+            "history",
+            step_execution.data,
+        )
+
+        history = step_execution.data["history"]
+
+        self.assertEqual(
+            history["version"],
+            1,
+        )
+
+        self.assertEqual(
+            len(history["fields"]),
+            1,
+        )
+
+        self.assertEqual(
+            history["fields"][0]["code"],
+            "customer_name",
+        )
+
+        self.assertEqual(
+            history["fields"][0]["value"],
+            "Ehsan",
+        )
+
+        self.assertTrue(
+            WorkflowTransitionExecution.objects.filter(
+                pk=transition_execution.pk,
+                instance=instance,
+                transition=self.transition_one,
+            ).exists()
+        )
+
+        self.assertTrue(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_two,
+            ).exists()
+        )
+
+    def test_submit_invalid_form_does_not_advance_workflow_or_store_history(self):
+        self.grant_execute_permission()
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+
+        form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="Invalid Submit Form",
+            is_active=True,
+        )
+
+        section = FormSection.objects.create(
+            form=form,
+            name="Main Section",
+            code="MAIN",
+            order=1,
+            is_active=True,
+        )
+
+        field = FormField.objects.create(
+            section=section,
+            name="Customer Name",
+            code="customer_name",
+            field_type=FormField.FieldType.TEXT,
+            label="Customer Name",
+            is_required=True,
+            order=1,
+            is_active=True,
+        )
+
+        instance = self.start_instance()
+
+        FormData.objects.create(
+            instance=instance,
+            data={
+                "customer_name": "",
+            },
+        )
+
+        step_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_one,
+        )
+
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            )
+
+        instance.refresh_from_db()
+        step_execution.refresh_from_db()
+
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_one.pk,
+        )
+
+        self.assertFalse(
+            step_execution.is_submitted,
+        )
+
+        self.assertIsNone(
+            step_execution.submitted_at,
+        )
+
+        self.assertNotIn(
+            "history",
+            step_execution.data,
+        )
+
+        self.assertFalse(
+            WorkflowTransitionExecution.objects.filter(
+                instance=instance,
+                transition=self.transition_one,
+            ).exists()
+        )
+
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_two,
+            ).exists()
         )
 
     def test_deny(self):
