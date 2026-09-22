@@ -27,6 +27,7 @@ import json
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from decimal import Decimal
 
 from workflow.form_services import DynamicFormService
 from workflow.form_draft_save_services import FormDraftSaveService
@@ -258,10 +259,25 @@ class FormulaPersistenceTestCase(TestCase):
                 for item in group["items"]
             ]
 
-        return FormulaService.calculate_context_data(
+        calculated = FormulaService.calculate_context_data(
             form=self.form,
             data=data,
         )
+
+        # Reconstruction returns Decimal values for NUMBER fields; the
+        # regression contract compares the form's transport representation.
+        for group in calculated.values():
+            if not isinstance(group, list):
+                continue
+            for row in group:
+                if not isinstance(row, dict):
+                    continue
+                for code, value in list(row.items()):
+                    if isinstance(value, Decimal):
+                        text_value = format(value, "f").rstrip("0").rstrip(".")
+                        row[code] = text_value or "0"
+
+        return calculated
 
     # --------------------------------------------------------------
     # Main regression: the reported scenario survives the real save
