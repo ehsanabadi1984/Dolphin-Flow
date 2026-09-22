@@ -749,6 +749,16 @@ const submitNewDevice = (modal, groupCode) => {
             "df-device-generated-field"
         );
 
+        if (input.type === "checkbox") {
+            const uncheckedValue =
+                document.createElement("input");
+
+            uncheckedValue.type = "hidden";
+            uncheckedValue.name = input.name;
+            uncheckedValue.value = "false";
+            editor.appendChild(uncheckedValue);
+        }
+
         editor.appendChild(input);
 
         cell.appendChild(editor);
