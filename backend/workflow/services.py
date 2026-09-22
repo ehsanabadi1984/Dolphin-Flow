@@ -7,14 +7,13 @@ from .authorization import WorkflowAuthorizationService
 from .sla_services import SLAService
 from .realtime_services import WorkflowRealtimeService
 from .models import (
-    FormData,
     WorkflowInstance,
     WorkflowPermission,
     WorkflowStepExecution,
     WorkflowTransitionExecution,
-    WorkflowMembership,
     Notification,
 )
+from .form_draft_submit_services import FormDraftSubmitService
 
 
 class WorkflowExecutionService:
@@ -176,33 +175,13 @@ class WorkflowExecutionService:
             transition=transition,
         )
 
-        has_form_definition = hasattr(
-            instance.workflow, 'form_definition'
-        )
+        form = getattr(instance.workflow, "form_definition", None)
 
-        if has_form_definition:
-            form_data = (
-                FormData.objects
-                .filter(instance=instance)
-                .first()
+        if form is not None:
+            FormDraftSubmitService.validate(
+                instance=instance,
+                form=form,
             )
-
-            if form_data is None:
-                raise ValidationError(
-                    "اطلاعات فرم هنوز ذخیره نشده است."
-                )
-
-            has_form_data = bool(form_data.data)
-            has_device_data = (
-                instance.instance_devices
-                .filter(is_active=True)
-                .exists()
-            )
-
-            if not has_form_data and not has_device_data:
-                raise ValidationError(
-                    "ابتدا اطلاعات فرم یا دستگاه را ذخیره کنید."
-                )
 
         from .history_services import HistoryService
 
