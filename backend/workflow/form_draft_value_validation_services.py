@@ -83,7 +83,7 @@ class FormDraftValueValidationService:
             form=form,
             fields_by_code=fields_by_code,
             submitted_values=values,
-            persisted_form_data=None,
+            persisted_values=None,
         )
 
     @classmethod
