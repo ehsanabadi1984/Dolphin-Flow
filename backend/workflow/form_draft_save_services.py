@@ -11,8 +11,10 @@ from .form_draft_device_update_apply_services import FormDraftDeviceUpdateApplyS
 from .form_draft_diff_services import FormDraftDiff, FormDraftDiffService
 from .form_draft_update_apply_services import FormDraftUpdateApplyService
 from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
+from .form_draft_normal_field_apply_services import FormDraftNormalFieldApplyService
 from .form_draft_permission_services import FormDraftPermissionService
 from .form_draft_structural_validation_services import FormDraftStructuralValidationService
+from .form_draft_value_validation_services import FormDraftValueValidationService
 from .models import FormData, FormDefinition
 from .permission_context import PermissionContext
 
@@ -51,6 +53,11 @@ class FormDraftSaveService:
             normalized_payload = cls._normalize_submitted_data(
                 form=form,
                 submitted_data=submitted_data,
+            )
+            FormDraftValueValidationService.validate_payload(
+                instance=instance,
+                form=form,
+                normalized_payload=normalized_payload,
             )
             diff = FormDraftDiffService.build(
                 instance=instance,
@@ -209,6 +216,10 @@ class FormDraftSaveService:
     ):
         del step, user, form
         created_rows = {}
+        form_data = FormDraftNormalFieldApplyService.apply(
+            instance=instance,
+            diff=diff,
+        )
         FormDraftCreateApplyService.apply(
             instance=instance,
             diff=diff,
@@ -232,7 +243,7 @@ class FormDraftSaveService:
             diff=diff,
         )
         return FormDraftSaveResult(
-            form_data=None,
+            form_data=form_data,
             saved=True,
             is_draft=True,
             permission_context=permission_context,
