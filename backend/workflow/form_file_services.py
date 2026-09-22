@@ -11,6 +11,7 @@ from django.urls import reverse
 from .authorization import WorkflowAuthorizationService
 from .form_file_models import FormFile
 from .form_services import DynamicFormService
+from .models import RepeatableRow
 from .permission_context import PermissionContext
 from .models import (
     FormData,
@@ -135,8 +136,20 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
                 group_code=group.code,
             )
             file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
+            persisted_row_ids = set(
+                str(row_id)
+                for row_id in RepeatableRow.objects.filter(
+                    instance=instance,
+                    group=group,
+                ).values_list("pk", flat=True)
+            )
             for index, row in enumerate(rows):
-                row_id = str(row.get("_id", "") or "")
+                submitted_row_id = str(row.get("_id", "") or "")
+                row_id = (
+                    submitted_row_id
+                    if submitted_row_id in persisted_row_ids
+                    else ""
+                )
                 for field in file_fields:
                     key = f"{group.code}_{index}_{field.code}"
                     upload = submitted_files.get(key)
@@ -375,11 +388,15 @@ def file_field_definitions(request, instance_id):
                 continue
 
             file_payloads = []
-            rows = form_data.data.get(group.code, []) if form_data and isinstance(form_data.data, dict) else []
             row_indexes = {
-                str(row.get("_id", "") or ""): index
-                for index, row in enumerate(rows)
-                if isinstance(row, dict) and row.get("_id")
+                str(row.pk): index
+                for index, row in enumerate(
+                    RepeatableRow.objects.filter(
+                        instance=instance,
+                        group=group,
+                        parent_row__isnull=True,
+                    ).order_by("row_order", "pk")
+                )
             }
             for (field_id, row_id), payload in existing.items():
                 if field_id in field_ids:
