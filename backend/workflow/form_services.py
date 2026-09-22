@@ -1,9 +1,4 @@
-import uuid
-
-from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
-from django.utils import timezone
-from .sla_services import SLAService
+from django.core.exceptions import ValidationError
 from .permission_context import PermissionContext
 
 from .instance_device_services import InstanceDeviceService
@@ -17,7 +12,6 @@ from .models import (
     StaticChoiceItem,
     InstanceDevice,
     DeviceIdentifier,
-    WorkflowStepExecution,
     FormRepeatableGroup,
     DeviceType,
     FormField,
