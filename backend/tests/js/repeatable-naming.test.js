@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
+import "../../operator_panel/static/operator_panel/js/repeatable-naming.js";
+
+const {
     reindexRepeatableFieldName,
-} from "../../operator_panel/static/operator_panel/js/repeatable-naming.js";
+} = globalThis.DolphinFlowRepeatableNaming;
 
 test("reindexes a root repeatable field", () => {
     assert.equal(
