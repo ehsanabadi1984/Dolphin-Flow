@@ -497,8 +497,7 @@
                       {% endfor %}
                       <th>عملیات</th>
                     </tr>
-                  </thead>
-                  <tbody
+                  </thead>                  <tbody
                     class="df-repeatable-items"
                     data-group-code="{{ group.group.code }}"
                   >
@@ -626,6 +625,7 @@
                               </button>
                             {% endif %}
                           </td>
+                        </tr>
 
                         <tr class="df-repeatable-child-row">
                           <td colspan="{{ group.fields|length|add:1 }}">
@@ -757,15 +757,13 @@
                                               حذف
                                             </button>
                                           {% endif %}
-                                        </td>
-
-                                                          {% if child_item.row_id %}
-                                            <input
-                                              type="hidden"
-                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}__id"
-                                              value="{{ child_item.row_id }}"
-                                            />
-                                          {% endif %}
+                                        {% if child_item.row_id %}
+                                          <input
+                                            type="hidden"
+                                            name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}__id"
+                                            value="{{ child_item.row_id }}"
+                                          />
+                                        {% endif %}
                                         </td>
                                       </tr>
                                     {% endwith %}
@@ -998,7 +996,6 @@
             </section>
 
             {% else %}
-
 
             <section
               class="df-repeatable-group"
@@ -1498,7 +1495,6 @@
                           <textarea
                             name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                           ></textarea>
-
                         {% elif template_field.field.field_type == "NUMBER" %}
                           <input
                             type="number"
