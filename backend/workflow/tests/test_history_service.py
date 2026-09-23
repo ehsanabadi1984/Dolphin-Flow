@@ -659,6 +659,13 @@ class HistoryServiceTests(TestCase):
             can_view=False,
             can_edit=False,
         )
+        FieldAccess.objects.create(
+            field=self.part_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
         RepeatableGroupAccess.objects.create(
             group=self.group,
             step=self.step,
