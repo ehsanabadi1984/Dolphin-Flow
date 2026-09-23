@@ -101,9 +101,11 @@ class GroupContext(TypedDict):
 
 
 class SectionContext(TypedDict):
-    """Presentation-ready section context before final serialization."""
+    """Application context for one visible form section."""
 
     section: Any
+    fields: list[Mapping[str, Any]]
+    repeatable_groups: list[Mapping[str, Any]]
     layout_items: list[Mapping[str, Any]]
 
 
