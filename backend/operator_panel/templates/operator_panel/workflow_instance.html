@@ -609,7 +609,111 @@
                             {% if item.row_id %}
                               <input type="hidden" name="{{ group.group.code }}_{{ item_index }}__id" value="{{ item.row_id }}" />
                             {% endif %}
-                            {% if edit_mode and not dynamic_form.is_submitted and group.can_delete %}
+                            {% for child_group in item.child_groups %}
+                      <section
+                        class="df-repeatable-group df-repeatable-child-group"
+                        data-repeatable-group="{{ child_group.group.code }}"
+                      >
+                        <div class="df-form-section-header">
+                          <div>
+                            <h4>{{ child_group.group.name }}</h4>
+                          </div>
+                        </div>
+
+                        <div
+                          class="df-repeatable-items"
+                          data-group-code="{{ child_group.group.code }}"
+                        >
+                          {% for child_item in child_group.items %}
+                            {% with child_index=forloop.counter0 %}
+                              <div
+                                class="df-repeatable-item"
+                                data-repeatable-item
+                                {% if child_item.row_id %}data-row-id="{{ child_item.row_id }}"{% endif %}
+                              >
+                                {% if child_item.row_id %}
+                                  <input
+                                    type="hidden"
+                                    name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}__id"
+                                    value="{{ child_item.row_id }}"
+                                  />
+                                {% endif %}
+
+                                {% for child_field in child_item.fields %}
+                                  <div
+                                    class="df-form-field"
+                                    data-field-code="{{ child_field.field.code }}"
+                                  >
+                                    <label>
+                                      {{ child_field.field.label }}
+                                      {% if child_field.field.is_required %}<span>*</span>{% endif %}
+                                    </label>
+
+                                    {% if edit_mode and not dynamic_form.is_submitted and child_field.can_edit %}
+                                      {% if child_field.field.field_type == "TEXT" %}
+                                        <input
+                                          type="text"
+                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          value="{{ child_field.value|default:'' }}"
+                                        />
+                                      {% elif child_field.field.field_type == "TEXTAREA" %}
+                                        <textarea
+                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                        >{{ child_field.value|default:'' }}</textarea>
+                                      {% elif child_field.field.field_type == "NUMBER" %}
+                                        <input
+                                          type="number"
+                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          value="{{ child_field.value|default:'' }}"
+                                        />
+                                      {% elif child_field.field.field_type == "DATE" %}
+                                        <input
+                                          type="date"
+                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          value="{{ child_field.value|default:'' }}"
+                                        />
+                                      {% elif child_field.field.field_type == "DATETIME" %}
+                                        <input
+                                          type="datetime-local"
+                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          value="{{ child_field.value|default:'' }}"
+                                        />
+                                      {% elif child_field.field.field_type == "BOOLEAN" %}
+                                        <input
+                                          type="checkbox"
+                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          {% if child_field.value %}checked{% endif %}
+                                        />
+                                      {% elif child_field.field.field_type == "SELECT" %}
+                                        <select
+                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                        >
+                                          <option value="">---------</option>
+                                          {% for choice in child_field.choices %}
+                                            <option
+                                              value="{{ choice.value }}"
+                                              {% if child_field.value|stringformat:"s" == choice.value|stringformat:"s" %}selected{% endif %}
+                                            >
+                                              {{ choice.label }}
+                                            </option>
+                                          {% endfor %}
+                                        </select>
+                                      {% endif %}
+                                    {% else %}
+                                      <div class="df-form-value">
+                                        {{ child_field.display_value|default:child_field.value|default:"—" }}
+                                      </div>
+                                    {% endif %}
+                                  </div>
+                                {% endfor %}
+                              </div>
+                            {% endwith %}
+                          {% endfor %}
+                        </div>
+                      </section>
+                    {% endfor %}
+
+                    {% if edit_mode and not dynamic_form.is_submitted and group.can_delete %}
                               <button
                                 type="button"
                                 class="df-button df-button-danger df-repeatable-delete"
