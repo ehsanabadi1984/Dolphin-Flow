@@ -1,5 +1,6 @@
 from django.db.models import Prefetch
 
+from .form_file_models import FormFile
 from .form_services import DynamicFormService
 from .models import (
     DeviceIdentifier,
@@ -302,6 +303,24 @@ class HistoryService:
                     history_field_id=config["history_field_id"],
                 )
                 serialized["display_value"] = value_data["display_value"]
+
+                if field.field_type == FormField.FieldType.FILE:
+                    form_file = (
+                        FormFile.objects
+                        .filter(
+                            form_data__instance=instance,
+                            field=field,
+                            row_id=str(row.pk),
+                        )
+                        .first()
+                    )
+                    if form_file is not None:
+                        serialized["file"] = {
+                            "name": form_file.original_name,
+                            "size": form_file.file_size,
+                            "content_type": form_file.content_type,
+                        }
+
                 item_fields.append(serialized)
 
             if item_fields:
