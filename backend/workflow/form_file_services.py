@@ -222,6 +222,68 @@ def _replace_file(*, form_data, field, row_id, upload, user):
 
 
 @transaction.atomic
+def _normalized_row_id(*, normalized_row, group, save_result):
+    if normalized_row.row_id is not None:
+        return str(normalized_row.row_id)
+
+    for group_diff in save_result.diff.groups:
+        if group_diff.group.pk != group.pk:
+            continue
+        for change in group_diff.changes:
+            if change.action.value != "create":
+                continue
+            if change.desired_row is normalized_row:
+                row = save_result.created_rows.get(change.row_reference)
+                if row is not None:
+                    return str(row.pk)
+                return None
+
+    return None
+
+
+def _save_repeatable_group_files(*, form_data, group, normalized_rows, submitted_files, user, save_result):
+    file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
+    if not file_fields:
+        return
+
+    for index, normalized_row in enumerate(normalized_rows):
+        row_id = _normalized_row_id(
+            normalized_row=normalized_row,
+            group=group,
+            save_result=save_result,
+        )
+        if not row_id:
+            continue
+
+        for field in file_fields:
+            _replace_file(
+                form_data=form_data,
+                field=field,
+                row_id=row_id,
+                upload=submitted_files.get(
+                    f"{group.code}_{index}_{field.code}"
+                ),
+                user=user,
+            )
+
+        for child_group_code, child_rows in normalized_row.child_groups.items():
+            child_group = group.child_groups.filter(
+                code=child_group_code,
+                is_active=True,
+            ).first()
+            if child_group is None:
+                continue
+            _save_repeatable_group_files(
+                form_data=form_data,
+                group=child_group,
+                normalized_rows=child_rows,
+                submitted_files=submitted_files,
+                user=user,
+                save_result=save_result,
+            )
+
+
+@transaction.atomic
 def save_uploaded_form_files(*, instance, user, submitted_files, save_result=None):
     form_data = FormData.objects.filter(instance=instance).first()
     if form_data is None:
@@ -245,51 +307,26 @@ def save_uploaded_form_files(*, instance, user, submitted_files, save_result=Non
                 user=user,
             )
 
+        if save_result is None:
+            continue
+
         for group in section.repeatable_groups.filter(
             is_active=True,
             group_type=FormRepeatableGroup.GroupType.NORMAL,
+            parent_group__isnull=True,
         ):
-            file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
-            if not file_fields:
-                continue
-            normalized_rows = (
-                save_result.normalized_payload.repeatable_groups.get(group.code, ())
-                if save_result is not None
-                else ()
+            normalized_rows = save_result.normalized_payload.repeatable_groups.get(
+                group.code,
+                (),
             )
-            row_ids_by_position = {}
-
-            if save_result is not None:
-                for index, normalized_row in enumerate(normalized_rows):
-                    if normalized_row.row_id is not None:
-                        row_ids_by_position[index] = str(normalized_row.row_id)
-
-                for group_diff in save_result.diff.groups:
-                    if group_diff.group.code != group.code:
-                        continue
-                    for change in group_diff.changes:
-                        if change.action.value != "create":
-                            continue
-                        row = save_result.created_rows.get(change.row_reference)
-                        if row is None:
-                            continue
-                        for index, normalized_row in enumerate(normalized_rows):
-                            if normalized_row is change.desired_row:
-                                row_ids_by_position[index] = str(row.pk)
-                                break
-
-            for index, normalized_row in enumerate(normalized_rows):
-                row_id = row_ids_by_position.get(index)
-                if not row_id:
-                    continue
-                for field in file_fields:
-                    _replace_file(
-                        form_data=form_data,
-                        field=field,
-                        row_id=row_id,
-                        upload=submitted_files.get(f"{group.code}_{index}_{field.code}"),
-                        user=user,
-                    )
+            _save_repeatable_group_files(
+                form_data=form_data,
+                group=group,
+                normalized_rows=normalized_rows,
+                submitted_files=submitted_files,
+                user=user,
+                save_result=save_result,
+            )
 
 
 def _file_payload(item):
