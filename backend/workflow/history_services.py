@@ -11,6 +11,7 @@ from .models import (
     InstanceDevice,
     WorkflowStepExecution,
 )
+from .history_browser_service import HistoryBrowserService
 from .history_models import HistoryConfiguration, HistoryField
 from .repeatable_row_read_services import RepeatableRowReadService
 
@@ -453,6 +454,13 @@ class HistoryService:
         return items
 
     @staticmethod
+    def get_device_history(*, device_id, user):
+        """Return authorized History snapshots for a device."""
+        return HistoryBrowserService.get_history(
+            user=user,
+            device_id=device_id,
+        )
+
     def get_device_history(*, device_id, user):
         instance_devices = (
             InstanceDevice.objects
