@@ -70,6 +70,8 @@ class FormDraftDeleteApplyService:
             rows.append(current)
             stack.extend(current.child_rows.all())
 
+        deleted_row_ids = tuple(current.pk for current in rows)
+
         for current in reversed(rows):
             form_data = getattr(instance, "form_data", None)
             if form_data is not None:
@@ -80,7 +82,7 @@ class FormDraftDeleteApplyService:
             current.values.all().delete()
             current.delete()
 
-        return tuple(current.pk for current in rows)
+        return deleted_row_ids
 
     @classmethod
     def _delete_row(cls, *, instance, change):
