@@ -51,15 +51,15 @@ class OperatorPanelFormPostAdapter:
         return payload
 
     @classmethod
-    def _parse_group(cls, *, group, submitted_data, instance):
-        prefix = f"{group.code}_"
+    def _parse_group(cls, *, group, submitted_data, instance, prefix=None):
+        group_prefix = prefix or f"{group.code}_"
         items = {}
 
         for key in submitted_data.keys():
-            if not key.startswith(prefix) or key.endswith("__id"):
+            if not key.startswith(group_prefix) or key.endswith("__id"):
                 continue
 
-            remainder = key[len(prefix):]
+            remainder = key[len(group_prefix):]
             parts = remainder.split("_", 1)
 
             if len(parts) != 2:
@@ -84,15 +84,14 @@ class OperatorPanelFormPostAdapter:
                 field=field,
             )
 
-        id_prefix = f"{group.code}_"
         for key in submitted_data.keys():
             if not (
-                key.startswith(id_prefix)
+                key.startswith(group_prefix)
                 and key.endswith("__id")
             ):
                 continue
 
-            middle = key[len(id_prefix):-len("__id")]
+            middle = key[len(group_prefix):-len("__id")]
             if not middle.isdigit():
                 continue
 
@@ -104,17 +103,17 @@ class OperatorPanelFormPostAdapter:
                 except (TypeError, ValueError):
                     items.setdefault(index, {})["row_id"] = None
 
-        instance_device_prefix = f"{group.code}_"
         if instance is not None:
+            instance_device_suffix = "_instance_device_id"
             for key in submitted_data.keys():
                 if not (
-                    key.startswith(instance_device_prefix)
-                    and key.endswith("_instance_device_id")
+                    key.startswith(group_prefix)
+                    and key.endswith(instance_device_suffix)
                 ):
                     continue
 
                 middle = key[
-                    len(instance_device_prefix):-len("_instance_device_id")
+                    len(group_prefix):-len(instance_device_suffix)
                 ]
                 if not middle.isdigit():
                     continue
@@ -147,10 +146,30 @@ class OperatorPanelFormPostAdapter:
         if not items:
             return None
 
-        return [
-            items[index]
-            for index in sorted(items)
-        ]
+        rows = []
+        child_groups = list(
+            group.child_groups.filter(is_active=True).order_by("order", "pk")
+        )
+
+        for index in sorted(items):
+            row = items[index]
+
+            for child_group in child_groups:
+                child_prefix = f"{group_prefix}{index}_{child_group.code}_"
+                child_rows = cls._parse_group(
+                    group=child_group,
+                    submitted_data=submitted_data,
+                    instance=instance,
+                    prefix=child_prefix,
+                )
+                if child_rows is not None:
+                    row.setdefault("child_groups", {})[
+                        child_group.code
+                    ] = tuple(child_rows)
+
+            rows.append(row)
+
+        return rows
 
     @staticmethod
     def _field_value(*, submitted_data, key, field):
