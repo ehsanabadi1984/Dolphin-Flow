@@ -41,6 +41,48 @@ class FormDraftDeleteApplyService:
         return tuple(deleted_rows)
 
     @classmethod
+    @transaction.atomic
+    def delete_row_tree(cls, *, instance, row_id):
+        """
+        Delete a current form row and its descendants.
+
+        This is the direct operator-panel DELETE path. It is row-centric:
+        RepeatableRow/values/files are removed, while InstanceDevice,
+        Device, and history remain untouched.
+        """
+        try:
+            row = (
+                RepeatableRow.objects
+                .select_related("instance", "group")
+                .get(
+                    pk=row_id,
+                    instance=instance,
+                )
+            )
+        except RepeatableRow.DoesNotExist:
+            raise ValidationError("Row موردنظر برای حذف یافت نشد.")
+
+        rows = []
+        stack = [row]
+
+        while stack:
+            current = stack.pop()
+            rows.append(current)
+            stack.extend(current.child_rows.all())
+
+        for current in reversed(rows):
+            form_data = getattr(instance, "form_data", None)
+            if form_data is not None:
+                FormFile.delete_for_row(
+                    form_data=form_data,
+                    row_id=current.pk,
+                )
+            current.values.all().delete()
+            current.delete()
+
+        return tuple(current.pk for current in rows)
+
+    @classmethod
     def _delete_row(cls, *, instance, change):
         group = change.group
 
