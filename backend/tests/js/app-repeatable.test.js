@@ -75,9 +75,13 @@ test("adds a nested child row under the second parent with isolated names", asyn
     globalThis.WebSocket = WebSocketStub;
     dom.window.WebSocket = WebSocketStub;
 
-    await import(
+    const namingModule = await import(
         "../../operator_panel/static/operator_panel/js/repeatable-naming.js"
     );
+    globalThis.reindexRepeatableFieldName =
+        namingModule.reindexRepeatableFieldName;
+    globalThis.buildRepeatableGroupPrefix =
+        namingModule.buildRepeatableGroupPrefix;
     await import(appPath);
 
     document.dispatchEvent(
