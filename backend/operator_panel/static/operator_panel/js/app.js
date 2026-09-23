@@ -1077,7 +1077,7 @@ const submitNewDevice = (modal, groupCode) => {
 
             const id =
                 row.querySelector(
-                    'input[name$="_instance_device_id"]'
+                    'input[name$="__id"]'
                 )?.value;
 
             /*
