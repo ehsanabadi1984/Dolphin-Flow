@@ -2709,13 +2709,16 @@ class DynamicFormService:
             # Add section only when it contains something
             # -------------------------------------------------
             if fields or repeatable_groups:
+                section_context = {
+                    "section": section,
+                    "fields": fields,
+                    "repeatable_groups": repeatable_groups,
+                    "layout_items": layout_items,
+                }
                 sections.append(
-                    {
-                        "section": section,
-                        "fields": fields,
-                        "repeatable_groups": repeatable_groups,
-                        "layout_items": layout_items,
-                    }
+                    OperatorFormSerializer.section(
+                        section_context=section_context,
+                    )
                 )
 
         has_editable_fields = any(
