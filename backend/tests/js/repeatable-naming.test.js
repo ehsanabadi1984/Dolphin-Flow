@@ -74,6 +74,28 @@ test("reindexes a deeper nested field while preserving the full ancestor path", 
     );
 });
 
+test("builds distinct child prefixes for different parent rows", () => {
+    assert.equal(
+        buildRepeatableGroupPrefix(
+            [
+                { groupCode: "customers", index: 0 },
+            ],
+            "contacts",
+        ),
+        "customers_0_contacts_",
+    );
+
+    assert.equal(
+        buildRepeatableGroupPrefix(
+            [
+                { groupCode: "customers", index: 1 },
+            ],
+            "contacts",
+        ),
+        "customers_1_contacts_",
+    );
+});
+
 test("builds the full nested repeatable group prefix from parent context", () => {
     assert.equal(
         buildRepeatableGroupPrefix(
