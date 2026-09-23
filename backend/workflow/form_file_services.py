@@ -227,9 +227,9 @@ def _normalized_row_id(*, normalized_row, group, save_result):
         return str(normalized_row.row_id)
 
     for group_diff in save_result.diff.groups:
-        if group_diff.group.pk != group.pk:
-            continue
         for change in group_diff.changes:
+            if change.group.pk != group.pk:
+                continue
             if change.action.value != "create":
                 continue
             if change.desired_row is normalized_row:
