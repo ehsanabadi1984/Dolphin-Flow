@@ -124,8 +124,7 @@ class HistoryBrowserService:
                     filtered_item["child_groups"] = child_groups
                 else:
                     filtered_item.pop("child_groups", None)
-                if filtered_item["fields"] or child_groups:
-                    filtered["items"].append(filtered_item)
+                filtered["items"].append(filtered_item)
 
             return filtered if filtered["items"] else None
 
