@@ -1398,6 +1398,7 @@ class DynamicFormService:
 
             for group in section.repeatable_groups.filter(
                 is_active=True,
+                parent_group__isnull=True,
             ):
 
 
