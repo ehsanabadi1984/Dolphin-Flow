@@ -2151,6 +2151,53 @@ document.addEventListener("click", (event) => {
  * When only one row remains the delete button is
  * disabled so the last row cannot be removed.
  */
+function getRepeatableGroupContext(group) {
+    const context = [];
+    let currentGroup = group;
+
+    while (currentGroup) {
+        const parentItem =
+            currentGroup.closest("[data-repeatable-item]");
+
+        if (!parentItem) break;
+
+        const parentGroup =
+            parentItem.closest(".df-repeatable-group");
+
+        if (!parentGroup) break;
+
+        const parentItems =
+            parentGroup.querySelector(".df-repeatable-items");
+
+        if (!parentItems) break;
+
+        const parentRows = Array.from(parentItems.children).filter(
+            (item) =>
+                item.matches("[data-repeatable-item]") &&
+                !item.hasAttribute("data-repeatable-template")
+        );
+
+        const parentIndex = parentRows.indexOf(parentItem);
+        if (parentIndex === -1) break;
+
+        context.unshift({
+            groupCode: parentGroup.dataset.repeatableGroup,
+            index: parentIndex,
+        });
+
+        currentGroup = parentGroup;
+    }
+
+    return context;
+}
+
+function getRepeatableGroupPrefix(group) {
+    return buildRepeatableGroupPrefix(
+        getRepeatableGroupContext(group),
+        group.dataset.repeatableGroup
+    );
+}
+
 function updateRepeatableDeleteState(container) {
     const group = container.closest(".df-repeatable-group");
     if (!group) return;
@@ -2217,8 +2264,15 @@ document.addEventListener("click", (event) => {
                     "[data-repeatable-item]"
                 );
 
-            const gc =
-                container.dataset.groupCode;
+            const group =
+                container.closest(".df-repeatable-group");
+
+            if (!group) {
+                return;
+            }
+
+            const groupPrefix =
+                getRepeatableGroupPrefix(group);
 
             remaining.forEach((r, i) => {
                 /*
@@ -2235,7 +2289,7 @@ document.addEventListener("click", (event) => {
                     if (old) {
                         f.name = reindexRepeatableFieldName(
                             old,
-                            `${gc}_`,
+                            groupPrefix,
                             i
                         );
                     }
@@ -2270,9 +2324,7 @@ document.addEventListener("click", (event) => {
         }
 
     const group =
-        document.querySelector(
-            `.df-repeatable-group[data-repeatable-group="${groupCode}"]`
-        );
+        addButton.closest(".df-repeatable-group");
 
     if (!group) {
         console.error(
@@ -2287,6 +2339,9 @@ document.addEventListener("click", (event) => {
         group.querySelector(
             ".df-repeatable-items"
         );
+
+    const groupPrefix =
+        getRepeatableGroupPrefix(group);
 
     if (!itemsContainer) {
         console.error(
@@ -2463,7 +2518,7 @@ document.addEventListener("click", (event) => {
         ) {
 
             field.name =
-                `${groupCode}_${newIndex}__id`;
+                `${groupPrefix}${newIndex}__id`;
 
             field.value = newRowId;
 
