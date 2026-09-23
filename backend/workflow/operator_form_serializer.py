@@ -106,8 +106,54 @@ class OperatorFormSerializer:
             fields=fields,
         )
 
-        if row_context.get("device") is not None:
-            item["device"] = row_context["device"]
+        device = row_context.get("device")
+        if device is not None:
+            device_model = device.get("device_model")
+            item.update(
+                {
+                    "instance_device_id": device.get(
+                        "instance_device_id"
+                    ),
+                    "device_id": device.get("device_id", ""),
+                    "is_existing_device": device.get(
+                        "is_existing_device",
+                        False,
+                    ),
+                    "device_model_id": (
+                        device_model.pk
+                        if device_model is not None
+                        else ""
+                    ),
+                    "device_type": (
+                        str(device.get("device_type"))
+                        if device.get("device_type") is not None
+                        else ""
+                    ),
+                    "device_model": (
+                        str(device_model)
+                        if device_model is not None
+                        else ""
+                    ),
+                    "reported_problem": device.get(
+                        "reported_problem",
+                        "",
+                    ),
+                    "description": device.get(
+                        "description",
+                        "",
+                    ),
+                    "warranty_status": device.get(
+                        "warranty_status",
+                        "",
+                    ),
+                    "status": device.get("status", ""),
+                    "identifiers": device.get("identifiers", []),
+                    "has_history": device.get(
+                        "has_history",
+                        False,
+                    ),
+                }
+            )
 
         return item
 
