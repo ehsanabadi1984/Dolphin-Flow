@@ -141,6 +141,41 @@ test("adds a child row under the second parent without changing the first parent
     );
 });
 
+test("deletes a nested child row without reindexing another parent", () => {
+    const parentZeroPrefix = buildRepeatableGroupPrefix(
+        [{ groupCode: "customers", index: 0 }],
+        "contacts",
+    );
+    const parentOnePrefix = buildRepeatableGroupPrefix(
+        [{ groupCode: "customers", index: 1 }],
+        "contacts",
+    );
+
+    const parentZeroRemaining = reindexRepeatableFieldName(
+        "customers_0_contacts_1_name",
+        parentZeroPrefix,
+        0,
+    );
+    const parentOneRemaining = reindexRepeatableFieldName(
+        "customers_1_contacts_0_name",
+        parentOnePrefix,
+        0,
+    );
+
+    assert.equal(
+        parentZeroRemaining,
+        "customers_0_contacts_0_name",
+    );
+    assert.equal(
+        parentOneRemaining,
+        "customers_1_contacts_0_name",
+    );
+    assert.notEqual(
+        parentZeroRemaining,
+        parentOneRemaining,
+    );
+});
+
 test("builds distinct child prefixes for different parent rows", () => {
     assert.equal(
         buildRepeatableGroupPrefix(
