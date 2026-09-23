@@ -234,7 +234,7 @@ def _normalized_row_id(*, normalized_row, group, save_result, parent_reference=N
                 continue
             if change.parent_reference != parent_reference:
                 continue
-            if change.desired_row != normalized_row:
+            if change.desired_row is not normalized_row:
                 continue
             row = save_result.created_rows.get(change.row_reference)
             if row is not None:
