@@ -152,13 +152,29 @@ class HistoryServiceTests(TestCase):
             display_order=1,
         )
 
-        instance = self._instance(
-            data={
-                "parts": [
-                    {"_id": "row-1", "part_name": "LCD"},
-                    {"_id": "row-2", "part_name": "Battery"},
-                ]
-            }
+        instance = self._instance()
+
+        from workflow.repeatable_row_services import RepeatableRowService
+
+        row_1 = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        row_2 = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=1,
+        )
+        RepeatableRowService.set_value(
+            row=row_1,
+            field=self.part_field,
+            value="LCD",
+        )
+        RepeatableRowService.set_value(
+            row=row_2,
+            field=self.part_field,
+            value="Battery",
         )
 
         snapshot = HistoryService.build_snapshot(
