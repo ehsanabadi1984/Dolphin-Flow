@@ -1058,10 +1058,21 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             group=parent_group,
             row_order=0,
         )
+        second_parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent_group,
+            row_order=1,
+        )
         child_row = RepeatableRow.objects.create(
             instance=self.instance,
             group=child_group,
             parent_row=parent_row,
+            row_order=0,
+        )
+        second_child_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=second_parent_row,
             row_order=0,
         )
         RepeatableRowValue.objects.create(
@@ -1070,9 +1081,19 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             text_value="Parent 1",
         )
         RepeatableRowValue.objects.create(
+            row=second_parent_row,
+            field=parent_field,
+            text_value="Parent 2",
+        )
+        RepeatableRowValue.objects.create(
             row=child_row,
             field=child_field,
             text_value="Child 1",
+        )
+        RepeatableRowValue.objects.create(
+            row=second_child_row,
+            field=child_field,
+            text_value="Child 2",
         )
 
         response = self.client.get(
@@ -1082,9 +1103,14 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Child 1")
+        self.assertContains(response, "Child 2")
         self.assertContains(
             response,
             'name="customers_0_contacts_0_contact_name"',
+        )
+        self.assertContains(
+            response,
+            'name="customers_1_contacts_0_contact_name"',
         )
 
 
