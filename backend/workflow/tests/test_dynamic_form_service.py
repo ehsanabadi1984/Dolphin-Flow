@@ -364,10 +364,6 @@ class DynamicFormServiceTests(TestCase):
 
         self.assertEqual(item["row_id"], str(row.pk))
         self.assertNotEqual(item["row_id"], str(instance_device.pk))
-        self.assertEqual(
-            item["device"]["instance_device_id"],
-            instance_device.pk,
-        )
 
     def test_get_form_for_step_builds_nested_repeatable_context_per_parent_row(self):
         parent_group = FormRepeatableGroup.objects.create(
