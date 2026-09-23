@@ -422,6 +422,59 @@ class HistoryBrowserServiceTests(TestCase):
             [visible_field.code],
         )
 
+    def test_history_shows_field_with_edit_permission_even_without_view_permission(self):
+        form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="History Form",
+        )
+        section = FormSection.objects.create(
+            form=form,
+            name="Main",
+            code="MAIN",
+            order=1,
+        )
+        field = FormField.objects.create(
+            section=section,
+            name="Editable",
+            code="editable",
+            label="Editable",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+        )
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=True,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=HISTORY_ACTION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        self._execution({
+            "version": 1,
+            "fields": [{
+                "code": field.code,
+                "value": "Editable value",
+            }],
+            "repeatable_groups": [],
+        })
+
+        history = HistoryBrowserService.get_history(
+            user=self.user,
+            instance_id=self.instance.pk,
+        )
+
+        self.assertEqual(len(history), 1)
+        self.assertEqual(
+            [item["code"] for item in history[0]["snapshot"]["fields"]],
+            [field.code],
+        )
+
     def test_device_filter_keeps_complete_top_level_history(self):
         device_type = DeviceType.objects.create(
             name="Phone",
