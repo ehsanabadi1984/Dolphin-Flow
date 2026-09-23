@@ -578,7 +578,10 @@ class HistoryServiceTests(TestCase):
         self.assertEqual(snapshot["repeatable_groups"], [])
 
     def test_legacy_history_field_is_removed_from_form_field_model(self):
-        self.assertIsNone(FormField._meta.get_field("is_history_enabled"))
+        from django.core.exceptions import FieldDoesNotExist
+
+        with self.assertRaises(FieldDoesNotExist):
+            FormField._meta.get_field("is_history_enabled")
 
     def test_transition_persists_independent_history_for_two_repairs_of_same_device(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
