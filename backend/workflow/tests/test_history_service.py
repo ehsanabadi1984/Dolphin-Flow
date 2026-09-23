@@ -60,7 +60,6 @@ class HistoryServiceTests(TestCase):
             code="imei",
             label="IMEI",
             field_type=FormField.FieldType.TEXT,
-            is_history_enabled=False,
             order=0,
         )
         self.problem_field = FormField.objects.create(
@@ -69,7 +68,6 @@ class HistoryServiceTests(TestCase):
             code="problem",
             label="Problem",
             field_type=FormField.FieldType.TEXT,
-            is_history_enabled=True,
             order=1,
         )
         self.group = FormRepeatableGroup.objects.create(
@@ -578,6 +576,9 @@ class HistoryServiceTests(TestCase):
         self.assertIsNotNone(snapshot["configuration_id"])
         self.assertEqual(snapshot["fields"], [])
         self.assertEqual(snapshot["repeatable_groups"], [])
+
+    def test_legacy_history_field_is_removed_from_form_field_model(self):
+        self.assertIsNone(FormField._meta.get_field("is_history_enabled"))
 
     def test_transition_persists_independent_history_for_two_repairs_of_same_device(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
