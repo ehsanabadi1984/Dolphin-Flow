@@ -1,6 +1,7 @@
 from .authorization import WorkflowAuthorizationService
 from .history_permissions import HISTORY_ACTION
-from .models import WorkflowStepExecution
+from .models import FormDefinition, FormField, FormRepeatableGroup, WorkflowStepExecution
+from .permission_context import PermissionContext
 
 
 class HistoryBrowserService:
@@ -48,6 +49,99 @@ class HistoryBrowserService:
             step=execution.workflow_step,
             instance=execution.instance,
         )
+
+    @staticmethod
+    def _filter_snapshot_by_permissions(*, snapshot, execution, user):
+        if not isinstance(snapshot, dict):
+            return None
+
+        form = (
+            FormDefinition.objects
+            .filter(workflow=execution.instance.workflow, is_active=True)
+            .prefetch_related(
+                "sections__fields",
+                "sections__repeatable_groups__fields",
+            )
+            .first()
+        )
+        if form is None:
+            return None
+
+        permission_context = PermissionContext.build(
+            workflow=execution.instance.workflow,
+            form=form,
+            step=execution.workflow_step,
+            user=user,
+        )
+
+        fields_by_code = {}
+        groups_by_code = {}
+        for section in form.sections.filter(is_active=True):
+            for field in section.fields.filter(is_active=True):
+                fields_by_code[field.code] = field
+            for group in section.repeatable_groups.filter(is_active=True):
+                groups_by_code[group.code] = group
+
+        def field_allowed(field):
+            permission = permission_context.field(field)
+            return permission.can_view or permission.can_edit
+
+        def filter_fields(field_items):
+            result = []
+            for item in field_items or []:
+                if not isinstance(item, dict):
+                    continue
+                field = fields_by_code.get(item.get("code"))
+                if field is not None and field_allowed(field):
+                    result.append(item)
+            return result
+
+        def filter_group(group_snapshot):
+            if not isinstance(group_snapshot, dict):
+                return None
+            group = groups_by_code.get(group_snapshot.get("code"))
+            if group is None:
+                return None
+            group_permission = permission_context.group(group)
+            if not (group_permission.can_view or group_permission.can_edit):
+                return None
+
+            filtered = {**group_snapshot, "items": []}
+            for item in group_snapshot.get("items", []):
+                if not isinstance(item, dict):
+                    continue
+                filtered_item = {**item}
+                filtered_item["fields"] = filter_fields(item.get("fields", []))
+                child_groups = [
+                    child
+                    for child in (
+                        filter_group(child)
+                        for child in item.get("child_groups", [])
+                    )
+                    if child is not None
+                ]
+                if child_groups:
+                    filtered_item["child_groups"] = child_groups
+                else:
+                    filtered_item.pop("child_groups", None)
+                if filtered_item["fields"] or child_groups:
+                    filtered["items"].append(filtered_item)
+
+            return filtered if filtered["items"] else None
+
+        filtered_snapshot = {
+            **snapshot,
+            "fields": filter_fields(snapshot.get("fields", [])),
+            "repeatable_groups": [
+                filtered_group
+                for filtered_group in (
+                    filter_group(group)
+                    for group in snapshot.get("repeatable_groups", [])
+                )
+                if filtered_group is not None
+            ],
+        }
+        return filtered_snapshot
 
     @staticmethod
     def _device_snapshot(*, snapshot, device_id):
@@ -108,6 +202,14 @@ class HistoryBrowserService:
                 )
 
             if not isinstance(snapshot, dict):
+                continue
+
+            snapshot = cls._filter_snapshot_by_permissions(
+                snapshot=snapshot,
+                execution=execution,
+                user=user,
+            )
+            if snapshot is None:
                 continue
 
             history.append(
