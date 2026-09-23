@@ -91,7 +91,7 @@ test("adds a nested child row under the second parent with isolated names", asyn
         dom.window.DolphinFlowRepeatableNaming.reindexRepeatableFieldName;
     globalThis.buildRepeatableGroupPrefix =
         dom.window.DolphinFlowRepeatableNaming.buildRepeatableGroupPrefix;
-    await import(appPath);
+    await import(`${appPath.href}?repeatable-dom-test`);
 
     document.dispatchEvent(
         new dom.window.Event("DOMContentLoaded", { bubbles: true })
@@ -237,7 +237,7 @@ test("deletes a nested child row under the second parent without affecting the f
         dom.window.DolphinFlowRepeatableNaming.reindexRepeatableFieldName;
     globalThis.buildRepeatableGroupPrefix =
         dom.window.DolphinFlowRepeatableNaming.buildRepeatableGroupPrefix;
-    await import(appPath);
+    await import(`${appPath.href}?repeatable-delete-test`);
 
     document.dispatchEvent(
         new dom.window.Event("DOMContentLoaded", { bubbles: true })
