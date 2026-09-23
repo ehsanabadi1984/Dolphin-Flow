@@ -232,7 +232,7 @@ class RepeatableFilePersistenceTests(TestCase):
             instance=self.instance,
             user=self.user,
             submitted_files={
-                "items_file_0_child_items_file_child_attachment": self._upload("nested.txt"),
+                "items_file_0_child_items_file_0_child_attachment": self._upload("nested.txt"),
             },
             save_result=result,
         )
