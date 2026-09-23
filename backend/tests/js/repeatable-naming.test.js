@@ -74,6 +74,38 @@ test("reindexes a deeper nested field while preserving the full ancestor path", 
     );
 });
 
+test("reindexes remaining nested rows independently after deleting a child row", () => {
+    const parentZeroRemaining = reindexRepeatableFieldName(
+        "customers_0_contacts_1_name",
+        "customers_0_contacts_",
+        0,
+    );
+
+    const parentOneRemaining = reindexRepeatableFieldName(
+        "customers_1_contacts_1_name",
+        "customers_1_contacts_",
+        0,
+    );
+
+    assert.equal(
+        parentZeroRemaining,
+        "customers_0_contacts_0_name",
+    );
+    assert.equal(
+        parentOneRemaining,
+        "customers_1_contacts_0_name",
+    );
+
+    assert.notEqual(
+        parentZeroRemaining,
+        "customers_1_contacts_0_name",
+    );
+    assert.notEqual(
+        parentOneRemaining,
+        "customers_0_contacts_0_name",
+    );
+});
+
 test("builds distinct child prefixes for different parent rows", () => {
     assert.equal(
         buildRepeatableGroupPrefix(
