@@ -894,6 +894,86 @@ class HistoryServiceTests(TestCase):
             "Original problem",
         )
 
+    def test_two_transitions_on_same_instance_persist_independent_history_snapshots(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.problem_field,
+            display_label="شرح مشکل",
+            display_order=1,
+        )
+
+        second_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Repair Review",
+            code="REPAIR_REVIEW",
+            order=2,
+        )
+        first_transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            from_step=self.step,
+            to_step=second_step,
+            name="Send to Review",
+        )
+        second_transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            from_step=second_step,
+            to_step=None,
+            name="Finish Repair",
+        )
+
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+        for transition in (first_transition, second_transition):
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                transition=transition,
+                user=self.user,
+                action=WorkflowPermission.Action.TRANSITION,
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
+
+        instance = self._instance(data={"problem": "Initial problem"})
+
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=first_transition,
+            user=self.user,
+        )
+
+        form_data = FormData.objects.get(instance=instance)
+        form_data.data = {"problem": "Updated problem"}
+        form_data.save(update_fields=["data"])
+
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=second_transition,
+            user=self.user,
+        )
+
+        executions = list(
+            WorkflowStepExecution.objects
+            .filter(instance=instance, is_submitted=True)
+            .order_by("submitted_at", "pk")
+        )
+
+        self.assertEqual(len(executions), 2)
+        self.assertEqual(
+            executions[0].data["history"]["fields"][0]["value"],
+            "Initial problem",
+        )
+        self.assertEqual(
+            executions[1].data["history"]["fields"][0]["value"],
+            "Updated problem",
+        )
+        self.assertNotEqual(
+            executions[0].data["history"],
+            executions[1].data["history"],
+        )
+
     def test_transition_persists_independent_history_with_files_for_two_repairs(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
         file_field = FormField.objects.create(
