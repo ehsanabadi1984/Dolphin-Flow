@@ -1012,7 +1012,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             section=self.section,
             repeatable_group=parent_group,
             name="Customer Name",
-            code="customer_name",
+            code="nested_customer_name",
             label="Customer Name",
             field_type=FormField.FieldType.TEXT,
             order=0,
