@@ -10,6 +10,13 @@ const appPath = new URL(
 test("adds a nested child row under the second parent with isolated names", async () => {
     const dom = new JSDOM(
         `
+        <button id="df-notification-toggle" type="button" aria-expanded="false"></button>
+        <div id="df-notification-menu" aria-hidden="true">
+            <div id="df-notification-list"></div>
+            <span id="df-notification-badge"></span>
+            <span id="df-notification-menu-count"></span>
+        </div>
+
         <form data-instance-id="1" data-edit-mode="1">
             <section class="df-repeatable-group" data-repeatable-group="customers">
                 <div class="df-repeatable-items">
