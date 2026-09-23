@@ -562,7 +562,7 @@ class HistoryServiceTests(TestCase):
         self.assertEqual(second_item["instance_device_id"], second_device.pk)
         self.assertNotEqual(first_item["instance_device_id"], second_item["instance_device_id"])
 
-    def test_without_active_configuration_legacy_history_flag_remains_compatible(self):
+    def test_without_active_configuration_does_not_use_legacy_history_flag(self):
         instance = self._instance(
             data={
                 "problem": "Legacy problem",
@@ -575,11 +575,9 @@ class HistoryServiceTests(TestCase):
             user=self.user,
         )
 
-        self.assertIsNone(snapshot["configuration_id"])
-        self.assertEqual(
-            [field["code"] for field in snapshot["fields"]],
-            ["problem"],
-        )
+        self.assertIsNotNone(snapshot["configuration_id"])
+        self.assertEqual(snapshot["fields"], [])
+        self.assertEqual(snapshot["repeatable_groups"], [])
 
     def test_transition_persists_independent_history_for_two_repairs_of_same_device(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
