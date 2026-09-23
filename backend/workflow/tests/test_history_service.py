@@ -353,6 +353,140 @@ class HistoryServiceTests(TestCase):
             },
         )
 
+    def test_nested_repeatable_files_preserve_parent_child_ownership(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Part Details",
+            code="part_details",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=3,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Attachment",
+            code="attachment",
+            label="Attachment",
+            field_type=FormField.FieldType.FILE,
+            order=4,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.part_field,
+            display_label="قطعه",
+            display_order=1,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=child_field,
+            display_label="پیوست",
+            display_order=2,
+        )
+
+        instance = self._instance()
+
+        from workflow.repeatable_row_services import RepeatableRowService
+
+        parent_a = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        parent_b = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=1,
+        )
+        RepeatableRowService.set_value(
+            row=parent_a,
+            field=self.part_field,
+            value="LCD",
+        )
+        RepeatableRowService.set_value(
+            row=parent_b,
+            field=self.part_field,
+            value="Battery",
+        )
+
+        child_a = RepeatableRowService.create_row(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_a,
+            row_order=0,
+        )
+        child_b = RepeatableRowService.create_row(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_b,
+            row_order=0,
+        )
+
+        form_data = FormData.objects.get(instance=instance)
+        FormFile.objects.create(
+            form_data=form_data,
+            field=child_field,
+            row_id=str(child_a.pk),
+            file=SimpleUploadedFile(
+                "file-a.jpg",
+                b"file-a-content",
+                content_type="image/jpeg",
+            ),
+            original_name="file-a.jpg",
+            file_size=13,
+            content_type="image/jpeg",
+            uploaded_by=self.user,
+        )
+        FormFile.objects.create(
+            form_data=form_data,
+            field=child_field,
+            row_id=str(child_b.pk),
+            file=SimpleUploadedFile(
+                "file-b.jpg",
+                b"file-b-content",
+                content_type="image/jpeg",
+            ),
+            original_name="file-b.jpg",
+            file_size=13,
+            content_type="image/jpeg",
+            uploaded_by=self.user,
+        )
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        parent_group = next(
+            group
+            for group in snapshot["repeatable_groups"]
+            if group["code"] == self.group.code
+        )
+
+        child_groups = [
+            item["child_groups"][0]
+            for item in parent_group["items"]
+        ]
+
+        self.assertEqual(
+            child_groups[0]["items"][0]["fields"][0]["file"],
+            {
+                "name": "file-a.jpg",
+                "size": 13,
+                "content_type": "image/jpeg",
+            },
+        )
+        self.assertEqual(
+            child_groups[1]["items"][0]["fields"][0]["file"],
+            {
+                "name": "file-b.jpg",
+                "size": 13,
+                "content_type": "image/jpeg",
+            },
+        )
+
     def test_same_device_in_two_instances_produces_independent_snapshots(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
 
