@@ -61,6 +61,19 @@ class OperatorFormSerializer:
         return data
 
     @staticmethod
+    def section(*, section_context):
+        """Serialize one SectionContext into the operator template contract."""
+        return {
+            "section": section_context["section"],
+            "fields": section_context.get("fields", []),
+            "repeatable_groups": section_context.get(
+                "repeatable_groups",
+                [],
+            ),
+            "layout_items": section_context.get("layout_items", []),
+        }
+
+    @staticmethod
     def row(*, row_context):
         """Serialize one canonical RowContext into the operator template contract."""
         fields = []
