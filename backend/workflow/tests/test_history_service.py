@@ -666,6 +666,52 @@ class HistoryServiceTests(TestCase):
         with self.assertRaises(FieldDoesNotExist):
             FormField._meta.get_field("is_history_enabled")
 
+    def test_persisted_history_snapshot_is_immutable_after_form_data_changes(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.problem_field,
+            display_label="شرح مشکل تعمیر",
+            display_order=1,
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            from_step=self.step,
+            to_step=None,
+            name="Finish Repair",
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            transition=transition,
+            user=self.user,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        instance = self._instance(data={"problem": "Original problem"})
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=transition,
+            user=self.user,
+        )
+        execution = instance.step_executions.get(workflow_step=self.step)
+        self.assertEqual(
+            execution.data["history"]["fields"][0]["value"],
+            "Original problem",
+        )
+        form_data = FormData.objects.get(instance=instance)
+        form_data.data = {"problem": "Changed later"}
+        form_data.save(update_fields=["data"])
+        execution.refresh_from_db()
+        self.assertEqual(
+            execution.data["history"]["fields"][0]["value"],
+            "Original problem",
+        )
+
     def test_transition_persists_independent_history_for_two_repairs_of_same_device(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
         HistoryField.objects.create(
