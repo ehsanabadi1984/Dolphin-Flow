@@ -232,7 +232,7 @@ class RepeatableFilePersistenceTests(TestCase):
             instance=self.instance,
             user=self.user,
             submitted_files={
-                "child_items_file_0_child_attachment": self._upload("nested.txt"),
+                "items_file_0_child_items_file_child_attachment": self._upload("nested.txt"),
             },
             save_result=result,
         )
@@ -313,8 +313,10 @@ class RepeatableFilePersistenceTests(TestCase):
             instance=self.instance,
             user=self.user,
             submitted_files={
-                "child_items_file_multi_0_child_attachment": self._upload("nested-0.txt"),
-                "child_items_file_multi_1_child_attachment": self._upload("nested-1.txt"),
+                "items_file_0_child_items_file_multi_0_child_attachment": self._upload("nested-0-0.txt"),
+                "items_file_0_child_items_file_multi_1_child_attachment": self._upload("nested-0-1.txt"),
+                "items_file_1_child_items_file_multi_0_child_attachment": self._upload("nested-1-0.txt"),
+                "items_file_1_child_items_file_multi_1_child_attachment": self._upload("nested-1-1.txt"),
             },
             save_result=result,
         )
@@ -426,7 +428,7 @@ class RepeatableFilePersistenceTests(TestCase):
         )
         self.assertEqual(
             {
-                item.row_id: item.file.name.split("/")[-1]
+                item.row_id: item.original_name
                 for item in files
             },
             {
