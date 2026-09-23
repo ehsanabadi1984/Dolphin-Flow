@@ -11,7 +11,7 @@ from django.urls import reverse
 from .authorization import WorkflowAuthorizationService
 from .form_file_models import FormFile
 from .form_services import DynamicFormService
-from .models import RepeatableRow
+from .models import RepeatableRow, RowReference, RowReferenceKind
 from .permission_context import PermissionContext
 from .models import (
     FormData,
@@ -221,17 +221,47 @@ def _replace_file(*, form_data, field, row_id, upload, user):
     )
 
 
-def _normalized_row_id(*, normalized_row, group, save_result, create_changes, create_index):
+def _normalized_row_id(*, normalized_row, group, save_result, parent_reference=None):
     if normalized_row.row_id is not None:
         return str(normalized_row.row_id)
 
-    if create_index >= len(create_changes):
-        return None
+    for group_diff in save_result.diff.groups:
+        for change in group_diff.changes:
+            if change.group.pk != group.pk:
+                continue
+            if change.action.value != "create":
+                continue
+            if change.parent_reference != parent_reference:
+                continue
+            if change.desired_row != normalized_row:
+                continue
+            row = save_result.created_rows.get(change.row_reference)
+            if row is not None:
+                return str(row.pk)
+            return None
 
-    change = create_changes[create_index]
-    row = save_result.created_rows.get(change.row_reference)
-    if row is not None:
-        return str(row.pk)
+    return None
+
+
+def _normalized_row_reference(*, normalized_row, group, save_result, parent_reference=None):
+    if normalized_row.row_id is not None:
+        return RowReference(
+            kind=RowReferenceKind.EXISTING,
+            value=normalized_row.row_id,
+        )
+
+    for group_diff in save_result.diff.groups:
+        for change in group_diff.changes:
+            if change.group.pk != group.pk:
+                continue
+            if change.action.value != "create":
+                continue
+            if change.parent_reference != parent_reference:
+                continue
+            if change.desired_row != normalized_row:
+                continue
+            return change.row_reference
+
     return None
 
 
@@ -244,6 +274,7 @@ def _save_repeatable_group_files(
     user,
     save_result,
     group_prefix=None,
+    parent_reference=None,
 ):
     file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
     if not file_fields:
@@ -251,25 +282,19 @@ def _save_repeatable_group_files(
 
     prefix = group_prefix or f"{group.code}_"
 
-    create_changes = [
-        change
-        for group_diff in save_result.diff.groups
-        for change in group_diff.changes
-        if change.group.pk == group.pk
-        and change.action.value == "create"
-    ]
-    create_index = 0
-
     for index, normalized_row in enumerate(normalized_rows):
         row_id = _normalized_row_id(
             normalized_row=normalized_row,
             group=group,
             save_result=save_result,
-            create_changes=create_changes,
-            create_index=create_index,
+            parent_reference=parent_reference,
         )
-        if normalized_row.row_id is None:
-            create_index += 1
+        row_reference = _normalized_row_reference(
+            normalized_row=normalized_row,
+            group=group,
+            save_result=save_result,
+            parent_reference=parent_reference,
+        )
         if not row_id:
             continue
 
@@ -299,6 +324,7 @@ def _save_repeatable_group_files(
                 user=user,
                 save_result=save_result,
                 group_prefix=f"{prefix}{index}_{child_group.code}_",
+                parent_reference=row_reference,
             )
 
 
