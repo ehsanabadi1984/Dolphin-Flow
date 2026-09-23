@@ -659,7 +659,7 @@ def _require_device_group_delete_permission(*, instance, user, group_code, reque
 
 
 @login_required
-def delete_device(request, instance_id, group_code, instance_device_id):
+def delete_device(request, instance_id, group_code, row_id):
     if request.method != "POST":
         return redirect("operator_panel:workflow_instance", instance_id=instance_id)
 
@@ -682,11 +682,16 @@ def delete_device(request, instance_id, group_code, instance_device_id):
     )
     instance_device = get_object_or_404(
         InstanceDevice,
-        pk=instance_device_id,
+        pk=row_id,
         instance=instance,
-        is_active=True,
+        group__code=group_code,
+        group__group_type=FormRepeatableGroup.GroupType.DEVICE,
     )
-    InstanceDeviceService.deactivate_device(instance_device=instance_device)
+    from workflow.form_draft_delete_apply_services import FormDraftDeleteApplyService
+    FormDraftDeleteApplyService.delete_row_tree(
+        instance=instance,
+        row_id=row_id,
+    )
     messages.success(request, "دستگاه از این فرآیند حذف شد.")
     return redirect("operator_panel:workflow_instance", instance_id=instance.pk)
 
