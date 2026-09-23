@@ -2469,76 +2469,74 @@ class DynamicFormService:
                             # -------------------------------------------------
 
                             items.append(
-                                OperatorFormSerializer.item(
-                                    instance_device_id=instance_device.pk,
-                                    device_id=(
-                                        instance_device.device_id
-                                        or ""
-                                    ),
-                                    is_existing_device=is_existing_device,
-                                    device_model_id=(
-                                        device_model.pk
-                                        if device_model
-                                        else ""
-                                    ),
-                                    device_type=(
-                                        device_type.name
-                                        if device_type
-                                        else ""
-                                    ),
-                                    device_model=(
-                                        str(device_model)
-                                        if device_model
-                                        else ""
-                                    ),
-                                    reported_problem=(
-                                        instance_device.reported_problem
-                                        or ""
-                                    ),
-                                    description=(
-                                        instance_device.description
-                                        or ""
-                                    ),
-                                    warranty_status=(
-                                        instance_device.warranty_status
-                                        or ""
-                                    ),
-                                    status=(
-                                        instance_device.status
-                                        or ""
-                                    ),
-                                    identifiers=[
-                                        {
-                                            "type": identifier.identifier_type,
-                                            "value": identifier.value,
-                                        }
-                                        for identifier
-                                        in (
-                                            instance_device.device.identifiers.all()
-                                            if instance_device.device
-                                            else []
-                                        )
-                                    ]
-                                    or [
-                                        {
-                                            "type": "IMEI",
-                                            "value": imei,
-                                        }
-                                    ],
-                                    has_history=is_existing_device,
-                                    fields=item_fields,
-                                )
+                                {
+                                    "row_id": str(instance_device.pk),
+                                    "row_order": len(items),
+                                    "parent_row_id": None,
+                                    "fields": item_fields,
+                                    "device": {
+                                        "instance_device": instance_device,
+                                        "device": instance_device.device,
+                                        "draft_device": (
+                                            instance_device.draft_device_model
+                                            if not instance_device.device
+                                            else None
+                                        ),
+                                        "device_id": (
+                                            instance_device.device_id or ""
+                                        ),
+                                        "instance_device_id": instance_device.pk,
+                                        "device_type": device_type,
+                                        "device_model": device_model,
+                                        "identifiers": [
+                                            {
+                                                "type": identifier.identifier_type,
+                                                "value": identifier.value,
+                                            }
+                                            for identifier in (
+                                                instance_device.device.identifiers.all()
+                                                if instance_device.device
+                                                else []
+                                            )
+                                        ] or [
+                                            {
+                                                "type": "IMEI",
+                                                "value": imei,
+                                            }
+                                        ],
+                                        "imei": imei,
+                                        "warranty_status": (
+                                            instance_device.warranty_status or ""
+                                        ),
+                                        "status": instance_device.status or "",
+                                        "reported_problem": (
+                                            instance_device.reported_problem or ""
+                                        ),
+                                        "description": (
+                                            instance_device.description or ""
+                                        ),
+                                        "is_existing_device": is_existing_device,
+                                        "has_history": is_existing_device,
+                                    },
+                                }
                             )
 
-                    group_context = OperatorFormSerializer.repeatable_group(
-                        group=group,
-                        fields=group_fields,
-                        items=items,
-                        has_editable_fields=group_has_editable_fields,
-                        can_view=group_can_view,
-                        can_edit=group_can_edit,
-                        can_add=group_can_add,
-                        can_delete=group_can_delete,
+                    group_context = {
+                        "group": group,
+                        "fields": group_fields,
+                        "items": items,
+                        "permissions": {
+                            "can_view": group_can_view,
+                            "can_edit": group_can_edit,
+                            "can_add": group_can_add,
+                            "can_delete": group_can_delete,
+                        },
+                        "has_editable_fields": group_has_editable_fields,
+                        "display_type": group.display_type,
+                        "group_type": group.group_type,
+                    }
+                    group_context = OperatorFormSerializer.group_context(
+                        group_context=group_context,
                     )
 
                 else:
