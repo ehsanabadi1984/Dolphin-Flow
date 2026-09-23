@@ -61,6 +61,70 @@ class OperatorFormSerializer:
         return data
 
     @staticmethod
+    def row(*, row_context):
+        """Serialize one canonical RowContext into the operator template contract."""
+        fields = []
+
+        for field_context in row_context.get("fields", []):
+            field = field_context["field"]
+            fields.append(
+                OperatorFormSerializer.field(
+                    field=field,
+                    can_edit=field_context["can_edit"],
+                    permission_can_edit=field_context.get(
+                        "permission_can_edit",
+                        False,
+                    ),
+                    value=field_context.get("value", ""),
+                    display_value=field_context.get(
+                        "display_value",
+                        "",
+                    ),
+                    choices=field_context.get("choices", []),
+                    device_types=field_context.get("device_types"),
+                    device_models=field_context.get("device_models"),
+                    parent_code=field_context.get("parent_code"),
+                    is_immutable=field_context.get("is_immutable"),
+                    is_imei_immutable=field_context.get(
+                        "is_imei_immutable"
+                    ),
+                )
+            )
+
+        return OperatorFormSerializer.item(
+            row_id=row_context.get("row_id", ""),
+            row_order=row_context.get("row_order"),
+            parent_row_id=row_context.get("parent_row_id"),
+            child_groups=row_context.get("child_groups", []),
+            device=row_context.get("device"),
+            fields=fields,
+        )
+
+    @staticmethod
+    def group_context(*, group_context):
+        """Serialize a GroupContext into the operator template contract."""
+        items = [
+            OperatorFormSerializer.row(row_context=row)
+            for row in group_context.get("items", [])
+        ]
+
+        permissions = group_context.get("permissions", {})
+
+        return OperatorFormSerializer.repeatable_group(
+            group=group_context["group"],
+            fields=group_context.get("fields", []),
+            items=items,
+            has_editable_fields=group_context.get(
+                "has_editable_fields",
+                False,
+            ),
+            can_view=permissions.get("can_view", False),
+            can_edit=permissions.get("can_edit", False),
+            can_add=permissions.get("can_add", False),
+            can_delete=permissions.get("can_delete", False),
+        )
+
+    @staticmethod
     def normal_item(
         *,
         row_id="",
