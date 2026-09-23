@@ -1192,6 +1192,20 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         instance_device.refresh_from_db()
-        self.assertTrue(instance_device.is_active)
+        self.assertFalse(instance_device.is_active)
         self.assertFalse(RepeatableRow.objects.filter(pk=row.pk).exists())
+
+        get_response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"edit": "1"},
+        )
+
+        self.assertEqual(get_response.status_code, 200)
+        self.assertNotContains(
+            get_response,
+            f'data-row-id="{row.pk}"',
+        )
 
