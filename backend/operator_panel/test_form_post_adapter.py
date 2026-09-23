@@ -182,6 +182,57 @@ class FormPostAdapterTests(TestCase):
         )
 
 
+    def test_nested_rows_keep_parent_context_when_child_indexes_repeat(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "Parent 1",
+            "items_0_child_items_0_child_title": "P1 child",
+            "items_1_title": "Parent 2",
+            "items_1_child_items_0_child_title": "P2 child",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {
+                    "title": "Parent 1",
+                    "child_groups": {
+                        "child_items": ({"child_title": "P1 child"},),
+                    },
+                },
+                {
+                    "title": "Parent 2",
+                    "child_groups": {
+                        "child_items": ({"child_title": "P2 child"},),
+                    },
+                },
+            ],
+        )
+
+
     def test_existing_device_instance_id_is_resolved_to_repeatable_row_id(self):
         device_group = FormRepeatableGroup.objects.create(
             section=self.section,
