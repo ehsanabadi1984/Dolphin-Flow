@@ -5,6 +5,7 @@ from workflow.instance_device_services import InstanceDeviceService
 from workflow.device_services import DeviceService
 
 from workflow.form_services import DynamicFormService
+from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.models import (
     Device,
     DeviceModel,
@@ -32,20 +33,6 @@ User = get_user_model()
 
 
 class DynamicFormServiceTests(TestCase):
-
-    @staticmethod
-    def flatten_repeatable_submission(submitted_data):
-        result = {
-            key: value
-            for key, value in submitted_data.items()
-            if key != "devices"
-        }
-
-        for index, row in enumerate(submitted_data.get("devices", [])):
-            for field, value in row.items():
-                result[f"devices_{index}_{field}"] = value
-
-        return result
 
     @classmethod
     def setUpTestData(cls):
@@ -272,6 +259,16 @@ class DynamicFormServiceTests(TestCase):
             code="TEST_MODEL",
             is_active=True,
         )
+
+    def save_form_for_step(self, *, instance, user, submitted_data, edit_mode):
+        result = FormDraftSaveService.save(
+            instance=instance,
+            step=self.step_one,
+            user=user,
+            submitted_data=submitted_data,
+            edit_mode=edit_mode,
+        )
+        return result.form_data
 
     def create_instance(self):
         instance = WorkflowInstance.objects.create(
@@ -810,10 +807,10 @@ class DynamicFormServiceTests(TestCase):
             "customer_address": "آدرس تست - کد پستی 1234567890",
         }
 
-        form_data = DynamicFormService.save_form_for_step(
+        form_data = self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            submitted_data=submitted_data,
             edit_mode=True,
         )
 
@@ -844,10 +841,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        form_data = DynamicFormService.save_form_for_step(
+        form_data = self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            submitted_data=submitted_data,
             edit_mode=True,
         )
 
@@ -927,10 +924,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance_1,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            submitted_data=submitted_data,
             edit_mode=True,
         )
 
@@ -946,10 +943,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance_2,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data_2),
+            submitted_data=submitted_data_2,
             edit_mode=True,
         )
 
@@ -985,10 +982,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(first_data),
+            submitted_data=first_data,
             edit_mode=True,
         )
 
@@ -1021,10 +1018,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(second_data),
+            submitted_data=second_data,
             edit_mode=True,
         )
 
@@ -1060,10 +1057,10 @@ class DynamicFormServiceTests(TestCase):
         }
 
         with self.assertRaises(Exception):
-            DynamicFormService.save_form_for_step(
+            self.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=self.flatten_repeatable_submission(submitted_data),
+                submitted_data=submitted_data,
                 edit_mode=True,
             )
 
@@ -1083,10 +1080,10 @@ class DynamicFormServiceTests(TestCase):
         }
 
         with self.assertRaises(Exception):
-            DynamicFormService.save_form_for_step(
+            self.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=self.flatten_repeatable_submission(submitted_data),
+                submitted_data=submitted_data,
                 edit_mode=True,
             )
 
@@ -1129,10 +1126,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(first_data),
+            submitted_data=first_data,
             edit_mode=True,
         )
 
@@ -1167,10 +1164,10 @@ class DynamicFormServiceTests(TestCase):
         }
 
         with self.assertRaises(ValidationError):
-            DynamicFormService.save_form_for_step(
+            self.save_form_for_step(
                 instance=second_instance,
                 user=self.user,
-                submitted_data=self.flatten_repeatable_submission(second_data),
+                submitted_data=second_data,
                 edit_mode=True,
             )
 
@@ -1212,10 +1209,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            submitted_data=submitted_data,
             edit_mode=True,
         )
 
@@ -1285,10 +1282,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            submitted_data=submitted_data,
             edit_mode=True,
         )
 
@@ -1346,10 +1343,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            submitted_data=submitted_data,
             edit_mode=True,
         )
 
@@ -1409,10 +1406,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            submitted_data=submitted_data,
             edit_mode=True,
         )
 
@@ -1486,10 +1483,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(first_submission),
+            submitted_data=first_submission,
             edit_mode=True,
         )
 
@@ -1514,10 +1511,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(second_submission),
+            submitted_data=second_submission,
             edit_mode=True,
         )
 
@@ -1578,10 +1575,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(first_submission),
+            submitted_data=first_submission,
             edit_mode=True,
         )
 
@@ -1614,10 +1611,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(second_submission),
+            submitted_data=second_submission,
             edit_mode=True,
         )
 
@@ -1683,10 +1680,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            submitted_data=submitted_data,
             edit_mode=True,
         )
 
@@ -1756,10 +1753,10 @@ class DynamicFormServiceTests(TestCase):
         }
 
         with self.assertRaises(ValidationError):
-            DynamicFormService.save_form_for_step(
+            self.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=self.flatten_repeatable_submission(submitted_data),
+                submitted_data=submitted_data,
                 edit_mode=True,
             )
 
@@ -1787,10 +1784,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            submitted_data=submitted_data,
             edit_mode=True,
         )
 
@@ -1841,10 +1838,10 @@ class DynamicFormServiceTests(TestCase):
         }
 
         with self.assertRaises(ValidationError):
-            DynamicFormService.save_form_for_step(
+            self.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=self.flatten_repeatable_submission(update_submission),
+                submitted_data=update_submission,
                 edit_mode=True,
             )
 
@@ -1888,10 +1885,10 @@ class DynamicFormServiceTests(TestCase):
         }
 
         # ابتدا دستگاه را با مجوز کامل ایجاد می‌کنیم.
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(submitted_data),
+            submitted_data=submitted_data,
             edit_mode=True,
         )
 
@@ -1965,10 +1962,10 @@ class DynamicFormServiceTests(TestCase):
         )
 
         with self.assertRaises(ValidationError):
-            DynamicFormService.save_form_for_step(
+            self.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=self.flatten_repeatable_submission(submitted_data),
+                submitted_data=submitted_data,
                 edit_mode=True,
             )
 
@@ -2012,10 +2009,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(first_submission),
+            submitted_data=first_submission,
             edit_mode=True,
         )
 
@@ -2048,10 +2045,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(second_submission),
+            submitted_data=second_submission,
             edit_mode=True,
         )
 
@@ -2087,10 +2084,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(first_submission),
+            submitted_data=first_submission,
             edit_mode=True,
         )
 
@@ -2120,10 +2117,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(second_submission),
+            submitted_data=second_submission,
             edit_mode=True,
         )
 
@@ -2199,10 +2196,10 @@ class DynamicFormServiceTests(TestCase):
             ],
         }
 
-        DynamicFormService.save_form_for_step(
+        self.save_form_for_step(
             instance=instance,
             user=self.user,
-            submitted_data=self.flatten_repeatable_submission(first_submission),
+            submitted_data=first_submission,
             edit_mode=True,
         )
 
@@ -2247,10 +2244,10 @@ class DynamicFormServiceTests(TestCase):
         }
 
         with self.assertRaises(ValidationError):
-            DynamicFormService.save_form_for_step(
+            self.save_form_for_step(
                 instance=instance,
                 user=self.user,
-                submitted_data=self.flatten_repeatable_submission(second_submission),
+                submitted_data=second_submission,
                 edit_mode=True,
             )
 
