@@ -333,6 +333,42 @@ class DynamicFormServiceTests(TestCase):
 
         return device
 
+    def test_get_form_for_step_uses_repeatable_row_id_for_device_rows(self):
+        instance = self.create_instance()
+
+        instance_device = InstanceDevice.objects.create(
+            instance=instance,
+            draft_imei="111111111111111",
+            draft_device_model=self.device_model,
+            draft_device_type=self.device_model.device_type,
+        )
+        row = RepeatableRow.objects.create(
+            instance=instance,
+            group=self.device_group,
+            row_order=0,
+            instance_device=instance_device,
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+        )
+
+        device_group = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].pk == self.device_group.pk
+        )
+        item = device_group["items"][0]
+
+        self.assertEqual(item["row_id"], str(row.pk))
+        self.assertNotEqual(item["row_id"], str(instance_device.pk))
+        self.assertEqual(
+            item["device"]["instance_device_id"],
+            instance_device.pk,
+        )
+
     def test_get_form_for_step_builds_nested_repeatable_context_per_parent_row(self):
         parent_group = FormRepeatableGroup.objects.create(
             section=self.section,
