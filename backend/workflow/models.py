@@ -1289,10 +1289,6 @@ class FormField(models.Model):
         default=False,
     )
 
-    is_history_enabled = models.BooleanField(
-        default=False,
-    )
-
     order = models.PositiveIntegerField(
         default=0,
     )
