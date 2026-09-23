@@ -263,6 +263,9 @@ class HistoryServiceTests(TestCase):
             if group["code"] == self.group.code
         )
 
+        self.assertIn("child_groups", parent_group["items"][0])
+        self.assertIn("child_groups", parent_group["items"][1])
+
         self.assertEqual(
             [
                 (
