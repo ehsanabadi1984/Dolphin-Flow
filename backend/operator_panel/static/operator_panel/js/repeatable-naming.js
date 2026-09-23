@@ -17,6 +17,17 @@ function reindexRepeatableFieldName(oldName, groupPrefix, newIndex) {
     );
 }
 
+function buildRepeatableGroupPrefix(parentContext, groupCode) {
+    return (
+        parentContext
+            .map(({ groupCode, index }) => `${groupCode}_${index}_`)
+            .join("") +
+        groupCode +
+        "_"
+    );
+}
+
 globalThis.DolphinFlowRepeatableNaming = {
     reindexRepeatableFieldName,
+    buildRepeatableGroupPrefix,
 };
