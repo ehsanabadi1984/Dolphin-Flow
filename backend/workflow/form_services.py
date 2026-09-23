@@ -129,6 +129,48 @@ class DynamicFormService:
 
      
     @staticmethod
+    def _get_display_value(
+        *,
+        field,
+        value,
+    ):
+        """
+        Resolve the human-readable representation of a field value.
+
+        SELECT fields map the stored value to its choice label
+        (STATIC, LOOKUP or MODEL choice sources). Unresolved values
+        fall back to the raw stored value instead of rendering blank.
+        Non-SELECT fields simply display their raw value.
+        """
+
+        if value in ("", None):
+            return ""
+
+        if isinstance(value, list):
+            return [
+                DynamicFormService._get_display_value(
+                    field=field,
+                    value=item,
+                )
+                for item in value
+            ]
+
+        if field.field_type != FormField.FieldType.SELECT:
+            return str(value)
+
+        choices = DynamicFormService._get_field_choices(
+            field
+        )
+
+        value_string = str(value)
+
+        for choice in choices:
+            if str(choice["value"]) == value_string:
+                return choice["label"]
+
+        return str(value)
+
+    @staticmethod
     def _get_lookup_label(*, field, value):
         """
         Return the human-readable label for a LOOKUP field value.
