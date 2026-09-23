@@ -171,6 +171,113 @@ class HistoryServiceTests(TestCase):
         self.assertEqual(items[0]["fields"][0]["value"], "LCD")
         self.assertEqual(items[1]["fields"][0]["value"], "Battery")
 
+    def test_nested_repeatable_rows_preserve_parent_child_hierarchy(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Part Details",
+            code="part_details",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=3,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Serial",
+            code="serial",
+            label="Serial",
+            field_type=FormField.FieldType.TEXT,
+            order=4,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.part_field,
+            display_label="قطعه",
+            display_order=1,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=child_field,
+            display_label="سریال",
+            display_order=2,
+        )
+
+        instance = self._instance()
+
+        from workflow.repeatable_row_services import RepeatableRowService
+
+        parent_a = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        parent_b = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=1,
+        )
+        RepeatableRowService.set_value(
+            row=parent_a,
+            field=self.part_field,
+            value="LCD",
+        )
+        RepeatableRowService.set_value(
+            row=parent_b,
+            field=self.part_field,
+            value="Battery",
+        )
+
+        child_a = RepeatableRowService.create_row(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_a,
+            row_order=0,
+        )
+        child_b = RepeatableRowService.create_row(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_b,
+            row_order=0,
+        )
+        RepeatableRowService.set_value(
+            row=child_a,
+            field=child_field,
+            value="SERIAL-A",
+        )
+        RepeatableRowService.set_value(
+            row=child_b,
+            field=child_field,
+            value="SERIAL-B",
+        )
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        parent_group = next(
+            group
+            for group in snapshot["repeatable_groups"]
+            if group["code"] == self.group.code
+        )
+
+        self.assertEqual(
+            [
+                (
+                    item["fields"][0]["value"],
+                    item["child_groups"][0]["code"],
+                    item["child_groups"][0]["items"][0]["fields"][0]["value"],
+                )
+                for item in parent_group["items"]
+            ],
+            [
+                ("LCD", child_group.code, "SERIAL-A"),
+                ("Battery", child_group.code, "SERIAL-B"),
+            ],
+        )
+
     def test_same_device_in_two_instances_produces_independent_snapshots(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
 
