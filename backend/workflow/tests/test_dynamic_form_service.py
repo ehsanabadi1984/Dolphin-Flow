@@ -545,6 +545,7 @@ class DynamicFormServiceTests(TestCase):
         result = DynamicFormService.get_form_for_step(
             instance=instance,
             user=self.user,
+            edit_mode=True,
         )
 
         customers = next(
@@ -607,6 +608,7 @@ class DynamicFormServiceTests(TestCase):
         result = DynamicFormService.get_form_for_step(
             instance=instance,
             user=self.user,
+            edit_mode=True,
         )
 
         customers = next(
