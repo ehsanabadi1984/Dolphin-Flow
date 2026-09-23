@@ -5,6 +5,7 @@ import "../../operator_panel/static/operator_panel/js/repeatable-naming.js";
 
 const {
     reindexRepeatableFieldName,
+    buildRepeatableGroupPrefix,
 } = globalThis.DolphinFlowRepeatableNaming;
 
 test("reindexes a root repeatable field", () => {
@@ -70,5 +71,28 @@ test("reindexes a deeper nested field while preserving the full ancestor path", 
             1,
         ),
         "customers_0_contacts_1_addresses_0_city",
+    );
+});
+
+test("builds the full nested repeatable group prefix from parent context", () => {
+    assert.equal(
+        buildRepeatableGroupPrefix(
+            [
+                { groupCode: "customers", index: 0 },
+            ],
+            "contacts",
+        ),
+        "customers_0_contacts_",
+    );
+
+    assert.equal(
+        buildRepeatableGroupPrefix(
+            [
+                { groupCode: "customers", index: 1 },
+                { groupCode: "contacts", index: 0 },
+            ],
+            "addresses",
+        ),
+        "customers_1_contacts_0_addresses_",
     );
 });
