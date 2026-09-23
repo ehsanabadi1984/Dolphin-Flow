@@ -129,6 +129,59 @@ class FormPostAdapterTests(TestCase):
         self.assertNotIn("items", payload)
 
 
+    def test_adapts_nested_repeatable_rows_into_child_groups(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "Parent",
+            "items_0_child_items_0_child_title": "First child",
+            "items_0_child_items_1_child_title": "Second child",
+            "items_0_child_items_1__id": "21",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {
+                    "title": "Parent",
+                    "child_groups": {
+                        "child_items": (
+                            {
+                                "child_title": "First child",
+                            },
+                            {
+                                "child_title": "Second child",
+                                "row_id": 21,
+                            },
+                        ),
+                    },
+                },
+            ],
+        )
+
+
     def test_existing_device_instance_id_is_resolved_to_repeatable_row_id(self):
         device_group = FormRepeatableGroup.objects.create(
             section=self.section,
