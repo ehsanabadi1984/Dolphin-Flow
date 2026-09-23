@@ -2457,7 +2457,7 @@ document.addEventListener("click", (event) => {
         if (oldName) {
             field.name = reindexRepeatableFieldName(
                 oldName,
-                `${groupCode}_`,
+                groupPrefix,
                 newIndex
             );
         }
