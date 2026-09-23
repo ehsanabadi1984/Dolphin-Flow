@@ -185,6 +185,67 @@ class FormDraftDeleteApplyServiceTests(TestCase):
         self.assertFalse(RepeatableRow.objects.filter(pk=first.pk).exists())
         self.assertTrue(RepeatableRow.objects.filter(pk=second.pk).exists())
 
+    def test_delete_row_tree_removes_device_row_tree_and_preserves_device_assignment(self):
+        parent_group, parent_field = self.create_group(
+            code="devices",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=1,
+        )
+        child_group, child_field = self.create_group(
+            code="device_children",
+            parent_group=parent_group,
+            order=2,
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            draft_imei="TREE-DRAFT-IMEI",
+        )
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent_group,
+            row_order=0,
+            instance_device=instance_device,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=parent_field,
+            text_value="Parent",
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=child_field,
+            text_value="Child",
+        )
+
+        deleted = FormDraftDeleteApplyService.delete_row_tree(
+            instance=self.instance,
+            row_id=parent_row.pk,
+        )
+
+        self.assertEqual(deleted, (child_row.pk, parent_row.pk))
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                pk__in=[parent_row.pk, child_row.pk],
+            ).exists()
+        )
+        self.assertFalse(
+            RepeatableRowValue.objects.filter(
+                row_id__in=[parent_row.pk, child_row.pk],
+            ).exists()
+        )
+        self.assertTrue(
+            InstanceDevice.objects.filter(
+                pk=instance_device.pk,
+                draft_imei="TREE-DRAFT-IMEI",
+            ).exists()
+        )
+
     def test_device_delete_removes_row_and_preserves_instance_device(self):
         group, field = self.create_group(
             code="devices",
