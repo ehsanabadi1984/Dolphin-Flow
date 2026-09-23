@@ -443,6 +443,203 @@ class DynamicFormServiceTests(TestCase):
             "Child 2",
         )
 
+    def test_get_form_for_step_applies_nested_group_and_field_permissions(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Customers",
+            code="customers_permissions",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=4,
+            is_active=True,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="Contacts",
+            code="contacts_permissions",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=5,
+            is_active=True,
+        )
+
+        parent_name = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Customer Name",
+            code="customer_name_permissions",
+            field_type=FormField.FieldType.TEXT,
+            label="Customer",
+            order=1,
+            is_active=True,
+        )
+        child_name = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Contact Name",
+            code="contact_name_permissions",
+            field_type=FormField.FieldType.TEXT,
+            label="Contact",
+            order=1,
+            is_active=True,
+        )
+
+        RepeatableGroupAccess.objects.create(
+            group=parent_group,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=False,
+            can_edit=False,
+            can_add=False,
+            can_delete=False,
+        )
+
+        FieldAccess.objects.create(
+            field=parent_name,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+        FieldAccess.objects.create(
+            field=child_name,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+
+        instance = self.create_instance()
+
+        parent_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=parent_group,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=parent_name,
+            text_value="Parent",
+        )
+
+        child_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=child_name,
+            text_value="Child",
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+        )
+
+        customers = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].code == parent_group.code
+        )
+
+        self.assertEqual(len(customers["items"]), 1)
+        self.assertEqual(customers["can_view"], True)
+        self.assertEqual(customers["can_edit"], True)
+        self.assertEqual(customers["can_add"], True)
+        self.assertEqual(customers["can_delete"], True)
+
+        parent_item = customers["items"][0]
+
+        self.assertEqual(
+            parent_item["fields"][0]["field"].code,
+            parent_name.code,
+        )
+        self.assertTrue(parent_item["fields"][0]["can_edit"])
+
+        self.assertEqual(parent_item["child_groups"], [])
+
+        # Child group is hidden by group-level permission, even though
+        # its field-level permission allows viewing/editing.
+        self.assertNotIn(
+            child_group.code,
+            [
+                group["group"].code
+                for group in parent_item["child_groups"]
+            ],
+        )
+
+        # The parent group remains visible and editable.
+        self.assertTrue(customers["can_view"])
+        self.assertTrue(customers["can_edit"])
+
+        # Now make the child group visible but read-only. Its field
+        # remains visible but must not be editable.
+        child_access = RepeatableGroupAccess.objects.get(
+            group=child_group,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+        child_access.can_view = True
+        child_access.can_edit = False
+        child_access.can_add = False
+        child_access.can_delete = False
+        child_access.save(
+            update_fields=[
+                "can_view",
+                "can_edit",
+                "can_add",
+                "can_delete",
+            ]
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+        )
+
+        customers = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].code == parent_group.code
+        )
+        parent_item = customers["items"][0]
+        child_context = next(
+            group
+            for group in parent_item["child_groups"]
+            if group["group"].code == child_group.code
+        )
+
+        self.assertTrue(child_context["can_view"])
+        self.assertFalse(child_context["can_edit"])
+        self.assertFalse(child_context["can_add"])
+        self.assertFalse(child_context["can_delete"])
+        self.assertEqual(len(child_context["items"]), 1)
+
+        child_field = child_context["items"][0]["fields"][0]
+
+        self.assertEqual(
+            child_field["field"].code,
+            child_name.code,
+        )
+        self.assertFalse(child_field["can_edit"])
+
+        # Parent edit permission does not override a child group's
+        # explicit read-only permission.
+        self.assertTrue(customers["can_edit"])
+
     def test_get_form_for_step_returns_repeatable_device_group(self):
         instance = self.create_instance()
 
