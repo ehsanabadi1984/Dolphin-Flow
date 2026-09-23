@@ -222,7 +222,7 @@ def _replace_file(*, form_data, field, row_id, upload, user):
     )
 
 
-def _normalized_row_id(*, normalized_row, group, save_result, parent_reference=None):
+def _normalized_row_id(*, normalized_row, group, save_result, parent_reference=None, index=None):
     if normalized_row.row_id is not None:
         return str(normalized_row.row_id)
 
@@ -241,10 +241,34 @@ def _normalized_row_id(*, normalized_row, group, save_result, parent_reference=N
                 return str(row.pk)
             return None
 
-    return None
+    if index is None or parent_reference is None:
+        return None
+
+    if parent_reference.kind == RowReferenceKind.CREATE:
+        parent_row = save_result.created_rows.get(parent_reference)
+    else:
+        parent_row = RepeatableRow.objects.filter(
+            pk=parent_reference.value,
+            instance_id=group.section.form.workflow_id,
+        ).first()
+
+    if parent_row is None:
+        return None
+
+    row = (
+        RepeatableRow.objects
+        .filter(
+            instance_id=parent_row.instance_id,
+            group=group,
+            parent_row=parent_row,
+        )
+        .order_by("row_order", "pk")[index:index + 1]
+        .first()
+    )
+    return str(row.pk) if row is not None else None
 
 
-def _normalized_row_reference(*, normalized_row, group, save_result, parent_reference=None):
+def _normalized_row_reference(*, normalized_row, group, save_result, parent_reference=None, index=None):
     if normalized_row.row_id is not None:
         return RowReference(
             kind=RowReferenceKind.EXISTING,
@@ -263,8 +287,20 @@ def _normalized_row_reference(*, normalized_row, group, save_result, parent_refe
                 continue
             return change.row_reference
 
-    return None
+    row_id = _normalized_row_id(
+        normalized_row=normalized_row,
+        group=group,
+        save_result=save_result,
+        parent_reference=parent_reference,
+        index=index,
+    )
+    if row_id is None:
+        return None
 
+    return RowReference(
+        kind=RowReferenceKind.EXISTING,
+        value=int(row_id),
+    )
 
 def _save_repeatable_group_files(
     *,
@@ -289,12 +325,14 @@ def _save_repeatable_group_files(
             group=group,
             save_result=save_result,
             parent_reference=parent_reference,
+            index=index,
         )
         row_reference = _normalized_row_reference(
             normalized_row=normalized_row,
             group=group,
             save_result=save_result,
             parent_reference=parent_reference,
+            index=index,
         )
         if not row_id:
             continue
