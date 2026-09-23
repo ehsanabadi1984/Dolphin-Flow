@@ -264,6 +264,7 @@
                                     class="df-device-row"
                                     data-device-row
                                     data-device-index="{{ forloop.counter0 }}"
+                                    {% if item.row_id %}data-row-id="{{ item.row_id }}"{% endif %}
                                 >
 
                                     {% for item_field in item.fields %}
@@ -373,6 +374,12 @@
 
                                         <input
                                             type="hidden"
+                                            name="{{ group.group.code }}_{{ forloop.counter0 }}__id"
+                                            value="{{ item.row_id }}"
+                                        >
+
+                                        <input
+                                            type="hidden"
                                             name="{{ group.group.code }}_{{ forloop.counter0 }}_instance_device_id"
                                             value="{{ item.instance_device_id }}"
                                         >
@@ -420,7 +427,7 @@
                                                 <button
                                                     type="submit"
                                                     class="df-button df-button-danger df-device-delete"
-                                                    formaction="{% url 'operator_panel:delete_device' instance.pk group.group.code item.instance_device_id %}{% if edit_mode %}?edit=1{% endif %}"
+                                                    formaction="{% url 'operator_panel:delete_device' instance.pk group.group.code item.row_id %}{% if edit_mode %}?edit=1{% endif %}"
                                                     formmethod="post"
                                                 >
                                                     حذف
