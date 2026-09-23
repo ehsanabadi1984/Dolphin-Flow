@@ -11,8 +11,9 @@ from django.urls import reverse
 from .authorization import WorkflowAuthorizationService
 from .form_file_models import FormFile
 from .form_services import DynamicFormService
-from .models import RepeatableRow, RowReference, RowReferenceKind
+from .models import RepeatableRow
 from .permission_context import PermissionContext
+from .form_draft_diff_services import RowReference, RowReferenceKind
 from .models import (
     FormData,
     FormDefinition,
