@@ -74,6 +74,53 @@ class OperatorFormSerializer:
         }
 
     @staticmethod
+    def device(*, device_context):
+        """Serialize a DeviceContext into the operator row device contract."""
+        device_model = device_context.get("device_model")
+
+        return {
+            "instance_device_id": device_context.get("instance_device_id"),
+            "device_id": device_context.get("device_id", ""),
+            "is_existing_device": device_context.get(
+                "is_existing_device",
+                False,
+            ),
+            "device_model_id": (
+                device_model.pk
+                if device_model is not None
+                else ""
+            ),
+            "device_type": (
+                str(device_context.get("device_type"))
+                if device_context.get("device_type") is not None
+                else ""
+            ),
+            "device_model": (
+                str(device_model)
+                if device_model is not None
+                else ""
+            ),
+            "reported_problem": device_context.get(
+                "reported_problem",
+                "",
+            ),
+            "description": device_context.get(
+                "description",
+                "",
+            ),
+            "warranty_status": device_context.get(
+                "warranty_status",
+                "",
+            ),
+            "status": device_context.get("status", ""),
+            "identifiers": device_context.get("identifiers", []),
+            "has_history": device_context.get(
+                "has_history",
+                False,
+            ),
+        }
+
+    @staticmethod
     def row(*, row_context):
         """Serialize one canonical RowContext into the operator template contract."""
         fields = []
@@ -121,51 +168,10 @@ class OperatorFormSerializer:
 
         device = row_context.get("device")
         if device is not None:
-            device_model = device.get("device_model")
             item.update(
-                {
-                    "instance_device_id": device.get(
-                        "instance_device_id"
-                    ),
-                    "device_id": device.get("device_id", ""),
-                    "is_existing_device": device.get(
-                        "is_existing_device",
-                        False,
-                    ),
-                    "device_model_id": (
-                        device_model.pk
-                        if device_model is not None
-                        else ""
-                    ),
-                    "device_type": (
-                        str(device.get("device_type"))
-                        if device.get("device_type") is not None
-                        else ""
-                    ),
-                    "device_model": (
-                        str(device_model)
-                        if device_model is not None
-                        else ""
-                    ),
-                    "reported_problem": device.get(
-                        "reported_problem",
-                        "",
-                    ),
-                    "description": device.get(
-                        "description",
-                        "",
-                    ),
-                    "warranty_status": device.get(
-                        "warranty_status",
-                        "",
-                    ),
-                    "status": device.get("status", ""),
-                    "identifiers": device.get("identifiers", []),
-                    "has_history": device.get(
-                        "has_history",
-                        False,
-                    ),
-                }
+                OperatorFormSerializer.device(
+                    device_context=device,
+                )
             )
 
         return item
@@ -198,45 +204,35 @@ class OperatorFormSerializer:
     def normal_item(
         *,
         row_id="",
+        row_order=None,
+        parent_row_id=None,
         field_contexts,
         values,
         display_values,
         child_groups=None,
     ):
-        """Serialize one normal repeatable row for operator presentation."""
+        """Serialize one normal repeatable row through the canonical row path."""
 
-        fields = []
+        row_fields = []
 
         for field_context in field_contexts:
-            field = field_context["field"]
-            fields.append(
-                OperatorFormSerializer.field(
-                    field=field,
-                    can_edit=field_context["can_edit"],
-                    permission_can_edit=field_context.get(
-                        "permission_can_edit",
-                        False,
-                    ),
-                    value=values.get(field.code, ""),
-                    display_value=display_values.get(
-                        field.code,
-                        "",
-                    ),
-                    choices=field_context.get("choices", []),
-                    device_types=field_context.get(
-                        "device_types"
-                    ),
-                    device_models=field_context.get(
-                        "device_models"
-                    ),
-                    parent_code=field_context.get("parent_code"),
-                )
+            context = dict(field_context)
+            field = context["field"]
+            context["value"] = values.get(field.code, "")
+            context["display_value"] = display_values.get(
+                field.code,
+                "",
             )
+            row_fields.append(context)
 
-        return OperatorFormSerializer.item(
-            row_id=row_id,
-            fields=fields,
-            child_groups=child_groups,
+        return OperatorFormSerializer.row(
+            row_context={
+                "row_id": row_id,
+                "row_order": row_order,
+                "parent_row_id": parent_row_id,
+                "fields": row_fields,
+                "child_groups": child_groups or [],
+            }
         )
 
     @staticmethod
@@ -261,6 +257,8 @@ class OperatorFormSerializer:
             items.append(
                 OperatorFormSerializer.normal_item(
                     row_id=item_context.get("row_id", ""),
+                    row_order=item_context.get("row_order", index),
+                    parent_row_id=item_context.get("parent_row_id"),
                     field_contexts=field_contexts,
                     values=item_context.get("values", {}),
                     display_values=item_context.get(
