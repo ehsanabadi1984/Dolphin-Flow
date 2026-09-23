@@ -80,7 +80,8 @@ class OperatorFormSerializer:
                     field=field,
                     can_edit=field_context["can_edit"],
                     permission_can_edit=field_context.get(
-                        "permission_can_edit"
+                        "permission_can_edit",
+                        False,
                     ),
                     value=values.get(field.code, ""),
                     display_value=display_values.get(
