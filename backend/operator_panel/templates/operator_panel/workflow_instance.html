@@ -1171,6 +1171,8 @@
 
                     {% endfor %}
 
+                        <tr class="df-repeatable-child-row">
+                          <td colspan="{{ group.fields|length|add:1 }}">
                             {% for child_group in item.child_groups %}
                       {% if child_group.group.display_type == "TABLE" %}
                         <section
@@ -1436,6 +1438,8 @@
                       </section>
                       {% endif %}
 
+                          </td>
+                        </tr>
                     {% if edit_mode and not dynamic_form.is_submitted and group.can_delete %}
                       <div class="df-repeatable-item-actions">
                         <button
