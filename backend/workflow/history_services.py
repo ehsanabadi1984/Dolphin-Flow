@@ -125,7 +125,7 @@ class HistoryService:
                 )
             )
 
-        def build_history_group(group):
+        def build_history_group(group, parent_row=None):
             bucket = groups.get(group.pk)
             if bucket is None:
                 return None
@@ -148,6 +148,7 @@ class HistoryService:
                     instance=instance,
                     group=group,
                     fields=fields,
+                    parent_row=parent_row,
                 )
 
             child_buckets = [
@@ -155,24 +156,48 @@ class HistoryService:
                 for child in groups.values()
                 if child["group"].parent_group_id == group.pk
             ]
-            child_groups = []
-            for child_bucket in sorted(
-                child_buckets,
-                key=lambda value: (
-                    value["display_order"],
-                    value["group"].pk,
-                ),
-            ):
-                child_group = build_history_group(child_bucket["group"])
-                if child_group is not None:
-                    child_groups.append(child_group)
 
-            if not items and not child_groups:
-                return None
-
-            if child_groups:
+            if child_buckets:
                 for item in items:
-                    item["child_groups"] = child_groups
+                    row_id = item.get("row_id")
+                    if row_id is None:
+                        continue
+
+                    row = next(
+                        (
+                            candidate
+                            for candidate in RepeatableRowReadService.get_rows(
+                                instance=instance,
+                                group=group,
+                                parent_row=parent_row,
+                            )
+                            if candidate.pk == row_id
+                        ),
+                        None,
+                    )
+                    if row is None:
+                        continue
+
+                    child_groups = []
+                    for child_bucket in sorted(
+                        child_buckets,
+                        key=lambda value: (
+                            value["display_order"],
+                            value["group"].pk,
+                        ),
+                    ):
+                        child_group = build_history_group(
+                            child_bucket["group"],
+                            parent_row=row,
+                        )
+                        if child_group is not None:
+                            child_groups.append(child_group)
+
+                    if child_groups:
+                        item["child_groups"] = child_groups
+
+            if not items:
+                return None
 
             return {
                 "code": group.code,
@@ -230,7 +255,7 @@ class HistoryService:
         }
 
     @staticmethod
-    def _build_normal_items(*, instance, group, fields):
+    def _build_normal_items(*, instance, group, fields, parent_row=None):
         if not fields:
             return []
 
@@ -241,27 +266,19 @@ class HistoryService:
 
         items = []
 
-        def get_rows_for_group(current_group):
-            parent_group = current_group.parent_group
-            if parent_group is None:
-                return RepeatableRowReadService.get_rows(
-                    instance=instance,
-                    group=current_group,
-                )
+        if parent_row is not None:
+            rows = RepeatableRowReadService.get_rows(
+                instance=instance,
+                group=group,
+                parent_row=parent_row,
+            )
+        else:
+            rows = RepeatableRowReadService.get_rows(
+                instance=instance,
+                group=group,
+            )
 
-            parent_rows = get_rows_for_group(parent_group)
-            rows = []
-            for parent_row in parent_rows:
-                rows.extend(
-                    RepeatableRowReadService.get_rows(
-                        instance=instance,
-                        group=current_group,
-                        parent_row=parent_row,
-                    )
-                )
-            return rows
-
-        for row in get_rows_for_group(group):
+        for row in rows:
             reconstructed = RepeatableRowReadService.reconstruct_row(
                 row=row,
             )
