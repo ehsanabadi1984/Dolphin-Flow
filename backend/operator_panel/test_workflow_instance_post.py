@@ -1113,6 +1113,17 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             'name="customers_1_contacts_0_contact_name"',
         )
 
+        self.assertContains(
+            response,
+            'class="df-button df-button-secondary df-repeatable-add" data-group-code="contacts"',
+        )
+        self.assertEqual(
+            response.content.decode().count(
+                'data-group-code="contacts"'
+            ),
+            2,
+        )
+
 
     def test_delete_device_rejects_without_group_delete_permission(self):
         group, fields = self._create_device_group(
