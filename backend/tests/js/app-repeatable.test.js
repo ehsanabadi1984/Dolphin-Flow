@@ -75,7 +75,10 @@ test("adds a nested child row under the second parent with isolated names", asyn
     globalThis.WebSocket = WebSocketStub;
     dom.window.WebSocket = WebSocketStub;
 
-    await import(\n        "../../operator_panel/static/operator_panel/js/repeatable-naming.js"\n    );\n    await import(appPath);
+    await import(
+        "../../operator_panel/static/operator_panel/js/repeatable-naming.js"
+    );
+    await import(appPath);
 
     document.dispatchEvent(
         new dom.window.Event("DOMContentLoaded", { bubbles: true })
