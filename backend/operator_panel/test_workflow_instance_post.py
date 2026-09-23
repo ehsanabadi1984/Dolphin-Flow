@@ -992,6 +992,102 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             1,
         )
 
+    def test_workflow_instance_renders_nested_repeatable_children(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Customers",
+            code="customers",
+            order=5,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Contacts",
+            code="contacts",
+            order=1,
+            parent_group=parent_group,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+        )
+        parent_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Customer Name",
+            code="customer_name",
+            label="Customer Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Contact Name",
+            code="contact_name",
+            label="Contact Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=parent_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        for field in (parent_field, child_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+            )
+
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent_group,
+            row_order=0,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=parent_field,
+            text_value="Parent 1",
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=child_field,
+            text_value="Child 1",
+        )
+
+        response = self.client.get(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {"edit": "1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Child 1")
+        self.assertContains(
+            response,
+            'name="customers_0_contacts_0_contact_name"',
+        )
+
+
     def test_delete_device_rejects_without_group_delete_permission(self):
         group, fields = self._create_device_group(
             can_delete=False,
