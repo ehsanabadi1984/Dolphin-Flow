@@ -243,6 +243,7 @@ class FormDraftDeleteApplyServiceTests(TestCase):
             InstanceDevice.objects.filter(
                 pk=instance_device.pk,
                 draft_imei="TREE-DRAFT-IMEI",
+                is_active=False,
             ).exists()
         )
 
@@ -276,7 +277,10 @@ class FormDraftDeleteApplyServiceTests(TestCase):
         self.assertFalse(RepeatableRow.objects.filter(pk=row.pk).exists())
         self.assertFalse(RepeatableRowValue.objects.filter(row_id=row.pk).exists())
         self.assertTrue(
-            InstanceDevice.objects.filter(pk=instance_device.pk).exists()
+            InstanceDevice.objects.filter(
+                pk=instance_device.pk,
+                is_active=False,
+            ).exists()
         )
         self.assertTrue(
             InstanceDevice.objects.filter(
