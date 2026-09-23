@@ -255,6 +255,8 @@ def _save_repeatable_group_files(
     if not file_fields:
         return
 
+    prefix = group_prefix or f"{group.code}_"
+
     for index, normalized_row in enumerate(normalized_rows):
         row_id = _normalized_row_id(
             normalized_row=normalized_row,
@@ -289,6 +291,7 @@ def _save_repeatable_group_files(
                 submitted_files=submitted_files,
                 user=user,
                 save_result=save_result,
+                group_prefix=f"{prefix}{index}_{child_group.code}_",
             )
 
 
