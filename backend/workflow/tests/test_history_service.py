@@ -1,7 +1,9 @@
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from accounts.models import User
 
+from workflow.form_file_models import FormFile
 from workflow.history_models import HistoryConfiguration, HistoryField
 from workflow.history_services import HistoryService
 from workflow.models import (
@@ -279,6 +281,76 @@ class HistoryServiceTests(TestCase):
                 ("LCD", child_group.code, "SERIAL-A"),
                 ("Battery", child_group.code, "SERIAL-B"),
             ],
+        )
+
+    def test_repeatable_file_is_included_in_history_snapshot(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        file_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="Attachment",
+            code="attachment",
+            label="Attachment",
+            field_type=FormField.FieldType.FILE,
+            order=3,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=file_field,
+            display_label="پیوست",
+            display_order=2,
+        )
+
+        instance = self._instance()
+
+        from workflow.repeatable_row_services import RepeatableRowService
+
+        row = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        RepeatableRowService.set_value(
+            row=row,
+            field=self.part_field,
+            value="LCD",
+        )
+
+        form_data = FormData.objects.get(instance=instance)
+        FormFile.objects.create(
+            form_data=form_data,
+            field=file_field,
+            row_id=str(row.pk),
+            file=SimpleUploadedFile(
+                "repair-photo.jpg",
+                b"historical-file-content",
+                content_type="image/jpeg",
+            ),
+            original_name="repair-photo.jpg",
+            file_size=22,
+            content_type="image/jpeg",
+            uploaded_by=self.user,
+        )
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        item = snapshot["repeatable_groups"][0]["items"][0]
+        file_history = next(
+            field
+            for field in item["fields"]
+            if field["code"] == file_field.code
+        )
+
+        self.assertEqual(
+            file_history["file"],
+            {
+                "name": "repair-photo.jpg",
+                "size": 22,
+                "content_type": "image/jpeg",
+            },
         )
 
     def test_same_device_in_two_instances_produces_independent_snapshots(self):
