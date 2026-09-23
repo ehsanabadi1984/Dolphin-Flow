@@ -2472,11 +2472,6 @@ class DynamicFormService:
                                     "device": {
                                         "instance_device": instance_device,
                                         "device": instance_device.device,
-                                        "draft_device": (
-                                            instance_device.draft_device_model
-                                            if not instance_device.device
-                                            else None
-                                        ),
                                         "device_id": (
                                             instance_device.device_id or ""
                                         ),
