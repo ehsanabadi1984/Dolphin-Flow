@@ -2445,49 +2445,45 @@ class DynamicFormService:
                             # -------------------------------------------------
 
                             items.append(
-                                {
-                                    "instance_device_id": (
-                                        instance_device.pk
-                                    ),
-                                    "device_id": (
+                                OperatorFormSerializer.item(
+                                    instance_device_id=instance_device.pk,
+                                    device_id=(
                                         instance_device.device_id
                                         or ""
                                     ),
-                                    "is_existing_device": (
-                                        is_existing_device
-                                    ),
-                                    "device_model_id": (
+                                    is_existing_device=is_existing_device,
+                                    device_model_id=(
                                         device_model.pk
                                         if device_model
                                         else ""
                                     ),
-                                    "device_type": (
+                                    device_type=(
                                         device_type.name
                                         if device_type
                                         else ""
                                     ),
-                                    "device_model": (
+                                    device_model=(
                                         str(device_model)
                                         if device_model
                                         else ""
                                     ),
-                                    "reported_problem": (
+                                    reported_problem=(
                                         instance_device.reported_problem
                                         or ""
                                     ),
-                                    "description": (
+                                    description=(
                                         instance_device.description
                                         or ""
                                     ),
-                                    "warranty_status": (
+                                    warranty_status=(
                                         instance_device.warranty_status
                                         or ""
                                     ),
-                                    "status": (
+                                    status=(
                                         instance_device.status
                                         or ""
                                     ),
-                                    "identifiers": [
+                                    identifiers=[
                                         {
                                             "type": identifier.identifier_type,
                                             "value": identifier.value,
@@ -2505,11 +2501,9 @@ class DynamicFormService:
                                             "value": imei,
                                         }
                                     ],
-                                    "has_history": (
-                                        is_existing_device
-                                    ),
-                                    "fields": item_fields,
-                                }
+                                    has_history=is_existing_device,
+                                    fields=item_fields,
+                                )
                             )
 
                                         
@@ -2641,24 +2635,23 @@ class DynamicFormService:
                         )
 
                         items.append(
-                            {
-                                "_id": row_id,
-                                "row_id": row_id,
-                                "fields": item_fields,
-                            }
+                            OperatorFormSerializer.item(
+                                row_id=row_id,
+                                fields=item_fields,
+                            )
                         )
                     #--------------Debug---------------
                     #---------End-Debug----------------
-                group_context = {
-                    "group": group,
-                    "fields": group_fields,
-                    "items": items,
-                    "has_editable_fields": group_has_editable_fields,
-                    "can_view": group_can_view,
-                    "can_edit": group_can_edit,
-                    "can_add": group_can_add,
-                    "can_delete": group_can_delete,
-                }
+                group_context = OperatorFormSerializer.repeatable_group(
+                    group=group,
+                    fields=group_fields,
+                    items=items,
+                    has_editable_fields=group_has_editable_fields,
+                    can_view=group_can_view,
+                    can_edit=group_can_edit,
+                    can_add=group_can_add,
+                    can_delete=group_can_delete,
+                )
 
                 if group.group_type == FormRepeatableGroup.GroupType.NORMAL:
                     for item, raw_item in zip(items, raw_items):
