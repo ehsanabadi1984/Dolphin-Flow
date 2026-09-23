@@ -259,7 +259,7 @@ def _normalized_row_reference(*, normalized_row, group, save_result, parent_refe
                 continue
             if change.parent_reference != parent_reference:
                 continue
-            if change.desired_row != normalized_row:
+            if change.desired_row is not normalized_row:
                 continue
             return change.row_reference
 
