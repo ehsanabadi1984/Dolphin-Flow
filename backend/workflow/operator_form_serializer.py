@@ -108,6 +108,7 @@ class OperatorFormSerializer:
     def normal_repeatable_group(
         *,
         group,
+        group_fields,
         field_contexts_by_item,
         item_contexts,
         has_editable_fields,
@@ -140,11 +141,7 @@ class OperatorFormSerializer:
 
         return OperatorFormSerializer.repeatable_group(
             group=group,
-            fields=(
-                field_contexts_by_item[0]
-                if field_contexts_by_item
-                else []
-            ),
+            fields=group_fields,
             items=items,
             has_editable_fields=has_editable_fields,
             can_view=can_view,
