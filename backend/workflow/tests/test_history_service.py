@@ -572,6 +572,82 @@ class HistoryServiceTests(TestCase):
             },
         )
 
+    def test_device_history_snapshot_is_immutable_after_assignment_deactivation(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Devices",
+            code="devices",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=2,
+        )
+        device_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=device_group,
+            name="Device IMEI",
+            code="device_imei",
+            label="IMEI",
+            field_type=FormField.FieldType.TEXT,
+            system_key=FormField.SystemKey.IMEI,
+            order=3,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=device_field,
+            display_label="IMEI دستگاه",
+            display_order=1,
+        )
+
+        device_type = DeviceType.objects.create(
+            name="Phone",
+            code="PHONE",
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Brand",
+            name="Model",
+            code="MODEL",
+        )
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="111222333",
+        )
+        instance = self._instance()
+        instance_device = InstanceDevice.objects.create(
+            instance=instance,
+            device=device,
+            is_active=True,
+        )
+
+        stored_snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        instance_device.is_active = False
+        instance_device.save(update_fields=["is_active"])
+
+        current_snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        stored_items = stored_snapshot["repeatable_groups"][0]["items"]
+        self.assertEqual(
+            stored_items[0]["instance_device_id"],
+            instance_device.pk,
+        )
+        self.assertEqual(
+            stored_items[0]["fields"][0]["value"],
+            "111222333",
+        )
+        self.assertEqual(
+            current_snapshot["repeatable_groups"],
+            [],
+        )
+
     def test_get_device_history_requires_history_permission(self):
         WorkflowMembership.objects.create(
             workflow=self.workflow,
