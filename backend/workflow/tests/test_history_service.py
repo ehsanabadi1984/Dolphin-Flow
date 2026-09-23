@@ -5,10 +5,13 @@ from accounts.models import User
 
 from workflow.form_file_models import FormFile
 from workflow.history_models import HistoryConfiguration, HistoryField
+from workflow.history_permissions import HISTORY_ACTION
 from workflow.history_services import HistoryService
 from workflow.models import (
     Device,
     DeviceIdentifier,
+    FieldAccess,
+    RepeatableGroupAccess,
     DeviceModel,
     DeviceType,
     FormData,
@@ -567,6 +570,153 @@ class HistoryServiceTests(TestCase):
                 "size": 13,
                 "content_type": "image/jpeg",
             },
+        )
+
+    def test_get_device_history_requires_history_permission(self):
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.problem_field,
+            display_label="شرح مشکل",
+            display_order=1,
+        )
+        device = Device.objects.create(
+            device_model=DeviceModel.objects.create(
+                device_type=DeviceType.objects.create(name="Phone", code="PHONE"),
+                brand="Brand",
+                name="Model",
+                code="MODEL",
+            )
+        )
+        instance = self._instance(data={"problem": "Secret"})
+        InstanceDevice.objects.create(instance=instance, device=device, is_active=True)
+        execution = instance.step_executions.get(workflow_step=self.step)
+        execution.is_submitted = True
+        execution.data = {
+            "history": {
+                "version": 1,
+                "fields": [{"code": "problem", "value": "Secret"}],
+                "repeatable_groups": [],
+            }
+        }
+        execution.save(update_fields=["is_submitted", "data"])
+
+        self.assertEqual(
+            HistoryService.get_device_history(
+                device_id=device.pk,
+                user=self.user,
+            ),
+            [],
+        )
+
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=HISTORY_ACTION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        self.assertEqual(
+            len(
+                HistoryService.get_device_history(
+                    device_id=device.pk,
+                    user=self.user,
+                )
+            ),
+            1,
+        )
+
+    def test_get_device_history_filters_fields_and_groups_by_current_permissions(self):
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=HISTORY_ACTION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        FieldAccess.objects.create(
+            field=self.problem_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+        FieldAccess.objects.create(
+            field=self.imei_field,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=False,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=self.group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+        device = Device.objects.create(
+            device_model=DeviceModel.objects.create(
+                device_type=DeviceType.objects.create(name="Phone", code="PHONE"),
+                brand="Brand",
+                name="Model",
+                code="MODEL",
+            )
+        )
+        instance = self._instance()
+        InstanceDevice.objects.create(instance=instance, device=device, is_active=True)
+        execution = instance.step_executions.get(workflow_step=self.step)
+        execution.is_submitted = True
+        execution.data = {
+            "history": {
+                "version": 1,
+                "fields": [
+                    {"code": self.problem_field.code, "value": "Visible"},
+                    {"code": self.imei_field.code, "value": "Hidden"},
+                ],
+                "repeatable_groups": [
+                    {
+                        "code": self.group.code,
+                        "name": self.group.name,
+                        "items": [
+                            {
+                                "device_id": device.pk,
+                                "fields": [
+                                    {"code": self.part_field.code, "value": "Visible part"},
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            }
+        }
+        execution.save(update_fields=["is_submitted", "data"])
+
+        history = HistoryService.get_device_history(
+            device_id=device.pk,
+            user=self.user,
+        )
+
+        self.assertEqual(len(history), 1)
+        snapshot = history[0]["snapshot"]
+        self.assertEqual(
+            [field["code"] for field in snapshot["fields"]],
+            [self.problem_field.code],
+        )
+        self.assertEqual(
+            [field["code"] for field in snapshot["repeatable_groups"][0]["items"][0]["fields"]],
+            [self.part_field.code],
         )
 
     def test_same_device_in_two_instances_produces_independent_snapshots(self):
