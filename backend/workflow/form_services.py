@@ -1113,13 +1113,13 @@ class DynamicFormService:
                         DeviceType.objects.filter(is_active=True)
                         if field.system_key
                         == FormField.SystemKey.DEVICE_TYPE
-                        else None
+                        else []
                     ),
                     "device_models": (
                         DeviceModel.objects.filter(is_active=True)
                         if field.system_key
                         == FormField.SystemKey.DEVICE_MODEL
-                        else None
+                        else []
                     ),
                     "parent_code": (
                         field.choice_parent_field.code
@@ -1196,6 +1196,7 @@ class DynamicFormService:
 
         return OperatorFormSerializer.normal_repeatable_group(
             group=group,
+            group_fields=group_fields,
             field_contexts_by_item=field_contexts_by_item,
             item_contexts=item_contexts,
             has_editable_fields=group_has_editable_fields,
