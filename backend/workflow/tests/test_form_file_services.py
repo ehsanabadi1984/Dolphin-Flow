@@ -171,3 +171,75 @@ class RepeatableFilePersistenceTests(TestCase):
             field=self.file_field,
         )
         self.assertEqual(form_file.row_id, str(row.pk))
+
+    def test_new_nested_repeatable_row_uses_child_row_pk_for_file(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items_file",
+            order=2,
+        )
+        child_file_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Attachment",
+            code="child_attachment",
+            label="Child Attachment",
+            field_type=FormField.FieldType.FILE,
+            is_required=False,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=child_file_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        result = self._save(
+            submitted_data={
+                "items_file": [
+                    {
+                        "child_items_file": [
+                            {},
+                        ],
+                    },
+                ],
+            },
+        )
+
+        parent_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=self.group,
+        )
+        child_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+        )
+
+        save_uploaded_form_files(
+            instance=self.instance,
+            user=self.user,
+            submitted_files={
+                "child_items_file_0_child_attachment": self._upload("nested.txt"),
+            },
+            save_result=result,
+        )
+
+        form_file = FormFile.objects.get(
+            form_data=self.form_data,
+            field=child_file_field,
+        )
+        self.assertEqual(form_file.row_id, str(child_row.pk))
+        self.assertNotEqual(form_file.row_id, str(parent_row.pk))
