@@ -908,6 +908,16 @@
                           <div>
                             <h4>{{ child_group.group.name }}</h4>
                           </div>
+
+                          {% if edit_mode and not dynamic_form.is_submitted and child_group.can_add %}
+                            <button
+                              type="button"
+                              class="df-button df-button-secondary df-repeatable-add"
+                              data-group-code="{{ child_group.group.code }}"
+                            >
+                              + افزودن
+                            </button>
+                          {% endif %}
                         </div>
 
                         <div
