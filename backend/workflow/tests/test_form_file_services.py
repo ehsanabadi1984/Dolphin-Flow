@@ -243,3 +243,95 @@ class RepeatableFilePersistenceTests(TestCase):
         )
         self.assertEqual(form_file.row_id, str(child_row.pk))
         self.assertNotEqual(form_file.row_id, str(parent_row.pk))
+
+
+    def test_nested_files_resolve_child_row_pk_across_multiple_parent_rows(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items_file_multi",
+            order=2,
+        )
+        child_file_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Attachment",
+            code="child_attachment",
+            label="Child Attachment",
+            field_type=FormField.FieldType.FILE,
+            is_required=False,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=child_file_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        result = self._save(
+            submitted_data={
+                "items_file": [
+                    {
+                        "child_items_file_multi": [{}, {}],
+                    },
+                    {
+                        "child_items_file_multi": [{}, {}],
+                    },
+                ],
+            },
+        )
+
+        parent_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=self.group,
+                parent_row__isnull=True,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(len(parent_rows), 2)
+
+        child_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=child_group,
+            ).order_by("parent_row_id", "row_order", "pk")
+        )
+        self.assertEqual(len(child_rows), 4)
+
+        save_uploaded_form_files(
+            instance=self.instance,
+            user=self.user,
+            submitted_files={
+                "child_items_file_multi_0_child_attachment": self._upload("nested-0.txt"),
+                "child_items_file_multi_1_child_attachment": self._upload("nested-1.txt"),
+            },
+            save_result=result,
+        )
+
+        files = list(
+            FormFile.objects.filter(
+                form_data=self.form_data,
+                field=child_file_field,
+            ).order_by("row_id")
+        )
+        self.assertEqual(len(files), 4)
+        self.assertEqual(
+            {item.row_id for item in files},
+            {str(row.pk) for row in child_rows},
+        )
+        self.assertTrue(
+            {str(row.pk) for row in child_rows}.isdisjoint(
+                {str(row.pk) for row in parent_rows}
+            )
+        )
