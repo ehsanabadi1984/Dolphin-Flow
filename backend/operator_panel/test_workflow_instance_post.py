@@ -1129,7 +1129,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             response.content.decode().count(
                 'data-group-code="contacts"'
             ),
-            2,
+            4,
         )
 
 
