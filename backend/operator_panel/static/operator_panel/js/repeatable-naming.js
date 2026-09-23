@@ -1,4 +1,4 @@
-export function reindexRepeatableFieldName(oldName, groupPrefix, newIndex) {
+function reindexRepeatableFieldName(oldName, groupPrefix, newIndex) {
     if (!oldName.startsWith(groupPrefix)) {
         return oldName;
     }
@@ -16,3 +16,7 @@ export function reindexRepeatableFieldName(oldName, groupPrefix, newIndex) {
         remainder.slice(separatorIndex)
     );
 }
+
+globalThis.DolphinFlowRepeatableNaming = {
+    reindexRepeatableFieldName,
+};
