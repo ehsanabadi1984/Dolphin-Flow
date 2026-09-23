@@ -2566,7 +2566,7 @@ class DynamicFormService:
 
                     rows = []
 
-                    for raw_item in raw_items:
+                    for row_index, raw_item in enumerate(raw_items):
                         if not isinstance(raw_item, dict):
                             continue
 
@@ -2649,7 +2649,7 @@ class DynamicFormService:
                                         raw_item.get("_id", ""),
                                     )
                                 ),
-                                "row_order": raw_item.get("row_order", 0),
+                                "row_order": raw_item.get("row_order", row_index),
                                 "parent_row_id": (
                                     str(raw_item["parent_row_id"])
                                     if raw_item.get("parent_row_id") is not None
