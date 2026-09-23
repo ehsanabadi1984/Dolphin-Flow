@@ -12,6 +12,7 @@ from .models import (
     WorkflowStepExecution,
 )
 from .history_models import HistoryConfiguration, HistoryField
+from .history_browser_service import HistoryBrowserService
 from .repeatable_row_read_services import RepeatableRowReadService
 
 
