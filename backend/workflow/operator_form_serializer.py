@@ -91,14 +91,25 @@ class OperatorFormSerializer:
                 )
             )
 
-        return OperatorFormSerializer.item(
+        child_groups = [
+            OperatorFormSerializer.group_context(
+                group_context=child_group,
+            )
+            for child_group in row_context.get("child_groups", [])
+        ]
+
+        item = OperatorFormSerializer.item(
             row_id=row_context.get("row_id", ""),
             row_order=row_context.get("row_order"),
             parent_row_id=row_context.get("parent_row_id"),
-            child_groups=row_context.get("child_groups", []),
-            device=row_context.get("device"),
+            child_groups=child_groups,
             fields=fields,
         )
+
+        if row_context.get("device") is not None:
+            item["device"] = row_context["device"]
+
+        return item
 
     @staticmethod
     def group_context(*, group_context):
