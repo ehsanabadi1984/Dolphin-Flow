@@ -2635,7 +2635,6 @@ class DynamicFormService:
                                     is_submitted=is_submitted,
                                 )
                             )
-                            if child_context is not None else None
 
                             if child_context is not None:
                                 child_contexts.append(child_context)
