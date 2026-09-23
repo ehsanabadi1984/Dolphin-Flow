@@ -2518,7 +2518,17 @@ class DynamicFormService:
                                 )
                             )
 
-                                        
+                    group_context = OperatorFormSerializer.repeatable_group(
+                        group=group,
+                        fields=group_fields,
+                        items=items,
+                        has_editable_fields=group_has_editable_fields,
+                        can_view=group_can_view,
+                        can_edit=group_can_edit,
+                        can_add=group_can_add,
+                        can_delete=group_can_delete,
+                    )
+
                 else:
                     # -------------------------------------------------
                     # NORMAL REPEATABLE GROUP
@@ -2654,6 +2664,7 @@ class DynamicFormService:
                     group_context = (
                         OperatorFormSerializer.normal_repeatable_group(
                             group=group,
+                            group_fields=group_fields,
                             field_contexts_by_item=field_contexts_by_item,
                             item_contexts=item_contexts,
                             has_editable_fields=group_has_editable_fields,
