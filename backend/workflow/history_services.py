@@ -61,6 +61,14 @@ class HistoryService:
             },
         )
 
+        if not configuration.is_active:
+            return {
+                "version": HistoryService.SNAPSHOT_VERSION,
+                "configuration_id": configuration.pk,
+                "fields": [],
+                "repeatable_groups": [],
+            }
+
         configured_fields = list(
             HistoryField.objects
             .filter(
