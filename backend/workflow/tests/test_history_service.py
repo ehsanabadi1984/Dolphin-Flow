@@ -801,6 +801,30 @@ class HistoryServiceTests(TestCase):
         self.assertEqual(second_item["instance_device_id"], second_device.pk)
         self.assertNotEqual(first_item["instance_device_id"], second_item["instance_device_id"])
 
+    def test_inactive_configuration_does_not_create_history_snapshot_content(self):
+        configuration = HistoryConfiguration.objects.create(
+            form=self.form,
+            is_active=False,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.problem_field,
+            display_order=1,
+        )
+
+        instance = self._instance(
+            data={"problem": "Should not be snapshotted"},
+        )
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        self.assertEqual(snapshot["configuration_id"], configuration.pk)
+        self.assertEqual(snapshot["fields"], [])
+        self.assertEqual(snapshot["repeatable_groups"], [])
+
     def test_without_active_configuration_does_not_use_legacy_history_flag(self):
         instance = self._instance(
             data={
