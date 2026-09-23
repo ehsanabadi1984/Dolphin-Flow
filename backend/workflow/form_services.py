@@ -17,6 +17,7 @@ from .models import (
     FormRepeatableGroup,
     DeviceType,
     FormField,
+    RepeatableRow,
 
     
 )
@@ -1566,6 +1567,21 @@ class DynamicFormService:
                         )
                     )
 
+                    # DEVICE row identity is owned by RepeatableRow.
+                    # InstanceDevice is only the device-assignment identity.
+                    device_row_ids = {
+                        row.instance_device_id: row.pk
+                        for row in (
+                            RepeatableRow.objects
+                            .filter(
+                                instance=instance,
+                                group=group,
+                                instance_device__in=instance_devices,
+                            )
+                            .only("pk", "instance_device_id")
+                        )
+                    }
+
                     # ---------------------------------------------------------
                     # POST data has priority only when validation failed.
                     #
@@ -2465,7 +2481,12 @@ class DynamicFormService:
 
                             items.append(
                                 {
-                                    "row_id": str(instance_device.pk),
+                                    "row_id": str(
+                                        device_row_ids.get(
+                                            instance_device.pk,
+                                            "",
+                                        )
+                                    ),
                                     "row_order": len(items),
                                     "parent_row_id": None,
                                     "fields": item_fields,
