@@ -680,8 +680,8 @@ def delete_device(request, instance_id, group_code, row_id):
         group_code=group_code,
         request=request,
     )
-    instance_device = get_object_or_404(
-        InstanceDevice,
+    get_object_or_404(
+        RepeatableRow,
         pk=row_id,
         instance=instance,
         group__code=group_code,
