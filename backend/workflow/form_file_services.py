@@ -221,23 +221,17 @@ def _replace_file(*, form_data, field, row_id, upload, user):
     )
 
 
-@transaction.atomic
-def _normalized_row_id(*, normalized_row, group, save_result):
+def _normalized_row_id(*, normalized_row, group, save_result, create_changes, create_index):
     if normalized_row.row_id is not None:
         return str(normalized_row.row_id)
 
-    for group_diff in save_result.diff.groups:
-        for change in group_diff.changes:
-            if change.group.pk != group.pk:
-                continue
-            if change.action.value != "create":
-                continue
-            if change.desired_row == normalized_row:
-                row = save_result.created_rows.get(change.row_reference)
-                if row is not None:
-                    return str(row.pk)
-                return None
+    if create_index >= len(create_changes):
+        return None
 
+    change = create_changes[create_index]
+    row = save_result.created_rows.get(change.row_reference)
+    if row is not None:
+        return str(row.pk)
     return None
 
 
@@ -257,12 +251,25 @@ def _save_repeatable_group_files(
 
     prefix = group_prefix or f"{group.code}_"
 
+    create_changes = [
+        change
+        for group_diff in save_result.diff.groups
+        for change in group_diff.changes
+        if change.group.pk == group.pk
+        and change.action.value == "create"
+    ]
+    create_index = 0
+
     for index, normalized_row in enumerate(normalized_rows):
         row_id = _normalized_row_id(
             normalized_row=normalized_row,
             group=group,
             save_result=save_result,
+            create_changes=create_changes,
+            create_index=create_index,
         )
+        if normalized_row.row_id is None:
+            create_index += 1
         if not row_id:
             continue
 
