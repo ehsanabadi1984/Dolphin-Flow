@@ -261,14 +261,49 @@ class DynamicFormServiceTests(TestCase):
         )
 
     def save_form_for_step(self, *, instance, user, submitted_data, edit_mode):
+        payload = self.normalize_test_submission(
+            instance=instance,
+            submitted_data=submitted_data,
+        )
         result = FormDraftSaveService.save(
             instance=instance,
             step=self.step_one,
             user=user,
-            submitted_data=submitted_data,
+            submitted_data=payload,
             edit_mode=edit_mode,
         )
         return result.form_data
+
+    @staticmethod
+    def normalize_test_submission(*, instance, submitted_data):
+        payload = dict(submitted_data)
+        groups = payload.get("devices")
+        if groups is not None:
+            payload["devices"] = [
+                {
+                    **row,
+                    **(
+                        {
+                            "row_id": (
+                                RepeatableRow.objects
+                                .filter(
+                                    instance=instance,
+                                    group=DynamicFormServiceTests.device_group,
+                                    instance_device_id=row["instance_device_id"],
+                                )
+                                .values_list("pk", flat=True)
+                                .first()
+                            )
+                        }
+                        if row.get("instance_device_id")
+                        else {}
+                    ),
+                }
+                for row in groups
+            ]
+            for row in payload["devices"]:
+                row.pop("instance_device_id", None)
+        return payload
 
     def create_instance(self):
         instance = WorkflowInstance.objects.create(
@@ -1048,7 +1083,7 @@ class DynamicFormServiceTests(TestCase):
             instance_device.status,
             "IN_REPAIR",
         )
-    def test_save_form_rejects_missing_required_normal_field(self):
+    def test_save_form_allows_partial_normal_field_submission(self):
         instance = self.create_instance()
 
         submitted_data = {
@@ -1056,13 +1091,17 @@ class DynamicFormServiceTests(TestCase):
             "devices": [],
         }
 
-        with self.assertRaises(Exception):
-            self.save_form_for_step(
-                instance=instance,
-                user=self.user,
-                submitted_data=submitted_data,
-                edit_mode=True,
-            )
+        form_data = self.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=submitted_data,
+            edit_mode=True,
+        )
+
+        self.assertEqual(
+            form_data.data["Phone"],
+            "09120000000",
+        )
 
     def test_save_form_rejects_invalid_device_model(self):
         instance = self.create_instance()
