@@ -313,8 +313,6 @@ def _save_repeatable_group_files(
     parent_reference=None,
 ):
     file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
-    if not file_fields:
-        return
 
     prefix = group_prefix or f"{group.code}_"
 
