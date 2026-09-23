@@ -257,14 +257,14 @@ class HistoryBrowserServiceTests(TestCase):
             parent_group=parent_group,
             name="Visible Child",
             code="visible_child",
-            order=1,
+            order=2,
         )
         hidden_child = FormRepeatableGroup.objects.create(
             section=section,
             parent_group=parent_group,
             name="Hidden Child",
             code="hidden_child",
-            order=2,
+            order=3,
         )
         RepeatableGroupAccess.objects.create(
             group=parent_group,
