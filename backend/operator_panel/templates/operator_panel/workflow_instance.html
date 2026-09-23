@@ -627,8 +627,8 @@
                             {% endif %}
                           </td>
 
-                        </tr>
-
+                        <tr class="df-repeatable-child-row">
+                          <td colspan="{{ group.fields|length|add:1 }}">
                             {% for child_group in item.child_groups %}
                       {% if child_group.group.display_type == "TABLE" %}
                         <section
@@ -759,13 +759,14 @@
                                           {% endif %}
                                         </td>
 
-                                        {% if child_item.row_id %}
-                                          <input
-                                            type="hidden"
-                                            name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}__id"
-                                            value="{{ child_item.row_id }}"
-                                          />
-                                        {% endif %}
+                                                          {% if child_item.row_id %}
+                                            <input
+                                              type="hidden"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}__id"
+                                              value="{{ child_item.row_id }}"
+                                            />
+                                          {% endif %}
+                                        </td>
                                       </tr>
                                     {% endwith %}
                                   {% endfor %}
@@ -893,6 +894,10 @@
                         </div>
                       </section>
                       {% endif %}
+
+                            {% endfor %}
+                          </td>
+                        </tr>
 
                       {% endfor %}
 
