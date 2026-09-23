@@ -25,6 +25,7 @@ from workflow.models import (
     WorkflowStepExecution,
     WorkflowTransition,
 )
+from workflow.repeatable_row_services import RepeatableRowService
 from workflow.services import WorkflowExecutionService
 
 
@@ -710,6 +711,188 @@ class HistoryServiceTests(TestCase):
         self.assertEqual(
             execution.data["history"]["fields"][0]["value"],
             "Original problem",
+        )
+
+    def test_transition_persists_independent_history_with_files_for_two_repairs(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        file_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="Attachment",
+            code="history_attachment",
+            label="Attachment",
+            field_type=FormField.FieldType.FILE,
+            order=3,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.part_field,
+            display_label="قطعه",
+            display_order=1,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=file_field,
+            display_label="پیوست",
+            display_order=2,
+        )
+
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            from_step=self.step,
+            to_step=None,
+            name="Finish Repair",
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            transition=transition,
+            user=self.user,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        device_type = DeviceType.objects.create(
+            name="Phone FILE E2E",
+            code="PHONE_FILE_E2E",
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Brand",
+            name="Model FILE E2E",
+            code="MODEL_FILE_E2E",
+        )
+        device = Device.objects.create(device_model=device_model)
+        DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value="987654322",
+        )
+
+        first = self._instance(data={"problem": "Broken LCD"})
+        InstanceDevice.objects.create(
+            instance=first,
+            device=device,
+            reported_problem="Broken LCD",
+            is_active=True,
+        )
+        first_row = RepeatableRowService.create_row(
+            instance=first,
+            group=self.group,
+            row_order=0,
+        )
+        RepeatableRowService.set_value(
+            row=first_row,
+            field=self.part_field,
+            value="LCD",
+        )
+        first_form_data = FormData.objects.get(instance=first)
+        FormFile.objects.create(
+            form_data=first_form_data,
+            field=file_field,
+            row_id=str(first_row.pk),
+            file=SimpleUploadedFile(
+                "repair-1.jpg",
+                b"repair-1-content",
+                content_type="image/jpeg",
+            ),
+            original_name="repair-1.jpg",
+            file_size=16,
+            content_type="image/jpeg",
+            uploaded_by=self.user,
+        )
+
+        WorkflowExecutionService.execute_transition(
+            instance=first,
+            transition=transition,
+            user=self.user,
+        )
+
+        first_execution = first.step_executions.get(workflow_step=self.step)
+        first_item = first_execution.data["history"]["repeatable_groups"][0]["items"][0]
+        self.assertEqual(first_item["fields"][0]["value"], "LCD")
+        self.assertEqual(
+            first_item["fields"][1]["file"],
+            {
+                "name": "repair-1.jpg",
+                "size": 16,
+                "content_type": "image/jpeg",
+            },
+        )
+
+        second = self._instance(data={"problem": "Battery issue"})
+        InstanceDevice.objects.create(
+            instance=second,
+            device=device,
+            reported_problem="Battery issue",
+            is_active=True,
+        )
+        second_row = RepeatableRowService.create_row(
+            instance=second,
+            group=self.group,
+            row_order=0,
+        )
+        RepeatableRowService.set_value(
+            row=second_row,
+            field=self.part_field,
+            value="Battery",
+        )
+        second_form_data = FormData.objects.get(instance=second)
+        FormFile.objects.create(
+            form_data=second_form_data,
+            field=file_field,
+            row_id=str(second_row.pk),
+            file=SimpleUploadedFile(
+                "repair-2.jpg",
+                b"repair-2-content",
+                content_type="image/jpeg",
+            ),
+            original_name="repair-2.jpg",
+            file_size=17,
+            content_type="image/jpeg",
+            uploaded_by=self.user,
+        )
+
+        WorkflowExecutionService.execute_transition(
+            instance=second,
+            transition=transition,
+            user=self.user,
+        )
+
+        second_execution = second.step_executions.get(workflow_step=self.step)
+        second_item = second_execution.data["history"]["repeatable_groups"][0]["items"][0]
+        self.assertEqual(second_item["fields"][0]["value"], "Battery")
+        self.assertEqual(
+            second_item["fields"][1]["file"],
+            {
+                "name": "repair-2.jpg",
+                "size": 17,
+                "content_type": "image/jpeg",
+            },
+        )
+
+        first_execution.refresh_from_db()
+        first_item = first_execution.data["history"]["repeatable_groups"][0]["items"][0]
+        self.assertEqual(first_item["fields"][0]["value"], "LCD")
+        self.assertEqual(
+            first_item["fields"][1]["file"],
+            {
+                "name": "repair-1.jpg",
+                "size": 16,
+                "content_type": "image/jpeg",
+            },
+        )
+        self.assertNotEqual(
+            first_item["fields"][0]["value"],
+            second_item["fields"][0]["value"],
+        )
+        self.assertNotEqual(
+            first_item["fields"][1]["file"]["name"],
+            second_item["fields"][1]["file"]["name"],
         )
 
     def test_transition_persists_independent_history_for_two_repairs_of_same_device(self):
