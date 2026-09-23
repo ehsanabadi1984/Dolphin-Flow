@@ -23,6 +23,8 @@ from workflow.models import (
     DeviceIdentifier,
     WorkflowStepExecution,
     RepeatableGroupAccess,
+    RepeatableRow,
+    RepeatableRowValue,
 )
 
 
@@ -298,6 +300,148 @@ class DynamicFormServiceTests(TestCase):
         )
 
         return device
+
+    def test_get_form_for_step_builds_nested_repeatable_context_per_parent_row(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Customers",
+            code="customers",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=4,
+            is_active=True,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="Contacts",
+            code="contacts",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=5,
+            is_active=True,
+        )
+
+        parent_name = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Customer Name",
+            code="customer_name",
+            field_type=FormField.FieldType.TEXT,
+            label="Customer",
+            order=1,
+            is_active=True,
+        )
+        child_name = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Contact Name",
+            code="contact_name",
+            field_type=FormField.FieldType.TEXT,
+            label="Contact",
+            order=1,
+            is_active=True,
+        )
+
+        for group in (parent_group, child_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step_one,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+
+        for field in (parent_name, child_name):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step_one,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=True,
+            )
+
+        instance = self.create_instance()
+
+        parent_rows = [
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=parent_group,
+                row_order=index,
+            )
+            for index in range(2)
+        ]
+
+        RepeatableRowValue.objects.create(
+            row=parent_rows[0],
+            field=parent_name,
+            text_value="Parent 1",
+        )
+        RepeatableRowValue.objects.create(
+            row=parent_rows[1],
+            field=parent_name,
+            text_value="Parent 2",
+        )
+
+        child_values = (
+            ("Child 1", parent_rows[0]),
+            ("Child 2", parent_rows[1]),
+        )
+        for row_order, (value, parent_row) in enumerate(child_values):
+            child_row = RepeatableRow.objects.create(
+                instance=instance,
+                group=child_group,
+                parent_row=parent_row,
+                row_order=0,
+            )
+            RepeatableRowValue.objects.create(
+                row=child_row,
+                field=child_name,
+                text_value=value,
+            )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+        )
+
+        top_level_groups = [
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+        ]
+        customers = next(
+            group for group in top_level_groups
+            if group["group"].code == "customers"
+        )
+
+        self.assertEqual(
+            [group["group"].code for group in top_level_groups],
+            ["devices", "customers"],
+        )
+        self.assertEqual(len(customers["items"]), 2)
+
+        first_item, second_item = customers["items"]
+
+        self.assertEqual(first_item["fields"][0]["value"], "Parent 1")
+        self.assertEqual(second_item["fields"][0]["value"], "Parent 2")
+
+        self.assertEqual(
+            [group["group"].code for group in first_item["child_groups"]],
+            ["contacts"],
+        )
+        self.assertEqual(
+            [group["group"].code for group in second_item["child_groups"]],
+            ["contacts"],
+        )
+        self.assertEqual(
+            first_item["child_groups"][0]["items"][0]["fields"][0]["value"],
+            "Child 1",
+        )
+        self.assertEqual(
+            second_item["child_groups"][0]["items"][0]["fields"][0]["value"],
+            "Child 2",
+        )
 
     def test_get_form_for_step_returns_repeatable_device_group(self):
         instance = self.create_instance()
