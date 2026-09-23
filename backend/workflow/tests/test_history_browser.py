@@ -8,9 +8,11 @@ from workflow.models import (
     DeviceModel,
     DeviceType,
     FieldAccess,
+    RepeatableGroupAccess,
     FormDefinition,
     FormField,
     FormSection,
+    FormRepeatableGroup,
     InstanceDevice,
     Workflow,
     WorkflowInstance,
@@ -159,6 +161,78 @@ class HistoryBrowserServiceTests(TestCase):
         self.assertEqual(
             [field["code"] for field in history[0]["snapshot"]["fields"]],
             [visible_field.code],
+        )
+
+    def test_history_filters_repeatable_groups_by_current_group_permission(self):
+        form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="History Form",
+        )
+        section = FormSection.objects.create(
+            form=form,
+            name="Main",
+            code="MAIN",
+            order=1,
+        )
+        visible_group = FormRepeatableGroup.objects.create(
+            section=section,
+            name="Visible Items",
+            code="visible_items",
+            order=1,
+        )
+        hidden_group = FormRepeatableGroup.objects.create(
+            section=section,
+            name="Hidden Items",
+            code="hidden_items",
+            order=2,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=visible_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=hidden_group,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=False,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=HISTORY_ACTION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        self._execution({
+            "version": 1,
+            "fields": [],
+            "repeatable_groups": [
+                {
+                    "code": visible_group.code,
+                    "name": visible_group.name,
+                    "items": [{"row_id": 1, "fields": []}],
+                },
+                {
+                    "code": hidden_group.code,
+                    "name": hidden_group.name,
+                    "items": [{"row_id": 2, "fields": []}],
+                },
+            ],
+        })
+
+        history = HistoryBrowserService.get_history(
+            user=self.user,
+            instance_id=self.instance.pk,
+        )
+
+        self.assertEqual(len(history), 1)
+        self.assertEqual(
+            [group["code"] for group in history[0]["snapshot"]["repeatable_groups"]],
+            [visible_group.code],
         )
 
     def test_device_filter_keeps_complete_top_level_history(self):
