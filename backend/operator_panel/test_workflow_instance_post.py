@@ -1113,9 +1113,17 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             'name="customers_1_contacts_0_contact_name"',
         )
 
-        self.assertContains(
-            response,
-            'class="df-button df-button-secondary df-repeatable-add" data-group-code="contacts"',
+        self.assertEqual(
+            response.content.decode().count(
+                'class="df-button df-button-secondary df-repeatable-add"'
+            ),
+            3,
+        )
+        self.assertEqual(
+            response.content.decode().count(
+                'data-group-code="contacts"'
+            ),
+            4,
         )
         self.assertEqual(
             response.content.decode().count(
