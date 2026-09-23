@@ -475,6 +475,82 @@ class HistoryBrowserServiceTests(TestCase):
             [field.code],
         )
 
+    def test_history_shows_repeatable_group_with_edit_permission_even_without_view_permission(self):
+        form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="History Form",
+        )
+        section = FormSection.objects.create(
+            form=form,
+            name="Main",
+            code="MAIN",
+            order=1,
+        )
+        group = FormRepeatableGroup.objects.create(
+            section=section,
+            name="Editable Items",
+            code="editable_items",
+            order=1,
+        )
+        field = FormField.objects.create(
+            section=section,
+            repeatable_group=group,
+            name="Value",
+            code="value",
+            label="Value",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=group,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=True,
+        )
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=HISTORY_ACTION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        self._execution({
+            "version": 1,
+            "fields": [],
+            "repeatable_groups": [{
+                "code": group.code,
+                "name": group.name,
+                "items": [{
+                    "row_id": 1,
+                    "fields": [{
+                        "code": field.code,
+                        "value": "Editable group value",
+                    }],
+                }],
+            }],
+        })
+
+        history = HistoryBrowserService.get_history(
+            user=self.user,
+            instance_id=self.instance.pk,
+        )
+
+        self.assertEqual(len(history), 1)
+        groups = history[0]["snapshot"]["repeatable_groups"]
+        self.assertEqual([item["code"] for item in groups], [group.code])
+        self.assertEqual(
+            [item["code"] for item in groups[0]["items"][0]["fields"]],
+            [field.code],
+        )
+
     def test_device_filter_keeps_complete_top_level_history(self):
         device_type = DeviceType.objects.create(
             name="Phone",
