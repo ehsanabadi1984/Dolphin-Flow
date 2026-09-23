@@ -1157,7 +1157,6 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                     row.pk,
                 ],
             ),
-            {"edit": "1"},
         )
 
         self.assertEqual(response.status_code, 403)
@@ -1189,7 +1188,6 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                     row.pk,
                 ],
             ),
-            {"edit": "1"},
         )
 
         self.assertEqual(response.status_code, 302)
