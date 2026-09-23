@@ -367,6 +367,73 @@ class HistoryServiceTests(TestCase):
             },
         )
 
+    def test_file_history_snapshot_contains_metadata_only(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        file_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="Attachment",
+            code="attachment_metadata",
+            label="Attachment",
+            field_type=FormField.FieldType.FILE,
+            order=3,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=file_field,
+            display_label="پیوست",
+            display_order=2,
+        )
+
+        instance = self._instance()
+        from workflow.repeatable_row_services import RepeatableRowService
+
+        row = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        form_data = FormData.objects.get(instance=instance)
+        form_file = FormFile.objects.create(
+            form_data=form_data,
+            field=file_field,
+            row_id=str(row.pk),
+            file=SimpleUploadedFile(
+                "history-secret.pdf",
+                b"historical-file-content",
+                content_type="application/pdf",
+            ),
+            original_name="history-secret.pdf",
+            file_size=22,
+            content_type="application/pdf",
+            uploaded_by=self.user,
+        )
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        file_history = snapshot["repeatable_groups"][0]["items"][0]["fields"][0]["file"]
+
+        self.assertEqual(
+            set(file_history),
+            {"name", "size", "content_type"},
+        )
+        self.assertEqual(
+            file_history,
+            {
+                "name": "history-secret.pdf",
+                "size": 22,
+                "content_type": "application/pdf",
+            },
+        )
+        self.assertNotIn("url", file_history)
+        self.assertNotIn("delete_url", file_history)
+        self.assertNotIn("path", file_history)
+        self.assertNotIn("file", file_history)
+        self.assertEqual(form_file.original_name, file_history["name"])
+
     def test_nested_repeatable_files_preserve_parent_child_ownership(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
 
