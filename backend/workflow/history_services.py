@@ -125,15 +125,11 @@ class HistoryService:
                 )
             )
 
-        history_groups = []
-        for bucket in sorted(
-            groups.values(),
-            key=lambda value: (
-                value["display_order"],
-                value["group"].pk,
-            ),
-        ):
-            group = bucket["group"]
+        def build_history_group(group):
+            bucket = groups.get(group.pk)
+            if bucket is None:
+                return None
+
             fields = sorted(
                 bucket["fields"],
                 key=lambda value: (
@@ -154,16 +150,54 @@ class HistoryService:
                     fields=fields,
                 )
 
-            if items:
-                history_groups.append(
-                    {
-                        "code": group.code,
-                        "name": group.name,
-                        "group_type": group.group_type,
-                        "display_order": bucket["display_order"],
-                        "items": items,
-                    }
-                )
+            child_buckets = [
+                child
+                for child in groups.values()
+                if child["group"].parent_group_id == group.pk
+            ]
+            child_groups = []
+            for child_bucket in sorted(
+                child_buckets,
+                key=lambda value: (
+                    value["display_order"],
+                    value["group"].pk,
+                ),
+            ):
+                child_group = build_history_group(child_bucket["group"])
+                if child_group is not None:
+                    child_groups.append(child_group)
+
+            if not items and not child_groups:
+                return None
+
+            if child_groups:
+                for item in items:
+                    item["child_groups"] = child_groups
+
+            return {
+                "code": group.code,
+                "name": group.name,
+                "group_type": group.group_type,
+                "display_order": bucket["display_order"],
+                "items": items,
+            }
+
+        history_groups = []
+        root_buckets = [
+            bucket
+            for bucket in groups.values()
+            if bucket["group"].parent_group_id is None
+        ]
+        for bucket in sorted(
+            root_buckets,
+            key=lambda value: (
+                value["display_order"],
+                value["group"].pk,
+            ),
+        ):
+            history_group = build_history_group(bucket["group"])
+            if history_group is not None:
+                history_groups.append(history_group)
 
         return {
             "version": HistoryService.SNAPSHOT_VERSION,
