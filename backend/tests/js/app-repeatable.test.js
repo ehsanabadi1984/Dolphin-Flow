@@ -146,4 +146,6 @@ test("adds a nested child row under the second parent with isolated names", asyn
         ).value,
         "child-2"
     );
+
+    dom.window.close();
 });
