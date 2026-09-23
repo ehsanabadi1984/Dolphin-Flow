@@ -110,17 +110,22 @@ class InstanceDeviceService:
     def get_devices_for_instance(
         *,
         instance,
+        include_inactive=False,
     ):
         """
         Return all devices attached to a workflow instance.
         """
 
-        return (
+        queryset = (
             InstanceDevice.objects
-            .filter(
-                instance=instance,
-                is_active=True,
-            )
+            .filter(instance=instance)
+        )
+
+        if not include_inactive:
+            queryset = queryset.filter(is_active=True)
+
+        return (
+            queryset
             .select_related(
                 "device",
                 "device__device_model",
