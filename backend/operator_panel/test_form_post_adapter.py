@@ -233,6 +233,64 @@ class FormPostAdapterTests(TestCase):
         )
 
 
+    def test_canonical_row_id_is_not_overwritten_by_instance_device_fallback(self):
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Devices",
+            code="devices_canonical",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=device_group,
+            name="Label",
+            code="label_canonical",
+            label="Label",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=instance,
+        )
+        RepeatableRow.objects.create(
+            instance=instance,
+            group=device_group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+        canonical_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=device_group,
+            row_order=1,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "devices_canonical_0_label_canonical": "Canonical row",
+            "devices_canonical_0__id": str(canonical_row.pk),
+            "devices_canonical_0_instance_device_id": str(instance_device.pk),
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+            instance=instance,
+        )
+
+        self.assertEqual(
+            payload["devices_canonical"],
+            [
+                {
+                    "label_canonical": "Canonical row",
+                    "row_id": canonical_row.pk,
+                }
+            ],
+        )
+
     def test_existing_device_instance_id_is_resolved_to_repeatable_row_id(self):
         device_group = FormRepeatableGroup.objects.create(
             section=self.section,
