@@ -141,7 +141,11 @@ class OperatorPanelFormPostAdapter:
                     row_id = None
 
                 if row_id is not None:
-                    items.setdefault(index, {})["row_id"] = row_id
+                    # Canonical row identity comes from the hidden __id.
+                    # instance_device_id is a compatibility fallback only.
+                    item = items.setdefault(index, {})
+                    if not item.get("row_id"):
+                        item["row_id"] = row_id
 
         if not items:
             return None
