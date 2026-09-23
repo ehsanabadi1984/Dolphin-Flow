@@ -1141,7 +1141,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             instance=self.instance,
             device=None,
         )
-        RepeatableRow.objects.create(
+        row = RepeatableRow.objects.create(
             instance=self.instance,
             group=group,
             instance_device=instance_device,
@@ -1154,14 +1154,16 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                 args=[
                     self.instance.pk,
                     group.code,
-                    instance_device.pk,
+                    row.pk,
                 ],
             ),
+            {"edit": "1"},
         )
 
         self.assertEqual(response.status_code, 403)
         instance_device.refresh_from_db()
         self.assertTrue(instance_device.is_active)
+        self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
 
     def test_delete_device_uses_permission_context_group_delete_permission(self):
         group, fields = self._create_device_group(
@@ -1171,7 +1173,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             instance=self.instance,
             device=None,
         )
-        RepeatableRow.objects.create(
+        row = RepeatableRow.objects.create(
             instance=self.instance,
             group=group,
             instance_device=instance_device,
@@ -1184,15 +1186,14 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                 args=[
                     self.instance.pk,
                     group.code,
-                    instance_device.pk,
+                    row.pk,
                 ],
             ),
+            {"edit": "1"},
         )
 
-        self.assertEqual(
-            response.status_code,
-            302,
-        )
+        self.assertEqual(response.status_code, 302)
         instance_device.refresh_from_db()
-        self.assertFalse(instance_device.is_active)
+        self.assertTrue(instance_device.is_active)
+        self.assertFalse(RepeatableRow.objects.filter(pk=row.pk).exists())
 
