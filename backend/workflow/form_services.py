@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from .permission_context import PermissionContext
+from .operator_form_serializer import OperatorFormSerializer
 from .repeatable_row_read_services import RepeatableRowReadService
 
 from .instance_device_services import InstanceDeviceService
@@ -1132,23 +1133,25 @@ class DynamicFormService:
                 raw_field = raw_fields.get(field.code, {})
                 value = raw_field.get("value", "")
 
-                item_fields.append({
-                    "field": field,
-                    "can_edit": field_info["can_edit"],
-                    "permission_can_edit": field_info["permission_can_edit"],
-                    "value": value,
-                    "display_value": raw_field.get(
-                        "display_value",
-                        DynamicFormService._get_display_value(
-                            field=field,
-                            value=value,
+                item_fields.append(
+                    OperatorFormSerializer.field(
+                        field=field,
+                        can_edit=field_info["can_edit"],
+                        permission_can_edit=field_info["permission_can_edit"],
+                        value=value,
+                        display_value=raw_field.get(
+                            "display_value",
+                            DynamicFormService._get_display_value(
+                                field=field,
+                                value=value,
+                            ),
                         ),
-                    ),
-                    "choices": field_info["choices"],
-                    "device_types": field_info["device_types"],
-                    "device_models": field_info["device_models"],
-                    "parent_code": field_info["parent_code"],
-                })
+                        choices=field_info["choices"],
+                        device_types=field_info["device_types"],
+                        device_models=field_info["device_models"],
+                        parent_code=field_info["parent_code"],
+                    )
+                )
 
             child_contexts = []
             child_groups_by_code = {
@@ -1367,27 +1370,25 @@ class DynamicFormService:
                         )
 
                 fields.append(
-                    {
-                        "field": field,
-                        "can_edit": can_edit,
-                        "permission_can_edit": (
+                    OperatorFormSerializer.field(
+                        field=field,
+                        can_edit=can_edit,
+                        permission_can_edit=(
                             permission_can_edit
                             and not is_submitted
                         ),
-                        "value": value,
-                        "display_value": (
-                            DynamicFormService._get_display_value(
-                                field=field,
-                                value=value,
-                            )
+                        value=value,
+                        display_value=DynamicFormService._get_display_value(
+                            field=field,
+                            value=value,
                         ),
-                        "choices": choices,
-                        "parent_code": (
+                        choices=choices,
+                        parent_code=(
                             field.choice_parent_field.code
                             if field.choice_parent_field_id
                             else None
                         ),
-                    }
+                    )
                 )
 
             # -------------------------------------------------
@@ -2605,32 +2606,32 @@ class DynamicFormService:
                                     )
 
                             item_fields.append(
-                                {
-                                    "field": field,
-                                    "can_edit": (
+                                OperatorFormSerializer.field(
+                                    field=field,
+                                    can_edit=(
                                         field_info["can_edit"]
                                         and group_can_edit
                                         and edit_mode
                                         and not is_submitted
                                     ),
-                                    "permission_can_edit": field_info.get(
+                                    permission_can_edit=field_info.get(
                                         "permission_can_edit",
                                         False,
                                     ),
-                                    "value": value,
-                                    "display_value": (
+                                    value=value,
+                                    display_value=(
                                         DynamicFormService._get_display_value(
                                             field=field,
                                             value=value,
                                         )
                                     ),
-                                    "choices": choices,
-                                    "parent_code": (
+                                    choices=choices,
+                                    parent_code=(
                                         field.choice_parent_field.code
                                         if field.choice_parent_field_id
                                         else None
                                     ),
-                                }
+                                )
                             )
 
                         row_id = (
