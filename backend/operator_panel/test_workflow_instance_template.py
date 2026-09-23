@@ -1,7 +1,8 @@
 from types import SimpleNamespace
 
 from django.template.loader import get_template
-from django.test import SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase
+from django.contrib.auth.models import AnonymousUser
 
 
 class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
@@ -116,9 +117,11 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
 
     def _render(self, parent_display_type, child_display_type):
         template = get_template(self.template_name)
-        return template.render(
-            self._context(parent_display_type, child_display_type)
-        )
+        context = self._context(parent_display_type, child_display_type)
+        request = RequestFactory().get("/operator/workflow/1/")
+        request.user = AnonymousUser()
+        context["request"] = request
+        return template.render(context)
 
     def test_list_parent_renders_list_child(self):
         rendered = self._render("LIST", "LIST")
