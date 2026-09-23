@@ -43,3 +43,44 @@ class OperatorFormSerializer:
             data["is_imei_immutable"] = is_imei_immutable
 
         return data
+
+    @staticmethod
+    def item(*, fields, row_id="", child_groups=None, **extra):
+        """Build a repeatable item presentation context."""
+
+        data = {
+            **extra,
+            "_id": row_id,
+            "row_id": row_id,
+            "fields": fields,
+        }
+
+        if child_groups is not None:
+            data["child_groups"] = child_groups
+
+        return data
+
+    @staticmethod
+    def repeatable_group(
+        *,
+        group,
+        fields,
+        items,
+        has_editable_fields,
+        can_view,
+        can_edit,
+        can_add,
+        can_delete,
+    ):
+        """Build a repeatable group presentation context."""
+
+        return {
+            "group": group,
+            "fields": fields,
+            "items": items,
+            "has_editable_fields": has_editable_fields,
+            "can_view": can_view,
+            "can_edit": can_edit,
+            "can_add": can_add,
+            "can_delete": can_delete,
+        }
