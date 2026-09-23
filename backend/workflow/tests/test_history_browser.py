@@ -551,6 +551,106 @@ class HistoryBrowserServiceTests(TestCase):
             [field.code],
         )
 
+    def test_nested_history_child_group_edit_permission_allows_visible_child(self):
+        form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="History Form",
+        )
+        section = FormSection.objects.create(
+            form=form,
+            name="Main",
+            code="MAIN",
+            order=1,
+        )
+        parent = FormRepeatableGroup.objects.create(
+            section=section,
+            name="Parent",
+            code="parent",
+            order=1,
+        )
+        child = FormRepeatableGroup.objects.create(
+            section=section,
+            parent_group=parent,
+            name="Child",
+            code="child",
+            order=2,
+        )
+        field = FormField.objects.create(
+            section=section,
+            repeatable_group=child,
+            name="Child Value",
+            code="child_value",
+            label="Child Value",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=parent,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=True,
+        )
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=HISTORY_ACTION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        self._execution({
+            "version": 1,
+            "fields": [],
+            "repeatable_groups": [{
+                "code": parent.code,
+                "name": parent.name,
+                "items": [{
+                    "row_id": 1,
+                    "fields": [],
+                    "child_groups": [{
+                        "code": child.code,
+                        "name": child.name,
+                        "items": [{
+                            "row_id": 2,
+                            "fields": [{
+                                "code": field.code,
+                                "value": "Nested value",
+                            }],
+                        }],
+                    }],
+                }],
+            }],
+        })
+
+        history = HistoryBrowserService.get_history(
+            user=self.user,
+            instance_id=self.instance.pk,
+        )
+
+        self.assertEqual(len(history), 1)
+        child_groups = history[0]["snapshot"]["repeatable_groups"][0]["items"][0][
+            "child_groups"
+        ]
+        self.assertEqual([item["code"] for item in child_groups], [child.code])
+        self.assertEqual(
+            [item["code"] for item in child_groups[0]["items"][0]["fields"]],
+            [field.code],
+        )
+
     def test_device_filter_keeps_complete_top_level_history(self):
         device_type = DeviceType.objects.create(
             name="Phone",
