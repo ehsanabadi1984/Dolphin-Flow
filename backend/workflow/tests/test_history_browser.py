@@ -7,6 +7,10 @@ from workflow.models import (
     Device,
     DeviceModel,
     DeviceType,
+    FieldAccess,
+    FormDefinition,
+    FormField,
+    FormSection,
     InstanceDevice,
     Workflow,
     WorkflowInstance,
@@ -87,6 +91,74 @@ class HistoryBrowserServiceTests(TestCase):
                 )
             ),
             1,
+        )
+
+    def test_history_filters_top_level_fields_by_current_field_permission(self):
+        form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="History Form",
+        )
+        section = FormSection.objects.create(
+            form=form,
+            name="Main",
+            code="MAIN",
+            order=1,
+        )
+        visible_field = FormField.objects.create(
+            section=section,
+            name="Customer",
+            code="customer",
+            label="Customer",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+        )
+        hidden_field = FormField.objects.create(
+            section=section,
+            name="Internal Note",
+            code="internal_note",
+            label="Internal Note",
+            field_type=FormField.FieldType.TEXT,
+            order=2,
+        )
+        FieldAccess.objects.create(
+            field=visible_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+        FieldAccess.objects.create(
+            field=hidden_field,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=False,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=HISTORY_ACTION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        self._execution({
+            "version": 1,
+            "fields": [
+                {"code": visible_field.code, "label": visible_field.label, "value": "Ehsan"},
+                {"code": hidden_field.code, "label": hidden_field.label, "value": "Secret"},
+            ],
+            "repeatable_groups": [],
+        })
+
+        history = HistoryBrowserService.get_history(
+            user=self.user,
+            instance_id=self.instance.pk,
+        )
+
+        self.assertEqual(len(history), 1)
+        self.assertEqual(
+            [field["code"] for field in history[0]["snapshot"]["fields"]],
+            [visible_field.code],
         )
 
     def test_device_filter_keeps_complete_top_level_history(self):
