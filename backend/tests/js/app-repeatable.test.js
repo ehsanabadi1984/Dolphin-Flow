@@ -64,6 +64,7 @@ test("adds a nested child row under the second parent with isolated names", asyn
     globalThis.document = dom.window.document;
     globalThis.CSS = dom.window.CSS;
     globalThis.confirm = () => true;
+    dom.window.confirm = () => true;
     globalThis.setTimeout = () => 0;
     globalThis.clearTimeout = () => {};
 
