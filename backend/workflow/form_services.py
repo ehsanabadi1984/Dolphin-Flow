@@ -206,6 +206,7 @@ class DynamicFormService:
 
             for group in section.repeatable_groups.filter(
                 is_active=True,
+                parent_group__isnull=True,
             ):
                 group_fields = list(
                     group.fields.filter(
@@ -1048,6 +1049,149 @@ class DynamicFormService:
         )
 
     @staticmethod
+    def _build_nested_group_context(
+        *,
+        group,
+        reconstructed_group,
+        permission_context,
+        group_can_edit,
+        edit_mode,
+        is_submitted,
+    ):
+        """Build the render context for a nested repeatable group."""
+        group_permission = permission_context.group(group)
+        group_can_view = group_permission.can_view
+        group_can_edit = group_permission.can_edit and group_can_edit
+        group_can_add = group_permission.can_add
+        group_can_delete = group_permission.can_delete
+
+        if is_submitted:
+            group_can_edit = False
+            group_can_add = False
+            group_can_delete = False
+
+        if not group_can_view:
+            return None
+
+        group_fields = []
+        group_has_editable_fields = False
+
+        for field in group.fields.filter(is_active=True):
+            field_permission = permission_context.field(field)
+            if not field_permission.can_view:
+                continue
+
+            effective_can_edit = (
+                field_permission.can_edit
+                and group_can_edit
+                and edit_mode
+                and not is_submitted
+            )
+
+            if field_permission.can_edit and group_can_edit and not is_submitted:
+                group_has_editable_fields = True
+
+            group_fields.append({
+                "field": field,
+                "can_edit": effective_can_edit,
+                "permission_can_edit": field_permission.can_edit,
+                "choices": (
+                    DynamicFormService._get_field_choices(field)
+                    if field.field_type == field.FieldType.SELECT
+                    else []
+                ),
+                "device_types": (
+                    DeviceType.objects.filter(is_active=True)
+                    if field.system_key == FormField.SystemKey.DEVICE_TYPE
+                    else []
+                ),
+                "device_models": (
+                    DeviceModel.objects.filter(is_active=True)
+                    if field.system_key == FormField.SystemKey.DEVICE_MODEL
+                    else []
+                ),
+                "parent_code": (
+                    field.choice_parent_field.code
+                    if field.choice_parent_field_id
+                    else None
+                ),
+            })
+
+        items = []
+        raw_items = reconstructed_group.get("items", [])
+
+        for raw_item in raw_items:
+            raw_fields = {
+                field["code"]: field
+                for field in raw_item.get("fields", [])
+            }
+            item_fields = []
+
+            for field_info in group_fields:
+                field = field_info["field"]
+                raw_field = raw_fields.get(field.code, {})
+                value = raw_field.get("value", "")
+
+                item_fields.append({
+                    "field": field,
+                    "can_edit": field_info["can_edit"],
+                    "permission_can_edit": field_info["permission_can_edit"],
+                    "value": value,
+                    "display_value": raw_field.get(
+                        "display_value",
+                        DynamicFormService._get_display_value(
+                            field=field,
+                            value=value,
+                        ),
+                    ),
+                    "choices": field_info["choices"],
+                    "device_types": field_info["device_types"],
+                    "device_models": field_info["device_models"],
+                    "parent_code": field_info["parent_code"],
+                })
+
+            child_contexts = []
+            child_groups_by_code = {
+                child["code"]: child
+                for child in raw_item.get("child_groups", [])
+            }
+
+            for child_group in group.child_groups.filter(
+                is_active=True,
+            ).order_by("order", "id"):
+                child_context = DynamicFormService._build_nested_group_context(
+                    group=child_group,
+                    reconstructed_group=child_groups_by_code.get(
+                        child_group.code,
+                        {"items": []},
+                    ),
+                    permission_context=permission_context,
+                    group_can_edit=group_can_edit,
+                    edit_mode=edit_mode,
+                    is_submitted=is_submitted,
+                )
+                if child_context is not None:
+                    child_contexts.append(child_context)
+
+            items.append({
+                "_id": str(raw_item.get("row_id", "")),
+                "row_id": raw_item.get("row_id"),
+                "fields": item_fields,
+                "child_groups": child_contexts,
+            })
+
+        return {
+            "group": group,
+            "fields": group_fields,
+            "items": items,
+            "has_editable_fields": group_has_editable_fields,
+            "can_view": group_can_view,
+            "can_edit": group_can_edit,
+            "can_add": group_can_add,
+            "can_delete": group_can_delete,
+        }
+
+    @staticmethod
     def get_form_for_step(
         *,
         instance,
@@ -1107,6 +1251,7 @@ class DynamicFormService:
                         field["code"]: field["value"]
                         for field in item.get("fields", [])
                     },
+                    "child_groups": item.get("child_groups", []),
                 }
                 for item in reconstructed_group.get("items", [])
             ]
@@ -2502,18 +2647,49 @@ class DynamicFormService:
                         )
                     #--------------Debug---------------
                     #---------End-Debug----------------
-                repeatable_groups.append(
-                    {
-                        "group": group,
-                        "fields": group_fields,
-                        "items": items,
-                        "has_editable_fields": group_has_editable_fields,
-                        "can_view": group_can_view,
-                        "can_edit": group_can_edit,
-                        "can_add": group_can_add,
-                        "can_delete": group_can_delete,
-                    }
-                )
+                group_context = {
+                    "group": group,
+                    "fields": group_fields,
+                    "items": items,
+                    "has_editable_fields": group_has_editable_fields,
+                    "can_view": group_can_view,
+                    "can_edit": group_can_edit,
+                    "can_add": group_can_add,
+                    "can_delete": group_can_delete,
+                }
+
+                if group.group_type == FormRepeatableGroup.GroupType.NORMAL:
+                    for item, raw_item in zip(items, raw_items):
+                        child_groups_by_code = (
+                            {
+                                child["code"]: child
+                                for child in raw_item.get("child_groups", [])
+                            }
+                            if isinstance(raw_item, dict)
+                            else {}
+                        )
+                        item["child_groups"] = []
+
+                        for child_group in group.child_groups.filter(
+                            is_active=True,
+                        ).order_by("order", "id"):
+                            child_context = (
+                                DynamicFormService._build_nested_group_context(
+                                    group=child_group,
+                                    reconstructed_group=child_groups_by_code.get(
+                                        child_group.code,
+                                        {"items": []},
+                                    ),
+                                    permission_context=permission_context,
+                                    group_can_edit=group_can_edit,
+                                    edit_mode=edit_mode,
+                                    is_submitted=is_submitted,
+                                )
+                            )
+                            if child_context is not None:
+                                item["child_groups"].append(child_context)
+
+                repeatable_groups.append(group_context)
 
                     #------------------Debug--------------
                     #---------------End-Debug-------------
