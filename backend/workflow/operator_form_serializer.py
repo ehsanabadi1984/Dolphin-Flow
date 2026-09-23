@@ -61,6 +61,99 @@ class OperatorFormSerializer:
         return data
 
     @staticmethod
+    def normal_item(
+        *,
+        row_id="",
+        field_contexts,
+        values,
+        display_values,
+        child_groups=None,
+    ):
+        """Serialize one normal repeatable row for operator presentation."""
+
+        fields = []
+
+        for field_context in field_contexts:
+            field = field_context["field"]
+            fields.append(
+                OperatorFormSerializer.field(
+                    field=field,
+                    can_edit=field_context["can_edit"],
+                    permission_can_edit=field_context.get(
+                        "permission_can_edit"
+                    ),
+                    value=values.get(field.code, ""),
+                    display_value=display_values.get(
+                        field.code,
+                        "",
+                    ),
+                    choices=field_context.get("choices", []),
+                    device_types=field_context.get(
+                        "device_types"
+                    ),
+                    device_models=field_context.get(
+                        "device_models"
+                    ),
+                    parent_code=field_context.get("parent_code"),
+                )
+            )
+
+        return OperatorFormSerializer.item(
+            row_id=row_id,
+            fields=fields,
+            child_groups=child_groups,
+        )
+
+    @staticmethod
+    def normal_repeatable_group(
+        *,
+        group,
+        field_contexts_by_item,
+        item_contexts,
+        has_editable_fields,
+        can_view,
+        can_edit,
+        can_add,
+        can_delete,
+    ):
+        """Serialize a normal repeatable group and its rows."""
+
+        items = []
+
+        for index, item_context in enumerate(item_contexts):
+            field_contexts = field_contexts_by_item[index]
+            items.append(
+                OperatorFormSerializer.normal_item(
+                    row_id=item_context.get("row_id", ""),
+                    field_contexts=field_contexts,
+                    values=item_context.get("values", {}),
+                    display_values=item_context.get(
+                        "display_values",
+                        {},
+                    ),
+                    child_groups=item_context.get(
+                        "child_groups",
+                        [],
+                    ),
+                )
+            )
+
+        return OperatorFormSerializer.repeatable_group(
+            group=group,
+            fields=(
+                field_contexts_by_item[0]
+                if field_contexts_by_item
+                else []
+            ),
+            items=items,
+            has_editable_fields=has_editable_fields,
+            can_view=can_view,
+            can_edit=can_edit,
+            can_add=can_add,
+            can_delete=can_delete,
+        )
+
+    @staticmethod
     def repeatable_group(
         *,
         group,
