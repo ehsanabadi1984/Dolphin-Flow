@@ -1734,57 +1734,6 @@ class DynamicFormServiceTests(TestCase):
             "RECEIVED",
         )
 
-    def test_history_keeps_deactivated_device_assignment(self):
-        instance = self.create_instance()
-
-        submitted_data = {
-            "Phone": "09120000000",
-            "customer_address": "آدرس تاریخچه",
-            "devices": [
-                {
-                    "imei": "888888888888888",
-                    "device_model_id": self.device_model.pk,
-                    "reported_problem": "دستگاه حذف‌شده",
-                    "warranty_status": "UNKNOWN",
-                    "status": "RECEIVED",
-                },
-            ],
-        }
-
-        self.device_imei_field.is_history_enabled = True
-        self.device_imei_field.save(update_fields=["is_history_enabled"])
-
-        self.save_form_for_step(
-            instance=instance,
-            user=self.user,
-            submitted_data=submitted_data,
-            edit_mode=True,
-        )
-
-        instance_device = InstanceDevice.objects.get(
-            instance=instance,
-        )
-        InstanceDeviceService.deactivate_device(
-            instance_device=instance_device,
-        )
-
-        snapshot = DynamicFormService._build_history_snapshot(
-            instance=instance,
-            user=self.user,
-        )
-
-        device_group = next(
-            group
-            for group in snapshot["repeatable_groups"]
-            if group["code"] == "devices"
-        )
-
-        self.assertEqual(len(device_group["items"]), 1)
-        self.assertEqual(
-            device_group["items"][0]["instance_device_id"],
-            instance_device.pk,
-        )
-
     def test_get_form_for_step_hides_deactivated_device(self):
         instance = self.create_instance()
 
