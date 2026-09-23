@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFile } from "node:fs/promises";
 import { JSDOM } from "jsdom";
 
 const appPath = new URL(
@@ -53,7 +54,10 @@ test("adds a nested child row under the second parent with isolated names", asyn
             </section>
         </form>
         `,
-        { url: "http://localhost/workflow/1/" }
+        {
+            url: "http://localhost/workflow/1/",
+            runScripts: "outside-only",
+        }
     );
 
     globalThis.window = dom.window;
@@ -75,13 +79,16 @@ test("adds a nested child row under the second parent with isolated names", asyn
     globalThis.WebSocket = WebSocketStub;
     dom.window.WebSocket = WebSocketStub;
 
-    const namingModule = await import(
-        "../../operator_panel/static/operator_panel/js/repeatable-naming.js"
+    const namingPath = new URL(
+        "../../operator_panel/static/operator_panel/js/repeatable-naming.js",
+        import.meta.url
     );
+    const namingSource = await readFile(namingPath, "utf8");
+    dom.window.eval(namingSource);
     globalThis.reindexRepeatableFieldName =
-        namingModule.reindexRepeatableFieldName;
+        dom.window.DolphinFlowRepeatableNaming.reindexRepeatableFieldName;
     globalThis.buildRepeatableGroupPrefix =
-        namingModule.buildRepeatableGroupPrefix;
+        dom.window.DolphinFlowRepeatableNaming.buildRepeatableGroupPrefix;
     await import(appPath);
 
     document.dispatchEvent(
