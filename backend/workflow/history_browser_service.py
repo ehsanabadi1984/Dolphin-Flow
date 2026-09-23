@@ -65,7 +65,7 @@ class HistoryBrowserService:
             .first()
         )
         if form is None:
-            return None
+            return snapshot
 
         permission_context = PermissionContext.build(
             workflow=execution.instance.workflow,
