@@ -183,7 +183,7 @@ class HistoryServiceTests(TestCase):
         )
 
         items = snapshot["repeatable_groups"][0]["items"]
-        self.assertEqual([item["row_id"] for item in items], ["row-1", "row-2"])
+        self.assertEqual([item["row_id"] for item in items], [row_1.pk, row_2.pk])
         self.assertEqual(items[0]["fields"][0]["value"], "LCD")
         self.assertEqual(items[1]["fields"][0]["value"], "Battery")
 
