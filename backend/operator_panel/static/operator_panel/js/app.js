@@ -2232,28 +2232,12 @@ document.addEventListener("click", (event) => {
                     const old =
                         f.getAttribute("name");
 
-                    if (
-                        old &&
-                        old.startsWith(gc + "_")
-                    ) {
-                        const tail =
-                            old.slice(
-                                gc.length + 1
-                            );
-
-                        const sep =
-                            tail.indexOf("_");
-
-                        if (sep !== -1) {
-                            f.name =
-                                gc +
-                                "_" +
-                                i +
-                                "_" +
-                                tail.slice(
-                                    sep + 1
-                                );
-                        }
+                    if (old) {
+                        f.name = reindexRepeatableFieldName(
+                            old,
+                            `${gc}_`,
+                            i
+                        );
                     }
                 });
             });
@@ -2416,29 +2400,11 @@ document.addEventListener("click", (event) => {
          */
 
         if (oldName) {
-
-            const prefix =
-                `${groupCode}_`;
-
-            if (oldName.startsWith(prefix)) {
-
-                const remainder =
-                    oldName.slice(prefix.length);
-
-                const separatorIndex =
-                    remainder.indexOf("_");
-
-                if (separatorIndex !== -1) {
-
-                    const fieldCode =
-                        remainder.slice(
-                            separatorIndex + 1
-                        );
-
-                    field.name =
-                        `${groupCode}_${newIndex}_${fieldCode}`;
-                }
-            }
+            field.name = reindexRepeatableFieldName(
+                oldName,
+                `${groupCode}_`,
+                newIndex
+            );
         }
 
         /*
