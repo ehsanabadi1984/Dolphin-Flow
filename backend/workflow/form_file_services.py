@@ -241,7 +241,7 @@ def _normalized_row_id(*, normalized_row, group, save_result):
     return None
 
 
-def _save_repeatable_group_files(\n    *, form_data, group, normalized_rows, submitted_files, user, save_result, group_prefix=None\n):
+def _save_repeatable_group_files(\n    *,\n    form_data,\n    group,\n    normalized_rows,\n    submitted_files,\n    user,\n    save_result,\n    group_prefix=None,\n):
     file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
     if not file_fields:
         return
