@@ -404,6 +404,7 @@ class DynamicFormService:
         instance_devices = (
             InstanceDeviceService.get_devices_for_instance(
                 instance=instance,
+                include_inactive=True,
             )
         )
 
