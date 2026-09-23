@@ -249,7 +249,6 @@ def _normalized_row_id(*, normalized_row, group, save_result, parent_reference=N
     else:
         parent_row = RepeatableRow.objects.filter(
             pk=parent_reference.value,
-            instance_id=group.section.form.workflow_id,
         ).first()
 
     if parent_row is None:
