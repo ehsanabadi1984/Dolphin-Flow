@@ -333,8 +333,10 @@ class AbandonedStartConsistencyTests(DashboardSidebarBase):
             reverse("operator_panel:my_processes"),
         )
         content = response.content.decode()
-        self.assertIn(f"<span>#{meaningful.pk}</span>", content)
-        self.assertNotIn(f"<span>#{abandoned.pk}</span>", content)
+        meaningful_number = meaningful.started_at.strftime("%y%m%d") + f"-{meaningful.pk:06d}"
+        abandoned_number = abandoned.started_at.strftime("%y%m%d") + f"-{abandoned.pk:06d}"
+        self.assertIn(f"<span>#{meaningful_number}</span>", content)
+        self.assertNotIn(f"<span>#{abandoned_number}</span>", content)
 
 
 class LimitBeforeFilterTests(DashboardSidebarBase):
