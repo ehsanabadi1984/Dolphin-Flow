@@ -456,15 +456,15 @@
 
                             {% endfor %}
 
-                            {% endwith %}
-
                         </tbody>
 
                     </table>
 
                 </div>
 
-            </section>     
+            </section>
+
+            {% endif %}
 
             {% elif group.group.display_type == "TABLE" %}
 
@@ -516,6 +516,8 @@
                 </table>
               </div>
             </section>
+
+            {% endwith %}
 
             {% else %}
 
