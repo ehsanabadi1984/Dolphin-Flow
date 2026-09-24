@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from django.core.exceptions import ValidationError
 
 from .models import (
@@ -63,6 +65,57 @@ class RepeatableRowReadService:
             )
             .order_by("row_order", "id")
         )
+
+    @staticmethod
+    def get_rows_by_group_parent(*, instance, groups):
+        """Load repeatable rows for multiple groups in one prefetched query."""
+        if instance is None or instance.pk is None:
+            raise ValidationError("WorkflowInstance معتبر نیست.")
+
+        groups = list(groups)
+        if not groups:
+            return {}
+
+        group_ids = []
+        for group in groups:
+            if group is None or group.pk is None:
+                raise ValidationError("RepeatableGroup معتبر نیست.")
+            if group.section.form.workflow_id != instance.workflow_id:
+                raise ValidationError(
+                    "گروه تکرارشونده و WorkflowInstance باید متعلق به یک Workflow باشند."
+                )
+            group_ids.append(group.pk)
+
+        rows = (
+            RepeatableRow.objects
+            .filter(
+                instance=instance,
+                group_id__in=group_ids,
+            )
+            .select_related(
+                "group",
+                "instance_device",
+                "instance_device__device",
+                "instance_device__device__device_model",
+                "instance_device__device__device_model__device_type",
+                "instance_device__draft_device_model",
+                "instance_device__draft_device_type",
+            )
+            .prefetch_related(
+                "group__fields",
+                "instance_device__device__identifiers",
+                "values__field",
+                "values__static_choice_item",
+                "values__lookup_item",
+            )
+            .order_by("group_id", "parent_row_id", "row_order", "id")
+        )
+
+        rows_by_group_parent = defaultdict(list)
+        for row in rows:
+            rows_by_group_parent[(row.group_id, row.parent_row_id)].append(row)
+
+        return dict(rows_by_group_parent)
 
     @staticmethod
     def reconstruct_row(*, row):
