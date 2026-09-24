@@ -1045,7 +1045,7 @@ class DynamicFormService:
                             dict(cell, show=visible_own)
                             for cell in own_cells
                         ],
-                        visible_own,
+                        True,
                     )
 
                     if before < len(rows) and first_leaf:
