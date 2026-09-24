@@ -607,7 +607,7 @@ class HistoryServiceTests(TestCase):
 
         row.refresh_from_db()
         self.assertEqual(
-            row.values.get(field=self.part_field).value,
+            row.values.get(field=self.part_field).text_value,
             "Battery",
         )
         self.assertEqual(
@@ -680,7 +680,7 @@ class HistoryServiceTests(TestCase):
             field=child_field,
             value="SERIAL-B",
         )
-        child.delete()
+        RepeatableRowService.delete_row(row=child)
 
         remaining_child_ids = {
             row.pk
@@ -799,9 +799,15 @@ class HistoryServiceTests(TestCase):
         )
         HistoryField.objects.create(
             configuration=configuration,
+            form_field=self.part_field,
+            display_label="قطعه",
+            display_order=1,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
             form_field=child_field,
             display_label="پیوست",
-            display_order=1,
+            display_order=2,
         )
 
         instance = self._instance()
