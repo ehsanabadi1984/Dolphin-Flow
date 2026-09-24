@@ -556,12 +556,13 @@ class DirectFormFileDeletionTests(RepeatableFilePersistenceTests):
         file_name = form_file.file.name
 
         self.client.force_login(self.user)
-        response = self.client.post(
-            reverse(
-                "operator_panel:delete_form_file",
-                args=[form_file.pk],
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse(
+                    "operator_panel:delete_form_file",
+                    args=[form_file.pk],
+                )
             )
-        )
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(FormFile.objects.filter(pk=form_file.pk).exists())
