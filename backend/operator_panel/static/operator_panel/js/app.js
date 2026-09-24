@@ -88,6 +88,7 @@ function reindexFlatTableRootRows(container, rootGroupCode) {
 
     rootRows.forEach((row, rootIndex) => {
         row.dataset.rootIndex = rootIndex;
+        row.dataset.rowPath = `${rootGroupCode}_${rootIndex}`;
 
         const rootPattern =
             new RegExp(`^${escapeRegExp(rootGroupCode)}_\\d+_`);
@@ -113,8 +114,12 @@ function reindexFlatTableRootRows(container, rootGroupCode) {
                 )
             );
 
-            children.forEach((child) => {
+            children.forEach((child, childIndex) => {
                 child.dataset.rootIndex = rootIndex;
+                child.dataset.rowPath =
+                    `${container.querySelector(
+                        `[data-repeatable-item][data-row-id="${CSS.escape(parentId)}"]`
+                    )?.dataset.rowPath || `${rootGroupCode}_${rootIndex}`}_${child.dataset.repeatableRowGroup}_${childIndex}`;
                 pending.push(child.dataset.rowId);
 
                 child.querySelectorAll("input, textarea, select").forEach((field) => {
