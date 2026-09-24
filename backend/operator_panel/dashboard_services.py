@@ -94,10 +94,8 @@ def _role_permission_exists(user, action, effect, *, step_scope=False, wf_scope=
 
 def _execute_annotations(user):
     """
-    EXECUTE is always resolved at the scope of the instance's current
-    step (the caller never asks for EXECUTE without a step), so only
-    step-scoped rows are needed. Precedence matches has_permission:
-    user DENY > user ALLOW > role DENY > role ALLOW > deny by default.
+    Resolve EXECUTE at the same scope as has_permission: current-step
+    scope when a step exists, workflow scope otherwise.
     """
     return {
         "_df_execute_user_allow": _user_permission_exists(
@@ -123,6 +121,30 @@ def _execute_annotations(user):
             WorkflowPermission.Action.EXECUTE,
             WorkflowPermission.Effect.DENY,
             step_scope=True,
+        ),
+        "_df_execute_wf_user_allow": _user_permission_exists(
+            user,
+            WorkflowPermission.Action.EXECUTE,
+            WorkflowPermission.Effect.ALLOW,
+            wf_scope=True,
+        ),
+        "_df_execute_wf_user_deny": _user_permission_exists(
+            user,
+            WorkflowPermission.Action.EXECUTE,
+            WorkflowPermission.Effect.DENY,
+            wf_scope=True,
+        ),
+        "_df_execute_wf_role_allow": _role_permission_exists(
+            user,
+            WorkflowPermission.Action.EXECUTE,
+            WorkflowPermission.Effect.ALLOW,
+            wf_scope=True,
+        ),
+        "_df_execute_wf_role_deny": _role_permission_exists(
+            user,
+            WorkflowPermission.Action.EXECUTE,
+            WorkflowPermission.Effect.DENY,
+            wf_scope=True,
         ),
     }
 
@@ -231,9 +253,53 @@ def _can_view_q(user):
         )
     )
 
-    return Q(current_step__isnull=False) & step_scope | Q(
-        current_step__isnull=True
-    ) & workflow_scope
+    return (
+        Q(workflow__memberships__user=user, workflow__memberships__is_active=True)
+        & (
+            Q(current_step__isnull=False) & step_scope
+            | Q(current_step__isnull=True) & workflow_scope
+        )
+    )
+
+
+def _deny_allow_q(prefix):
+    """Return the effective allow/deny predicate for an annotated action."""
+    step_scope = (
+        Q(
+            **{
+                f"_df_{prefix}_user_deny": False,
+                f"_df_{prefix}_user_allow": True,
+            }
+        )
+        | Q(
+            **{
+                f"_df_{prefix}_user_deny": False,
+                f"_df_{prefix}_user_allow": False,
+                f"_df_{prefix}_role_deny": False,
+                f"_df_{prefix}_role_allow": True,
+            }
+        )
+    )
+    workflow_scope = (
+        Q(
+            **{
+                f"_df_{prefix}_wf_user_deny": False,
+                f"_df_{prefix}_wf_user_allow": True,
+            }
+        )
+        | Q(
+            **{
+                f"_df_{prefix}_wf_user_deny": False,
+                f"_df_{prefix}_wf_user_allow": False,
+                f"_df_{prefix}_wf_role_deny": False,
+                f"_df_{prefix}_wf_role_allow": True,
+            }
+        )
+    )
+    return (
+        Q(current_step__isnull=False) & step_scope
+        | Q(current_step__isnull=True) & workflow_scope
+    )
 
 
 def _actionability_annotations(user):
@@ -304,22 +370,13 @@ def _actionability_annotations(user):
 
 def _can_take_action_q(user):
     """Return the database-side VIEW-and-(EXECUTE-or-TRANSITION) predicate."""
-    execute_granted = (
-        Q(
-            _df_execute_user_deny=False,
-            _df_execute_user_allow=True,
-        )
-        | Q(
-            _df_execute_user_deny=False,
-            _df_execute_user_allow=False,
-            _df_execute_role_deny=False,
-            _df_execute_role_allow=True,
-        )
-    )
     return (
         Q(_df_member=True)
         & _can_view_q(user)
-        & (execute_granted | Q(_df_transition_granted=True))
+        & (
+            _deny_allow_q(prefix="execute")
+            | Q(_df_transition_granted=True)
+        )
     )
 
 
