@@ -981,3 +981,29 @@ class RepeatableRowActionAndEmptyStateRenderTests(TestCase):
         self.assertTrue(result["is_submitted"])
         self.assertNotIn("df-repeatable-add", html)
         self.assertNotIn("df-repeatable-delete", html)
+
+
+
+class RepeatableAccessibilityContractTests(TestCase):
+    """16.3H static accessibility contracts for repeatable templates."""
+
+    def test_workflow_instance_repeatable_controls_have_label_targets(self):
+        from pathlib import Path
+
+        template_path = Path(__file__).resolve().parents[2] / "operator_panel" / "templates" / "operator_panel" / "workflow_instance.html"
+        content = template_path.read_text()
+
+        self.assertIn('scope="col"', content)
+        self.assertIn('for="repeatable-{{ group.group.code }}-{{ item_index }}-', content)
+        self.assertIn('id="repeatable-{{ group.group.code }}-{{ item_index }}-', content)
+        self.assertIn('aria-label="بستن پنجره افزودن دستگاه"', content)
+
+    def test_nested_repeatable_table_has_scoped_headers_and_label_targets(self):
+        from pathlib import Path
+
+        template_path = Path(__file__).resolve().parents[2] / "operator_panel" / "templates" / "operator_panel" / "_repeatable_child_groups.html"
+        content = template_path.read_text()
+
+        self.assertIn('scope="col"', content)
+        self.assertIn('for="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-', content)
+        self.assertIn('id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-', content)
