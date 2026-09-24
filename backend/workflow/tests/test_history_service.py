@@ -1,5 +1,7 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from accounts.models import User
 
@@ -146,6 +148,70 @@ class HistoryServiceTests(TestCase):
         self.assertEqual(snapshot["fields"][0]["display_label"], "شماره IMEI")
         self.assertEqual(snapshot["fields"][0]["display_order"], 10)
         self.assertEqual(snapshot["fields"][0]["history_field_id"], history_field.pk)
+
+    def test_repeatable_history_query_count_does_not_scale_with_row_count(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.part_field,
+            display_label="قطعه",
+            display_order=1,
+        )
+
+        instance = self._instance()
+
+        rows = []
+        for index in range(1, 6):
+            row = RepeatableRowService.create_row(
+                instance=instance,
+                group=self.group,
+                row_order=index,
+            )
+            RepeatableRowService.set_value(
+                row=row,
+                field=self.part_field,
+                value=f"Part {index}",
+            )
+            rows.append(row)
+
+        with CaptureQueriesContext(connection) as queries:
+            snapshot = HistoryService.build_snapshot(
+                instance=instance,
+                user=self.user,
+            )
+
+        self.assertEqual(len(snapshot["repeatable_groups"][0]["items"]), 5)
+
+        single_row_instance = self._instance()
+        single_row = RepeatableRowService.create_row(
+            instance=single_row_instance,
+            group=self.group,
+            row_order=0,
+        )
+        RepeatableRowService.set_value(
+            row=single_row,
+            field=self.part_field,
+            value="Part",
+        )
+
+        with CaptureQueriesContext(connection) as single_row_queries:
+            single_snapshot = HistoryService.build_snapshot(
+                instance=single_row_instance,
+                user=self.user,
+            )
+
+        self.assertEqual(
+            len(single_snapshot["repeatable_groups"][0]["items"]),
+            1,
+        )
+        self.assertLessEqual(
+            len(queries) - len(single_row_queries),
+            1,
+            msg=(
+                "History snapshot query count grew with repeatable row count; "
+                "row reconstruction is likely performing per-row queries."
+            ),
+        )
 
     def test_normal_repeatable_rows_keep_their_row_id_and_values(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
