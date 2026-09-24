@@ -38,7 +38,8 @@ def _build_context_data(*, instance, submitted_data):
     reconstructed = RepeatableRowReadService.reconstruct_instance(
         instance=instance,
     )
-    for group in reconstructed.get("groups", []):
+
+    def serialize_group(group):
         rows = []
         for item in group.get("items", []):
             row_data = {
@@ -46,8 +47,26 @@ def _build_context_data(*, instance, submitted_data):
                 for field in item.get("fields", [])
             }
             row_data["_id"] = str(item["row_id"])
+            row_data["row_id"] = str(item["row_id"])
+            row_data["parent_row_id"] = (
+                str(item["parent_row_id"])
+                if item.get("parent_row_id") is not None
+                else None
+            )
+            row_data["child_groups"] = [
+                serialize_group(child_group)
+                for child_group in item.get("child_groups", [])
+            ]
             rows.append(row_data)
-        data[group["code"]] = rows
+
+        return {
+            "code": group["code"],
+            "items": rows,
+        }
+
+    for group in reconstructed.get("groups", []):
+        serialized_group = serialize_group(group)
+        data[group["code"]] = serialized_group["items"]
 
     if submitted_data is None:
         return data
