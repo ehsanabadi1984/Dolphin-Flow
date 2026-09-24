@@ -288,6 +288,87 @@ class FormDraftUpdateApplyServiceTests(TestCase):
         self.assertEqual(refreshed.parent_row_id, parent_row.pk)
         self.assertEqual(refreshed.row_order, 5)
 
+
+    def test_nested_existing_grandchild_updates_without_changing_parent_chain(self):
+        parent_group, _ = self.create_group(
+            code="parents_depth_three",
+            order=1,
+        )
+        child_group, _ = self.create_group(
+            code="children_depth_three",
+            parent_group=parent_group,
+            order=2,
+        )
+        grandchild_group, grandchild_fields = self.create_group(
+            code="grandchildren_depth_three",
+            parent_group=child_group,
+            order=3,
+        )
+
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent_group,
+            row_order=2,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=4,
+        )
+        grandchild_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=grandchild_group,
+            parent_row=child_row,
+            row_order=6,
+        )
+        RepeatableRowValue.objects.create(
+            row=grandchild_row,
+            field=grandchild_fields["grandchildren_depth_three_name"],
+            text_value="Old grandchild",
+        )
+
+        diff = self.build_diff(
+            parents_depth_three=[
+                self.row(
+                    row_id=parent_row.pk,
+                    child_groups={
+                        "children_depth_three": (
+                            self.row(
+                                row_id=child_row.pk,
+                                child_groups={
+                                    "grandchildren_depth_three": (
+                                        self.row(
+                                            row_id=grandchild_row.pk,
+                                            fields={
+                                                "grandchildren_depth_three_name": "New grandchild"
+                                            },
+                                        ),
+                                    ),
+                                },
+                            ),
+                        ),
+                    },
+                ),
+            ],
+        )
+
+        FormDraftUpdateApplyService.apply(
+            instance=self.instance,
+            diff=diff,
+        )
+
+        grandchild_row.refresh_from_db()
+        self.assertEqual(grandchild_row.parent_row_id, child_row.pk)
+        self.assertEqual(grandchild_row.row_order, 6)
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=grandchild_row,
+                field=grandchild_fields["grandchildren_depth_three_name"],
+            ).text_value,
+            "New grandchild",
+        )
+
     def test_device_update_is_skipped_for_device_groups(self):
         group, fields = self.create_group(
             code="devices",
