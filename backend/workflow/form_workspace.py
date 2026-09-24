@@ -91,13 +91,21 @@ class FormRepeatableGroupWorkspaceForm(forms.ModelForm):
             "is_active",
         )
 
-    def __init__(self, *args, section=None, **kwargs):
+    def __init__(self, *args, section=None, parent_group=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.section = section
         self.fields["parent_group"].queryset = get_valid_parent_group_queryset(
             section,
             self.instance,
         )
+        if (
+            parent_group
+            and not self.is_bound
+            and not self.instance.pk
+            and section
+            and parent_group.section_id == section.id
+        ):
+            self.initial["parent_group"] = parent_group
 
     def clean_code(self):
         code = self.cleaned_data["code"].strip()
