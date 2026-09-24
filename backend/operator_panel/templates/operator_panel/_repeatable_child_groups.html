@@ -15,7 +15,7 @@
                                 class="df-button df-button-secondary df-repeatable-add"
                                 data-group-code="{{ child_group.group.code }}"
                               >
-                                + افزودن
+                                + افزودن {{ child_group.group.name }}
                               </button>
                             {% endif %}
                           </div>
@@ -121,9 +121,10 @@
                                             <button
                                               type="button"
                                               class="df-button df-button-danger df-repeatable-delete"
-                                              title="حذف این ردیف"
+                                              title="حذف {{ child_group.group.name }}"
+                                              data-delete-label="{{ child_group.group.name }}"
                                             >
-                                              حذف
+                                              حذف {{ child_group.group.name }}
                                             </button>
                                           {% endif %}
                                         {% if child_item.row_id %}
@@ -206,9 +207,10 @@
                                           <button
                                             type="button"
                                             class="df-button df-button-danger df-repeatable-delete"
-                                            title="حذف این ردیف"
+                                            title="حذف {{ child_group.group.name }}"
+                                            data-delete-label="{{ child_group.group.name }}"
                                           >
-                                            حذف
+                                            حذف {{ child_group.group.name }}
                                           </button>
                                         {% endif %}
                                       </td>
