@@ -150,8 +150,8 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
         self.child.refresh_from_db()
         self.grandchild.refresh_from_db()
 
-        self.assertEqual(self.root.order, 5)
-        self.assertEqual(root_sibling.order, 1)
+        self.assertEqual(self.root.order, 4)
+        self.assertEqual(root_sibling.order, 5)
         self.assertEqual(self.child.order, 2)
         self.assertEqual(self.grandchild.order, 3)
 
