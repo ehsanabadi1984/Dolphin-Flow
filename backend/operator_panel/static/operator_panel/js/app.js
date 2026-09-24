@@ -2166,6 +2166,13 @@ function getDirectRepeatableTemplate(container) {
     ) || null;
 }
 
+function getGroupOwnedElements(item, group, selector) {
+    return Array.from(item.querySelectorAll(selector)).filter(
+        (element) =>
+            element.closest(".df-repeatable-group") === group
+    );
+}
+
 function getRepeatableGroupContext(group) {
     const context = [];
     let currentGroup = group;
@@ -2222,8 +2229,13 @@ function updateRepeatableDeleteState(container) {
 
     const rows = getDirectRepeatableItems(container);
 
-    const buttons = container.querySelectorAll(
-        ".df-repeatable-delete"
+    const buttons = getDirectRepeatableItems(container).flatMap(
+        (row) =>
+            getGroupOwnedElements(
+                row,
+                group,
+                ".df-repeatable-delete"
+            )
     );
 
     const disable = rows.length <= 1;
@@ -2291,7 +2303,9 @@ document.addEventListener("click", (event) => {
                  * The identity is stable; only the DOM index changes.
                  */
 
-                r.querySelectorAll(
+                getGroupOwnedElements(
+                    r,
+                    group,
                     "input, textarea, select"
                 ).forEach((f) => {
                     const old =
@@ -2443,7 +2457,9 @@ document.addEventListener("click", (event) => {
      */
 
     const fields =
-        newItem.querySelectorAll(
+        getGroupOwnedElements(
+            newItem,
+            group,
             "input, textarea, select"
         );
 
@@ -2592,7 +2608,9 @@ document.addEventListener("click", (event) => {
      */
 
     const labels =
-        newItem.querySelectorAll(
+        getGroupOwnedElements(
+            newItem,
+            group,
             "label[for]"
         );
 
