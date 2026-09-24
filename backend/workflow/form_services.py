@@ -1005,6 +1005,10 @@ class DynamicFormService:
                         )
                         + "__id"
                     ),
+                    "path_key": "".join(
+                        f"{group_code}_{index}_"
+                        for group_code, index in path
+                    ).rstrip("_"),
                     "cells": ancestor_cells + [
                         dict(cell, show=True)
                         for cell in own_cells
