@@ -7,9 +7,6 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Max
 from django.urls import reverse
 from workflow.device_services import DeviceService
-from workflow.history_permissions import HISTORY_ACTION
-
-
 from workflow.notification_services import NotificationService
 from workflow.form_services import DynamicFormService
 from workflow.form_draft_save_services import FormDraftSaveService
@@ -17,7 +14,6 @@ from workflow.repeatable_row_read_services import RepeatableRowReadService
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.permission_context import PermissionContext
 from workflow.models import (
-    Device,
     DeviceModel,
     DeviceIdentifier,
     FormData,
@@ -696,60 +692,6 @@ def delete_device(request, instance_id, group_code, row_id):
     return redirect("operator_panel:workflow_instance", instance_id=instance.pk)
 
 
-@login_required
-def device_history(request, instance_id, device_id):
-    instance = get_object_or_404(
-        WorkflowInstance.objects.select_related("workflow", "current_step"),
-        pk=instance_id,
-    )
-    WorkflowAuthorizationService.require_permission(
-        user=request.user,
-        workflow=instance.workflow,
-        action=WorkflowPermission.Action.VIEW,
-        step=instance.current_step,
-        instance=instance,
-    )
-
-    if not WorkflowAuthorizationService.has_permission(
-        user=request.user,
-        workflow=instance.workflow,
-        action=HISTORY_ACTION,
-    ):
-        messages.error(
-            request,
-            "شما اجازه مشاهده سوابق دستگاه را ندارید.",
-        )
-        return redirect(
-            "operator_panel:workflow_instance",
-            instance_id=instance.pk,
-        )
-
-    device = get_object_or_404(
-        Device,
-        pk=device_id,
-        workflow_instances__instance=instance,
-    )
-    histories = (
-        InstanceDevice.objects.filter(
-            device=device,
-            instance__workflow__memberships__user=request.user,
-            instance__workflow__memberships__is_active=True,
-        )
-        .select_related("instance", "instance__workflow", "instance__current_step")
-        .distinct()
-        .order_by("-received_at")
-    )
-    return render(
-        request,
-        "operator_panel/device_history.html",
-        {
-            "instance": instance,
-            "device": device,
-            "histories": histories,
-            "page_title": "سوابق دستگاه",
-            "page_breadcrumb": "سوابق دستگاه",
-        },
-    )
 
 @login_required
 def execute_transition(request, instance_id, transition_id):
