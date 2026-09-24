@@ -513,10 +513,14 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
 
         original_replace = form_file_services._replace_file
         call_count = {"value": 0}
+        stored_names = []
 
         def replace_then_fail(*args, **kwargs):
             call_count["value"] += 1
             original_replace(*args, **kwargs)
+            form_file = FormFile.objects.order_by("-pk").first()
+            if form_file and form_file.file:
+                stored_names.append(form_file.file.name)
             if call_count["value"] == 2:
                 raise RuntimeError("forced batch failure")
 
@@ -542,14 +546,9 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
                 field__in=[first_field, second_field],
             ).exists()
         )
-        self.assertEqual(
-            list(default_storage.listdir(f"workflow_forms/{self.instance.pk}/first_attachment")[1]),
-            [],
-        )
-        self.assertEqual(
-            list(default_storage.listdir(f"workflow_forms/{self.instance.pk}/second_attachment")[1]),
-            [],
-        )
+        self.assertEqual(len(stored_names), 2)
+        for file_name in stored_names:
+            self.assertFalse(default_storage.exists(file_name))
 
     def test_create_file_cleans_storage_when_save_fails(self):
         original_save = FormFile.save
