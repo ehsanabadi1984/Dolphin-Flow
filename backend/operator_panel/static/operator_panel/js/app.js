@@ -2151,6 +2151,21 @@ document.addEventListener("click", (event) => {
  * When only one row remains the delete button is
  * disabled so the last row cannot be removed.
  */
+function getDirectRepeatableItems(container) {
+    return Array.from(container.children).filter(
+        (item) =>
+            item.matches("[data-repeatable-item]") &&
+            !item.hasAttribute("data-repeatable-template")
+    );
+}
+
+function getDirectRepeatableTemplate(container) {
+    return Array.from(container.children).find(
+        (item) =>
+            item.matches("[data-repeatable-item][data-repeatable-template]")
+    ) || null;
+}
+
 function getRepeatableGroupContext(group) {
     const context = [];
     let currentGroup = group;
@@ -2205,9 +2220,7 @@ function updateRepeatableDeleteState(container) {
     /* DEVICE groups must remain completely unaffected. */
     if (group.classList.contains("df-device-group")) return;
 
-    const rows = container.querySelectorAll(
-        "[data-repeatable-item]:not([data-repeatable-template])"
-    );
+    const rows = getDirectRepeatableItems(container);
 
     const buttons = container.querySelectorAll(
         ".df-repeatable-delete"
@@ -2260,9 +2273,7 @@ document.addEventListener("click", (event) => {
              * "افزودن" click gets the correct index. */
 
             const remaining =
-                container.querySelectorAll(
-                    "[data-repeatable-item]"
-                );
+                getDirectRepeatableItems(container);
 
             const group =
                 container.closest(".df-repeatable-group");
@@ -2353,9 +2364,7 @@ document.addEventListener("click", (event) => {
     }
 
     const items =
-        itemsContainer.querySelectorAll(
-            "[data-repeatable-item]:not([data-repeatable-template])"
-        );
+        getDirectRepeatableItems(itemsContainer);
 
     /*
      * ---------------------------------------------------------
@@ -2377,9 +2386,7 @@ document.addEventListener("click", (event) => {
     } else {
 
         sourceItem =
-            itemsContainer.querySelector(
-                "[data-repeatable-item][data-repeatable-template]"
-            );
+            getDirectRepeatableTemplate(itemsContainer);
 
         if (!sourceItem) {
             console.error(
@@ -2617,8 +2624,9 @@ document.addEventListener("click", (event) => {
      */
 
     const emptyState =
-        itemsContainer.querySelector(
-            ".df-empty-state, .df-table-empty"
+        Array.from(itemsContainer.children).find(
+            (child) =>
+                child.matches(".df-empty-state, .df-table-empty")
         );
 
     if (emptyState) {
