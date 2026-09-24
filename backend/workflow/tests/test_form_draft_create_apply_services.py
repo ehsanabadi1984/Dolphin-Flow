@@ -186,6 +186,89 @@ class FormDraftCreateApplyServiceTests(TestCase):
             "Child",
         )
 
+
+    def test_nested_create_persists_parent_child_grandchild_chain(self):
+        parent_group, parent_field = self.create_group(
+            code="parents_depth_three",
+            order=1,
+        )
+        child_group, child_field = self.create_group(
+            code="children_depth_three",
+            parent_group=parent_group,
+            order=2,
+        )
+        grandchild_group, grandchild_field = self.create_group(
+            code="grandchildren_depth_three",
+            parent_group=child_group,
+            order=3,
+        )
+
+        diff = self.build_diff(
+            parents_depth_three=[
+                self.row(
+                    fields={"parents_depth_three_name": "Parent"},
+                    child_groups={
+                        "children_depth_three": (
+                            self.row(
+                                fields={"children_depth_three_name": "Child"},
+                                child_groups={
+                                    "grandchildren_depth_three": (
+                                        self.row(
+                                            fields={
+                                                "grandchildren_depth_three_name": "Grandchild"
+                                            }
+                                        ),
+                                    ),
+                                },
+                            ),
+                        ),
+                    },
+                ),
+            ],
+        )
+
+        created = FormDraftCreateApplyService.apply(
+            instance=self.instance,
+            diff=diff,
+        )
+
+        parent_row = next(
+            row for row in created.values()
+            if row.group_id == parent_group.pk
+        )
+        child_row = next(
+            row for row in created.values()
+            if row.group_id == child_group.pk
+        )
+        grandchild_row = next(
+            row for row in created.values()
+            if row.group_id == grandchild_group.pk
+        )
+
+        self.assertEqual(child_row.parent_row_id, parent_row.pk)
+        self.assertEqual(grandchild_row.parent_row_id, child_row.pk)
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=parent_row,
+                field=parent_field,
+            ).text_value,
+            "Parent",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=child_row,
+                field=child_field,
+            ).text_value,
+            "Child",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=grandchild_row,
+                field=grandchild_field,
+            ).text_value,
+            "Grandchild",
+        )
+
     def test_new_child_can_attach_to_existing_parent(self):
         parent_group, _ = self.create_group(
             code="parents",
