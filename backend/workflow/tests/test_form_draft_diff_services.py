@@ -217,6 +217,77 @@ class FormDraftDiffServiceTests(TestCase):
         self.assertEqual(changes[0].action, RowChangeAction.UPDATE)
         self.assertEqual(changes[0].row_id, child_row.pk)
 
+
+    def test_nested_new_rows_build_create_chain_through_grandchild(self):
+        parent = self.create_group(code="parents_depth_three", order=1)
+        child = self.create_group(
+            code="children_depth_three",
+            parent_group=parent,
+            order=2,
+        )
+        grandchild = self.create_group(
+            code="grandchildren_depth_three",
+            parent_group=child,
+            order=3,
+        )
+
+        diff = FormDraftDiffService.build(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=self.payload(
+                parents_depth_three=[
+                    self.row(
+                        fields={"parents_depth_three_name": "Parent"},
+                        child_groups={
+                            "children_depth_three": (
+                                self.row(
+                                    fields={"children_depth_three_name": "Child"},
+                                    child_groups={
+                                        "grandchildren_depth_three": (
+                                            self.row(
+                                                fields={
+                                                    "grandchildren_depth_three_name": "Grandchild"
+                                                }
+                                            ),
+                                        ),
+                                    },
+                                ),
+                            ),
+                        },
+                    ),
+                ],
+            ),
+        )
+
+        changes = diff.groups[0].changes
+
+        self.assertEqual(
+            [change.action for change in changes],
+            [
+                RowChangeAction.CREATE,
+                RowChangeAction.CREATE,
+                RowChangeAction.CREATE,
+            ],
+        )
+        parent_change, child_change, grandchild_change = changes
+
+        self.assertEqual(parent_change.group.pk, parent.pk)
+        self.assertEqual(child_change.group.pk, child.pk)
+        self.assertEqual(grandchild_change.group.pk, grandchild.pk)
+
+        self.assertEqual(
+            child_change.parent_reference,
+            parent_change.row_reference,
+        )
+        self.assertEqual(
+            grandchild_change.parent_reference,
+            child_change.row_reference,
+        )
+        self.assertEqual(
+            grandchild_change.parent_reference.kind,
+            RowReferenceKind.CREATE,
+        )
+
     def test_omitted_existing_row_is_delete(self):
         group = self.create_group(code="items")
         persisted = RepeatableRow.objects.create(
