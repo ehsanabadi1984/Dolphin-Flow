@@ -138,10 +138,9 @@ function reindexFlatTableRootRows(container, rootGroupCode) {
 
 function reindexFlatTableChildRows(
     container,
-    rootGroupCode,
     childGroupCode,
     parentRowId,
-    rootIndex
+    parentPath
 ) {
     const childRows = Array.from(
         container.querySelectorAll(
@@ -151,7 +150,7 @@ function reindexFlatTableChildRows(
 
     const childPattern =
         new RegExp(
-            `^${escapeRegExp(rootGroupCode)}_${rootIndex}_${escapeRegExp(childGroupCode)}_\\d+_`
+            `^${escapeRegExp(parentPath)}_${escapeRegExp(childGroupCode)}_\\d+_`
         );
 
     childRows.forEach((row, childIndex) => {
@@ -2525,7 +2524,11 @@ document.addEventListener("click", (event) => {
                 );
             } else {
                 const parentRowId = flatRow.dataset.parentRowId;
-                const rootIndex = flatRow.dataset.rootIndex;
+                const parentRow = container.querySelector(
+                    `[data-repeatable-item][data-row-id="${CSS.escape(parentRowId)}"]`
+                );
+                const parentPath = parentRow?.dataset.rowPath || "";
+
                 const removedIds = new Set([flatRow.dataset.rowId]);
                 let changed = true;
 
@@ -2555,10 +2558,9 @@ document.addEventListener("click", (event) => {
 
                 reindexFlatTableChildRows(
                     container,
-                    rootGroupCode,
                     rowGroupCode,
                     parentRowId,
-                    rootIndex
+                    parentPath
                 );
             }
 
