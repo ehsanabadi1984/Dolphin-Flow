@@ -120,10 +120,11 @@ class FormDraftDeleteApplyServiceTests(TestCase):
         storage = form_file.file.storage
         file_name = form_file.file.name
         with patch.object(storage, "delete") as storage_delete:
-            deleted = FormDraftDeleteApplyService.apply(
-                instance=self.instance,
-                diff=self.build_diff(items=[]),
-            )
+            with self.captureOnCommitCallbacks(execute=True):
+                deleted = FormDraftDeleteApplyService.apply(
+                    instance=self.instance,
+                    diff=self.build_diff(items=[]),
+                )
 
         self.assertEqual(deleted, (row.pk,))
         self.assertFalse(RepeatableRow.objects.filter(pk=row.pk).exists())
