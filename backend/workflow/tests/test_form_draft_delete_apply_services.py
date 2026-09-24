@@ -147,6 +147,82 @@ class FormDraftDeleteApplyServiceTests(TestCase):
         self.assertFalse(RepeatableRow.objects.filter(pk=row.pk).exists())
         self.assertFalse(RepeatableRowValue.objects.filter(row_id=row.pk).exists())
 
+    def test_nested_grandchild_delete_is_bottom_up(self):
+        parent_group, parent_field = self.create_group(
+            code="parents",
+            order=1,
+        )
+        child_group, child_field = self.create_group(
+            code="children",
+            parent_group=parent_group,
+            order=2,
+        )
+        grandchild_group, grandchild_field = self.create_group(
+            code="grandchildren",
+            parent_group=child_group,
+            order=3,
+        )
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent_group,
+            row_order=0,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        grandchild_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=grandchild_group,
+            parent_row=child_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=parent_field,
+            text_value="Parent",
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=child_field,
+            text_value="Child",
+        )
+        RepeatableRowValue.objects.create(
+            row=grandchild_row,
+            field=grandchild_field,
+            text_value="Grandchild",
+        )
+
+        deleted = FormDraftDeleteApplyService.apply(
+            instance=self.instance,
+            diff=self.build_diff(parents=[]),
+        )
+
+        self.assertEqual(
+            deleted,
+            (grandchild_row.pk, child_row.pk, parent_row.pk),
+        )
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                pk__in=[
+                    parent_row.pk,
+                    child_row.pk,
+                    grandchild_row.pk,
+                ],
+            ).exists()
+        )
+        self.assertFalse(
+            RepeatableRowValue.objects.filter(
+                row_id__in=[
+                    parent_row.pk,
+                    child_row.pk,
+                    grandchild_row.pk,
+                ],
+            ).exists()
+        )
+
     def test_nested_delete_is_bottom_up(self):
         parent_group, parent_field = self.create_group(code="parents", order=1)
         child_group, child_field = self.create_group(
