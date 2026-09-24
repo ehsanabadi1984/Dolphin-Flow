@@ -51,28 +51,30 @@ class HistoryBrowserService:
         )
 
     @staticmethod
-    def _filter_snapshot_by_permissions(*, snapshot, execution, user):
+    def _filter_snapshot_by_permissions(\n        *, snapshot, execution, user, form=None, permission_context=None\n    ):
         if not isinstance(snapshot, dict):
             return None
 
-        form = (
-            FormDefinition.objects
-            .filter(workflow=execution.instance.workflow, is_active=True)
-            .prefetch_related(
-                "sections__fields",
-                "sections__repeatable_groups__fields",
+        if form is None:
+            form = (
+                FormDefinition.objects
+                .filter(workflow=execution.instance.workflow, is_active=True)
+                .prefetch_related(
+                    "sections__fields",
+                    "sections__repeatable_groups__fields",
+                )
+                .first()
             )
-            .first()
-        )
         if form is None:
             return snapshot
 
-        permission_context = PermissionContext.build(
-            workflow=execution.instance.workflow,
-            form=form,
-            step=execution.workflow_step,
-            user=user,
-        )
+        if permission_context is None:
+            permission_context = PermissionContext.build(
+                workflow=execution.instance.workflow,
+                form=form,
+                step=execution.workflow_step,
+                user=user,
+            )
 
         fields_by_code = {}
         groups_by_code = {}
@@ -181,6 +183,8 @@ class HistoryBrowserService:
     @classmethod
     def get_history(cls, *, user, instance_id=None, device_id=None):
         history = []
+        form_cache = {}
+        permission_cache = {}
 
         for execution in cls._base_queryset(
             instance_id=instance_id,
@@ -203,10 +207,48 @@ class HistoryBrowserService:
             if not isinstance(snapshot, dict):
                 continue
 
+            workflow_id = execution.instance.workflow_id
+            form = form_cache.get(workflow_id)
+            if workflow_id not in form_cache:
+                form = (
+                    FormDefinition.objects
+                    .filter(
+                        workflow_id=workflow_id,
+                        is_active=True,
+                    )
+                    .prefetch_related(
+                        "sections__fields",
+                        "sections__repeatable_groups__fields",
+                    )
+                    .first()
+                )
+                form_cache[workflow_id] = form
+
+            permission_key = (
+                workflow_id,
+                execution.workflow_step_id,
+                getattr(user, "pk", None),
+            )
+            permission_context = permission_cache.get(permission_key)
+            if permission_key not in permission_cache:
+                permission_context = (
+                    PermissionContext.build(
+                        workflow=execution.instance.workflow,
+                        form=form,
+                        step=execution.workflow_step,
+                        user=user,
+                    )
+                    if form is not None
+                    else None
+                )
+                permission_cache[permission_key] = permission_context
+
             snapshot = cls._filter_snapshot_by_permissions(
                 snapshot=snapshot,
                 execution=execution,
                 user=user,
+                form=form,
+                permission_context=permission_context,
             )
             if snapshot is None:
                 continue
