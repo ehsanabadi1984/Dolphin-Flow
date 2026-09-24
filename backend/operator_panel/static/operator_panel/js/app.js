@@ -2526,8 +2526,32 @@ document.addEventListener("click", (event) => {
             } else {
                 const parentRowId = flatRow.dataset.parentRowId;
                 const rootIndex = flatRow.dataset.rootIndex;
+                const removedIds = new Set([flatRow.dataset.rowId]);
+                let changed = true;
 
-                flatRow.remove();
+                while (changed) {
+                    changed = false;
+                    Array.from(
+                        container.querySelectorAll("[data-repeatable-item]")
+                    ).forEach((candidate) => {
+                        if (
+                            candidate.dataset.parentRowId &&
+                            removedIds.has(candidate.dataset.parentRowId) &&
+                            !removedIds.has(candidate.dataset.rowId)
+                        ) {
+                            removedIds.add(candidate.dataset.rowId);
+                            changed = true;
+                        }
+                    });
+                }
+
+                Array.from(
+                    container.querySelectorAll("[data-repeatable-item]")
+                )
+                    .filter((candidate) =>
+                        removedIds.has(candidate.dataset.rowId)
+                    )
+                    .forEach((candidate) => candidate.remove());
 
                 reindexFlatTableChildRows(
                     container,
