@@ -193,6 +193,16 @@ def _delete_storage_file(*, storage, file_name):
         storage.delete(file_name)
 
 
+def _cleanup_storage_files(files):
+    for storage, file_name in files:
+        _delete_storage_file(storage=storage, file_name=file_name)
+
+
+def _track_storage_file(files, *, storage, file_name):
+    if storage and file_name:
+        files.append((storage, file_name))
+
+
 def _schedule_storage_delete(*, storage, file_name):
     if file_name:
         transaction.on_commit(
@@ -203,7 +213,7 @@ def _schedule_storage_delete(*, storage, file_name):
         )
 
 
-def _replace_file(*, form_data, field, row_id, upload, user):
+def _replace_file(*, form_data, field, row_id, upload, user, storage_files=None):
     if not _upload_present(upload):
         return
 
@@ -242,6 +252,13 @@ def _replace_file(*, form_data, field, row_id, upload, user):
                 )
             raise
 
+        if storage_files is not None:
+            _track_storage_file(
+                storage_files,
+                storage=old.file.storage if old.file else None,
+                file_name=old.file.name if old.file else "",
+            )
+
         if old_storage and old_file_name and old_file_name != old.file.name:
             _schedule_storage_delete(
                 storage=old_storage,
@@ -261,6 +278,12 @@ def _replace_file(*, form_data, field, row_id, upload, user):
     )
     try:
         form_file.save()
+        if storage_files is not None:
+            _track_storage_file(
+                storage_files,
+                storage=form_file.file.storage if form_file.file else None,
+                file_name=form_file.file.name if form_file.file else "",
+            )
     except Exception:
         new_file_name = form_file.file.name if form_file.file else ""
         new_storage = form_file.file.storage if form_file.file else None
@@ -354,6 +377,7 @@ def _normalized_row_reference(*, normalized_row, group, save_result, parent_refe
 def _save_repeatable_group_files(
     *,
     form_data,
+
     group,
     normalized_rows,
     submitted_files,
@@ -361,6 +385,7 @@ def _save_repeatable_group_files(
     save_result,
     group_prefix=None,
     parent_reference=None,
+    storage_files=None,
 ):
     file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
 
@@ -393,6 +418,7 @@ def _save_repeatable_group_files(
                     f"{prefix}{index}_{field.code}"
                 ),
                 user=user,
+                storage_files=storage_files,
             )
 
         for child_group_code, child_rows in normalized_row.child_groups.items():
@@ -411,53 +437,64 @@ def _save_repeatable_group_files(
                 save_result=save_result,
                 group_prefix=f"{prefix}{index}_{child_group.code}_",
                 parent_reference=row_reference,
+                storage_files=storage_files,
             )
 
 
 @transaction.atomic
 def save_uploaded_form_files(*, instance, user, submitted_files, save_result=None):
-    form_data = FormData.objects.filter(instance=instance).first()
-    if form_data is None:
-        return
+    storage_files = []
+    try:
+        form_data = FormData.objects.filter(instance=instance).first()
+        if form_data is None:
+            return storage_files
 
-    form = _current_form(instance)
-    if form is None:
-        return
+        form = _current_form(instance)
+        if form is None:
+            return storage_files
 
-    for section in form.sections.filter(is_active=True):
-        for field in section.fields.filter(
-            is_active=True,
-            repeatable_group__isnull=True,
-            field_type="FILE",
-        ):
-            _replace_file(
-                form_data=form_data,
-                field=field,
-                row_id="",
-                upload=submitted_files.get(field.code),
-                user=user,
-            )
+        for section in form.sections.filter(is_active=True):
+            for field in section.fields.filter(
+                is_active=True,
+                repeatable_group__isnull=True,
+                field_type="FILE",
+            ):
+                _replace_file(
+                    form_data=form_data,
+                    field=field,
+                    row_id="",
+                    upload=submitted_files.get(field.code),
+                    user=user,
+                    storage_files=storage_files,
+                )
 
-        if save_result is None:
-            continue
+            if save_result is None:
+                continue
 
-        for group in section.repeatable_groups.filter(
-            is_active=True,
-            group_type=FormRepeatableGroup.GroupType.NORMAL,
-            parent_group__isnull=True,
-        ):
-            normalized_rows = save_result.normalized_payload.repeatable_groups.get(
-                group.code,
-                (),
-            )
-            _save_repeatable_group_files(
-                form_data=form_data,
-                group=group,
-                normalized_rows=normalized_rows,
-                submitted_files=submitted_files,
-                user=user,
-                save_result=save_result,
-            )
+            for group in section.repeatable_groups.filter(
+                is_active=True,
+                group_type=FormRepeatableGroup.GroupType.NORMAL,
+                parent_group__isnull=True,
+            ):
+                normalized_rows = save_result.normalized_payload.repeatable_groups.get(
+                    group.code,
+                    (),
+                )
+                _save_repeatable_group_files(
+                    form_data=form_data,
+                    group=group,
+                    normalized_rows=normalized_rows,
+                    submitted_files=submitted_files,
+                    user=user,
+                    save_result=save_result,
+                    storage_files=storage_files,
+                )
+    except Exception:
+        _cleanup_storage_files(storage_files)
+        raise
+
+    transaction.on_commit(storage_files.clear)
+    return storage_files
 
 
 def _file_payload(item):
