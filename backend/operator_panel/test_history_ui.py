@@ -35,6 +35,7 @@ class HistoryTemplateTests(SimpleTestCase):
             "request": request,
             "history_title": "سوابق",
             "history_subtitle": "Workflow",
+            "instance": SimpleNamespace(pk=1),
             "history": [
                 SimpleNamespace(
                     execution=SimpleNamespace(
