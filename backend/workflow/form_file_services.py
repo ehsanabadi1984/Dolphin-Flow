@@ -574,9 +574,30 @@ def file_field_definitions(request, instance_id):
         ).order_by("parent_group_id", "order", "pk"):
             groups_by_parent.setdefault(group.parent_group_id, []).append(group)
 
-        def append_group(group, parent_context=()):
-            if not permission_context.group(group).can_view:
-                return
+        def append_group(group, parent_context_by_row=None):
+            parent_context_by_row = parent_context_by_row or {}
+
+            rows = list(
+                RepeatableRow.objects
+                .filter(instance=instance, group=group)
+                .order_by("parent_row_id", "row_order", "pk")
+            )
+            sibling_indexes = {}
+            row_contexts = {}
+            for row in rows:
+                parent_key = row.parent_row_id
+                row_index = sibling_indexes.get(parent_key, 0)
+                sibling_indexes[parent_key] = row_index + 1
+                parent_context = parent_context_by_row.get(
+                    str(parent_key),
+                    (),
+                )
+                row_contexts[str(row.pk)] = parent_context + (
+                    {
+                        "group_code": group.code,
+                        "row_index": row_index,
+                    },
+                )
 
             visible_fields = [
                 field
@@ -584,12 +605,9 @@ def file_field_definitions(request, instance_id):
                 if permission_context.field(field).can_view
             ]
             group_fields = []
-            field_by_code = {}
-
             for column_index, field in enumerate(visible_fields):
                 if field.field_type != "FILE":
                     continue
-                field_by_code[field.code] = field
                 group_fields.append({
                     "field_id": field.pk,
                     "code": field.code,
@@ -602,36 +620,19 @@ def file_field_definitions(request, instance_id):
                     "column_index": column_index,
                 })
 
-            if group_fields:
-                rows = list(
-                    RepeatableRow.objects
-                    .filter(instance=instance, group=group)
-                    .order_by("parent_row_id", "row_order", "pk")
-                )
-                sibling_indexes = {}
-                row_contexts = {}
-                for row in rows:
-                    parent_key = row.parent_row_id
-                    row_index = sibling_indexes.get(parent_key, 0)
-                    sibling_indexes[parent_key] = row_index + 1
-                    row_contexts[str(row.pk)] = parent_context + (
-                        {
-                            "group_code": group.code,
-                            "row_index": row_index,
-                        },
-                    )
-
+            if permission_context.group(group).can_view and group_fields:
                 file_payloads = []
                 for (field_id, row_id), payload in existing.items():
                     field = next(
-                        (item for item in group_fields if item["field_id"] == field_id),
+                        (
+                            item
+                            for item in group_fields
+                            if item["field_id"] == field_id
+                        ),
                         None,
                     )
-                    if field is None:
-                        continue
-
                     context = row_contexts.get(str(row_id))
-                    if context is None:
+                    if field is None or context is None:
                         continue
 
                     prefix = "".join(
@@ -648,14 +649,18 @@ def file_field_definitions(request, instance_id):
 
                 groups.append({
                     "code": group.code,
-                    "parent_group_code": group.parent_group.code if group.parent_group_id else None,
+                    "parent_group_code": (
+                        group.parent_group.code
+                        if group.parent_group_id
+                        else None
+                    ),
                     "fields": group_fields,
                     "files": file_payloads,
                     "is_table": group.display_type == "TABLE",
                 })
 
             for child_group in groups_by_parent.get(group.pk, []):
-                append_group(child_group, parent_context)
+                append_group(child_group, row_contexts)
 
         for root_group in groups_by_parent.get(None, []):
             append_group(root_group)
