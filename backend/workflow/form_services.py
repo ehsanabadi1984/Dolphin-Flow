@@ -1073,7 +1073,6 @@ class DynamicFormService:
                 group_context,
                 [(group_context["group"].code, root_index)],
                 [],
-                [],
             )
 
         first_ancestor_rows = set()
