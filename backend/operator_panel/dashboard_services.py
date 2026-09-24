@@ -302,6 +302,21 @@ def _deny_allow_q(prefix):
     )
 
 
+def _meaningful_instance_q():
+    """Return instances that have persisted workflow data."""
+    return (
+        Q(Exists(FormData.objects.filter(instance_id=OuterRef("pk"))))
+        | Q(Exists(InstanceDevice.objects.filter(instance_id=OuterRef("pk"))))
+        | Q(
+            Exists(
+                WorkflowTransitionExecution.objects.filter(
+                    instance_id=OuterRef("pk"),
+                )
+            )
+        )
+    )
+
+
 def _actionability_annotations(user):
     """Return the DB-side annotations needed by dashboard authorization."""
     transition_user_allow = WorkflowPermission.objects.filter(
@@ -410,33 +425,10 @@ class DashboardService:
         )
 
     def _my_active_queryset(self):
-        meaningful = (
-            Q(
-                Exists(
-                    FormData.objects.filter(
-                        instance_id=OuterRef("pk"),
-                    )
-                )
-            )
-            | Q(
-                Exists(
-                    InstanceDevice.objects.filter(
-                        instance_id=OuterRef("pk"),
-                    )
-                )
-            )
-            | Q(
-                Exists(
-                    WorkflowTransitionExecution.objects.filter(
-                        instance_id=OuterRef("pk"),
-                    )
-                )
-            )
-        )
         return (
             self._accessible_active_queryset()
             .filter(started_by=self.user)
-            .filter(meaningful)
+            .filter(_meaningful_instance_q())
             .select_related("workflow", "current_step")
             .prefetch_related(
                 Prefetch(
@@ -459,6 +451,7 @@ class DashboardService:
             )
             .annotate(**annotations)
             .filter(_can_view_q(self.user))
+            .filter(_meaningful_instance_q())
             .select_related("workflow", "current_step")
             .distinct()
         )
