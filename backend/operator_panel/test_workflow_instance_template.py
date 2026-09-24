@@ -143,6 +143,48 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
         self.assertIn('data-repeatable-group="CHILD"', rendered)
         self.assertIn("df-repeatable-child-group", rendered)
 
+    def test_empty_nested_list_group_renders_add_row_template(self):
+        context = self._context("LIST", "LIST")
+        child_group = context["dynamic_form"].sections[0].layout_items[0].item.items[0].child_groups[0]
+        child_group.items = []
+        child_group.can_add = True
+        context["edit_mode"] = True
+        context["dynamic_form"].is_submitted = False
+
+        template = get_template(self.template_name)
+        request = RequestFactory().get("/operator/workflow/1/")
+        request.user = AnonymousUser()
+        context["request"] = request
+
+        rendered = template.render(context)
+
+        self.assertIn('data-repeatable-template', rendered)
+        self.assertIn(
+            'name="PARENT_0_CHILD_TEMPLATE_child_field"',
+            rendered,
+        )
+
+    def test_empty_nested_table_group_renders_add_row_template(self):
+        context = self._context("LIST", "TABLE")
+        child_group = context["dynamic_form"].sections[0].layout_items[0].item.items[0].child_groups[0]
+        child_group.items = []
+        child_group.can_add = True
+        context["edit_mode"] = True
+        context["dynamic_form"].is_submitted = False
+
+        template = get_template(self.template_name)
+        request = RequestFactory().get("/operator/workflow/1/")
+        request.user = AnonymousUser()
+        context["request"] = request
+
+        rendered = template.render(context)
+
+        self.assertIn('data-repeatable-template', rendered)
+        self.assertIn(
+            'name="PARENT_0_CHILD_TEMPLATE_child_field"',
+            rendered,
+        )
+
     def test_table_parent_renders_table_child(self):
         rendered = self._render("TABLE", "TABLE")
 
