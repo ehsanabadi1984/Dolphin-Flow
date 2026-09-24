@@ -144,7 +144,7 @@ class SectionLayoutAdminTests(TestCase):
         inactive_group.is_active = False
         inactive_group.save(update_fields=["is_active"])
 
-        nested_group = make_group(self.section, "nested_group", order=6, layout_order=60)
+        nested_group = make_group(self.section, "nested_group", order=6, layout_order=60, parent_group=self.group_a)
         nested_field = make_field(
             self.section,
             "nested_field",
@@ -159,6 +159,7 @@ class SectionLayoutAdminTests(TestCase):
         self.assertIn(self.field_a.code, content)
         self.assertIn(self.field_b.code, content)
         self.assertIn(self.group_a.code, content)
+        self.assertNotIn(nested_group.code, content)
         self.assertNotIn(inactive_field.code, content)
         self.assertNotIn(inactive_group.code, content)
         self.assertNotIn(nested_field.code, content)
@@ -181,6 +182,45 @@ class SectionLayoutAdminTests(TestCase):
             )
         ]
         self.assertEqual(positions, sorted(positions))
+
+    def test_nested_group_is_not_a_top_level_layout_item(self):
+        child = make_group(
+            self.section,
+            "child_group",
+            order=4,
+            layout_order=40,
+            parent_group=self.group_a,
+        )
+
+        response = self.client.get(self.layout_url())
+        content = response.content.decode("utf-8")
+
+        self.assertIn(self.group_a.code, content)
+        self.assertNotIn(child.code, content)
+
+    def test_nested_group_is_rejected_by_layout_save(self):
+        child = make_group(
+            self.section,
+            "child_save_group",
+            order=4,
+            layout_order=40,
+            parent_group=self.group_a,
+        )
+
+        response = self.post_layout(
+            self.payload(
+                ("field", self.field_a.pk),
+                ("group", self.group_a.pk),
+                ("field", self.field_b.pk),
+                ("group", child.pk),
+            )
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertJSONEqual(
+            response.content,
+            {"error": "گروه نامعتبر یا غیرفعال است."},
+        )
 
     def test_valid_mixed_save_normalizes_layout_order_and_preserves_order(self):
         original_orders = {
