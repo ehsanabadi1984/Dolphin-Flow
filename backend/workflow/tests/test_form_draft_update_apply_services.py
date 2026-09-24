@@ -430,7 +430,7 @@ class FormDraftUpdateApplyServiceTests(TestCase):
                 ),
                 self.row(
                     row_id=second.pk,
-                    fields={"items_number": ""},
+                    fields={"items_number": "not-a-number"},
                 ),
             ],
         )
