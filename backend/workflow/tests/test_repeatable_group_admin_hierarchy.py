@@ -13,6 +13,7 @@ from workflow.form_workspace import (
     FormRepeatableGroupWorkspaceForm,
     build_repeatable_group_tree,
     form_workspace,
+    _preview_items,
 )
 from workflow.models import (
     FormDefinition,
@@ -154,6 +155,32 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
         self.assertEqual(root_sibling.order, 5)
         self.assertEqual(self.child.order, 2)
         self.assertEqual(self.grandchild.order, 3)
+
+    def test_preview_items_exposes_only_root_groups_with_recursive_children(self):
+        sections = []
+        section = self.section
+        section.top_level_fields = []
+        section.active_groups = [
+            self.root,
+            self.child,
+            self.grandchild,
+            self.sibling,
+        ]
+        section.active_group_tree = build_repeatable_group_tree(section.active_groups)
+        sections.append(section)
+
+        preview = _preview_items(sections)
+        items = preview[0][1]
+
+        self.assertEqual(
+            [item["node"]["group"] for item in items if item["kind"] == "group"],
+            [self.root, self.sibling],
+        )
+        root_node = next(item["node"] for item in items if item["kind"] == "group" and item["node"]["group"] == self.root)
+        child_node = root_node["children"][0]
+
+        self.assertIs(child_node["group"], self.child)
+        self.assertEqual(child_node["children"][0]["group"], self.grandchild)
 
     def test_workspace_context_exposes_recursive_group_tree(self):
         request = RequestFactory().get("/admin/")
