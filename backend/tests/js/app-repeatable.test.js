@@ -303,3 +303,200 @@ test("deletes a nested child row under the second parent without affecting the f
 
     dom.window.close();
 });
+
+test("adding a root row does not clone its nested child rows", async () => {
+    const dom = new JSDOM(
+        `
+        <button id="df-notification-toggle" type="button" aria-expanded="false"></button>
+        <div id="df-notification-menu" aria-hidden="true">
+            <div id="df-notification-list"></div>
+            <span id="df-notification-badge"></span>
+            <span id="df-notification-menu-count"></span>
+        </div>
+
+        <form data-instance-id="1" data-edit-mode="1">
+            <section class="df-repeatable-group" data-repeatable-group="parents">
+                <div class="df-repeatable-items">
+                    <div class="df-repeatable-item" data-repeatable-item>
+                        <input name="parents_0_name" value="Parent">
+                        <input type="hidden" name="parents_0__id" value="parent-1">
+                        <section class="df-repeatable-group df-repeatable-child-group" data-repeatable-group="children">
+                            <div class="df-repeatable-items">
+                                <div class="df-repeatable-item" data-repeatable-item>
+                                    <input name="parents_0_children_0_name" value="Child">
+                                    <input type="hidden" name="parents_0_children_0__id" value="child-1">
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                <button type="button" class="df-repeatable-add" data-group-code="parents">
+                    + افزودن
+                </button>
+            </section>
+        </form>
+        `,
+        { url: "http://localhost/workflow/1/", runScripts: "outside-only" }
+    );
+
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.CSS = dom.window.CSS;
+    globalThis.confirm = () => true;
+    dom.window.confirm = () => true;
+    globalThis.setTimeout = () => 0;
+    globalThis.clearTimeout = () => {};
+
+    class WebSocketStub {
+        static OPEN = 1;
+        static CONNECTING = 0;
+        constructor() {
+            this.readyState = WebSocketStub.OPEN;
+        }
+        addEventListener() {}
+    }
+
+    globalThis.WebSocket = WebSocketStub;
+    dom.window.WebSocket = WebSocketStub;
+
+    const namingPath = new URL(
+        "../../operator_panel/static/operator_panel/js/repeatable-naming.js",
+        import.meta.url
+    );
+    const namingSource = await readFile(namingPath, "utf8");
+    dom.window.eval(namingSource);
+    globalThis.reindexRepeatableFieldName =
+        dom.window.DolphinFlowRepeatableNaming.reindexRepeatableFieldName;
+    globalThis.buildRepeatableGroupPrefix =
+        dom.window.DolphinFlowRepeatableNaming.buildRepeatableGroupPrefix;
+
+    await import(`${appPath.href}?repeatable-root-clone-test`);
+    document.dispatchEvent(
+        new dom.window.Event("DOMContentLoaded", { bubbles: true })
+    );
+
+    document.querySelector(
+        '.df-repeatable-add[data-group-code="parents"]'
+    ).dispatchEvent(
+        new dom.window.MouseEvent("click", { bubbles: true })
+    );
+
+    const parentRows = document.querySelectorAll(
+        '.df-repeatable-group[data-repeatable-group="parents"] > .df-repeatable-items > [data-repeatable-item]'
+    );
+
+    assert.equal(parentRows.length, 2);
+    assert.equal(
+        parentRows[1].querySelectorAll(
+            '.df-repeatable-child-group .df-repeatable-items > [data-repeatable-item]'
+        ).length,
+        0
+    );
+
+    dom.window.close();
+});
+
+
+test("adding a child row does not clone its nested grandchild rows", async () => {
+    const dom = new JSDOM(
+        `
+        <button id="df-notification-toggle" type="button" aria-expanded="false"></button>
+        <div id="df-notification-menu" aria-hidden="true">
+            <div id="df-notification-list"></div>
+            <span id="df-notification-badge"></span>
+            <span id="df-notification-menu-count"></span>
+        </div>
+
+        <form data-instance-id="1" data-edit-mode="1">
+            <section class="df-repeatable-group" data-repeatable-group="parents">
+                <div class="df-repeatable-items">
+                    <div class="df-repeatable-item" data-repeatable-item>
+                        <input name="parents_0_name" value="Parent">
+                        <input type="hidden" name="parents_0__id" value="parent-1">
+                        <section class="df-repeatable-group df-repeatable-child-group" data-repeatable-group="children">
+                            <div class="df-repeatable-items">
+                                <div class="df-repeatable-item" data-repeatable-item>
+                                    <input name="parents_0_children_0_name" value="Child">
+                                    <input type="hidden" name="parents_0_children_0__id" value="child-1">
+                                    <section class="df-repeatable-group df-repeatable-child-group" data-repeatable-group="grandchildren">
+                                        <div class="df-repeatable-items">
+                                            <div class="df-repeatable-item" data-repeatable-item>
+                                                <input name="parents_0_children_0_grandchildren_0_name" value="Grandchild">
+                                                <input type="hidden" name="parents_0_children_0_grandchildren_0__id" value="grandchild-1">
+                                            </div>
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>
+                            <button type="button" class="df-repeatable-add" data-group-code="children">
+                                + افزودن
+                            </button>
+                        </section>
+                    </div>
+                </div>
+            </section>
+        </form>
+        `,
+        { url: "http://localhost/workflow/1/", runScripts: "outside-only" }
+    );
+
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.CSS = dom.window.CSS;
+    globalThis.confirm = () => true;
+    dom.window.confirm = () => true;
+    globalThis.setTimeout = () => 0;
+    globalThis.clearTimeout = () => {};
+
+    class WebSocketStub {
+        static OPEN = 1;
+        static CONNECTING = 0;
+        constructor() {
+            this.readyState = WebSocketStub.OPEN;
+        }
+        addEventListener() {}
+    }
+
+    globalThis.WebSocket = WebSocketStub;
+    dom.window.WebSocket = WebSocketStub;
+
+    const namingPath = new URL(
+        "../../operator_panel/static/operator_panel/js/repeatable-naming.js",
+        import.meta.url
+    );
+    const namingSource = await readFile(namingPath, "utf8");
+    dom.window.eval(namingSource);
+    globalThis.reindexRepeatableFieldName =
+        dom.window.DolphinFlowRepeatableNaming.reindexRepeatableFieldName;
+    globalThis.buildRepeatableGroupPrefix =
+        dom.window.DolphinFlowRepeatableNaming.buildRepeatableGroupPrefix;
+
+    await import(`${appPath.href}?repeatable-child-clone-test`);
+    document.dispatchEvent(
+        new dom.window.Event("DOMContentLoaded", { bubbles: true })
+    );
+
+    document.querySelector(
+        '.df-repeatable-add[data-group-code="children"]'
+    ).dispatchEvent(
+        new dom.window.MouseEvent("click", { bubbles: true })
+    );
+
+    const parentRow = document.querySelector(
+        '.df-repeatable-group[data-repeatable-group="parents"] > .df-repeatable-items > [data-repeatable-item]'
+    );
+    const childRows = parentRow.querySelectorAll(
+        '.df-repeatable-child-group[data-repeatable-group="children"] > .df-repeatable-items > [data-repeatable-item]'
+    );
+
+    assert.equal(childRows.length, 2);
+    assert.equal(
+        childRows[1].querySelectorAll(
+            '.df-repeatable-child-group[data-repeatable-group="grandchildren"] .df-repeatable-items > [data-repeatable-item]'
+        ).length,
+        0
+    );
+
+    dom.window.close();
+});
+
