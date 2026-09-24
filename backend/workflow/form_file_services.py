@@ -748,9 +748,15 @@ def delete_form_file(request, file_id):
     if form_file.field.repeatable_group_id and not permission_context.group(form_file.field.repeatable_group).can_edit:
         return JsonResponse({"error": "شما اجازه حذف این فایل را ندارید."}, status=403)
 
-    if form_file.file:
-        form_file.file.delete(save=False)
+    file_name = form_file.file.name if form_file.file else ""
+    storage = form_file.file.storage if form_file.file else None
+
     form_file.delete()
+
+    if file_name and storage:
+        transaction.on_commit(
+            lambda file_name=file_name, storage=storage: storage.delete(file_name)
+        )
 
     return JsonResponse({"success": True, "file_id": file_id})
 
