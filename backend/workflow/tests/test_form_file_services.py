@@ -501,6 +501,7 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
             label="First Attachment",
             field_type=FormField.FieldType.FILE,
             is_required=False,
+            order=3,
         )
         second_field = FormField.objects.create(
             section=self.section,
@@ -509,6 +510,7 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
             label="Second Attachment",
             field_type=FormField.FieldType.FILE,
             is_required=False,
+            order=4,
         )
 
         original_replace = form_file_services._replace_file
