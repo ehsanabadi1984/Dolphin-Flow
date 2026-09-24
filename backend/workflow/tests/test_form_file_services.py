@@ -546,6 +546,184 @@ class RepeatableFilePersistenceTests(TestCase):
         self.assertNotEqual(form_file.row_id, str(parent_row.pk))
 
 
+    def test_repeatable_file_definition_exposes_ui_contract(self):
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=self.group,
+            row_order=0,
+        )
+        form_file = FormFile.objects.create(
+            form_data=self.form_data,
+            field=self.file_field,
+            row_id=str(row.pk),
+            file=self._upload("contract.txt"),
+            original_name="contract.txt",
+            file_size=len(b"file-content"),
+            content_type="text/plain",
+            uploaded_by=self.user,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse(
+                "operator_panel:file_field_definitions",
+                args=[self.instance.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        group_payload = next(
+            item for item in payload["groups"]
+            if item["code"] == self.group.code
+        )
+
+        self.assertEqual(
+            group_payload["fields"],
+            [{
+                "field_id": self.file_field.pk,
+                "code": self.file_field.code,
+                "label": self.file_field.label,
+                "editable": True,
+                "required": False,
+                "column_index": 0,
+            }],
+        )
+        self.assertFalse(group_payload["is_table"])
+        self.assertEqual(
+            group_payload["files"],
+            [{
+                "field_code": self.file_field.code,
+                "row_id": str(row.pk),
+                "row_index": 0,
+                "input_name": f"{self.group.code}_0_{self.file_field.code}",
+                "id": form_file.pk,
+                "name": "contract.txt",
+                "url": reverse(
+                    "operator_panel:download_form_file",
+                    args=[form_file.pk],
+                ),
+                "delete_url": reverse(
+                    "operator_panel:delete_form_file",
+                    args=[form_file.pk],
+                ),
+            }],
+        )
+
+    def test_repeatable_file_definition_preserves_field_edit_and_required_flags(self):
+        self.file_field.is_required = True
+        self.file_field.save(update_fields=["is_required"])
+        FieldAccess.objects.filter(
+            field=self.file_field,
+            step=self.step,
+            user=self.user,
+        ).update(can_edit=False)
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse(
+                "operator_panel:file_field_definitions",
+                args=[self.instance.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        group_payload = next(
+            item for item in payload["groups"]
+            if item["code"] == self.group.code
+        )
+        self.assertFalse(group_payload["fields"][0]["editable"])
+        self.assertTrue(group_payload["fields"][0]["required"])
+
+    def test_repeatable_file_definition_omits_file_group_when_field_is_not_viewable(self):
+        FieldAccess.objects.filter(
+            field=self.file_field,
+            step=self.step,
+            user=self.user,
+        ).update(can_view=False)
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse(
+                "operator_panel:file_field_definitions",
+                args=[self.instance.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(
+            any(
+                item["code"] == self.group.code
+                for item in payload["groups"]
+            )
+        )
+
+    def test_repeatable_table_file_definition_uses_visible_column_index(self):
+        self.file_field.order = 1
+        self.file_field.save(update_fields=["order"])
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="Name",
+            code="name",
+            label="Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=self.group,
+            row_order=0,
+        )
+        form_file = FormFile.objects.create(
+            form_data=self.form_data,
+            field=self.file_field,
+            row_id=str(row.pk),
+            file=self._upload("table-contract.txt"),
+            original_name="table-contract.txt",
+            file_size=len(b"file-content"),
+            content_type="text/plain",
+            uploaded_by=self.user,
+        )
+        self.group.display_type = FormRepeatableGroup.DisplayType.TABLE
+        self.group.save(update_fields=["display_type"])
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse(
+                "operator_panel:file_field_definitions",
+                args=[self.instance.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        group_payload = next(
+            item for item in payload["groups"]
+            if item["code"] == self.group.code
+        )
+        self.assertTrue(group_payload["is_table"])
+        self.assertEqual(
+            group_payload["fields"][0]["column_index"],
+            1,
+        )
+        self.assertEqual(
+            group_payload["files"][0]["row_id"],
+            str(row.pk),
+        )
+        self.assertEqual(
+            group_payload["files"][0]["input_name"],
+            "items_file_0_attachment",
+        )
+        self.assertEqual(
+            group_payload["files"][0]["id"],
+            form_file.pk,
+        )
+
+
+
 class NestedRepeatableFileValidationTests(RepeatableFilePersistenceTests):
     def _create_nested_required_file_field(self):
         child_group = FormRepeatableGroup.objects.create(
