@@ -42,6 +42,8 @@ from workflow.models import (
     FormRepeatableGroup,
     FormSection,
     RepeatableGroupAccess,
+    RepeatableRow,
+    RepeatableRowValue,
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
