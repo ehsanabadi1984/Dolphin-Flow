@@ -230,7 +230,12 @@ def _replace_file(*, form_data, field, row_id, upload, user):
         except Exception:
             new_file_name = old.file.name if old.file else ""
             new_storage = old.file.storage if old.file else None
-            if new_storage and new_file_name and new_file_name != old_file_name:
+            if (
+                getattr(old.file, "_committed", False)
+                and new_storage
+                and new_file_name
+                and new_file_name != old_file_name
+            ):
                 _delete_storage_file(
                     storage=new_storage,
                     file_name=new_file_name,
@@ -259,7 +264,7 @@ def _replace_file(*, form_data, field, row_id, upload, user):
     except Exception:
         new_file_name = form_file.file.name if form_file.file else ""
         new_storage = form_file.file.storage if form_file.file else None
-        if new_storage and new_file_name:
+        if getattr(form_file.file, "_committed", False) and new_storage and new_file_name:
             _delete_storage_file(
                 storage=new_storage,
                 file_name=new_file_name,
