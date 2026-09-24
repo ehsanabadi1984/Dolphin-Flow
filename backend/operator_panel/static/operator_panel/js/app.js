@@ -2269,6 +2269,93 @@ function updateRepeatableDeleteState(container) {
 document.addEventListener("click", (event) => {
 
     /* ---------------------------------------------------------
+     * Flat TABLE child add
+     * --------------------------------------------------------- */
+
+    const childAddButton = event.target.closest(
+        ".df-repeatable-child-add"
+    );
+
+    if (childAddButton) {
+        if (!isEditMode()) return;
+
+        const table = childAddButton.closest(".df-table-group");
+        const parentRow = childAddButton.closest("[data-repeatable-item]");
+
+        if (!table || !parentRow) return;
+
+        const container = table.querySelector(".df-repeatable-items");
+        const childGroupCode = childAddButton.dataset.groupCode;
+        const parentRowId = childAddButton.dataset.parentRowId;
+        const rootIndex = parentRow.dataset.rootIndex;
+
+        const template = container?.querySelector(
+            `[data-repeatable-child-template][data-child-group-code="${CSS.escape(childGroupCode)}"]`
+        );
+
+        if (!container || !template || !rootIndex || !parentRowId) {
+            console.error("Flat TABLE child template/context is missing.");
+            return;
+        }
+
+        const childRows = Array.from(
+            container.querySelectorAll(
+                `[data-repeatable-item][data-repeatable-row-group="${CSS.escape(childGroupCode)}"][data-parent-row-id="${CSS.escape(parentRowId)}"]`
+            )
+        );
+
+        const childIndex = childRows.length;
+        const newRowId = generateRowId();
+        const newItem = template.cloneNode(true);
+
+        newItem.removeAttribute("data-repeatable-template");
+        newItem.removeAttribute("data-repeatable-child-template");
+        newItem.style.display = "";
+        newItem.dataset.rowId = newRowId;
+        newItem.dataset.repeatableRowGroup = childGroupCode;
+        newItem.dataset.parentRowId = parentRowId;
+        newItem.dataset.rootIndex = rootIndex;
+
+        const childPrefix =
+            `${table.dataset.repeatableGroup}_${rootIndex}_${childGroupCode}_${childIndex}_`;
+
+        newItem.querySelectorAll("input, textarea, select").forEach((field) => {
+            const oldName = field.getAttribute("name");
+
+            if (oldName) {
+                field.name = oldName
+                    .replace(
+                        `${table.dataset.repeatableGroup}_PARENT_${childGroupCode}_TEMPLATE_`,
+                        childPrefix
+                    );
+            }
+
+            if (field.type === "hidden" && oldName?.endsWith("__id")) {
+                field.name = `${childPrefix}__id`;
+                field.value = newRowId;
+                return;
+            }
+
+            if (field.type === "checkbox" || field.type === "radio") {
+                field.checked = false;
+            } else if (field.tagName === "SELECT") {
+                field.selectedIndex = 0;
+            } else {
+                field.value = "";
+            }
+        });
+
+        const existingChildren = childRows;
+        if (existingChildren.length) {
+            existingChildren[existingChildren.length - 1].after(newItem);
+        } else {
+            parentRow.after(newItem);
+        }
+
+        return;
+    }
+
+    /* ---------------------------------------------------------
      * Delete a normal repeatable row
      * --------------------------------------------------------- */
 
