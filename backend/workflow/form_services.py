@@ -784,7 +784,7 @@ class DynamicFormService:
                 }
             )
 
-        return {
+        context = {
             "group": group,
             "fields": group_fields,
             "items": rows,
@@ -798,6 +798,13 @@ class DynamicFormService:
             "display_type": group.display_type,
             "group_type": group.group_type,
         }
+
+        if group.display_type == FormRepeatableGroup.DisplayType.TABLE:
+            context["flat_table"] = DynamicFormService._build_flat_table_context(
+                context
+            )
+
+        return context
 
     @staticmethod
     def _build_flat_table_context(group_context):
