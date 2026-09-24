@@ -2415,6 +2415,12 @@ document.addEventListener("click", (event) => {
         newItem.dataset.rowPath =
             `${parentRow.dataset.rowPath}_${childGroupCode}_${childIndex}`;
 
+        newItem.querySelectorAll(
+            ".df-repeatable-child-add"
+        ).forEach((button) => {
+            button.dataset.parentRowId = newRowId;
+        });
+
         const childPrefix =
             `${parentRow.dataset.rowPath}_${childGroupCode}_${childIndex}_`;
 
