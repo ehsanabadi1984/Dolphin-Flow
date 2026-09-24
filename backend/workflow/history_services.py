@@ -22,9 +22,8 @@ class HistoryService:
     """
     Build and read immutable History snapshots for any FormDefinition.
 
-    History is configuration-driven when an active HistoryConfiguration
-    exists. Forms without an active configuration keep the legacy
-    FormField.is_history_enabled behavior as a compatibility fallback.
+    History is configuration-driven through the active
+    HistoryConfiguration and its enabled HistoryField definitions.
     """
 
     SNAPSHOT_VERSION = 1
