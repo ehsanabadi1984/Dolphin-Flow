@@ -60,8 +60,9 @@ class FormFile(models.Model):
             file_name = item.file.name if item.file else ""
             item.delete()
             if file_name:
+                storage = item.file.storage
                 transaction.on_commit(
-                    lambda file_name=file_name, storage=item.file.storage: storage.delete(file_name)
+                    lambda file_name=file_name, storage=storage: storage.delete(file_name)
                 )
 
         return len(files)
