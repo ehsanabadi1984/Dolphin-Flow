@@ -528,7 +528,7 @@ class DynamicFormServiceTests(TestCase):
                 row["row_group_code"]
                 for row in customers["flat_table"]["rows"]
             ],
-            ["contacts", "contacts"],
+            ["contacts", "contacts", "contacts"],
         )
         self.assertEqual(
             customers["flat_table"]["rows"][0]["column_cells"][0]["display_value"],
