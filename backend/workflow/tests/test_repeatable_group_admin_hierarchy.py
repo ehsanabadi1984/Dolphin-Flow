@@ -1,3 +1,4 @@
+from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory, TestCase
 
 from workflow.admin import (
@@ -146,6 +147,7 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
             dolphin_admin_site,
         )
         request = RequestFactory().get("/admin/")
+        request.user = AnonymousUser()
         form_class = model_admin.get_form(request, self.root)
         form = form_class(instance=self.root)
 
@@ -168,6 +170,7 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
             dolphin_admin_site,
         )
         request = RequestFactory().get("/admin/")
+        request.user = AnonymousUser()
         formset_class = inline.get_formset(request, self.section)
         formset = formset_class(instance=self.section)
 
