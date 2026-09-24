@@ -371,6 +371,7 @@ class DynamicFormServiceTests(TestCase):
             name="Customers",
             code="customers",
             group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
             order=4,
             is_active=True,
         )
@@ -380,6 +381,7 @@ class DynamicFormServiceTests(TestCase):
             name="Contacts",
             code="contacts",
             group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
             order=5,
             is_active=True,
         )
@@ -504,6 +506,36 @@ class DynamicFormServiceTests(TestCase):
         )
         self.assertEqual(
             second_item["child_groups"][0]["items"][0]["fields"][0]["value"],
+            "Child 2",
+        )
+        self.assertEqual(
+            customers["flat_table"]["columns"][0]["field_context"]["field"].code,
+            "customer_name",
+        )
+        self.assertEqual(
+            customers["flat_table"]["columns"][1]["field_context"]["field"].code,
+            "contact_name",
+        )
+        self.assertEqual(
+            [
+                row["row_group_code"]
+                for row in customers["flat_table"]["rows"]
+            ],
+            ["contacts", "contacts"],
+        )
+        self.assertEqual(
+            customers["flat_table"]["rows"][0]["column_cells"][0]["display_value"],
+            "Parent 1",
+        )
+        self.assertEqual(
+            customers["flat_table"]["rows"][0]["column_cells"][1]["display_value"],
+            "Child 1",
+        )
+        self.assertFalse(
+            customers["flat_table"]["rows"][1]["column_cells"][0]["show"],
+        )
+        self.assertEqual(
+            customers["flat_table"]["rows"][1]["column_cells"][1]["display_value"],
             "Child 2",
         )
 
