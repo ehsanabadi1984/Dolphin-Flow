@@ -423,7 +423,7 @@ class FormulaPersistenceTestCase(TestCase):
             if item["code"] == "formula_grandchildren"
         )
         self.assertEqual(
-            grandchild["items"][0]["fields"][0]["value"],
+            grandchild["items"][0]["amount"],
             Decimal("125"),
         )
 
