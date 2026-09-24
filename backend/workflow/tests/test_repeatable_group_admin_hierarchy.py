@@ -192,6 +192,35 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
             form.fields["parent_group"].queryset.values_list("pk", flat=True),
         )
 
+    def test_workspace_add_group_defaults_selected_group_as_parent(self):
+        form = FormRepeatableGroupWorkspaceForm(
+            section=self.section,
+            parent_group=self.root,
+        )
+
+        self.assertEqual(form.initial["parent_group"], self.root)
+
+        form = FormRepeatableGroupWorkspaceForm(section=self.section)
+        self.assertNotIn("parent_group", form.initial)
+
+        bound = FormRepeatableGroupWorkspaceForm(
+            data={
+                "name": "New Child",
+                "code": "NEW_CHILD",
+                "group_type": FormRepeatableGroup.GroupType.NORMAL,
+                "display_type": FormRepeatableGroup.DisplayType.LIST,
+                "description": "",
+                "parent_group": "",
+                "is_required": False,
+                "is_active": True,
+            },
+            section=self.section,
+            parent_group=self.root,
+        )
+
+        self.assertTrue(bound.is_valid(), bound.errors)
+        self.assertIsNone(bound.cleaned_data["parent_group"])
+
     def test_workspace_edit_excludes_self_and_all_descendants(self):
         form = FormRepeatableGroupWorkspaceForm(
             instance=self.root,
