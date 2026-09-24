@@ -247,9 +247,9 @@
                         <thead>
                             <tr>
                                 {% for field_info in group.fields %}
-                                    <th>{{ field_info.field.label }}</th>
+                                    <th scope="col">{{ field_info.field.label }}</th>
                                 {% endfor %}
-                                <th>عملیات</th>
+                                <th scope="col">عملیات</th>
                             </tr>
                         </thead>
 
