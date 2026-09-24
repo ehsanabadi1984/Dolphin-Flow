@@ -152,17 +152,33 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     }
 
-    function getGroupItems(groupCode) {
-        const group = form.querySelector(
-            `[data-repeatable-group="${cssEscape(groupCode)}"]`
+    function getDirectRepeatableItems(group) {
+        return Array.from(group.children).filter(
+            (item) =>
+                item.matches("[data-repeatable-item]") &&
+                !item.hasAttribute("data-repeatable-template")
         );
-        if (!group) return [];
-        return Array.from(group.querySelectorAll("[data-repeatable-item]"));
     }
 
-    function getRowId(groupCode, row, rowIndex) {
-        const idInput = row.querySelector(
-            `input[type="hidden"][name="${cssEscape(groupCode)}_${rowIndex}__id"]`
+    function getDirectChildGroups(row) {
+        return Array.from(row.querySelectorAll("[data-repeatable-group]")).filter(
+            (group) => group.closest("[data-repeatable-item]") === row
+        );
+    }
+
+    function getGroupOwnedElements(item, group, selector) {
+        return Array.from(item.querySelectorAll(selector)).filter(
+            (element) => element.closest(".df-repeatable-group") === group
+        );
+    }
+
+    function getRowId(row, groupPrefix) {
+        const idInput = getGroupOwnedElements(
+            row,
+            row.closest(".df-repeatable-group"),
+            "input[type=\"hidden\"]"
+        ).find(
+            (input) => input.name === `${groupPrefix}__id`
         );
         return idInput ? String(idInput.value || "") : "";
     }
@@ -183,37 +199,75 @@ document.addEventListener("DOMContentLoaded", () => {
                 addFileControl(container, field, field.file || null);
             }
 
-            for (const group of payload.groups || []) {
-                const rows = getGroupItems(group.code).filter(
-                    row => !row.hasAttribute("data-repeatable-template")
-                );
+            const definitionsByCode = new Map(
+                (payload.groups || []).map((group) => [group.code, group])
+            );
 
+            const processGroup = (groupElement, parentContext = []) => {
+                const groupCode = groupElement.dataset.repeatableGroup;
+                const group = definitionsByCode.get(groupCode);
+                if (!group) return;
+
+                const rows = getDirectRepeatableItems(groupElement);
                 rows.forEach((row, rowIndex) => {
-                    const rowId = getRowId(group.code, row, rowIndex);
+                    const context = [
+                        ...parentContext,
+                        { groupCode, index: rowIndex },
+                    ];
+                    const groupPrefix = context
+                        .map(({ groupCode: code, index }) => `${code}_${index}_`)
+                        .join("");
+                    const rowId = getRowId(row, groupPrefix);
+
                     for (const field of group.fields || []) {
                         const fieldFile = (group.files || []).find(
-                            item => item.row_id === rowId && item.field_code === field.code
+                            (item) =>
+                                item.row_id === rowId &&
+                                item.field_code === field.code
                         );
                         const rowField = {
                             ...field,
-                            input_name: `${group.code}_${rowIndex}_${field.code}`,
+                            input_name: `${groupPrefix}${field.code}`,
                         };
 
                         if (group.is_table) {
                             const columnIndex = Number(field.column_index);
                             if (Number.isInteger(columnIndex)) {
                                 const cell = row.children[columnIndex];
-                                if (cell) addFileControl(cell, rowField, fieldFile || null);
+                                if (cell) {
+                                    addFileControl(
+                                        cell,
+                                        rowField,
+                                        fieldFile || null
+                                    );
+                                }
                             }
                         } else {
-                            const container = row.querySelector(
+                            const container = getGroupOwnedElements(
+                                row,
+                                groupElement,
                                 `.df-form-field[data-field-code="${cssEscape(field.code)}"]`
+                            )[0];
+                            addFileControl(
+                                container,
+                                rowField,
+                                fieldFile || null
                             );
-                            addFileControl(container, rowField, fieldFile || null);
                         }
                     }
+
+                    for (const childGroup of getDirectChildGroups(row)) {
+                        processGroup(childGroup, context);
+                    }
                 });
-            }
+            };
+
+            const rootGroups = Array.from(
+                form.querySelectorAll("[data-repeatable-group]")
+            ).filter(
+                (group) => !group.closest("[data-repeatable-item]")
+            );
+            rootGroups.forEach((group) => processGroup(group));
         } catch (error) {
             console.warn("Workflow file fields could not be loaded:", error);
         }
