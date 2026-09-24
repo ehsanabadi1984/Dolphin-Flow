@@ -2173,6 +2173,27 @@ function getGroupOwnedElements(item, group, selector) {
     );
 }
 
+function getRowOwnedElements(item, selector) {
+    return Array.from(item.querySelectorAll(selector)).filter(
+        (element) =>
+            !element.closest(".df-repeatable-group")
+    );
+}
+
+function clearClonedNestedRows(item) {
+    item.querySelectorAll(".df-repeatable-items").forEach(
+        (container) => {
+            Array.from(container.children)
+                .filter(
+                    (child) =>
+                        child.matches("[data-repeatable-item]") &&
+                        !child.hasAttribute("data-repeatable-template")
+                )
+                .forEach((child) => child.remove());
+        }
+    );
+}
+
 function getRepeatableGroupContext(group) {
     const context = [];
     let currentGroup = group;
@@ -2429,6 +2450,13 @@ document.addEventListener("click", (event) => {
     newItem.style.display = "";
 
     /*
+     * A cloned parent/child row must not carry its existing
+     * nested row tree into the new row. Nested groups remain
+     * available, but their real rows start empty.
+     */
+    clearClonedNestedRows(newItem);
+
+    /*
      * ---------------------------------------------------------
      * Calculate new index
      * ---------------------------------------------------------
@@ -2457,9 +2485,8 @@ document.addEventListener("click", (event) => {
      */
 
     const fields =
-        getGroupOwnedElements(
+        getRowOwnedElements(
             newItem,
-            group,
             "input, textarea, select"
         );
 
@@ -2608,9 +2635,8 @@ document.addEventListener("click", (event) => {
      */
 
     const labels =
-        getGroupOwnedElements(
+        getRowOwnedElements(
             newItem,
-            group,
             "label[for]"
         );
 
