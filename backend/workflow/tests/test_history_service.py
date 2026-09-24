@@ -149,6 +149,117 @@ class HistoryServiceTests(TestCase):
         self.assertEqual(snapshot["fields"][0]["display_order"], 10)
         self.assertEqual(snapshot["fields"][0]["history_field_id"], history_field.pk)
 
+    def test_nested_repeatable_history_query_count_does_not_scale_with_parent_row_count(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Part Details",
+            code="part_details_perf",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=3,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Detail",
+            code="detail_perf",
+            label="Detail",
+            field_type=FormField.FieldType.TEXT,
+            order=4,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.part_field,
+            display_label="قطعه",
+            display_order=1,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=child_field,
+            display_label="جزئیات",
+            display_order=2,
+        )
+
+        instance = self._instance()
+        for index in range(5):
+            parent = RepeatableRowService.create_row(
+                instance=instance,
+                group=self.group,
+                row_order=index,
+            )
+            RepeatableRowService.set_value(
+                row=parent,
+                field=self.part_field,
+                value=f"Part {index}",
+            )
+            child = RepeatableRowService.create_row(
+                instance=instance,
+                group=child_group,
+                parent_row=parent,
+                row_order=0,
+            )
+            RepeatableRowService.set_value(
+                row=child,
+                field=child_field,
+                value=f"Detail {index}",
+            )
+
+        with CaptureQueriesContext(connection) as queries:
+            snapshot = HistoryService.build_snapshot(
+                instance=instance,
+                user=self.user,
+            )
+
+        self.assertEqual(len(snapshot["repeatable_groups"][0]["items"]), 5)
+        self.assertEqual(
+            len(snapshot["repeatable_groups"][0]["items"][0]["child_groups"][0]["items"]),
+            1,
+        )
+
+        single_instance = self._instance()
+        parent = RepeatableRowService.create_row(
+            instance=single_instance,
+            group=self.group,
+            row_order=0,
+        )
+        RepeatableRowService.set_value(
+            row=parent,
+            field=self.part_field,
+            value="Part",
+        )
+        child = RepeatableRowService.create_row(
+            instance=single_instance,
+            group=child_group,
+            parent_row=parent,
+            row_order=0,
+        )
+        RepeatableRowService.set_value(
+            row=child,
+            field=child_field,
+            value="Detail",
+        )
+
+        with CaptureQueriesContext(connection) as single_queries:
+            single_snapshot = HistoryService.build_snapshot(
+                instance=single_instance,
+                user=self.user,
+            )
+
+        self.assertEqual(
+            len(single_snapshot["repeatable_groups"][0]["items"][0]["child_groups"][0]["items"]),
+            1,
+        )
+        self.assertLessEqual(
+            len(queries) - len(single_queries),
+            2,
+            msg=(
+                "Nested history snapshot query count grew with parent rows; "
+                "child row loading is likely performing per-parent queries."
+            ),
+        )
+
     def test_repeatable_history_query_count_does_not_scale_with_row_count(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
         HistoryField.objects.create(
