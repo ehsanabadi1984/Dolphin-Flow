@@ -494,9 +494,11 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
 
     def test_create_file_cleans_storage_when_save_fails(self):
         original_save = FormFile.save
+        created_name = {}
 
         def save_then_fail(instance, *args, **kwargs):
             original_save(instance, *args, **kwargs)
+            created_name["name"] = instance.file.name
             raise RuntimeError("forced file save failure")
 
         with self.assertRaises(RuntimeError):
@@ -517,14 +519,7 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
                 row_id="create-fail",
             ).exists()
         )
-        self.assertFalse(
-            any(
-                name.endswith("create-fail.txt")
-                for name in default_storage.listdir(
-                    f"workflow_forms/{self.instance.pk}/{self.file_field.code}"
-                )[1]
-            )
-        )
+        self.assertFalse(default_storage.exists(created_name["name"]))
 
     def test_replace_file_keeps_old_storage_until_commit(self):
         old = FormFile.objects.create(
@@ -566,9 +561,11 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
         )
         old_name = old.file.name
         original_save = FormFile.save
+        new_name = {}
 
         def save_then_fail(instance, *args, **kwargs):
             original_save(instance, *args, **kwargs)
+            new_name["name"] = instance.file.name
             raise RuntimeError("forced replace save failure")
 
         with self.assertRaises(RuntimeError):
@@ -585,14 +582,7 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
         old.refresh_from_db()
         self.assertEqual(old.file.name, old_name)
         self.assertTrue(default_storage.exists(old_name))
-        self.assertFalse(
-            any(
-                name.endswith("replace-new-fail.txt")
-                for name in default_storage.listdir(
-                    f"workflow_forms/{self.instance.pk}/{self.file_field.code}"
-                )[1]
-            )
-        )
+        self.assertFalse(default_storage.exists(new_name["name"]))
 
     def test_delete_for_row_does_not_delete_storage_on_transaction_rollback(self):
         form_file = FormFile.objects.create(
