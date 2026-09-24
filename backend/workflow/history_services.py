@@ -51,9 +51,14 @@ class HistoryService:
         form_data = (
             FormData.objects
             .filter(instance=instance)
+            .prefetch_related("files")
             .first()
         )
         data = form_data.data if form_data and form_data.data else {}
+        form_files_by_key = {
+            (item.field_id, str(item.row_id)): item
+            for item in (form_data.files.all() if form_data is not None else [])
+        }
 
         configuration, _ = HistoryConfiguration.objects.get_or_create(
             form=form,
@@ -166,6 +171,16 @@ class HistoryService:
                 ),
             )
 
+            rows = None
+            rows_by_id = {}
+            if group.group_type != FormRepeatableGroup.GroupType.DEVICE:
+                rows = RepeatableRowReadService.get_rows(
+                    instance=instance,
+                    group=group,
+                    parent_row=parent_row,
+                )
+                rows_by_id = {row.pk: row for row in rows}
+
             if group.group_type == FormRepeatableGroup.GroupType.DEVICE:
                 items = HistoryService._build_device_items(
                     instance=instance,
@@ -177,6 +192,8 @@ class HistoryService:
                     group=group,
                     fields=fields,
                     parent_row=parent_row,
+                    rows=rows,
+                    form_files_by_key=form_files_by_key,
                 )
 
             child_buckets = [
@@ -191,18 +208,7 @@ class HistoryService:
                     if row_id is None:
                         continue
 
-                    row = next(
-                        (
-                            candidate
-                            for candidate in RepeatableRowReadService.get_rows(
-                                instance=instance,
-                                group=group,
-                                parent_row=parent_row,
-                            )
-                            if candidate.pk == row_id
-                        ),
-                        None,
-                    )
+                    row = rows_by_id.get(row_id)
                     if row is None:
                         continue
 
@@ -283,7 +289,15 @@ class HistoryService:
         }
 
     @staticmethod
-    def _build_normal_items(*, instance, group, fields, parent_row=None):
+    def _build_normal_items(
+        *,
+        instance,
+        group,
+        fields,
+        parent_row=None,
+        rows=None,
+        form_files_by_key=None,
+    ):
         if not fields:
             return []
 
@@ -294,20 +308,15 @@ class HistoryService:
 
         items = []
 
-        if parent_row is not None:
+        if rows is None:
             rows = RepeatableRowReadService.get_rows(
                 instance=instance,
                 group=group,
                 parent_row=parent_row,
             )
-        else:
-            rows = RepeatableRowReadService.get_rows(
-                instance=instance,
-                group=group,
-            )
 
         for row in rows:
-            reconstructed = RepeatableRowReadService.reconstruct_row(
+            reconstructed = RepeatableRowReadService._reconstruct_prefetched_row(
                 row=row,
             )
             reconstructed_fields = {
@@ -333,13 +342,19 @@ class HistoryService:
 
                 if field.field_type == FormField.FieldType.FILE:
                     form_file = (
-                        FormFile.objects
-                        .filter(
-                            form_data__instance=instance,
-                            field=field,
-                            row_id=str(row.pk),
+                        (form_files_by_key or {}).get(
+                            (field.pk, str(row.pk))
                         )
-                        .first()
+                        if form_files_by_key is not None
+                        else (
+                            FormFile.objects
+                            .filter(
+                                form_data__instance=instance,
+                                field=field,
+                                row_id=str(row.pk),
+                            )
+                            .first()
+                        )
                     )
                     if form_file is not None:
                         serialized["file"] = {
