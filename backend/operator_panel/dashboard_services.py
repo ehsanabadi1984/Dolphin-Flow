@@ -421,6 +421,14 @@ class DashboardService:
             )
             .annotate(**annotations)
             .filter(_can_view_q(self.user))
+            .select_related("workflow", "current_step")
+            .prefetch_related(
+                Prefetch(
+                    "workflow__steps",
+                    queryset=WorkflowStep.objects.filter(is_active=True).order_by("order"),
+                    to_attr="dashboard_steps",
+                )
+            )
             .distinct()
         )
 
@@ -430,13 +438,6 @@ class DashboardService:
             .filter(started_by=self.user)
             .filter(_meaningful_instance_q())
             .select_related("workflow", "current_step")
-            .prefetch_related(
-                Prefetch(
-                    "workflow__steps",
-                    queryset=WorkflowStep.objects.filter(is_active=True).order_by("order"),
-                    to_attr="dashboard_steps",
-                )
-            )
         )
 
     def my_processes_queryset(self):

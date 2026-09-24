@@ -731,6 +731,44 @@ class DashboardQueryVolumeTests(DashboardSidebarBase):
             )
             self.assertEqual(response.status_code, 200)
 
+        from collections import Counter
+
+        print("\n========== DASHBOARD QUERY SUMMARY ==========")
+        print("TOTAL:", len(ctx))
+
+        for i, query in enumerate(ctx.captured_queries, 1):
+            sql = " ".join(query["sql"].split())
+
+            if sql.startswith("SELECT"):
+                if "workflow_workflowinstance" in sql:
+                    kind = "WorkflowInstance"
+                elif "workflow_workflowtransitionexecution" in sql:
+                    kind = "TransitionExecution"
+                elif "workflow_workflowstepexecution" in sql:
+                    kind = "StepExecution"
+                elif "workflow_workflowpermission" in sql:
+                    kind = "Permission"
+                elif "workflow_formdata" in sql:
+                    kind = "FormData"
+                elif "workflow_instancedevice" in sql:
+                    kind = "InstanceDevice"
+                elif "workflow_workflowstep" in sql:
+                    kind = "WorkflowStep"
+                elif "accounts_user" in sql:
+                    kind = "User"
+                elif "userpreference" in sql.lower():
+                    kind = "UserPreference"
+                else:
+                    kind = "Other SELECT"
+            else:
+                kind = sql.split(" ", 1)[0]
+
+            if 40 <= i <= 125:
+                sql = " ".join(query["sql"].split())
+                print(f"\n{i:03d}: {sql[:500]}")
+
+        print("========== END SUMMARY ==========\n")
+
         self.assertLess(len(ctx), 60)
 
 
