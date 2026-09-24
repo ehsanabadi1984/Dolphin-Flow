@@ -4,6 +4,7 @@
       class="df-repeatable-item df-repeatable-flat-row {% if row.row_group_code != group.group.code %}df-repeatable-child-flat-row{% endif %}"
       data-repeatable-item
       data-repeatable-row-group="{{ row.row_group_code }}"
+      data-root-index="{{ row.path.0.1 }}"
       data-row-id="{{ row.row_id }}"
       data-parent-row-id="{{ row.parent_row_id|default:'' }}"
     >
