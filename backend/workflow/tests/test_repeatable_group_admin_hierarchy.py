@@ -161,3 +161,26 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
 
     def test_repeatable_group_inline_exposes_parent_group(self):
         self.assertIn("parent_group", FormRepeatableGroupInline.fields)
+
+    def test_repeatable_group_inline_scopes_parent_group_per_row(self):
+        inline = FormRepeatableGroupInline(
+            FormRepeatableGroup,
+            dolphin_admin_site,
+        )
+        request = RequestFactory().get("/admin/")
+        formset_class = inline.get_formset(request, self.section)
+        formset = formset_class(instance=self.section)
+
+        root_form = next(
+            form for form in formset.forms
+            if form.instance.pk == self.root.pk
+        )
+        root_parent_ids = set(
+            root_form.fields["parent_group"].queryset.values_list("pk", flat=True)
+        )
+
+        self.assertNotIn(self.root.pk, root_parent_ids)
+        self.assertNotIn(self.child.pk, root_parent_ids)
+        self.assertNotIn(self.grandchild.pk, root_parent_ids)
+        self.assertIn(self.sibling.pk, root_parent_ids)
+        self.assertNotIn(self.other_section_group.pk, root_parent_ids)
