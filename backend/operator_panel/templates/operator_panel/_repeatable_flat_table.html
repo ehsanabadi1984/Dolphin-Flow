@@ -153,7 +153,16 @@
           {% elif field_context.field.field_type == "BOOLEAN" %}
             <input type="checkbox" name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}" class="df-table-checkbox" />
           {% elif field_context.field.field_type == "SELECT" %}
-            <select name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}" class="df-table-input">
+            <select
+              name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}"
+              class="df-table-input"
+              data-field-id="{{ field_context.field.pk }}"
+              data-field-code="{{ field_context.field.code }}"
+              {% if field_context.parent_code %}
+              data-depends-on="{{ field_context.parent_code }}"
+              data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+              {% endif %}
+            >
               <option value="">---------</option>
               {% for choice in field_context.choices %}
                 <option value="{{ choice.value }}">{{ choice.label }}</option>
@@ -240,6 +249,12 @@
                   <select
                     name="{{ group.group.code }}_PARENT_{{ child_group.code }}_TEMPLATE_{{ field_context.field.code }}"
                     class="df-table-input"
+                    data-field-id="{{ field_context.field.pk }}"
+                    data-field-code="{{ field_context.field.code }}"
+                    {% if field_context.parent_code %}
+                    data-depends-on="{{ field_context.parent_code }}"
+                    data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                    {% endif %}
                   >
                     <option value="">---------</option>
                     {% for choice in field_context.choices %}
