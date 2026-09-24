@@ -537,6 +537,58 @@ class NestedRepeatableFileValidationTests(RepeatableFilePersistenceTests):
         self.assertEqual(errors[0]["item_index"], 0)
 
 
+
+class DirectFormFileDeletionTests(RepeatableFilePersistenceTests):
+    def _create_form_file(self, name="direct-delete.txt"):
+        return FormFile.objects.create(
+            form_data=self.form_data,
+            field=self.file_field,
+            row_id="direct-delete-row",
+            file=self._upload(name),
+            original_name=name,
+            file_size=len(b"file-content"),
+            content_type="text/plain",
+            uploaded_by=self.user,
+        )
+
+    def test_delete_endpoint_removes_storage_after_transaction_commit(self):
+        form_file = self._create_form_file()
+        file_name = form_file.file.name
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse(
+                "operator_panel:delete_form_file",
+                args=[form_file.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(FormFile.objects.filter(pk=form_file.pk).exists())
+        self.assertFalse(default_storage.exists(file_name))
+
+    def test_delete_endpoint_keeps_storage_when_database_delete_rolls_back(self):
+        form_file = self._create_form_file("direct-delete-rollback.txt")
+        file_name = form_file.file.name
+
+        self.client.force_login(self.user)
+        with patch.object(
+            FormFile,
+            "delete",
+            autospec=True,
+            side_effect=RuntimeError("forced delete failure"),
+        ):
+            with self.assertRaises(RuntimeError):
+                self.client.post(
+                    reverse(
+                        "operator_panel:delete_form_file",
+                        args=[form_file.pk],
+                    )
+                )
+
+        self.assertTrue(FormFile.objects.filter(pk=form_file.pk).exists())
+        self.assertTrue(default_storage.exists(file_name))
+
 class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
     def test_delete_for_row_deletes_storage_after_transaction_commit(self):
         form_file = FormFile.objects.create(
