@@ -44,13 +44,13 @@
                                         {% if child_item.row_id %}data-row-id="{{ child_item.row_id }}"{% endif %}
                                       >
                                         {% for child_field in child_item.fields %}
-                                          <label
-                                            class="df-accessible-label"
-                                            for="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
-                                          >
-                                            {{ child_field.field.label }}
-                                          </label>
                                           <td>
+                                            <label
+                                              class="df-accessible-label"
+                                              for="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                            >
+                                              {{ child_field.field.label }}
+                                            </label>
                                             {% if edit_mode and not dynamic_form.is_submitted and child_field.can_edit %}
                                               {% if child_field.field.field_type == "TEXT" %}
                                                 <input
