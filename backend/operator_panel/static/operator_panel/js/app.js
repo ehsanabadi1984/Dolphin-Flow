@@ -76,7 +76,7 @@ function generateRowId() {
         });
 
         function escapeRegExp(value) {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\function reindexFlatTableRootRows");
+    return value.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&");
 }
 
 function reindexFlatTableRootRows(container, rootGroupCode) {
