@@ -350,15 +350,24 @@ class TableModeRenderTests(TestCase):
 
         instance = self.create_instance()
 
-        # Save some data first
-        submitted_data = {
-            "parts_0_part": "oil_filter",
-            "parts_0_qty": "2",
-        }
-        DynamicFormService.save_form_for_step(
-            instance=instance, user=self.user,
-            submitted_data=submitted_data,
-            edit_mode=True,
+        RepeatableRowValue.objects.create(
+            row=RepeatableRow.objects.create(
+                instance=instance,
+                group=self.table_group,
+                row_order=0,
+            ),
+            field=self.part_field,
+            lookup_item=self.lookup_oil,
+        )
+        row = RepeatableRow.objects.filter(
+            instance=instance,
+            group=self.table_group,
+        ).get()
+
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=self.qty_field,
+            decimal_value="2",
         )
 
         result = DynamicFormService.get_form_for_step(
@@ -610,17 +619,12 @@ class TableModeRenderTests(TestCase):
 
         instance = self.create_instance()
 
-        submitted_data = {
-            "parts_0_part": "oil_filter",
-            "parts_0_qty": "1",
-            "devices_0_imei": "123456789012345",
-            "devices_0_device_model_id": str(device_model.pk),
-        }
+        from workflow.instance_device_services import InstanceDeviceService
 
-        DynamicFormService.save_form_for_step(
-            instance=instance, user=self.user,
-            submitted_data=submitted_data,
-            edit_mode=True,
+        InstanceDeviceService.add_draft_device(
+            instance=instance,
+            imei="123456789012345",
+            device_model=device_model,
         )
 
         from workflow.models import InstanceDevice
