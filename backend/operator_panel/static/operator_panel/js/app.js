@@ -2409,18 +2409,6 @@ document.addEventListener("click", (event) => {
         newItem.removeAttribute("data-repeatable-child-template");
         newItem.style.display = "";
         newItem.dataset.rowId = newRowId;
-
-    if (flatTable) {
-        newItem.dataset.repeatableRowGroup = groupCode;
-        newItem.dataset.rootIndex = newIndex;
-        newItem.dataset.parentRowId = "";
-
-        newItem.querySelectorAll(
-            ".df-repeatable-child-add"
-        ).forEach((button) => {
-            button.dataset.parentRowId = newRowId;
-        });
-    }
         newItem.dataset.repeatableRowGroup = childGroupCode;
         newItem.dataset.parentRowId = parentRowId;
         newItem.dataset.rootIndex = rootIndex;
@@ -2764,6 +2752,18 @@ document.addEventListener("click", (event) => {
     const newRowId = generateRowId();
 
     newItem.dataset.rowId = newRowId;
+
+    if (flatTable) {
+        newItem.dataset.repeatableRowGroup = groupCode;
+        newItem.dataset.rootIndex = newIndex;
+        newItem.dataset.parentRowId = "";
+
+        newItem.querySelectorAll(
+            ".df-repeatable-child-add"
+        ).forEach((button) => {
+            button.dataset.parentRowId = newRowId;
+        });
+    }
 
     /*
      * ---------------------------------------------------------
