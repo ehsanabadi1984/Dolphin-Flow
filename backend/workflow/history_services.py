@@ -138,6 +138,20 @@ class HistoryService:
                 ),
             )
 
+        non_device_groups = [
+            bucket["group"]
+            for bucket in groups.values()
+            if bucket["group"].group_type != FormRepeatableGroup.GroupType.DEVICE
+        ]
+        rows_by_group_parent = (
+            RepeatableRowReadService.get_rows_by_group_parent(
+                instance=instance,
+                groups=non_device_groups,
+            )
+            if non_device_groups
+            else {}
+        )
+
         history_fields = []
         for item in sorted(
             top_level,
@@ -174,10 +188,9 @@ class HistoryService:
             rows = None
             rows_by_id = {}
             if group.group_type != FormRepeatableGroup.GroupType.DEVICE:
-                rows = RepeatableRowReadService.get_rows(
-                    instance=instance,
-                    group=group,
-                    parent_row=parent_row,
+                rows = rows_by_group_parent.get(
+                    (group.pk, getattr(parent_row, "pk", None)),
+                    [],
                 )
                 rows_by_id = {row.pk: row for row in rows}
 
