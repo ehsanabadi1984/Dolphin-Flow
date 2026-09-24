@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.template.loader import get_template
+from django.test import RequestFactory, TestCase
 
 from workflow.models import (
     FieldAccess,
@@ -672,3 +673,311 @@ class TableModeRenderTests(TestCase):
 
         # Should not have a hidden td for row_id
         self.assertNotIn("<td style=\"display:none;\">", content)
+
+
+
+class RepeatableRowActionAndEmptyStateRenderTests(TestCase):
+    """16.3E regression matrix for row actions and empty-state rendering."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            username="row_action_test_user",
+            password="test-password",
+        )
+        cls.workflow = Workflow.objects.create(
+            name="Row Action WF",
+            code="ROW_ACTION_WF",
+            is_active=True,
+        )
+        cls.step = WorkflowStep.objects.create(
+            workflow=cls.workflow,
+            name="Step",
+            code="ROW_ACTION_STEP",
+            order=1,
+            is_active=True,
+        )
+        WorkflowMembership.objects.create(
+            workflow=cls.workflow,
+            user=cls.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        cls.form = FormDefinition.objects.create(
+            workflow=cls.workflow,
+            name="Row Action Form",
+            is_active=True,
+        )
+        cls.section = FormSection.objects.create(
+            form=cls.form,
+            name="Section",
+            code="ROW_ACTION_SEC",
+            order=1,
+            is_active=True,
+        )
+        cls.group = FormRepeatableGroup.objects.create(
+            section=cls.section,
+            name="Parts",
+            code="parts",
+            order=1,
+            display_type=FormRepeatableGroup.DisplayType.LIST,
+            is_active=True,
+        )
+        cls.field = FormField.objects.create(
+            section=cls.section,
+            repeatable_group=cls.group,
+            name="Part",
+            code="part",
+            field_type=FormField.FieldType.TEXT,
+            label="Part",
+            order=1,
+            is_active=True,
+        )
+        FieldAccess.objects.create(
+            field=cls.field,
+            step=cls.step,
+            user=cls.user,
+            can_view=True,
+            can_edit=True,
+        )
+        cls.group_access = RepeatableGroupAccess.objects.create(
+            group=cls.group,
+            step=cls.step,
+            user=cls.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+
+    def create_instance(self, *, submitted=False):
+        instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+            status=WorkflowInstance.Status.ACTIVE,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step,
+            performed_by=self.user,
+            is_submitted=submitted,
+        )
+        return instance
+
+    def render_instance(self, instance, *, edit_mode=True):
+        from workflow.form_services import DynamicFormService
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+            edit_mode=edit_mode,
+        )
+        request = RequestFactory().get("/")
+        request.user = self.user
+        context = {
+            "instance": instance,
+            "dynamic_form": result,
+            "edit_mode": edit_mode,
+            "transitions": [],
+            "error": None,
+            "validation_errors": [],
+            "has_saved_data": result.get("has_saved_data", False),
+            "current_step_execution": instance.step_executions.order_by("-id").first(),
+        }
+        return result, get_template(
+            "operator_panel/workflow_instance.html"
+        ).render(context, request)
+
+    def set_group_permissions(self, *, can_view=True, can_edit=True,
+                               can_add=True, can_delete=True):
+        self.group_access.can_view = can_view
+        self.group_access.can_edit = can_edit
+        self.group_access.can_add = can_add
+        self.group_access.can_delete = can_delete
+        self.group_access.save()
+
+    def create_row(self, instance):
+        row = RepeatableRow.objects.create(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=self.field,
+            text_value="part-1",
+        )
+        return row
+
+    def test_list_empty_can_add_true_shows_add_contract(self):
+        instance = self.create_instance()
+        self.group.display_type = FormRepeatableGroup.DisplayType.LIST
+        self.group.save(update_fields=["display_type"])
+        self.set_group_permissions(can_add=True)
+
+        _, html = self.render_instance(instance)
+
+        self.assertIn('data-group-code="parts"', html)
+        self.assertIn("df-repeatable-add", html)
+        self.assertIn("هنوز اطلاعاتی برای این گروه ثبت نشده است.", html)
+
+    def test_list_empty_can_add_false_hides_add_contract(self):
+        instance = self.create_instance()
+        self.group.display_type = FormRepeatableGroup.DisplayType.LIST
+        self.group.save(update_fields=["display_type"])
+        self.set_group_permissions(can_add=False)
+
+        _, html = self.render_instance(instance)
+
+        self.assertNotIn("df-repeatable-add", html)
+        self.assertIn("هنوز اطلاعاتی برای این گروه ثبت نشده است.", html)
+
+    def test_table_empty_can_add_true_shows_add_contract(self):
+        instance = self.create_instance()
+        self.group.display_type = FormRepeatableGroup.DisplayType.TABLE
+        self.group.save(update_fields=["display_type"])
+        self.set_group_permissions(can_add=True)
+
+        _, html = self.render_instance(instance)
+
+        self.assertIn('data-group-code="parts"', html)
+        self.assertIn("df-repeatable-add", html)
+        self.assertIn("df-table-empty", html)
+
+    def test_table_empty_can_add_false_hides_add_contract(self):
+        instance = self.create_instance()
+        self.group.display_type = FormRepeatableGroup.DisplayType.TABLE
+        self.group.save(update_fields=["display_type"])
+        self.set_group_permissions(can_add=False)
+
+        _, html = self.render_instance(instance)
+
+        self.assertNotIn("df-repeatable-add", html)
+        self.assertIn("df-table-empty", html)
+
+    def test_nested_child_empty_renders_under_existing_parent(self):
+        instance = self.create_instance()
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Parts",
+            code="child_parts",
+            order=2,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            is_active=True,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Part",
+            code="child_part",
+            field_type=FormField.FieldType.TEXT,
+            label="Child Part",
+            order=1,
+            is_active=True,
+        )
+        FieldAccess.objects.create(
+            field=child_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=False,
+            can_delete=True,
+        )
+        self.set_group_permissions(can_add=True)
+        self.create_row(instance)
+
+        _, html = self.render_instance(instance)
+
+        self.assertIn('data-repeatable-group="child_parts"', html)
+        self.assertIn("df-table-empty", html)
+        self.assertIn("هنوز اطلاعاتی برای این گروه ثبت نشده است.", html)
+
+    def test_nested_child_without_view_permission_is_not_rendered(self):
+        instance = self.create_instance()
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Hidden Child",
+            code="hidden_child",
+            order=2,
+            display_type=FormRepeatableGroup.DisplayType.LIST,
+            is_active=True,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Hidden Value",
+            code="hidden_value",
+            field_type=FormField.FieldType.TEXT,
+            label="Hidden Value",
+            order=1,
+            is_active=True,
+        )
+        FieldAccess.objects.create(
+            field=child_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=False,
+            can_add=False,
+            can_delete=False,
+        )
+        self.create_row(instance)
+
+        _, html = self.render_instance(instance)
+
+        self.assertNotIn('data-repeatable-group="hidden_child"', html)
+        self.assertNotIn("Hidden Child", html)
+
+    def test_populated_row_can_delete_false_hides_delete_action(self):
+        instance = self.create_instance()
+        self.set_group_permissions(can_delete=False)
+        self.create_row(instance)
+
+        _, html = self.render_instance(instance)
+
+        self.assertIn('data-row-id=', html)
+        self.assertNotIn("df-repeatable-delete", html)
+
+    def test_populated_row_can_delete_true_shows_delete_action(self):
+        instance = self.create_instance()
+        self.set_group_permissions(can_delete=True)
+        self.create_row(instance)
+
+        _, html = self.render_instance(instance)
+
+        self.assertIn('data-row-id=', html)
+        self.assertIn("df-repeatable-delete", html)
+
+    def test_submitted_mode_disables_add_and_delete_actions(self):
+        instance = self.create_instance(submitted=True)
+        self.set_group_permissions(
+            can_add=True,
+            can_delete=True,
+            can_edit=True,
+        )
+        self.create_row(instance)
+
+        result, html = self.render_instance(instance, edit_mode=True)
+
+        self.assertTrue(result["is_submitted"])
+        self.assertNotIn("df-repeatable-add", html)
+        self.assertNotIn("df-repeatable-delete", html)
