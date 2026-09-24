@@ -1,7 +1,7 @@
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.test import TestCase
-from unittest.mock import patch
 from django.urls import reverse
 
 from workflow.form_draft_save_services import FormDraftSaveService
@@ -449,7 +449,7 @@ class RepeatableFilePersistenceTests(TestCase):
 
 
 class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
-    def test_delete_for_row_deletes_database_row_after_transaction_commit(self):
+    def test_delete_for_row_deletes_storage_after_transaction_commit(self):
         form_file = FormFile.objects.create(
             form_data=self.form_data,
             field=self.file_field,
@@ -461,6 +461,9 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
             uploaded_by=self.user,
         )
 
+        file_name = form_file.file.name
+        self.assertTrue(default_storage.exists(file_name))
+
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             FormFile.delete_for_row(
                 form_data=self.form_data,
@@ -469,6 +472,7 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
 
         self.assertEqual(len(callbacks), 1)
         self.assertFalse(FormFile.objects.filter(pk=form_file.pk).exists())
+        self.assertFalse(default_storage.exists(file_name))
 
     def test_delete_for_row_does_not_delete_storage_on_transaction_rollback(self):
         form_file = FormFile.objects.create(
@@ -482,17 +486,19 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
             uploaded_by=self.user,
         )
 
-        with patch.object(form_file.file, "delete") as delete_mock:
-            with self.assertRaises(RuntimeError):
-                with transaction.atomic():
-                    FormFile.delete_for_row(
-                        form_data=self.form_data,
-                        row_id="row-rollback",
-                    )
-                    raise RuntimeError("rollback")
+        file_name = form_file.file.name
+        self.assertTrue(default_storage.exists(file_name))
 
-        delete_mock.assert_not_called()
+        with self.assertRaises(RuntimeError):
+            with transaction.atomic():
+                FormFile.delete_for_row(
+                    form_data=self.form_data,
+                    row_id="row-rollback",
+                )
+                raise RuntimeError("rollback")
+
         self.assertTrue(FormFile.objects.filter(pk=form_file.pk).exists())
+        self.assertTrue(default_storage.exists(file_name))
 
 
 class FileFieldDefinitionsNestedRowTests(RepeatableFilePersistenceTests):
