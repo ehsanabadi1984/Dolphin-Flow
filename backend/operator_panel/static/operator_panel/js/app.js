@@ -161,7 +161,7 @@ function reindexFlatTableChildRows(
             if (childPattern.test(name)) {
                 field.name = name.replace(
                     childPattern,
-                    `${rootGroupCode}_${rootIndex}_${childGroupCode}_${childIndex}_`
+                    `${parentPath}_${childGroupCode}_${childIndex}_`
                 );
             }
         });
