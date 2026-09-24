@@ -146,6 +146,74 @@
                                       هنوز اطلاعاتی برای این گروه ثبت نشده است.
                                     </td>
                                   </tr>
+
+                                  {% if edit_mode and not dynamic_form.is_submitted and child_group.can_add %}
+                                    <tr
+                                      class="df-repeatable-item"
+                                      data-repeatable-item
+                                      data-repeatable-template
+                                      style="display:none;"
+                                    >
+                                      {% for template_field in child_group.fields %}
+                                        <td>
+                                          {% if template_field.field.field_type == "TEXT" %}
+                                            <input
+                                              type="text"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-input"
+                                            />
+                                          {% elif template_field.field.field_type == "TEXTAREA" %}
+                                            <textarea
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-input df-table-textarea"
+                                            ></textarea>
+                                          {% elif template_field.field.field_type == "NUMBER" %}
+                                            <input
+                                              type="number"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-input"
+                                            />
+                                          {% elif template_field.field.field_type == "DATE" %}
+                                            <input
+                                              type="date"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-input"
+                                            />
+                                          {% elif template_field.field.field_type == "DATETIME" %}
+                                            <input
+                                              type="datetime-local"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-input"
+                                            />
+                                          {% elif template_field.field.field_type == "BOOLEAN" %}
+                                            <input
+                                              type="checkbox"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-checkbox"
+                                            />
+                                          {% elif template_field.field.field_type == "SELECT" %}
+                                            <select
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-input"
+                                            >
+                                              <option value="">---------</option>
+                                            </select>
+                                          {% endif %}
+                                        </td>
+                                      {% endfor %}
+                                      <td class="df-table-actions">
+                                        {% if child_group.can_delete %}
+                                          <button
+                                            type="button"
+                                            class="df-button df-button-danger df-repeatable-delete"
+                                            title="حذف این ردیف"
+                                          >
+                                            حذف
+                                          </button>
+                                        {% endif %}
+                                      </td>
+                                    </tr>
+                                  {% endif %}
                                 {% endif %}
                               </tbody>
                             </table>
@@ -261,6 +329,60 @@
                               </div>
                             {% endwith %}
                           {% endfor %}
+
+                          {% if not child_group.items and edit_mode and not dynamic_form.is_submitted and child_group.can_add %}
+                            <div
+                              class="df-repeatable-item"
+                              data-repeatable-item
+                              data-repeatable-template
+                              style="display:none;"
+                            >
+                              {% for template_field in child_group.fields %}
+                                <div
+                                  class="df-form-field"
+                                  data-field-code="{{ template_field.field.code }}"
+                                >
+                                  <label>{{ template_field.field.label }}</label>
+                                  {% if template_field.field.field_type == "TEXT" %}
+                                    <input
+                                      type="text"
+                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    />
+                                  {% elif template_field.field.field_type == "TEXTAREA" %}
+                                    <textarea
+                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    ></textarea>
+                                  {% elif template_field.field.field_type == "NUMBER" %}
+                                    <input
+                                      type="number"
+                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    />
+                                  {% elif template_field.field.field_type == "DATE" %}
+                                    <input
+                                      type="date"
+                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    />
+                                  {% elif template_field.field.field_type == "DATETIME" %}
+                                    <input
+                                      type="datetime-local"
+                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    />
+                                  {% elif template_field.field.field_type == "BOOLEAN" %}
+                                    <input
+                                      type="checkbox"
+                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    />
+                                  {% elif template_field.field.field_type == "SELECT" %}
+                                    <select
+                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    >
+                                      <option value="">---------</option>
+                                    </select>
+                                  {% endif %}
+                                </div>
+                              {% endfor %}
+                            </div>
+                          {% endif %}
                         </div>
                       </section>
                       {% endif %}
