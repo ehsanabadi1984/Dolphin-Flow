@@ -233,6 +233,79 @@ class FormPostAdapterTests(TestCase):
         )
 
 
+    def test_adapts_parent_child_grandchild_rows_without_losing_context(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Grandchild Items",
+            code="grandchild_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=3,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Grandchild Title",
+            code="grandchild_title",
+            label="Grandchild Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "Parent",
+            "items_0_child_items_0_child_title": "Child",
+            "items_0_child_items_0_grandchild_items_0_grandchild_title": "Grandchild",
+            "items_0_child_items_0_grandchild_items_0__id": "31",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {
+                    "title": "Parent",
+                    "child_groups": {
+                        "child_items": (
+                            {
+                                "child_title": "Child",
+                                "child_groups": {
+                                    "grandchild_items": (
+                                        {
+                                            "grandchild_title": "Grandchild",
+                                            "row_id": 31,
+                                        },
+                                    ),
+                                },
+                            },
+                        ),
+                    },
+                },
+            ],
+        )
+
     def test_canonical_row_id_is_not_overwritten_by_instance_device_fallback(self):
         device_group = FormRepeatableGroup.objects.create(
             section=self.section,
