@@ -401,7 +401,7 @@ class FormulaPersistenceTestCase(TestCase):
         RepeatableRowValue.objects.create(
             row=grandchild_row,
             field=amount,
-            numeric_value=Decimal("125"),
+            decimal_value=Decimal("125"),
         )
 
         context = _build_context_data(
