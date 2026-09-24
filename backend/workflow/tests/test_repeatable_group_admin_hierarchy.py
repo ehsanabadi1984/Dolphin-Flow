@@ -12,6 +12,7 @@ from workflow.admin import (
 from workflow.form_workspace import (
     FormRepeatableGroupWorkspaceForm,
     build_repeatable_group_tree,
+    form_workspace,
 )
 from workflow.models import (
     FormDefinition,
@@ -88,6 +89,71 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
             [self.grandchild],
         )
         self.assertEqual(tree[1]["children"], [])
+
+    def test_workspace_group_move_only_reorders_siblings(self):
+        child_sibling = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Child Sibling",
+            code="CHILD_SIBLING",
+            order=5,
+            parent_group=self.root,
+        )
+
+        request = RequestFactory().post(
+            "/admin/",
+            {
+                "action": "move_group_down",
+                "group_id": str(self.child.pk),
+            },
+        )
+
+        with patch("workflow.form_workspace.messages.success"), patch(
+            "workflow.form_workspace._redirect_designer",
+            return_value=object(),
+        ):
+            form_workspace(request, self.workflow.pk)
+
+        self.child.refresh_from_db()
+        child_sibling.refresh_from_db()
+        self.grandchild.refresh_from_db()
+        self.sibling.refresh_from_db()
+
+        self.assertEqual(self.child.order, 5)
+        self.assertEqual(child_sibling.order, 2)
+        self.assertEqual(self.grandchild.order, 3)
+        self.assertEqual(self.sibling.order, 4)
+
+    def test_workspace_root_move_does_not_reorder_child_groups(self):
+        root_sibling = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Root Sibling",
+            code="ROOT_SIBLING",
+            order=5,
+        )
+
+        request = RequestFactory().post(
+            "/admin/",
+            {
+                "action": "move_group_down",
+                "group_id": str(self.root.pk),
+            },
+        )
+
+        with patch("workflow.form_workspace.messages.success"), patch(
+            "workflow.form_workspace._redirect_designer",
+            return_value=object(),
+        ):
+            form_workspace(request, self.workflow.pk)
+
+        self.root.refresh_from_db()
+        root_sibling.refresh_from_db()
+        self.child.refresh_from_db()
+        self.grandchild.refresh_from_db()
+
+        self.assertEqual(self.root.order, 5)
+        self.assertEqual(root_sibling.order, 1)
+        self.assertEqual(self.child.order, 2)
+        self.assertEqual(self.grandchild.order, 3)
 
     def test_workspace_context_exposes_recursive_group_tree(self):
         request = RequestFactory().get("/admin/")
