@@ -163,7 +163,13 @@
       {% endif %}
     </td>
   {% endfor %}
-  <td class="df-table-actions"></td>
+  <td class="df-table-actions">
+    <input
+      type="hidden"
+      name="{{ group.group.code }}_TEMPLATE__id"
+      value=""
+    />
+  </td>
 </tr>
 
 {% for child_group in group.group.child_groups.all %}
