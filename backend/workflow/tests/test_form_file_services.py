@@ -2,11 +2,12 @@ from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.test import TestCase
+from unittest.mock import patch
 from django.urls import reverse
 
 from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.form_file_models import FormFile
-from workflow.form_file_services import save_uploaded_form_files
+from workflow.form_file_services import _replace_file, save_uploaded_form_files
 from workflow.models import (
     FieldAccess,
     FormData,
@@ -473,6 +474,125 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
         self.assertEqual(len(callbacks), 1)
         self.assertFalse(FormFile.objects.filter(pk=form_file.pk).exists())
         self.assertFalse(default_storage.exists(file_name))
+
+    def test_create_file_persists_storage_on_commit(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            _replace_file(
+                form_data=self.form_data,
+                field=self.file_field,
+                row_id="create-1",
+                upload=self._upload("create-success.txt"),
+                user=self.user,
+            )
+
+        form_file = FormFile.objects.get(
+            form_data=self.form_data,
+            field=self.file_field,
+            row_id="create-1",
+        )
+        self.assertTrue(default_storage.exists(form_file.file.name))
+
+    def test_create_file_cleans_storage_when_save_fails(self):
+        original_save = FormFile.save
+
+        def save_then_fail(instance, *args, **kwargs):
+            original_save(instance, *args, **kwargs)
+            raise RuntimeError("forced file save failure")
+
+        with self.assertRaises(RuntimeError):
+            with transaction.atomic():
+                with patch.object(FormFile, "save", autospec=True, side_effect=save_then_fail):
+                    _replace_file(
+                        form_data=self.form_data,
+                        field=self.file_field,
+                        row_id="create-fail",
+                        upload=self._upload("create-fail.txt"),
+                        user=self.user,
+                    )
+
+        self.assertFalse(
+            FormFile.objects.filter(
+                form_data=self.form_data,
+                field=self.file_field,
+                row_id="create-fail",
+            ).exists()
+        )
+        self.assertFalse(
+            any(
+                name.endswith("create-fail.txt")
+                for name in default_storage.listdir(
+                    f"workflow_forms/{self.instance.pk}/{self.file_field.code}"
+                )[1]
+            )
+        )
+
+    def test_replace_file_keeps_old_storage_until_commit(self):
+        old = FormFile.objects.create(
+            form_data=self.form_data,
+            field=self.file_field,
+            row_id="replace-1",
+            file=self._upload("replace-old.txt"),
+            original_name="replace-old.txt",
+            file_size=len(b"file-content"),
+            content_type="text/plain",
+            uploaded_by=self.user,
+        )
+        old_name = old.file.name
+
+        with self.captureOnCommitCallbacks(execute=True):
+            _replace_file(
+                form_data=self.form_data,
+                field=self.file_field,
+                row_id="replace-1",
+                upload=self._upload("replace-new.txt"),
+                user=self.user,
+            )
+
+        old.refresh_from_db()
+        self.assertTrue(default_storage.exists(old.file.name))
+        self.assertFalse(default_storage.exists(old_name))
+        self.assertEqual(old.original_name, "replace-new.txt")
+
+    def test_replace_file_cleans_new_storage_when_save_fails(self):
+        old = FormFile.objects.create(
+            form_data=self.form_data,
+            field=self.file_field,
+            row_id="replace-fail",
+            file=self._upload("replace-old-fail.txt"),
+            original_name="replace-old-fail.txt",
+            file_size=len(b"file-content"),
+            content_type="text/plain",
+            uploaded_by=self.user,
+        )
+        old_name = old.file.name
+        original_save = FormFile.save
+
+        def save_then_fail(instance, *args, **kwargs):
+            original_save(instance, *args, **kwargs)
+            raise RuntimeError("forced replace save failure")
+
+        with self.assertRaises(RuntimeError):
+            with transaction.atomic():
+                with patch.object(FormFile, "save", autospec=True, side_effect=save_then_fail):
+                    _replace_file(
+                        form_data=self.form_data,
+                        field=self.file_field,
+                        row_id="replace-fail",
+                        upload=self._upload("replace-new-fail.txt"),
+                        user=self.user,
+                    )
+
+        old.refresh_from_db()
+        self.assertEqual(old.file.name, old_name)
+        self.assertTrue(default_storage.exists(old_name))
+        self.assertFalse(
+            any(
+                name.endswith("replace-new-fail.txt")
+                for name in default_storage.listdir(
+                    f"workflow_forms/{self.instance.pk}/{self.file_field.code}"
+                )[1]
+            )
+        )
 
     def test_delete_for_row_does_not_delete_storage_on_transaction_rollback(self):
         form_file = FormFile.objects.create(
