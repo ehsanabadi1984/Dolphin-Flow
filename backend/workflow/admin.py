@@ -2162,6 +2162,7 @@ class FormSectionAdmin(admin.ModelAdmin):
             FormRepeatableGroup.objects
             .filter(
                 section=section,
+                parent_group__isnull=True,
                 is_active=True,
             )
             .only(
@@ -2311,6 +2312,7 @@ class FormSectionAdmin(admin.ModelAdmin):
                     FormRepeatableGroup.objects
                     .filter(
                         section=section,
+                        parent_group__isnull=True,
                         is_active=True,
                     )
                     .only(
