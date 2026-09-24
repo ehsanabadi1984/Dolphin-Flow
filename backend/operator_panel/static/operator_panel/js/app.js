@@ -2409,6 +2409,18 @@ document.addEventListener("click", (event) => {
         newItem.removeAttribute("data-repeatable-child-template");
         newItem.style.display = "";
         newItem.dataset.rowId = newRowId;
+
+    if (flatTable) {
+        newItem.dataset.repeatableRowGroup = groupCode;
+        newItem.dataset.rootIndex = newIndex;
+        newItem.dataset.parentRowId = "";
+
+        newItem.querySelectorAll(
+            ".df-repeatable-child-add"
+        ).forEach((button) => {
+            button.dataset.parentRowId = newRowId;
+        });
+    }
         newItem.dataset.repeatableRowGroup = childGroupCode;
         newItem.dataset.parentRowId = parentRowId;
         newItem.dataset.rootIndex = rootIndex;
@@ -2653,6 +2665,16 @@ document.addEventListener("click", (event) => {
     const items =
         getDirectRepeatableItems(itemsContainer);
 
+    const flatTable =
+        group.classList.contains("df-table-group");
+
+    const rootItems = flatTable
+        ? items.filter(
+            (item) =>
+                item.dataset.repeatableRowGroup === groupCode
+        )
+        : items;
+
     /*
      * ---------------------------------------------------------
      * Find source item
@@ -2665,7 +2687,20 @@ document.addEventListener("click", (event) => {
 
     let sourceItem;
 
-    if (items.length > 0) {
+    if (flatTable) {
+        sourceItem =
+            itemsContainer.querySelector(
+                "[data-repeatable-root-template]"
+            );
+
+        if (!sourceItem) {
+            console.error(
+                "No flat TABLE root template available:",
+                groupCode
+            );
+            return;
+        }
+    } else if (items.length > 0) {
 
         sourceItem =
             items[items.length - 1];
@@ -2715,7 +2750,7 @@ document.addEventListener("click", (event) => {
      */
 
     const newIndex =
-        items.length;
+        rootItems.length;
 
     /*
      * ---------------------------------------------------------
