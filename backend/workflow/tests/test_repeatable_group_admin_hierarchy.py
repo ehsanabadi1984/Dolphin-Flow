@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory, TestCase
 
@@ -78,6 +80,25 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
         tree = build_repeatable_group_tree(
             FormRepeatableGroup.objects.filter(section=self.section).order_by("order")
         )
+
+        self.assertEqual([node["group"] for node in tree], [self.root, self.sibling])
+        self.assertEqual([node["group"] for node in tree[0]["children"]], [self.child])
+        self.assertEqual(
+            [node["group"] for node in tree[0]["children"][0]["children"]],
+            [self.grandchild],
+        )
+        self.assertEqual(tree[1]["children"], [])
+
+    def test_workspace_context_exposes_recursive_group_tree(self):
+        request = RequestFactory().get("/admin/")
+        with patch("workflow.form_workspace.render") as render:
+            render.return_value = object()
+            from workflow.form_workspace import form_workspace
+
+            form_workspace(request, self.workflow.pk)
+
+        context = render.call_args.args[2]
+        tree = context["sections"][0].active_group_tree
 
         self.assertEqual([node["group"] for node in tree], [self.root, self.sibling])
         self.assertEqual([node["group"] for node in tree[0]["children"]], [self.child])
