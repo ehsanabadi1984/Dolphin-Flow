@@ -2579,6 +2579,17 @@ class DynamicFormService:
                         "display_type": group.display_type,
                         "group_type": group.group_type,
                     }
+
+                    if group.display_type == FormRepeatableGroup.DisplayType.TABLE:
+                        group_context["flat_table"] = (
+                            DynamicFormService._build_flat_table_context(
+                                group_context,
+                                permission_context,
+                                edit_mode,
+                                is_submitted,
+                            )
+                        )
+
                     group_context = OperatorFormSerializer.group_context(
                         group_context=group_context,
                     )
