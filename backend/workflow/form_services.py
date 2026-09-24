@@ -820,7 +820,7 @@ class DynamicFormService:
                 columns.append({
                     "group_code": context["group"].code,
                     "group_name": context["group"].name,
-                    "field": field_context["field"],
+                    "field_context": field_context,
                 })
             for item in context["items"]:
                 for child in item["child_groups"]:
@@ -840,6 +840,7 @@ class DynamicFormService:
                 value = values.get(field_context["field"].code, {})
                 cells.append({
                     "group_code": context["group"].code,
+                    "field_context": dict(field_context),
                     "field": field_context["field"],
                     "value": value.get("value", ""),
                     "display_value": value.get("display_value", ""),
@@ -905,11 +906,12 @@ class DynamicFormService:
                     (
                         cell for cell in row["cells"]
                         if cell["group_code"] == column["group_code"]
-                        and cell["field"].code == column["field"].code
+                        and cell["field"].code == column["field_context"]["field"].code
                     ),
                     {
                         "group_code": column["group_code"],
-                        "field": column["field"],
+                        "field_context": column["field_context"],
+                        "field": column["field_context"]["field"],
                         "value": "",
                         "display_value": "",
                         "can_edit": False,
