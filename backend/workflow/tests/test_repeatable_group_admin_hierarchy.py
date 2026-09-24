@@ -7,7 +7,10 @@ from workflow.admin import (
     FormSectionAdmin,
     dolphin_admin_site,
 )
-from workflow.form_workspace import FormRepeatableGroupWorkspaceForm
+from workflow.form_workspace import (
+    FormRepeatableGroupWorkspaceForm,
+    build_repeatable_group_tree,
+)
 from workflow.models import (
     FormDefinition,
     FormRepeatableGroup,
@@ -70,6 +73,19 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
             code="OTHER_ROOT",
             order=1,
         )
+
+    def test_workspace_group_tree_builds_root_child_grandchild_hierarchy(self):
+        tree = build_repeatable_group_tree(
+            FormRepeatableGroup.objects.filter(section=self.section).order_by("order")
+        )
+
+        self.assertEqual([node["group"] for node in tree], [self.root, self.sibling])
+        self.assertEqual([node["group"] for node in tree[0]["children"]], [self.child])
+        self.assertEqual(
+            [node["group"] for node in tree[0]["children"][0]["children"]],
+            [self.grandchild],
+        )
+        self.assertEqual(tree[1]["children"], [])
 
     def test_workspace_form_exposes_parent_group(self):
         form = FormRepeatableGroupWorkspaceForm(section=self.section)
