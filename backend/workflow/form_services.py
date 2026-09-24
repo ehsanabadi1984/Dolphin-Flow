@@ -810,8 +810,8 @@ class DynamicFormService:
     def _build_flat_table_context(group_context):
         """
         Derive flat TABLE rows/columns from the canonical repeatable tree.
-        This changes presentation only; the RepeatableRow hierarchy remains
-        the source of truth.
+        This changes presentation only; RepeatableRow remains the source
+        of truth and row identity is never replaced by a visual index.
         """
         columns = []
 
@@ -830,26 +830,34 @@ class DynamicFormService:
 
         rows = []
 
-        def field_cells(item, context):
-            cells = []
+        def field_cells(item, context, path):
             values = {
                 value["field"].code: value
                 for value in item["fields"]
             }
+            prefix = "".join(
+                f"{group_code}_{index}_"
+                for group_code, index in path
+            )
+            cells = []
+
             for field_context in context["fields"]:
-                value = values.get(field_context["field"].code, {})
+                field = field_context["field"]
+                value = values.get(field.code, {})
                 cells.append({
                     "group_code": context["group"].code,
                     "field_context": dict(field_context),
-                    "field": field_context["field"],
+                    "field": field,
                     "value": value.get("value", ""),
                     "display_value": value.get("display_value", ""),
                     "can_edit": field_context["can_edit"],
+                    "input_prefix": prefix,
                 })
+
             return cells
 
-        def emit(item, context, ancestor_cells, ancestor_visible):
-            own_cells = field_cells(item, context)
+        def emit(item, context, path, ancestor_cells, ancestor_visible):
+            own_cells = field_cells(item, context, path)
             child_contexts = [
                 child for child in item["child_groups"]
                 if child.get("items")
@@ -860,6 +868,7 @@ class DynamicFormService:
                     "row_id": item["row_id"],
                     "row_group_code": context["group"].code,
                     "parent_row_id": item["parent_row_id"],
+                    "path": path,
                     "cells": ancestor_cells + [
                         dict(cell, show=True)
                         for cell in own_cells
@@ -872,19 +881,25 @@ class DynamicFormService:
                 return
 
             first_leaf = True
+
             for child in child_contexts:
-                for child_item in child["items"]:
+                for child_index, child_item in enumerate(child["items"]):
                     visible_own = ancestor_visible and first_leaf
                     before = len(rows)
+
                     emit(
                         child_item,
                         child,
+                        path + [
+                            (child["group"].code, child_index)
+                        ],
                         ancestor_cells + [
                             dict(cell, show=visible_own)
                             for cell in own_cells
                         ],
                         visible_own,
                     )
+
                     if before < len(rows) and first_leaf:
                         rows[-1]["add_children"] = [
                             {
@@ -895,18 +910,28 @@ class DynamicFormService:
                             }
                             for child in child_contexts
                         ]
+
                     first_leaf = False
 
-        for item in group_context["items"]:
-            emit(item, group_context, [], True)
+        for root_index, item in enumerate(group_context["items"]):
+            emit(
+                item,
+                group_context,
+                [(group_context["group"].code, root_index)],
+                [],
+                True,
+            )
 
         for row in rows:
             row["column_cells"] = [
                 next(
                     (
                         cell for cell in row["cells"]
-                        if cell["group_code"] == column["group_code"]
-                        and cell["field"].code == column["field_context"]["field"].code
+                        if (
+                            cell["group_code"] == column["group_code"]
+                            and cell["field"].code
+                            == column["field_context"]["field"].code
+                        )
                     ),
                     {
                         "group_code": column["group_code"],
@@ -916,6 +941,7 @@ class DynamicFormService:
                         "display_value": "",
                         "can_edit": False,
                         "show": False,
+                        "input_prefix": "",
                     },
                 )
                 for column in columns
