@@ -117,7 +117,9 @@ class FormDraftDeleteApplyServiceTests(TestCase):
             original_name="delete.txt",
         )
 
-        with patch("django.db.models.fields.files.FieldFile.delete") as file_delete:
+        storage = form_file.file.storage
+        file_name = form_file.file.name
+        with patch.object(storage, "delete") as storage_delete:
             deleted = FormDraftDeleteApplyService.apply(
                 instance=self.instance,
                 diff=self.build_diff(items=[]),
@@ -127,7 +129,7 @@ class FormDraftDeleteApplyServiceTests(TestCase):
         self.assertFalse(RepeatableRow.objects.filter(pk=row.pk).exists())
         self.assertFalse(RepeatableRowValue.objects.filter(row_id=row.pk).exists())
         self.assertFalse(FormFile.objects.filter(pk=form_file.pk).exists())
-        file_delete.assert_called_once()
+        storage_delete.assert_called_once_with(file_name)
         form_file.file.delete(save=False)
 
     def test_delete_removes_row_and_values(self):
