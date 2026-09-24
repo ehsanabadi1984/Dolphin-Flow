@@ -2,7 +2,7 @@ import os
 import uuid
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 
 
 def workflow_form_file_upload_to(instance, filename):
@@ -57,9 +57,12 @@ class FormFile(models.Model):
         )
 
         for item in files:
-            if item.file:
-                item.file.delete(save=False)
+            file_name = item.file.name if item.file else ""
             item.delete()
+            if file_name:
+                transaction.on_commit(
+                    lambda file_name=file_name, storage=item.file.storage: storage.delete(file_name)
+                )
 
         return len(files)
 
