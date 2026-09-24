@@ -252,6 +252,40 @@ class FormDraftStructuralValidationServiceTests(TestCase):
             },
         )
 
+    def test_accepts_new_grandchild_row_tree(self):
+        group = self.create_group(code="items")
+        child_group = self.create_group(
+            code="children",
+            parent_group=group,
+        )
+        grandchild_group = self.create_group(
+            code="grandchildren",
+            parent_group=child_group,
+        )
+        self.create_field(group=group, code="name")
+        self.create_field(group=child_group, code="child_name")
+        self.create_field(group=grandchild_group, code="grandchild_name")
+
+        FormDraftStructuralValidationService.validate_payload(
+            instance=self.instance,
+            form=self.form,
+            submitted_data={
+                "items": [
+                    {
+                        "name": "new",
+                        "children": [
+                            {
+                                "child_name": "child",
+                                "grandchildren": [
+                                    {"grandchild_name": "grandchild"},
+                                ],
+                            },
+                        ],
+                    }
+                ]
+            },
+        )
+
     def test_accepts_new_nested_row_tree(self):
         group = self.create_group(code="items")
         child_group = self.create_group(code="children", parent_group=group)
