@@ -1,4 +1,6 @@
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from accounts.models import User
 from workflow.history_browser_service import HistoryBrowserService
@@ -57,6 +59,86 @@ class HistoryBrowserServiceTests(TestCase):
             performed_by=self.user,
             is_submitted=True,
             data={"history": snapshot},
+        )
+
+    def test_history_query_count_does_not_scale_with_same_step_executions(self):
+        form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="History Form",
+        )
+        section = FormSection.objects.create(
+            form=form,
+            name="Main",
+            code="MAIN",
+            order=1,
+        )
+        field = FormField.objects.create(
+            section=section,
+            name="Customer",
+            code="customer",
+            label="Customer",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+        )
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=HISTORY_ACTION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        self._execution({
+            "version": 1,
+            "fields": [{"code": field.code, "value": "one"}],
+            "repeatable_groups": [],
+        })
+
+        with CaptureQueriesContext(connection) as one_execution_queries:
+            history = HistoryBrowserService.get_history(
+                user=self.user,
+                instance_id=self.instance.pk,
+            )
+
+        self.assertEqual(len(history), 1)
+
+        for index in range(2, 6):
+            WorkflowStepExecution.objects.create(
+                instance=self.instance,
+                workflow_step=self.step,
+                performed_by=self.user,
+                is_submitted=True,
+                data={
+                    "history": {
+                        "version": 1,
+                        "fields": [{"code": field.code, "value": f"value-{index}"}],
+                        "repeatable_groups": [],
+                    }
+                },
+            )
+
+        with CaptureQueriesContext(connection) as five_execution_queries:
+            history = HistoryBrowserService.get_history(
+                user=self.user,
+                instance_id=self.instance.pk,
+            )
+
+        self.assertEqual(len(history), 5)
+        self.assertLessEqual(
+            len(five_execution_queries) - len(one_execution_queries),
+            2,
+            msg=(
+                "History browser query count grew with executions from the "
+                "same workflow step; authorization/form permission state is "
+                "likely being rebuilt per execution."
+            ),
         )
 
     def test_history_permission_is_independent_from_view(self):
