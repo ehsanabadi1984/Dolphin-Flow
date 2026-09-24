@@ -2810,6 +2810,7 @@ document.addEventListener("click", (event) => {
     if (flatTable) {
         newItem.dataset.repeatableRowGroup = groupCode;
         newItem.dataset.rootIndex = newIndex;
+        newItem.dataset.rowPath = `${groupCode}_${newIndex}`;
         newItem.dataset.parentRowId = "";
 
         newItem.querySelectorAll(
