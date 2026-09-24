@@ -651,6 +651,128 @@ class HistoryBrowserServiceTests(TestCase):
             [field.code],
         )
 
+    def test_history_uses_each_execution_step_for_history_authorization(self):
+        second_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Review",
+            code="REVIEW",
+            order=2,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=HISTORY_ACTION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        first_execution = WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step,
+            performed_by=self.user,
+            is_submitted=True,
+            data={
+                "history": {
+                    "version": 1,
+                    "fields": [],
+                    "repeatable_groups": [],
+                }
+            },
+        )
+        WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=second_step,
+            performed_by=self.user,
+            is_submitted=True,
+            data={
+                "history": {
+                    "version": 1,
+                    "fields": [],
+                    "repeatable_groups": [],
+                }
+            },
+        )
+
+        history = HistoryBrowserService.get_history(
+            user=self.user,
+            instance_id=self.instance.pk,
+        )
+
+        self.assertEqual(len(history), 1)
+        self.assertEqual(
+            history[0]["execution"].pk,
+            first_execution.pk,
+        )
+
+    def test_history_permission_filter_does_not_mutate_stored_snapshot(self):
+        form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="History Form",
+        )
+        section = FormSection.objects.create(
+            form=form,
+            name="Main",
+            code="MAIN",
+            order=1,
+        )
+        field = FormField.objects.create(
+            section=section,
+            name="Customer",
+            code="customer",
+            label="Customer",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+        )
+        field_access = FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=HISTORY_ACTION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        execution = self._execution({
+            "version": 1,
+            "fields": [
+                {
+                    "code": field.code,
+                    "label": field.label,
+                    "value": "Historical value",
+                }
+            ],
+            "repeatable_groups": [],
+        })
+
+        history = HistoryBrowserService.get_history(
+            user=self.user,
+            instance_id=self.instance.pk,
+        )
+        self.assertEqual(
+            history[0]["snapshot"]["fields"][0]["value"],
+            "Historical value",
+        )
+
+        field_access.can_view = False
+        field_access.save(update_fields=["can_view"])
+
+        history = HistoryBrowserService.get_history(
+            user=self.user,
+            instance_id=self.instance.pk,
+        )
+
+        self.assertEqual(history[0]["snapshot"]["fields"], [])
+        execution.refresh_from_db()
+        self.assertEqual(
+            execution.data["history"]["fields"][0]["value"],
+            "Historical value",
+        )
+
     def test_device_filter_keeps_complete_top_level_history(self):
         device_type = DeviceType.objects.create(
             name="Phone",
