@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -313,7 +313,12 @@ class RepeatableRowService:
         if field.field_type == FormField.FieldType.NUMBER:
             if value is None or value == "":
                 raise ValidationError("مقدار NUMBER نمی‌تواند خالی باشد.")
-            kwargs["decimal_value"] = Decimal(str(value))
+            try:
+                kwargs["decimal_value"] = Decimal(str(value))
+            except (InvalidOperation, TypeError, ValueError):
+                raise ValidationError(
+                    "مقدار NUMBER معتبر نیست."
+                )
             return kwargs
 
         if field.field_type == FormField.FieldType.DATE:
