@@ -442,8 +442,16 @@ def _save_repeatable_group_files(
 
 
 @transaction.atomic
-def save_uploaded_form_files(*, instance, user, submitted_files, save_result=None):
-    storage_files = []
+def save_uploaded_form_files(
+    *,
+    instance,
+    user,
+    submitted_files,
+    save_result=None,
+    storage_files=None,
+):
+    if storage_files is None:
+        storage_files = []
     try:
         form_data = FormData.objects.filter(instance=instance).first()
         if form_data is None:
@@ -722,11 +730,12 @@ def workflow_instance_with_files(request, instance_id):
             else:
                 response, save_result = result, None
             if 300 <= response.status_code < 400:
-                storage_files = save_uploaded_form_files(
+                save_uploaded_form_files(
                     instance=instance,
                     user=request.user,
                     submitted_files=request.FILES,
                     save_result=save_result,
+                    storage_files=storage_files,
                 )
             return response
     except Exception:
