@@ -188,6 +188,21 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
         raise exc
 
 
+def _delete_storage_file(*, storage, file_name):
+    if file_name:
+        storage.delete(file_name)
+
+
+def _schedule_storage_delete(*, storage, file_name):
+    if file_name:
+        transaction.on_commit(
+            lambda storage=storage, file_name=file_name: _delete_storage_file(
+                storage=storage,
+                file_name=file_name,
+            )
+        )
+
+
 def _replace_file(*, form_data, field, row_id, upload, user):
     if not _upload_present(upload):
         return
@@ -197,20 +212,39 @@ def _replace_file(*, form_data, field, row_id, upload, user):
         .filter(form_data=form_data, field=field, row_id=row_id)
         .first()
     )
+
     if old:
-        if old.file:
-            old.file.delete(save=False)
+        old_file_name = old.file.name if old.file else ""
+        old_storage = old.file.storage if old.file else None
+
         old.file = upload
         old.original_name = os.path.basename(upload.name)
         old.file_size = upload.size
         old.content_type = getattr(upload, "content_type", "") or ""
         old.uploaded_by = user
-        old.save(update_fields=[
-            "file", "original_name", "file_size", "content_type", "uploaded_by", "updated_at"
-        ])
+
+        try:
+            old.save(update_fields=[
+                "file", "original_name", "file_size", "content_type", "uploaded_by", "updated_at"
+            ])
+        except Exception:
+            new_file_name = old.file.name if old.file else ""
+            new_storage = old.file.storage if old.file else None
+            if new_storage and new_file_name and new_file_name != old_file_name:
+                _delete_storage_file(
+                    storage=new_storage,
+                    file_name=new_file_name,
+                )
+            raise
+
+        if old_storage and old_file_name and old_file_name != old.file.name:
+            _schedule_storage_delete(
+                storage=old_storage,
+                file_name=old_file_name,
+            )
         return
 
-    FormFile.objects.create(
+    form_file = FormFile(
         form_data=form_data,
         field=field,
         row_id=row_id,
@@ -220,6 +254,17 @@ def _replace_file(*, form_data, field, row_id, upload, user):
         content_type=getattr(upload, "content_type", "") or "",
         uploaded_by=user,
     )
+    try:
+        form_file.save()
+    except Exception:
+        new_file_name = form_file.file.name if form_file.file else ""
+        new_storage = form_file.file.storage if form_file.file else None
+        if new_storage and new_file_name:
+            _delete_storage_file(
+                storage=new_storage,
+                file_name=new_file_name,
+            )
+        raise
 
 
 def _normalized_row_id(*, normalized_row, group, save_result, parent_reference=None, index=None):
