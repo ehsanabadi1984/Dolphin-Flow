@@ -481,118 +481,41 @@
                     class="df-button df-button-secondary df-repeatable-add"
                     data-group-code="{{ group.group.code }}"
                   >
-                    + افزودن
+                    + افزودن {{ group.group.name }}
                   </button>
                 {% endif %}
               </div>
+
               {% for validation_error in validation_errors %}
-              {% if validation_error.type == "group" and validation_error.code == group.group.code %}
-                <div class="df-repeatable-validation-error">
-                  <span class="df-repeatable-validation-error-icon">!</span>
-                  <span>{{ validation_error.message }}</span>
-                </div>
-              {% endif %}
-            {% endfor %}
+                {% if validation_error.type == "group" and validation_error.code == group.group.code %}
+                  <div class="df-repeatable-validation-error">
+                    <span class="df-repeatable-validation-error-icon">!</span>
+                    <span>{{ validation_error.message }}</span>
+                  </div>
+                {% endif %}
+              {% endfor %}
 
               <div class="df-table-wrapper">
                 <table class="df-normal-table">
                   <thead>
                     <tr>
-                      {% for field_info in group.fields %}
-                        <th>{{ field_info.field.label }}</th>
+                      {% for column in group.flat_table.columns %}
+                        <th>{{ column.field_context.field.label }}</th>
                       {% endfor %}
                       <th>عملیات</th>
                     </tr>
-                  </thead>                  <tbody
+                  </thead>
+                  <tbody
                     class="df-repeatable-items"
                     data-group-code="{{ group.group.code }}"
                   >
+                    {% include "operator_panel/_repeatable_flat_table.html" with group=group %}
+                  </tbody>
+                </table>
+              </div>
+            </section>
 
-                    {% if group.items %}
-                      {% for item in group.items %}
-                      {% with item_index=forloop.counter0 %}
-
-                        <tr
-                          class="df-repeatable-item"
-                          data-repeatable-item
-                          {% if item.row_id %}data-row-id="{{ item.row_id }}"{% endif %}
-                        >
-
-                          {% for item_field in item.fields %}
-                            <td>
-                              {% if edit_mode and not dynamic_form.is_submitted and item_field.can_edit %}
-
-                                {% if item_field.field.field_type == "TEXT" %}
-                                  <input
-                                    type="text"
-                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                    value="{{ item_field.value|default:'' }}"
-                                    class="df-table-input"
-                                  />
-
-                                {% elif item_field.field.field_type == "TEXTAREA" %}
-                                  <textarea
-                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                    class="df-table-input df-table-textarea"
-                                  >{{ item_field.value|default:'' }}</textarea>
-
-                                {% elif item_field.field.field_type == "NUMBER" %}
-                                  <input
-                                    type="number"
-                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                    value="{{ item_field.value|default:'' }}"
-                                    class="df-table-input"
-                                  />
-
-                                {% elif item_field.field.field_type == "DATE" %}
-                                  <input
-                                    type="date"
-                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                    value="{{ item_field.value|default:'' }}"
-                                    class="df-table-input"
-                                  />
-
-                                {% elif item_field.field.field_type == "DATETIME" %}
-                                  <input
-                                    type="datetime-local"
-                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                    value="{{ item_field.value|default:'' }}"
-                                    class="df-table-input"
-                                  />
-
-                                {% elif item_field.field.field_type == "BOOLEAN" %}
-                                  <input
-                                    type="checkbox"
-                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                    {% if item_field.value %}checked{% endif %}
-                                    class="df-table-checkbox"
-                                  />
-
-                                {% elif item_field.field.field_type == "SELECT" %}
-                                  <select
-                                    name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
-                                    class="df-table-input"
-                                    data-field-id="{{ item_field.field.pk }}"
-                                    data-field-code="{{ item_field.field.code }}"
-                                    {% if item_field.parent_code %}
-                                    data-depends-on="{{ item_field.parent_code }}"
-                                    data-options-url="{% url 'operator_panel:dependent_field_options' %}"
-                                    {% endif %}
-                                  >
-                                    <option value="">---------</option>
-                                    {% for choice in item_field.choices %}
-                                      <option
-                                        value="{{ choice.value }}"
-                                        {% if item_field.value|stringformat:"s" == choice.value|stringformat:"s" %}selected{% endif %}
-                                      >
-                                        {{ choice.label }}
-                                      </option>
-                                    {% endfor %}
-                                  </select>
-
-                                {% endif %}
-
-                              {% else %}
+            {% else %}
 
                                 <div class="df-table-value">
                                   {{ item_field.display_value|default:item_field.value|default:"—" }}
