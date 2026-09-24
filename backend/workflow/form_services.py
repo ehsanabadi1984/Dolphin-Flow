@@ -1015,8 +1015,12 @@ class DynamicFormService:
                         for group_code, index in path
                     ).rstrip("_"),
                     "cells": [
-                        dict(cell, show=True)
-                        for cells in ancestor_cells
+                        dict(
+                            cell,
+                            show=False,
+                            _ancestor_path=tuple(ancestor_path),
+                        )
+                        for ancestor_path, cells in ancestor_cells
                         for cell in cells
                     ] + [
                         dict(cell, show=True)
@@ -1047,7 +1051,10 @@ class DynamicFormService:
                         path + [
                             (child["group"].code, child_index)
                         ],
-                        ancestor_cells + [own_cells],
+                        ancestor_cells + [(
+                            path,
+                            own_cells,
+                        )],
                     )
 
             if first_row_index < len(rows):
@@ -1068,6 +1075,18 @@ class DynamicFormService:
                 [],
                 [],
             )
+
+        first_ancestor_rows = set()
+
+        for row in rows:
+            for cell in row["cells"]:
+                ancestor_path = cell.pop("_ancestor_path", None)
+                if ancestor_path is None:
+                    continue
+
+                if ancestor_path not in first_ancestor_rows:
+                    cell["show"] = True
+                    first_ancestor_rows.add(ancestor_path)
 
         for row in rows:
             row["column_cells"] = [
