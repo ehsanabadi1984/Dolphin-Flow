@@ -2412,9 +2412,11 @@ document.addEventListener("click", (event) => {
         newItem.dataset.repeatableRowGroup = childGroupCode;
         newItem.dataset.parentRowId = parentRowId;
         newItem.dataset.rootIndex = rootIndex;
+        newItem.dataset.rowPath =
+            `${parentRow.dataset.rowPath}_${childGroupCode}_${childIndex}`;
 
         const childPrefix =
-            `${table.dataset.repeatableGroup}_${rootIndex}_${childGroupCode}_${childIndex}_`;
+            `${parentRow.dataset.rowPath}_${childGroupCode}_${childIndex}_`;
 
         newItem.querySelectorAll("input, textarea, select").forEach((field) => {
             const oldName = field.getAttribute("name");
@@ -2422,8 +2424,12 @@ document.addEventListener("click", (event) => {
             if (oldName) {
                 field.name = oldName
                     .replace(
-                        `${table.dataset.repeatableGroup}_PARENT_${childGroupCode}_TEMPLATE_`,
-                        childPrefix
+                        "PARENT_PREFIX",
+                        `${parentRow.dataset.rowPath}_`
+                    )
+                    .replace(
+                        `_${childGroupCode}_TEMPLATE_`,
+                        `_${childGroupCode}_${childIndex}_`
                     );
             }
 
