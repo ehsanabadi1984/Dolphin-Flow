@@ -43,7 +43,17 @@
                 {% for field in entry.snapshot.fields %}
                   <tr>
                     <td>{{ field.display_label|default:field.label }}</td>
-                    <td>{% if field.display_value %}{{ field.display_value }}{% elif field.value %}{{ field.value }}{% else %}—{% endif %}</td>
+                    <td>
+                      {% if field.display_value is not None %}
+                        {{ field.display_value }}
+                      {% elif field.value is not None %}
+                        {{ field.value }}
+                      {% elif field.file %}
+                        {{ field.file.name }} ({{ field.file.size }} bytes{% if field.file.content_type %}, {{ field.file.content_type }}{% endif %})
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
                   </tr>
                 {% endfor %}
               </tbody>
