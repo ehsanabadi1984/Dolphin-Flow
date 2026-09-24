@@ -1,6 +1,4 @@
-from django.contrib.auth import get_user_model
 from django.urls import reverse
-from django.test import TestCase
 
 from workflow.form_file_models import FormFile
 from workflow.models import (
@@ -145,6 +143,8 @@ class RepeatableFileFieldDefinitionContractTests(RepeatableFilePersistenceTests)
         )
 
     def test_repeatable_table_file_definition_uses_visible_column_index(self):
+        self.file_field.order = 1
+        self.file_field.save(update_fields=["order"])
         text_field = FormField.objects.create(
             section=self.section,
             repeatable_group=self.group,
@@ -154,8 +154,6 @@ class RepeatableFileFieldDefinitionContractTests(RepeatableFilePersistenceTests)
             field_type=FormField.FieldType.TEXT,
             order=0,
         )
-        self.file_field.order = 1
-        self.file_field.save(update_fields=["order"])
 
         row, form_file = self._create_row_with_file(
             name="table-contract.txt",
