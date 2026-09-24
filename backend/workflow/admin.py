@@ -2030,6 +2030,7 @@ class FormRepeatableGroupInlineFormSet(forms.BaseInlineFormSet):
 
 class FormRepeatableGroupInline(admin.TabularInline):
     model = FormRepeatableGroup
+    fk_name = "section"
     formset = FormRepeatableGroupInlineFormSet
     extra = 0
     fields = (
