@@ -106,11 +106,16 @@ class PermissionContext:
 
     @staticmethod
     def _field_permission(*, field, step, user, roles):
-        access_rules = field.access_rules.filter(step=step)
+        access_rules = [
+            rule
+            for rule in field.access_rules.all()
+            if rule.step_id == step.pk
+        ]
 
-        user_rule = access_rules.filter(
-            user=user,
-        ).first()
+        user_rule = next(
+            (rule for rule in access_rules if rule.user_id == user.pk),
+            None,
+        )
 
         if user_rule is not None:
             return FieldPermission(
@@ -118,27 +123,29 @@ class PermissionContext:
                 can_edit=user_rule.can_edit,
             )
 
-        role_rules = access_rules.filter(
-            role__in=roles,
-            user__isnull=True,
-        )
+        role_rules = [
+            rule
+            for rule in access_rules
+            if rule.user_id is None and rule.role in roles
+        ]
 
         return FieldPermission(
-            can_view=role_rules.filter(
-                can_view=True,
-            ).exists(),
-            can_edit=role_rules.filter(
-                can_edit=True,
-            ).exists(),
+            can_view=any(rule.can_view for rule in role_rules),
+            can_edit=any(rule.can_edit for rule in role_rules),
         )
 
     @staticmethod
     def _group_permission(*, group, step, user, roles):
-        access_rules = group.access_rules.filter(step=step)
+        access_rules = [
+            rule
+            for rule in group.access_rules.all()
+            if rule.step_id == step.pk
+        ]
 
-        user_rule = access_rules.filter(
-            user=user,
-        ).first()
+        user_rule = next(
+            (rule for rule in access_rules if rule.user_id == user.pk),
+            None,
+        )
 
         if user_rule is not None:
             return GroupPermission(
@@ -148,24 +155,17 @@ class PermissionContext:
                 can_delete=user_rule.can_delete,
             )
 
-        role_rules = access_rules.filter(
-            role__in=roles,
-            user__isnull=True,
-        )
+        role_rules = [
+            rule
+            for rule in access_rules
+            if rule.user_id is None and rule.role in roles
+        ]
 
         return GroupPermission(
-            can_view=role_rules.filter(
-                can_view=True,
-            ).exists(),
-            can_edit=role_rules.filter(
-                can_edit=True,
-            ).exists(),
-            can_add=role_rules.filter(
-                can_add=True,
-            ).exists(),
-            can_delete=role_rules.filter(
-                can_delete=True,
-            ).exists(),
+            can_view=any(rule.can_view for rule in role_rules),
+            can_edit=any(rule.can_edit for rule in role_rules),
+            can_add=any(rule.can_add for rule in role_rules),
+            can_delete=any(rule.can_delete for rule in role_rules),
         )
 
     def field(self, field):
