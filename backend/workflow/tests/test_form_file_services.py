@@ -8,6 +8,7 @@ from django.urls import reverse
 from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.form_file_models import FormFile
 from workflow.form_file_services import _replace_file, save_uploaded_form_files
+import workflow.form_file_services as form_file_services
 from workflow.models import (
     FieldAccess,
     FormData,
@@ -491,6 +492,64 @@ class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
             row_id="create-1",
         )
         self.assertTrue(default_storage.exists(form_file.file.name))
+
+    def test_batch_file_failure_cleans_previous_storage_writes(self):
+        first_field = FormField.objects.create(
+            section=self.section,
+            name="First Attachment",
+            code="first_attachment",
+            label="First Attachment",
+            field_type=FormField.FieldType.FILE,
+            is_required=False,
+        )
+        second_field = FormField.objects.create(
+            section=self.section,
+            name="Second Attachment",
+            code="second_attachment",
+            label="Second Attachment",
+            field_type=FormField.FieldType.FILE,
+            is_required=False,
+        )
+
+        original_replace = form_file_services._replace_file
+        call_count = {"value": 0}
+
+        def replace_then_fail(*args, **kwargs):
+            call_count["value"] += 1
+            original_replace(*args, **kwargs)
+            if call_count["value"] == 2:
+                raise RuntimeError("forced batch failure")
+
+        with self.assertRaises(RuntimeError):
+            with transaction.atomic():
+                with patch.object(
+                    form_file_services,
+                    "_replace_file",
+                    side_effect=replace_then_fail,
+                ):
+                    save_uploaded_form_files(
+                        instance=self.instance,
+                        user=self.user,
+                        submitted_files={
+                            "first_attachment": self._upload("batch-first.txt"),
+                            "second_attachment": self._upload("batch-second.txt"),
+                        },
+                    )
+
+        self.assertFalse(
+            FormFile.objects.filter(
+                form_data=self.form_data,
+                field__in=[first_field, second_field],
+            ).exists()
+        )
+        self.assertEqual(
+            list(default_storage.listdir(f"workflow_forms/{self.instance.pk}/first_attachment")[1]),
+            [],
+        )
+        self.assertEqual(
+            list(default_storage.listdir(f"workflow_forms/{self.instance.pk}/second_attachment")[1]),
+            [],
+        )
 
     def test_create_file_cleans_storage_when_save_fails(self):
         original_save = FormFile.save
