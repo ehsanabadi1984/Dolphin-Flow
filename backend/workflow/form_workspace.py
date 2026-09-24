@@ -374,6 +374,7 @@ def form_workspace(request, workflow_id):
     for section in sections:
         section.top_level_fields = [f for f in section.fields.all() if f.repeatable_group_id is None and f.is_active]
         section.active_groups = [g for g in section.repeatable_groups.all() if g.is_active]
+        section.active_group_tree = build_repeatable_group_tree(section.active_groups)
     preview_sections = _preview_items(sections)
 
     context = {
