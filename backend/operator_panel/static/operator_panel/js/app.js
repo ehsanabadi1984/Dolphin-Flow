@@ -75,7 +75,97 @@ function generateRowId() {
             );
         });
 
-        document.addEventListener("click", (event) => {
+        function reindexFlatTableRootRows(container, rootGroupCode) {
+    const rootRows = Array.from(
+        container.querySelectorAll(
+            `[data-repeatable-item][data-repeatable-row-group="${CSS.escape(rootGroupCode)}"]`
+        )
+    );
+
+    rootRows.forEach((row, rootIndex) => {
+        row.dataset.rootIndex = rootIndex;
+
+        const rootPattern =
+            new RegExp(`^${escapeRegExp(rootGroupCode)}_\\d+_`);
+
+        row.querySelectorAll("input, textarea, select").forEach((field) => {
+            const name = field.getAttribute("name");
+            if (name && rootPattern.test(name)) {
+                field.name = name.replace(
+                    rootPattern,
+                    `${rootGroupCode}_${rootIndex}_`
+                );
+            }
+        });
+
+        let pending = [row.dataset.rowId];
+
+        while (pending.length) {
+            const parentId = pending.shift();
+
+            const children = Array.from(
+                container.querySelectorAll(
+                    `[data-repeatable-item][data-parent-row-id="${CSS.escape(parentId)}"]`
+                )
+            );
+
+            children.forEach((child) => {
+                child.dataset.rootIndex = rootIndex;
+                pending.push(child.dataset.rowId);
+
+                child.querySelectorAll("input, textarea, select").forEach((field) => {
+                    const name = field.getAttribute("name");
+                    if (!name) return;
+
+                    const childRootPattern =
+                        new RegExp(`^${escapeRegExp(rootGroupCode)}_\\d+_`);
+
+                    if (childRootPattern.test(name)) {
+                        field.name = name.replace(
+                            childRootPattern,
+                            `${rootGroupCode}_${rootIndex}_`
+                        );
+                    }
+                });
+            });
+        }
+    });
+}
+
+function reindexFlatTableChildRows(
+    container,
+    rootGroupCode,
+    childGroupCode,
+    parentRowId,
+    rootIndex
+) {
+    const childRows = Array.from(
+        container.querySelectorAll(
+            `[data-repeatable-item][data-repeatable-row-group="${CSS.escape(childGroupCode)}"][data-parent-row-id="${CSS.escape(parentRowId)}"]`
+        )
+    );
+
+    const childPattern =
+        new RegExp(
+            `^${escapeRegExp(rootGroupCode)}_${rootIndex}_${escapeRegExp(childGroupCode)}_\\d+_`
+        );
+
+    childRows.forEach((row, childIndex) => {
+        row.querySelectorAll("input, textarea, select").forEach((field) => {
+            const name = field.getAttribute("name");
+            if (!name) return;
+
+            if (childPattern.test(name)) {
+                field.name = name.replace(
+                    childPattern,
+                    `${rootGroupCode}_${rootIndex}_${childGroupCode}_${childIndex}_`
+                );
+            }
+        });
+    });
+}
+
+document.addEventListener("click", (event) => {
             if (
                 !workflowTrigger.contains(event.target) &&
                 !workflowList.contains(event.target)
