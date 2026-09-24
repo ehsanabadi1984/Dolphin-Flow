@@ -451,14 +451,21 @@ class DynamicFormServiceTests(TestCase):
 
         child_values = (
             ("Child 1", parent_rows[0]),
+            ("Child 1-B", parent_rows[0]),
             ("Child 2", parent_rows[1]),
         )
-        for row_order, (value, parent_row) in enumerate(child_values):
+        for value, parent_row in child_values:
             child_row = RepeatableRow.objects.create(
                 instance=instance,
                 group=child_group,
                 parent_row=parent_row,
-                row_order=0,
+                row_order=(
+                    RepeatableRow.objects.filter(
+                        instance=instance,
+                        group=child_group,
+                        parent_row=parent_row,
+                    ).count()
+                ),
             )
             RepeatableRowValue.objects.create(
                 row=child_row,
@@ -536,6 +543,17 @@ class DynamicFormServiceTests(TestCase):
         )
         self.assertEqual(
             customers["flat_table"]["rows"][1]["column_cells"][1]["display_value"],
+            "Child 1-B",
+        )
+        self.assertTrue(
+            customers["flat_table"]["rows"][2]["column_cells"][0]["show"],
+        )
+        self.assertEqual(
+            customers["flat_table"]["rows"][2]["column_cells"][0]["display_value"],
+            "Parent 2",
+        )
+        self.assertEqual(
+            customers["flat_table"]["rows"][2]["column_cells"][1]["display_value"],
             "Child 2",
         )
 
