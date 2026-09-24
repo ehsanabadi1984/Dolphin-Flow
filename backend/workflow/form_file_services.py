@@ -678,57 +678,57 @@ def delete_form_file(request, file_id):
 
 
 @login_required
-@transaction.atomic
 def workflow_instance_with_files(request, instance_id):
     from operator_panel import views
 
-    if request.method != "POST":
-        return views.workflow_instance(request, instance_id)
-
-    instance = get_object_or_404(
-        WorkflowInstance.objects.select_related("workflow", "current_step"),
-        pk=instance_id,
-    )
-    WorkflowAuthorizationService.require_permission(
-        user=request.user,
-        workflow=instance.workflow,
-        action=WorkflowPermission.Action.VIEW,
-        step=instance.current_step,
-        instance=instance,
-    )
-
-    submitted_data = prepare_submitted_data_for_files(
-        instance=instance,
-        submitted_data=request.POST,
-        submitted_files=request.FILES,
-    )
-    validate_uploaded_files(
-        instance=instance,
-        user=request.user,
-        submitted_data=submitted_data,
-        submitted_files=request.FILES,
-    )
-
-    request._post = submitted_data
     storage_files = []
     try:
-        result = views.workflow_instance(
-            request,
-            instance_id,
-            _return_save_result=True,
-        )
-        if isinstance(result, tuple):
-            response, save_result = result
-        else:
-            response, save_result = result, None
-        if 300 <= response.status_code < 400:
-            storage_files = save_uploaded_form_files(
+        with transaction.atomic():
+            if request.method != "POST":
+                return views.workflow_instance(request, instance_id)
+
+            instance = get_object_or_404(
+                WorkflowInstance.objects.select_related("workflow", "current_step"),
+                pk=instance_id,
+            )
+            WorkflowAuthorizationService.require_permission(
+                user=request.user,
+                workflow=instance.workflow,
+                action=WorkflowPermission.Action.VIEW,
+                step=instance.current_step,
+                instance=instance,
+            )
+
+            submitted_data = prepare_submitted_data_for_files(
+                instance=instance,
+                submitted_data=request.POST,
+                submitted_files=request.FILES,
+            )
+            validate_uploaded_files(
                 instance=instance,
                 user=request.user,
+                submitted_data=submitted_data,
                 submitted_files=request.FILES,
-                save_result=save_result,
             )
-        return response
+
+            request._post = submitted_data
+            result = views.workflow_instance(
+                request,
+                instance_id,
+                _return_save_result=True,
+            )
+            if isinstance(result, tuple):
+                response, save_result = result
+            else:
+                response, save_result = result, None
+            if 300 <= response.status_code < 400:
+                storage_files = save_uploaded_form_files(
+                    instance=instance,
+                    user=request.user,
+                    submitted_files=request.FILES,
+                    save_result=save_result,
+                )
+            return response
     except Exception:
         _cleanup_storage_files(storage_files)
         raise
