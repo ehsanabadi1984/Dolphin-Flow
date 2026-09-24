@@ -16,6 +16,7 @@ from workflow.models import (
     RepeatableRow,
     Workflow,
     WorkflowInstance,
+    WorkflowMembership,
     WorkflowStep,
     WorkflowStepExecution,
 )
@@ -93,6 +94,12 @@ class RepeatableFilePersistenceTests(TestCase):
         self.form_data = FormData.objects.create(
             instance=self.instance,
             data={},
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
         )
 
     def _save(self, submitted_data):
