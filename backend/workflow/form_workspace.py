@@ -40,6 +40,43 @@ class FormSectionWorkspaceForm(forms.ModelForm):
         return code
 
 
+def get_valid_parent_group_queryset(section, instance=None):
+    """
+    Return groups that can be selected as the parent of the instance.
+    """
+    if section is None:
+        return FormRepeatableGroup.objects.none()
+
+    queryset = (
+        FormRepeatableGroup.objects
+        .filter(section=section)
+        .select_related("section")
+        .order_by("order", "name", "id")
+    )
+
+    if not instance or not instance.pk:
+        return queryset
+
+    groups = FormRepeatableGroup.objects.filter(section=section).values_list(
+        "id", "parent_group_id"
+    )
+    children_by_parent = {}
+    for group_id, parent_id in groups:
+        if parent_id is not None:
+            children_by_parent.setdefault(parent_id, set()).add(group_id)
+
+    excluded = {instance.pk}
+    pending = [instance.pk]
+    while pending:
+        parent_id = pending.pop()
+        for child_id in children_by_parent.get(parent_id, ()):
+            if child_id not in excluded:
+                excluded.add(child_id)
+                pending.append(child_id)
+
+    return queryset.exclude(pk__in=excluded)
+
+
 class FormRepeatableGroupWorkspaceForm(forms.ModelForm):
     class Meta:
         model = FormRepeatableGroup
@@ -49,6 +86,7 @@ class FormRepeatableGroupWorkspaceForm(forms.ModelForm):
             "group_type",
             "display_type",
             "description",
+            "parent_group",
             "is_required",
             "is_active",
         )
@@ -56,12 +94,22 @@ class FormRepeatableGroupWorkspaceForm(forms.ModelForm):
     def __init__(self, *args, section=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.section = section
+        self.fields["parent_group"].queryset = get_valid_parent_group_queryset(
+            section,
+            self.instance,
+        )
 
     def clean_code(self):
         code = self.cleaned_data["code"].strip()
         if not code:
             raise forms.ValidationError("کد گروه الزامی است.")
         return code
+
+    def clean_parent_group(self):
+        parent_group = self.cleaned_data.get("parent_group")
+        if parent_group and self.section and parent_group.section_id != self.section.id:
+            raise forms.ValidationError("گروه والد باید متعلق به همان Section باشد.")
+        return parent_group
 
 
 class FormFieldWorkspaceForm(FormulaFieldAdminForm):
