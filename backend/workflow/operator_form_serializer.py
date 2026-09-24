@@ -186,7 +186,7 @@ class OperatorFormSerializer:
 
         permissions = group_context.get("permissions", {})
 
-        return OperatorFormSerializer.repeatable_group(
+        data = OperatorFormSerializer.repeatable_group(
             group=group_context["group"],
             fields=group_context.get("fields", []),
             items=items,
@@ -199,6 +199,11 @@ class OperatorFormSerializer:
             can_add=permissions.get("can_add", False),
             can_delete=permissions.get("can_delete", False),
         )
+
+        if "flat_table" in group_context:
+            data["flat_table"] = group_context["flat_table"]
+
+        return data
 
     @staticmethod
     def normal_item(
