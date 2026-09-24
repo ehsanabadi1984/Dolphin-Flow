@@ -1,8 +1,16 @@
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory, SimpleTestCase
 from django.template.loader import get_template
-from django.contrib.auth.models import AnonymousUser
+from django.urls import resolve, reverse
+
+from workflow.history_browser_service import HistoryBrowserService
+from workflow.history_permissions import HISTORY_ACTION
+from workflow.models import InstanceDevice
+from operator_panel import history_views
 
 
 class HistoryTemplateTests(SimpleTestCase):
@@ -136,6 +144,135 @@ class HistoryTemplateTests(SimpleTestCase):
 
         self.assertIn(">0<", rendered)
         self.assertIn(">False<", rendered)
+
+    def test_device_history_url_resolves_to_canonical_history_view(self):
+        match = resolve(
+            reverse(
+                "operator_panel:device_history",
+                kwargs={"instance_id": 42, "device_id": 7},
+            )
+        )
+
+        self.assertIs(match.func, history_views.device_history)
+
+    @patch("operator_panel.history_views.render")
+    @patch("operator_panel.history_views.InstanceDevice.objects.filter")
+    @patch.object(HistoryBrowserService, "has_stored_history", return_value=False)
+    @patch.object(HistoryBrowserService, "get_history", return_value=[])
+    @patch.object(history_views.WorkflowAuthorizationService, "require_permission")
+    @patch("operator_panel.history_views.get_object_or_404")
+    def test_device_history_uses_legacy_fallback_only_without_stored_snapshot(
+        self,
+        get_object_or_404,
+        require_permission,
+        get_history,
+        has_stored_history,
+        filter_devices,
+        render,
+    ):
+        instance = SimpleNamespace(
+            pk=42,
+            workflow=SimpleNamespace(name="Workflow"),
+            current_step=SimpleNamespace(),
+        )
+        device = SimpleNamespace(pk=7)
+        get_object_or_404.side_effect = [instance, device]
+        filter_devices.return_value = MagicMock()
+        render.return_value = "response"
+        request = SimpleNamespace(user=SimpleNamespace(is_authenticated=True))
+
+        response = history_views.device_history.__wrapped__(
+            request,
+            instance_id=42,
+            device_id=7,
+        )
+
+        self.assertEqual(response, "response")
+        require_permission.assert_called_once_with(
+            user=request.user,
+            workflow=instance.workflow,
+            action=HISTORY_ACTION,
+        )
+        filter_devices.assert_called_once_with(
+            device=device,
+            instance__workflow__memberships__user=request.user,
+            instance__workflow__memberships__is_active=True,
+        )
+
+    @patch("operator_panel.history_views.render")
+    @patch("operator_panel.history_views.InstanceDevice.objects.filter")
+    @patch.object(HistoryBrowserService, "has_stored_history", return_value=True)
+    @patch.object(
+        HistoryBrowserService,
+        "get_history",
+        return_value=[{"snapshot": {"version": 1}}],
+    )
+    @patch.object(history_views.WorkflowAuthorizationService, "require_permission")
+    @patch("operator_panel.history_views.get_object_or_404")
+    def test_device_history_does_not_fallback_when_new_snapshot_exists(
+        self,
+        get_object_or_404,
+        require_permission,
+        get_history,
+        has_stored_history,
+        filter_devices,
+        render,
+    ):
+        instance = SimpleNamespace(
+            pk=42,
+            workflow=SimpleNamespace(name="Workflow"),
+            current_step=SimpleNamespace(),
+        )
+        device = SimpleNamespace(pk=7)
+        get_object_or_404.side_effect = [instance, device]
+        render.return_value = "response"
+        request = SimpleNamespace(user=SimpleNamespace(is_authenticated=True))
+
+        response = history_views.device_history.__wrapped__(
+            request,
+            instance_id=42,
+            device_id=7,
+        )
+
+        self.assertEqual(response, "response")
+        has_stored_history.assert_not_called()
+        require_permission.assert_not_called()
+        filter_devices.assert_not_called()
+
+    @patch("operator_panel.history_views.render")
+    @patch("operator_panel.history_views.InstanceDevice.objects.filter")
+    @patch.object(HistoryBrowserService, "has_stored_history", return_value=True)
+    @patch.object(HistoryBrowserService, "get_history", return_value=[])
+    @patch.object(history_views.WorkflowAuthorizationService, "require_permission")
+    @patch("operator_panel.history_views.get_object_or_404")
+    def test_device_history_does_not_use_legacy_fallback_when_snapshot_is_stored_but_hidden(
+        self,
+        get_object_or_404,
+        require_permission,
+        get_history,
+        has_stored_history,
+        filter_devices,
+        render,
+    ):
+        instance = SimpleNamespace(
+            pk=42,
+            workflow=SimpleNamespace(name="Workflow"),
+            current_step=SimpleNamespace(),
+        )
+        device = SimpleNamespace(pk=7)
+        get_object_or_404.side_effect = [instance, device]
+        request = SimpleNamespace(user=SimpleNamespace(is_authenticated=True))
+
+        with self.assertRaises(PermissionDenied):
+            history_views.device_history.__wrapped__(
+                request,
+                instance_id=42,
+                device_id=7,
+            )
+
+        require_permission.assert_not_called()
+        filter_devices.assert_not_called()
+        render.assert_not_called()
 
     def test_renders_top_level_zero_and_false_values(self):
         rendered = self._render({
