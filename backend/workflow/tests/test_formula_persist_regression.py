@@ -725,7 +725,7 @@ class FormulaPersistenceTestCase(TestCase):
 
         instance = self.save_rows([
             {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
-        ])
+        ], note="history-source-test")
 
         form_data = FormData.objects.get(instance=instance)
         form_data.data = {**form_data.data, "FinalPriceRepair": "999999.99"}
