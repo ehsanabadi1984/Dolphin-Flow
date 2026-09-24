@@ -34,6 +34,8 @@ from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.repeatable_row_read_services import RepeatableRowReadService
 from workflow.formula_bootstrap import bootstrap_formula_system, _build_context_data
 from workflow.formula_services import FormulaService
+from workflow.history_models import HistoryConfiguration, HistoryField
+from workflow.history_services import HistoryService
 from workflow.models import (
     FieldAccess,
     FormData,
@@ -711,6 +713,41 @@ class FormulaPersistenceTestCase(TestCase):
         data = self.persisted_rows(instance)
         self.assertEqual(data["note"], "hello")
         self.assertEqual(data["cunspartTable"][0]["quantity"], "10")
+
+    def test_history_recalculates_top_level_formula_instead_of_trusting_form_data(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.final,
+            display_label="قیمت نهایی",
+            display_order=1,
+        )
+
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ])
+
+        form_data = FormData.objects.get(instance=instance)
+        form_data.data = {**form_data.data, "FinalPriceRepair": "999999.99"}
+        form_data.save(update_fields=["data"])
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            snapshot["fields"][0]["code"],
+            self.final.code,
+        )
+        self.assertEqual(
+            snapshot["fields"][0]["value"],
+            "5000.00",
+        )
+        self.assertNotEqual(
+            snapshot["fields"][0]["value"],
+            form_data.data["FinalPriceRepair"],
+        )
 
     # --------------------------------------------------------------
     # GET rendering: read-only vs edit contexts
