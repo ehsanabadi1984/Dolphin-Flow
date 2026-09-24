@@ -14,6 +14,8 @@ from .models import (
 from .history_models import HistoryConfiguration, HistoryField
 from .history_browser_service import HistoryBrowserService
 from .repeatable_row_read_services import RepeatableRowReadService
+from .formula_bootstrap import _build_context_data
+from .formula_services import FormulaService
 
 
 class HistoryService:
@@ -118,13 +120,29 @@ class HistoryService:
             else:
                 top_level.append(item)
 
+        formula_data = None
+        if any(
+            FormulaService.is_formula(item["form_field"])
+            for item in top_level
+        ):
+            formula_data = FormulaService.calculate_context_data(
+                form=form,
+                data=_build_context_data(
+                    instance=instance,
+                    submitted_data=None,
+                ),
+            )
+
         history_fields = []
         for item in sorted(
             top_level,
             key=lambda value: (value["display_order"], value["form_field"].pk),
         ):
             field = item["form_field"]
-            value = data.get(field.code, "")
+            if FormulaService.is_formula(field):
+                value = (formula_data or {}).get(field.code, "")
+            else:
+                value = data.get(field.code, "")
             history_fields.append(
                 HistoryService._serialize_field(
                     field=field,
