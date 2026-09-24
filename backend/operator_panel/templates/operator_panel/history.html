@@ -54,26 +54,7 @@
         {% for group in entry.snapshot.repeatable_groups %}
           <section style="margin-top: 1rem;">
             <h4>{{ group.name }}</h4>
-            {% for item in group.items %}
-              <div class="df-saved-table-wrapper" style="margin-top: .75rem;">
-                <table class="df-saved-table">
-                  <thead>
-                    <tr>
-                      {% for field in item.fields %}
-                        <th>{{ field.display_label|default:field.label }}</th>
-                      {% endfor %}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {% for field in item.fields %}
-                        <td>{% if field.display_value %}{{ field.display_value }}{% elif field.value %}{{ field.value }}{% else %}—{% endif %}</td>
-                      {% endfor %}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            {% endfor %}
+            {% include "operator_panel/history_group.html" with group=group only %}
           </section>
         {% endfor %}
       </article>

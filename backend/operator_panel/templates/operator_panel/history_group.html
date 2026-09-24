@@ -1,0 +1,39 @@
+{% for item in group.items %}
+  <div class="df-saved-table-wrapper" style="margin-top: .75rem;">
+    <table class="df-saved-table">
+      <thead>
+        <tr>
+          {% for field in item.fields %}
+            <th>{{ field.display_label|default:field.label }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          {% for field in item.fields %}
+            <td>
+              {% if field.display_value is not None %}
+                {{ field.display_value }}
+              {% elif field.value is not None %}
+                {{ field.value }}
+              {% elif field.file %}
+                {{ field.file.name }}
+                {% if field.file.size is not None %} ({{ field.file.size }} bytes){% endif %}
+                {% if field.file.content_type %} — {{ field.file.content_type }}{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          {% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  {% for child_group in item.child_groups %}
+    <section style="margin-top: 1rem;">
+      <h5>{{ child_group.name }}</h5>
+      {% include "operator_panel/history_group.html" with group=child_group only %}
+    </section>
+  {% endfor %}
+{% endfor %}
