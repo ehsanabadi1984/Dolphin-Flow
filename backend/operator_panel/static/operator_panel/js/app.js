@@ -75,7 +75,11 @@ function generateRowId() {
             );
         });
 
-        function reindexFlatTableRootRows(container, rootGroupCode) {
+        function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\function reindexFlatTableRootRows");
+}
+
+function reindexFlatTableRootRows(container, rootGroupCode) {
     const rootRows = Array.from(
         container.querySelectorAll(
             `[data-repeatable-item][data-repeatable-row-group="${CSS.escape(rootGroupCode)}"]`
