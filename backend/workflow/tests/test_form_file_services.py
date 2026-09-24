@@ -748,3 +748,108 @@ class FileFieldDefinitionsNestedRowTests(RepeatableFilePersistenceTests):
             str(child_row.pk),
         )
         self.assertEqual(group_payload["files"][0]["row_index"], 0)
+
+
+    def test_nested_file_definition_uses_full_canonical_input_name(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items_file_path",
+            order=2,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Grandchild Items",
+            code="grandchild_items_file_path",
+            order=3,
+        )
+        grandchild_file_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Grandchild Attachment",
+            code="grandchild_attachment",
+            label="Grandchild Attachment",
+            field_type=FormField.FieldType.FILE,
+            is_required=False,
+        )
+        for group in (child_group, grandchild_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+        FieldAccess.objects.create(
+            field=grandchild_file_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        parent_rows = [
+            RepeatableRow.objects.create(
+                instance=self.instance,
+                group=self.group,
+                row_order=index,
+            )
+            for index in range(2)
+        ]
+        child_rows = [
+            RepeatableRow.objects.create(
+                instance=self.instance,
+                group=child_group,
+                parent_row=parent_rows[0],
+                row_order=index,
+            )
+            for index in range(2)
+        ]
+        grandchild_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=grandchild_group,
+            parent_row=child_rows[1],
+            row_order=0,
+        )
+        FormFile.objects.create(
+            form_data=self.form_data,
+            field=grandchild_file_field,
+            row_id=str(grandchild_row.pk),
+            file=self._upload("grandchild-definition.txt"),
+            original_name="grandchild-definition.txt",
+            file_size=len(b"file-content"),
+            content_type="text/plain",
+            uploaded_by=self.user,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse(
+                "operator_panel:file_field_definitions",
+                args=[self.instance.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        group_payload = next(
+            item for item in payload["groups"]
+            if item["code"] == grandchild_group.code
+        )
+        self.assertEqual(len(group_payload["files"]), 1)
+        file_payload = group_payload["files"][0]
+        self.assertEqual(file_payload["row_id"], str(grandchild_row.pk))
+        self.assertEqual(file_payload["row_index"], 0)
+        self.assertEqual(
+            file_payload["input_name"],
+            (
+                "items_file_0_"
+                "child_items_file_path_1_"
+                "grandchild_items_file_path_0_"
+                "grandchild_attachment"
+            ),
+        )
