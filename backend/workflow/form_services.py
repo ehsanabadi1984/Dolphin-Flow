@@ -989,8 +989,6 @@ class DynamicFormService:
             context,
             path,
             ancestor_cells,
-            ancestor_visibility,
-            on_leaf=None,
         ):
             own_cells = field_cells(item, context, path)
             child_contexts = list(item["child_groups"])
@@ -1000,16 +998,6 @@ class DynamicFormService:
             ]
 
             if not populated_children:
-                visible_ancestor_cells = []
-                offset = 0
-                for cells in ancestor_cells:
-                    show = ancestor_visibility[offset]
-                    offset += 1
-                    visible_ancestor_cells.extend(
-                        dict(cell, show=show)
-                        for cell in cells
-                    )
-
                 rows.append({
                     "row_id": item["row_id"],
                     "row_group_code": context["group"].code,
@@ -1026,7 +1014,11 @@ class DynamicFormService:
                         f"{group_code}_{index}_"
                         for group_code, index in path
                     ).rstrip("_"),
-                    "cells": visible_ancestor_cells + [
+                    "cells": [
+                        dict(cell, show=True)
+                        for cells in ancestor_cells
+                        for cell in cells
+                    ] + [
                         dict(cell, show=True)
                         for cell in own_cells
                     ],
@@ -1043,25 +1035,12 @@ class DynamicFormService:
                     "delete_group_code": context["group"].code,
                     "delete_group_name": context["group"].name,
                 })
-
-                if on_leaf is not None:
-                    on_leaf()
-
                 return
 
-            first_leaf = True
-            first_row_index = None
-
-            def mark_leaf_emitted():
-                nonlocal first_leaf
-                first_leaf = False
-                if on_leaf is not None:
-                    on_leaf()
+            first_row_index = len(rows)
 
             for child in populated_children:
                 for child_index, child_item in enumerate(child["items"]):
-                    before = len(rows)
-
                     emit(
                         child_item,
                         child,
@@ -1069,24 +1048,18 @@ class DynamicFormService:
                             (child["group"].code, child_index)
                         ],
                         ancestor_cells + [own_cells],
-                        ancestor_visibility + [first_leaf],
-                        on_leaf=mark_leaf_emitted,
                     )
 
-                    if before < len(rows) and first_row_index is None:
-                        first_row_index = before
-
-                    if before < len(rows) and first_row_index == before:
-                        rows[before]["add_children"] = [
-                            {
-                                "group_code": child["group"].code,
-                                "group_name": child["group"].name,
-                                "can_add": child["permissions"]["can_add"],
-                                "parent_row_id": item["row_id"],
-                            }
-                            for child in child_contexts
-                        ]
-
+            if first_row_index < len(rows):
+                rows[first_row_index]["add_children"] = [
+                    {
+                        "group_code": child["group"].code,
+                        "group_name": child["group"].name,
+                        "can_add": child["permissions"]["can_add"],
+                        "parent_row_id": item["row_id"],
+                    }
+                    for child in child_contexts
+                ]
         for root_index, item in enumerate(group_context["items"]):
             emit(
                 item,
