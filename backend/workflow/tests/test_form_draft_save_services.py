@@ -121,6 +121,89 @@ class FormDraftSaveServiceContractTests(TestCase):
             can_edit=True,
         )
 
+
+    def test_nested_repeatable_groups_are_normalized_recursively_to_grandchild(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Parents",
+            code="parents_depth_three",
+            order=1,
+        )
+        parent_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Parent Name",
+            code="parent_name_depth_three",
+            label="Parent Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="Children",
+            code="children_depth_three",
+            order=2,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Name",
+            code="child_name_depth_three",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Grandchildren",
+            code="grandchildren_depth_three",
+            order=3,
+        )
+        grandchild_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Grandchild Name",
+            code="grandchild_name_depth_three",
+            label="Grandchild Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+
+        normalized = FormDraftSaveService._normalize_submitted_data(
+            form=self.form,
+            submitted_data={
+                "parents_depth_three": [
+                    {
+                        "row_id": None,
+                        "parent_name_depth_three": "Parent",
+                        "children_depth_three": [
+                            {
+                                "row_id": None,
+                                "child_name_depth_three": "Child",
+                                "grandchildren_depth_three": [
+                                    {
+                                        "row_id": None,
+                                        "grandchild_name_depth_three": "Grandchild",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+
+        parent = normalized.repeatable_groups["parents_depth_three"][0]
+        child = parent.child_groups["children_depth_three"][0]
+        grandchild = child.child_groups["grandchildren_depth_three"][0]
+
+        self.assertEqual(parent.fields, {parent_field.code: "Parent"})
+        self.assertEqual(child.fields, {child_field.code: "Child"})
+        self.assertEqual(
+            grandchild.fields,
+            {grandchild_field.code: "Grandchild"},
+        )
+        self.assertEqual(grandchild.child_groups, {})
+
     def test_valid_context_builds_permission_snapshot(self):
         result = self.call(
             submitted_data={"customer_name": "Ehsan"},
