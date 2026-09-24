@@ -858,12 +858,13 @@ class DynamicFormService:
 
         def emit(item, context, path, ancestor_cells, ancestor_visible):
             own_cells = field_cells(item, context, path)
-            child_contexts = [
-                child for child in item["child_groups"]
+            child_contexts = list(item["child_groups"])
+            populated_children = [
+                child for child in child_contexts
                 if child.get("items")
             ]
 
-            if not child_contexts:
+            if not populated_children:
                 rows.append({
                     "row_id": item["row_id"],
                     "row_group_code": context["group"].code,
@@ -873,7 +874,15 @@ class DynamicFormService:
                         dict(cell, show=True)
                         for cell in own_cells
                     ],
-                    "add_children": [],
+                    "add_children": [
+                        {
+                            "group_code": child["group"].code,
+                            "group_name": child["group"].name,
+                            "can_add": child["permissions"]["can_add"],
+                            "parent_row_id": item["row_id"],
+                        }
+                        for child in child_contexts
+                    ],
                     "can_delete": context["permissions"]["can_delete"],
                     "delete_group_code": context["group"].code,
                     "delete_group_name": context["group"].name,
@@ -882,7 +891,7 @@ class DynamicFormService:
 
             first_leaf = True
 
-            for child in child_contexts:
+            for child in populated_children:
                 for child_index, child_item in enumerate(child["items"]):
                     visible_own = ancestor_visible and first_leaf
                     before = len(rows)
