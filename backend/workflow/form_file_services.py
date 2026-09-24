@@ -499,6 +499,7 @@ def save_uploaded_form_files(
                 )
     except Exception:
         _cleanup_storage_files(storage_files)
+        storage_files.clear()
         raise
 
     transaction.on_commit(storage_files.clear)
