@@ -226,6 +226,26 @@ def _move_within_queryset(obj, *, direction, queryset, order_field="order"):
     return True
 
 
+def build_repeatable_group_tree(groups):
+    """Build a recursive tree from FormRepeatableGroup objects."""
+    groups = list(groups)
+    nodes = {
+        group.pk: {"group": group, "children": []}
+        for group in groups
+    }
+
+    roots = []
+    for group in groups:
+        node = nodes[group.pk]
+        parent_id = group.parent_group_id
+        if parent_id is None or parent_id not in nodes:
+            roots.append(node)
+        else:
+            nodes[parent_id]["children"].append(node)
+
+    return roots
+
+
 def _preview_items(sections):
     """Build a design-time preview model; it deliberately does not execute runtime services."""
     preview = []
