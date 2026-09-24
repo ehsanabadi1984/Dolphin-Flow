@@ -1,4 +1,4 @@
-<div class="df-fw-tree-group">
+<div class="df-fw-tree-group" data-group-id="{{ node.group.pk }}">
 <a class="df-fw-tree-item {% if selected_group.pk == node.group.pk %}selected{% endif %}" href="?section={{ section.pk }}&group={{ node.group.pk }}">↻ {{ node.group.name }} <span class="df-fw-pill">{{ node.group.get_display_type_display }}</span></a>
 <div class="df-fw-tree-items">
 {% for field in node.group.fields.all %}{% if field.is_active %}<a class="df-fw-tree-item {% if selected_field.pk == field.pk %}selected{% endif %}" href="?section={{ section.pk }}&group={{ node.group.pk }}&field={{ field.pk }}">↳ {{ field.label }}</a>{% endif %}{% endfor %}
