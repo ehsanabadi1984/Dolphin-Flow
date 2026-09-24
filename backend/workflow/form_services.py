@@ -870,6 +870,13 @@ class DynamicFormService:
                     "row_group_code": context["group"].code,
                     "parent_row_id": item["parent_row_id"],
                     "path": path,
+                    "id_input_name": (
+                        "".join(
+                            f"{group_code}_{index}_"
+                            for group_code, index in path
+                        )
+                        + "__id"
+                    ),
                     "cells": ancestor_cells + [
                         dict(cell, show=True)
                         for cell in own_cells
