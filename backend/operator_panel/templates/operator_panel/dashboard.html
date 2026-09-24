@@ -133,7 +133,7 @@
 
     <section class="df-grid">
         <div class="df-card df-panel">
-            <div class="df-panel-header"><div class="df-panel-title">شروع سریع</div></div>
+            <div class="df-panel-header"><div class="df-panel-title">فرآیندهای قابل شروع</div></div>
             <div class="df-activity">
                 {% for workflow in startable_workflows|slice:":4" %}
                     <div class="df-activity-item"><div class="df-dashboard-priority"></div><div class="df-activity-main"><div class="df-activity-title">{{ workflow.name }}</div>{% if workflow.description %}<div class="df-activity-meta">{{ workflow.description }}</div>{% endif %}</div><form method="post" action="{% url 'operator_panel:start_workflow' workflow.pk %}">{% csrf_token %}<button type="submit" class="df-status df-status-info">شروع</button></form></div>
