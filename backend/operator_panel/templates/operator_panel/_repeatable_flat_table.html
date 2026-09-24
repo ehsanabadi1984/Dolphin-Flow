@@ -237,6 +237,11 @@
           </td>
         {% endfor %}
         <td class="df-table-actions">
+          <input
+            type="hidden"
+            name="{{ group.group.code }}_PARENT_{{ child_group.code }}_TEMPLATE__id"
+            value=""
+          />
           <button
             type="button"
             class="df-button df-button-danger df-repeatable-delete"
