@@ -127,16 +127,21 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
                     "message": f"فایل «{field.label}» الزامی است.",
                 })
 
+        groups_by_parent = {}
         for group in section.repeatable_groups.filter(
             is_active=True,
             group_type=FormRepeatableGroup.GroupType.NORMAL,
-        ):
+        ).order_by("parent_group_id", "order", "pk"):
+            groups_by_parent.setdefault(group.parent_group_id, []).append(group)
+
+        def validate_group(group, group_prefix=""):
             group_can_edit = permission_context.group(group).can_edit
-            rows = DynamicFormService._parse_repeatable_data(
-                submitted_data=submitted_data,
-                group_code=group.code,
+            file_fields = list(
+                group.fields.filter(
+                    is_active=True,
+                    field_type="FILE",
+                )
             )
-            file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
             persisted_row_ids = set(
                 str(row_id)
                 for row_id in RepeatableRow.objects.filter(
@@ -144,15 +149,30 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
                     group=group,
                 ).values_list("pk", flat=True)
             )
-            for index, row in enumerate(rows):
-                submitted_row_id = str(row.get("_id", "") or "")
+
+            row_indexes = set()
+            prefix = group_prefix + f"{group.code}_"
+            for key in submitted_data.keys():
+                if not key.startswith(prefix):
+                    continue
+                remainder = key[len(prefix):]
+                index, separator, _ = remainder.partition("_")
+                if separator and index.isdigit():
+                    row_indexes.add(int(index))
+
+            for index in sorted(row_indexes):
+                row_id_key = f"{prefix}{index}__id"
+                submitted_row_id = str(
+                    submitted_data.get(row_id_key, "") or ""
+                ).strip()
                 row_id = (
                     submitted_row_id
                     if submitted_row_id in persisted_row_ids
                     else ""
                 )
+
                 for field in file_fields:
-                    key = f"{group.code}_{index}_{field.code}"
+                    key = f"{prefix}{index}_{field.code}"
                     upload = submitted_files.get(key)
                     if not group_can_edit or not permission_context.field(field).can_edit:
                         if _upload_present(upload):
@@ -164,6 +184,7 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
                                 "message": f"شما اجازه ویرایش فایل «{field.label}» را ندارید.",
                             })
                         continue
+
                     error = _validate_upload(upload, field)
                     if error:
                         errors.append({
@@ -173,7 +194,11 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
                             "item_index": index,
                             "message": error,
                         })
-                    elif field.is_required and not _upload_present(upload) and (field.pk, row_id) not in existing:
+                    elif (
+                        field.is_required
+                        and not _upload_present(upload)
+                        and (field.pk, row_id) not in existing
+                    ):
                         errors.append({
                             "type": "repeatable_field",
                             "group_code": group.code,
@@ -181,6 +206,16 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
                             "item_index": index,
                             "message": f"فایل «{field.label}» در ردیف {index + 1} الزامی است.",
                         })
+
+                child_prefix = f"{prefix}{index}_"
+                for child_group in groups_by_parent.get(group.pk, []):
+                    validate_group(
+                        child_group,
+                        group_prefix=child_prefix,
+                    )
+
+        for root_group in groups_by_parent.get(None, []):
+            validate_group(root_group)
 
     if errors:
         exc = ValidationError("اطلاعات فایل‌ها کامل یا معتبر نیست.")
