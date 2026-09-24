@@ -11,6 +11,8 @@ from workflow.models import (
     LookupItem,
     LookupList,
     RepeatableGroupAccess,
+    RepeatableRow,
+    RepeatableRowValue,
     StaticChoiceItem,
     StaticChoiceSet,
     Workflow,
@@ -372,6 +374,194 @@ class TableModeRenderTests(TestCase):
 
         self.assertEqual(len(table_group["items"]), 1)
         self.assertTrue(table_group["items"][0].get("row_id"))
+
+
+    def test_flat_table_flattens_grandchild_rows_and_scopes_visibility_per_subtree(self):
+        from workflow.form_services import DynamicFormService
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.table_group,
+            name="Child Parts",
+            code="child_parts",
+            order=2,
+            is_active=True,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Grandchild Details",
+            code="grandchild_details",
+            order=3,
+            is_active=True,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Code",
+            code="child_code",
+            field_type=FormField.FieldType.TEXT,
+            label="Child Code",
+            order=1,
+            is_active=True,
+        )
+        grandchild_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Grandchild Code",
+            code="grandchild_code",
+            field_type=FormField.FieldType.TEXT,
+            label="Grandchild Code",
+            order=1,
+            is_active=True,
+        )
+
+        for group in (child_group, grandchild_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+        for field in (child_field, grandchild_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+            )
+
+        instance = self.create_instance()
+        parent_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=self.table_group,
+            row_order=0,
+        )
+        child_one = RepeatableRow.objects.create(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        child_two = RepeatableRow.objects.create(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=1,
+        )
+        grandchild_rows = [
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=grandchild_group,
+                parent_row=child_one,
+                row_order=0,
+            ),
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=grandchild_group,
+                parent_row=child_one,
+                row_order=1,
+            ),
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=grandchild_group,
+                parent_row=child_two,
+                row_order=0,
+            ),
+        ]
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=self.part_field,
+            text_value="parent",
+        )
+        RepeatableRowValue.objects.create(
+            row=child_one,
+            field=child_field,
+            text_value="child-1",
+        )
+        RepeatableRowValue.objects.create(
+            row=child_two,
+            field=child_field,
+            text_value="child-2",
+        )
+        for index, row in enumerate(grandchild_rows, start=1):
+            RepeatableRowValue.objects.create(
+                row=row,
+                field=grandchild_field,
+                text_value=f"grandchild-{index}",
+            )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+        )
+        table_group = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].code == self.table_group.code
+        )
+        flat = table_group["flat_table"]
+
+        self.assertEqual(
+            [
+                column["field_context"]["field"].code
+                for column in flat["columns"]
+            ],
+            ["part", "description", "qty", "status", "child_code", "grandchild_code"],
+        )
+        self.assertEqual(len(flat["rows"]), 3)
+
+        rows = flat["rows"]
+        self.assertEqual(
+            [row["row_id"] for row in rows],
+            [str(row.pk) for row in grandchild_rows],
+        )
+        self.assertEqual(
+            [row["parent_row_id"] for row in rows],
+            [str(child_one.pk), str(child_one.pk), str(child_two.pk)],
+        )
+
+        child_code_cells = [
+            next(cell for cell in row["column_cells"] if cell["field"].code == "child_code")
+            for row in rows
+        ]
+        self.assertEqual(
+            [cell["value"] for cell in child_code_cells],
+            ["child-1", "child-1", "child-2"],
+        )
+        self.assertEqual(
+            [cell["show"] for cell in child_code_cells],
+            [True, False, True],
+        )
+
+        parent_part_cells = [
+            next(cell for cell in row["column_cells"] if cell["field"].code == "part")
+            for row in rows
+        ]
+        self.assertEqual(
+            [cell["value"] for cell in parent_part_cells],
+            ["parent", "parent", "parent"],
+        )
+        self.assertEqual(
+            [cell["show"] for cell in parent_part_cells],
+            [True, False, False],
+        )
+
+        grandchild_code_cells = [
+            next(cell for cell in row["column_cells"] if cell["field"].code == "grandchild_code")
+            for row in rows
+        ]
+        self.assertEqual(
+            [cell["show"] for cell in grandchild_code_cells],
+            [True, True, True],
+        )
 
     def test_device_groups_unaffected(self):
         """DEVICE repeatable groups continue to use InstanceDevice."""
