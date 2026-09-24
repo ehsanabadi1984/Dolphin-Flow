@@ -572,6 +572,299 @@ class HistoryServiceTests(TestCase):
             },
         )
 
+
+    def test_repeatable_history_snapshot_survives_later_row_value_changes(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.part_field,
+            display_label="قطعه",
+            display_order=1,
+        )
+
+        instance = self._instance()
+        row = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        RepeatableRowService.set_value(
+            row=row,
+            field=self.part_field,
+            value="LCD",
+        )
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        RepeatableRowService.set_value(
+            row=row,
+            field=self.part_field,
+            value="Battery",
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(
+            row.values.get(field=self.part_field).value,
+            "Battery",
+        )
+        self.assertEqual(
+            snapshot["repeatable_groups"][0]["items"][0]["fields"][0]["value"],
+            "LCD",
+        )
+
+    def test_nested_history_snapshot_survives_later_child_changes_and_deletion(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Part Details",
+            code="part_details_history",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=3,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Serial",
+            code="serial_history",
+            label="Serial",
+            field_type=FormField.FieldType.TEXT,
+            order=4,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.part_field,
+            display_label="قطعه",
+            display_order=1,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=child_field,
+            display_label="سریال",
+            display_order=2,
+        )
+
+        instance = self._instance()
+        parent = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        child = RepeatableRowService.create_row(
+            instance=instance,
+            group=child_group,
+            parent_row=parent,
+            row_order=0,
+        )
+        RepeatableRowService.set_value(
+            row=parent,
+            field=self.part_field,
+            value="LCD",
+        )
+        RepeatableRowService.set_value(
+            row=child,
+            field=child_field,
+            value="SERIAL-A",
+        )
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        RepeatableRowService.set_value(
+            row=child,
+            field=child_field,
+            value="SERIAL-B",
+        )
+        child.delete()
+
+        self.assertFalse(
+            RepeatableRowService.get_rows(
+                instance=instance,
+                group=child_group,
+                parent_row=parent,
+            ).filter(pk=child.pk).exists(),
+        )
+        historical_parent = snapshot["repeatable_groups"][0]["items"][0]
+        self.assertEqual(
+            historical_parent["fields"][0]["value"],
+            "LCD",
+        )
+        self.assertEqual(
+            historical_parent["child_groups"][0]["items"][0]["fields"][0]["value"],
+            "SERIAL-A",
+        )
+
+    def test_repeatable_file_history_survives_later_file_replacement(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        file_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="Attachment",
+            code="attachment_history_replace",
+            label="Attachment",
+            field_type=FormField.FieldType.FILE,
+            order=3,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=file_field,
+            display_label="پیوست",
+            display_order=2,
+        )
+
+        instance = self._instance()
+        row = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        form_data = FormData.objects.get(instance=instance)
+        original = FormFile.objects.create(
+            form_data=form_data,
+            field=file_field,
+            row_id=str(row.pk),
+            file=SimpleUploadedFile(
+                "history-old.pdf",
+                b"old-content",
+                content_type="application/pdf",
+            ),
+            original_name="history-old.pdf",
+            file_size=11,
+            content_type="application/pdf",
+            uploaded_by=self.user,
+        )
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        original.delete()
+        FormFile.objects.create(
+            form_data=form_data,
+            field=file_field,
+            row_id=str(row.pk),
+            file=SimpleUploadedFile(
+                "history-new.jpg",
+                b"new-content",
+                content_type="image/jpeg",
+            ),
+            original_name="history-new.jpg",
+            file_size=12,
+            content_type="image/jpeg",
+            uploaded_by=self.user,
+        )
+
+        self.assertFalse(FormFile.objects.filter(pk=original.pk).exists())
+        current_file = FormFile.objects.get(
+            form_data=form_data,
+            field=file_field,
+            row_id=str(row.pk),
+        )
+        self.assertEqual(current_file.original_name, "history-new.jpg")
+        self.assertEqual(
+            snapshot["repeatable_groups"][0]["items"][0]["fields"][0]["file"],
+            {
+                "name": "history-old.pdf",
+                "size": 11,
+                "content_type": "application/pdf",
+            },
+        )
+
+    def test_nested_file_history_survives_later_file_replacement(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Part Details",
+            code="part_details_file_history",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=3,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Attachment",
+            code="nested_attachment_history",
+            label="Attachment",
+            field_type=FormField.FieldType.FILE,
+            order=4,
+        )
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=child_field,
+            display_label="پیوست",
+            display_order=1,
+        )
+
+        instance = self._instance()
+        parent = RepeatableRowService.create_row(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        child = RepeatableRowService.create_row(
+            instance=instance,
+            group=child_group,
+            parent_row=parent,
+            row_order=0,
+        )
+        form_data = FormData.objects.get(instance=instance)
+        original = FormFile.objects.create(
+            form_data=form_data,
+            field=child_field,
+            row_id=str(child.pk),
+            file=SimpleUploadedFile(
+                "nested-old.pdf",
+                b"nested-old",
+                content_type="application/pdf",
+            ),
+            original_name="nested-old.pdf",
+            file_size=10,
+            content_type="application/pdf",
+            uploaded_by=self.user,
+        )
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        original.delete()
+        FormFile.objects.create(
+            form_data=form_data,
+            field=child_field,
+            row_id=str(child.pk),
+            file=SimpleUploadedFile(
+                "nested-new.png",
+                b"nested-new",
+                content_type="image/png",
+            ),
+            original_name="nested-new.png",
+            file_size=11,
+            content_type="image/png",
+            uploaded_by=self.user,
+        )
+
+        historical_file = (
+            snapshot["repeatable_groups"][0]
+            ["items"][0]["child_groups"][0]
+            ["items"][0]["fields"][0]["file"]
+        )
+        self.assertEqual(
+            historical_file,
+            {
+                "name": "nested-old.pdf",
+                "size": 10,
+                "content_type": "application/pdf",
+            },
+        )
+
     def test_device_history_snapshot_is_immutable_after_assignment_deactivation(self):
         configuration = HistoryConfiguration.objects.create(form=self.form)
         device_group = FormRepeatableGroup.objects.create(
