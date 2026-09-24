@@ -1,5 +1,6 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.urls import reverse
 
 from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.form_file_models import FormFile
@@ -436,3 +437,82 @@ class RepeatableFilePersistenceTests(TestCase):
                 str(child_rows[1].pk): "parent-1-child.txt",
             },
         )
+
+
+class FileFieldDefinitionsNestedRowTests(RepeatableFilePersistenceTests):
+    def test_nested_file_definition_uses_canonical_child_row_index(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items_file_definitions",
+            order=2,
+        )
+        child_file_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Attachment",
+            code="child_attachment",
+            label="Child Attachment",
+            field_type=FormField.FieldType.FILE,
+            is_required=False,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=child_file_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=self.group,
+            row_order=0,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        FormFile.objects.create(
+            form_data=self.form_data,
+            field=child_file_field,
+            row_id=str(child_row.pk),
+            file=self._upload("nested-definition.txt"),
+            original_name="nested-definition.txt",
+            file_size=len(b"file-content"),
+            content_type="text/plain",
+            uploaded_by=self.user,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse(
+                "operator_panel:file_field_definitions",
+                args=[self.instance.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        group_payload = next(
+            item for item in payload["groups"]
+            if item["code"] == child_group.code
+        )
+        self.assertEqual(len(group_payload["files"]), 1)
+        self.assertEqual(
+            group_payload["files"][0]["row_id"],
+            str(child_row.pk),
+        )
+        self.assertEqual(group_payload["files"][0]["row_index"], 0)
