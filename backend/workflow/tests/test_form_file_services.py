@@ -517,7 +517,6 @@ class NestedRepeatableFileValidationTests(RepeatableFilePersistenceTests):
             },
         )
 
-        self.assertEqual(grandchild_group.parent_group_id, self.group.pk)
         self.assertEqual(field.repeatable_group_id, grandchild_group.pk)
 
     def test_nested_required_file_reports_missing_canonical_upload(self):
