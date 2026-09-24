@@ -801,32 +801,160 @@ class DynamicFormService:
 
         if group.display_type == FormRepeatableGroup.DisplayType.TABLE:
             context["flat_table"] = DynamicFormService._build_flat_table_context(
-                context
+                context,
+                permission_context,
+                edit_mode,
+                is_submitted,
             )
 
         return context
 
     @staticmethod
-    def _build_flat_table_context(group_context):
+    def _build_flat_table_context(
+        group_context,
+        permission_context,
+        edit_mode,
+        is_submitted,
+    ):
         """
         Derive flat TABLE rows/columns from the canonical repeatable tree.
         This changes presentation only; RepeatableRow remains the source
         of truth and row identity is never replaced by a visual index.
         """
         columns = []
+        seen_columns = set()
 
-        def collect_columns(context):
+        def append_context_columns(context):
             for field_context in context["fields"]:
+                key = (
+                    context["group"].code,
+                    field_context["field"].code,
+                )
+                if key in seen_columns:
+                    continue
+                seen_columns.add(key)
                 columns.append({
                     "group_code": context["group"].code,
                     "group_name": context["group"].name,
                     "field_context": field_context,
                 })
-            for item in context["items"]:
-                for child in item["child_groups"]:
-                    collect_columns(child)
 
-        collect_columns(group_context)
+        def build_empty_child_context(child_group, inherited_can_edit):
+            group_permission = permission_context.group(child_group)
+            if not group_permission.can_view:
+                return None
+
+            can_edit = (
+                group_permission.can_edit
+                and inherited_can_edit
+                and edit_mode
+                and not is_submitted
+            )
+            can_add = (
+                group_permission.can_add
+                and not is_submitted
+            )
+            can_delete = (
+                group_permission.can_delete
+                and not is_submitted
+            )
+
+            fields = []
+            for field in child_group.fields.filter(is_active=True):
+                field_permission = permission_context.field(field)
+                if not field_permission.can_view:
+                    continue
+
+                fields.append({
+                    "field": field,
+                    "can_edit": (
+                        field_permission.can_edit
+                        and can_edit
+                    ),
+                    "permission_can_edit": field_permission.can_edit,
+                    "value": "",
+                    "display_value": "",
+                    "choices": (
+                        DynamicFormService._get_field_choices(field)
+                        if field.field_type == FormField.FieldType.SELECT
+                        else []
+                    ),
+                    "device_types": (
+                        DeviceType.objects.filter(is_active=True)
+                        if field.system_key == FormField.SystemKey.DEVICE_TYPE
+                        else []
+                    ),
+                    "device_models": (
+                        DeviceModel.objects.filter(is_active=True)
+                        if field.system_key == FormField.SystemKey.DEVICE_MODEL
+                        else []
+                    ),
+                    "parent_code": (
+                        field.choice_parent_field.code
+                        if field.choice_parent_field_id
+                        else None
+                    ),
+                })
+
+            return {
+                "group": child_group,
+                "fields": fields,
+                "items": [],
+                "permissions": {
+                    "can_view": True,
+                    "can_edit": can_edit,
+                    "can_add": can_add,
+                    "can_delete": can_delete,
+                },
+                "child_groups": [
+                    child
+                    for child in (
+                        build_empty_child_context(
+                            nested,
+                            can_edit,
+                        )
+                        for nested in child_group.child_groups.filter(
+                            is_active=True,
+                        ).order_by("order", "id")
+                    )
+                    if child is not None
+                ],
+            }
+
+        append_context_columns(group_context)
+
+        child_context_by_code = {}
+        for item in group_context["items"]:
+            for child in item["child_groups"]:
+                child_context_by_code[child["group"].code] = child
+
+        for child_group in group_context["group"].child_groups.filter(
+            is_active=True,
+        ).order_by("order", "id"):
+            child_context = child_context_by_code.get(
+                child_group.code
+            )
+            if child_context is None:
+                child_context = build_empty_child_context(
+                    child_group,
+                    group_context["permissions"]["can_edit"],
+                )
+
+            if child_context is None:
+                continue
+
+            append_context_columns(child_context)
+
+            for nested in child_context.get("child_groups", []):
+                append_context_columns(nested)
+
+        # Existing populated contexts may contain deeper descendants.
+        for item in group_context["items"]:
+            for child in item["child_groups"]:
+                append_context_columns(child)
+                for nested_item in child["items"]:
+                    for nested in nested_item["child_groups"]:
+                        append_context_columns(nested)
 
         rows = []
 
