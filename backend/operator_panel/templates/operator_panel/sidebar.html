@@ -58,6 +58,11 @@
             {% empty %}<div class="df-nav-empty">فرآیند قابل شروعی وجود ندارد.</div>{% endfor %}
         </div>
 
+        <a href="{% url 'operator_panel:my_processes' %}" class="df-nav-link{% if request.resolver_match.url_name == 'my_processes' %} active{% endif %}" data-tooltip="فرآیندهای من">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"></path><path d="M8 8h8"></path><path d="M8 12h8"></path><path d="M8 16h5"></path></svg>
+            <span>فرآیندهای من</span><span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-active-count"{% if not sidebar_counts.active %} hidden{% endif %}>{{ sidebar_counts.active }}</span>
+        </a>
+
         <a href="{% url 'operator_panel:assigned_tasks' %}" class="df-nav-link{% if request.resolver_match.url_name == 'assigned_tasks' %} active{% endif %}" data-tooltip="وظایف اختصاص‌یافته">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"></path><path d="m8 9 2 2 4-4"></path><path d="M8 15h8"></path></svg>
             <span>وظایف اختصاص‌یافته</span><span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-task-count"{% if not sidebar_counts.tasks %} hidden{% endif %}>{{ sidebar_counts.tasks }}</span>
