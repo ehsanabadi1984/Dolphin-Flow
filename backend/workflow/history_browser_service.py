@@ -85,11 +85,15 @@ class HistoryBrowserService:
 
         fields_by_code = {}
         groups_by_code = {}
-        for section in form.sections.filter(is_active=True):
-            for field in section.fields.filter(is_active=True):
-                fields_by_code[field.code] = field
-            for group in section.repeatable_groups.filter(is_active=True):
-                groups_by_code[group.code] = group
+        for section in form.sections.all():
+            if not section.is_active:
+                continue
+            for field in section.fields.all():
+                if field.is_active:
+                    fields_by_code[field.code] = field
+            for group in section.repeatable_groups.all():
+                if group.is_active:
+                    groups_by_code[group.code] = group
 
         def field_allowed(field):
             permission = permission_context.field(field)
