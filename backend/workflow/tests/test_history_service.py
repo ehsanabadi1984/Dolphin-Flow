@@ -682,13 +682,15 @@ class HistoryServiceTests(TestCase):
         )
         child.delete()
 
-        self.assertFalse(
-            RepeatableRowService.get_rows(
+        remaining_child_ids = {
+            row.pk
+            for row in RepeatableRowService.get_rows(
                 instance=instance,
                 group=child_group,
                 parent_row=parent,
-            ).filter(pk=child.pk).exists(),
-        )
+            )
+        }
+        self.assertNotIn(child.pk, remaining_child_ids)
         historical_parent = snapshot["repeatable_groups"][0]["items"][0]
         self.assertEqual(
             historical_parent["fields"][0]["value"],
