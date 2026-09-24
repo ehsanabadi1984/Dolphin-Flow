@@ -505,7 +505,17 @@ def file_field_definitions(request, instance_id):
             if not group_fields:
                 continue
 
-            file_payloads = {}
+            file_payloads = []
+            row_indexes = {}
+            sibling_indexes = {}
+            for row in (
+                RepeatableRow.objects
+                .filter(instance=instance, group=group)
+                .order_by("parent_row_id", "row_order", "pk")
+            ):
+                parent_key = row.parent_row_id
+                row_indexes[str(row.pk)] = sibling_indexes.get(parent_key, 0)
+                sibling_indexes[parent_key] = row_indexes[str(row.pk)] + 1
             for (field_id, row_id), payload in existing.items():
                 if field_id in field_ids:
                     field_code = next(
