@@ -331,6 +331,100 @@ class FormulaPersistenceTestCase(TestCase):
         self.assertEqual([r["TotalPrice"] for r in rows], ["8000", "200"])
         self.assertEqual(self.persisted_rows(instance)["FinalPriceRepair"], "8200.00")
 
+
+    def test_build_context_data_reconstructs_grandchild_repeatable_rows(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="formula_children",
+            order=1,
+            is_active=True,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Grandchild Items",
+            code="formula_grandchildren",
+            order=2,
+            is_active=True,
+        )
+        amount = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Amount",
+            code="amount",
+            field_type=FormField.FieldType.NUMBER,
+            label="Amount",
+            order=0,
+            is_active=True,
+        )
+
+        for group in (child_group, grandchild_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+        FieldAccess.objects.create(
+            field=amount,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+
+        instance = self.make_instance()
+        parent_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        grandchild_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=grandchild_group,
+            parent_row=child_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=grandchild_row,
+            field=amount,
+            numeric_value=Decimal("125"),
+        )
+
+        context = _build_context_data(
+            instance=instance,
+            submitted_data=None,
+        )
+
+        self.assertIn("cunspartTable", context)
+        root = context["cunspartTable"][0]
+        self.assertIn("child_groups", root)
+        child = next(
+            item
+            for item in root["child_groups"]
+            if item["code"] == "formula_children"
+        )
+        grandchild = next(
+            item
+            for item in child["items"][0]["child_groups"]
+            if item["code"] == "formula_grandchildren"
+        )
+        self.assertEqual(
+            grandchild["items"][0]["fields"][0]["value"],
+            Decimal("125"),
+        )
+
     # --------------------------------------------------------------
     # Second save / edit semantics (previous_item matters)
     # --------------------------------------------------------------
