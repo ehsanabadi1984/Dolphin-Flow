@@ -44,23 +44,32 @@
                                         {% if child_item.row_id %}data-row-id="{{ child_item.row_id }}"{% endif %}
                                       >
                                         {% for child_field in child_item.fields %}
+                                          <label
+                                            class="df-accessible-label"
+                                            for="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                          >
+                                            {{ child_field.field.label }}
+                                          </label>
                                           <td>
                                             {% if edit_mode and not dynamic_form.is_submitted and child_field.can_edit %}
                                               {% if child_field.field.field_type == "TEXT" %}
                                                 <input
                                                   type="text"
+                                                  id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                                   value="{{ child_field.value|default:'' }}"
                                                   class="df-table-input"
                                                 />
                                               {% elif child_field.field.field_type == "TEXTAREA" %}
                                                 <textarea
+                                                  id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                                   class="df-table-input df-table-textarea"
                                                 >{{ child_field.value|default:'' }}</textarea>
                                               {% elif child_field.field.field_type == "NUMBER" %}
                                                 <input
                                                   type="number"
+                                                  id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                                   value="{{ child_field.value|default:'' }}"
                                                   class="df-table-input"
@@ -68,6 +77,7 @@
                                               {% elif child_field.field.field_type == "DATE" %}
                                                 <input
                                                   type="date"
+                                                  id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                                   value="{{ child_field.value|default:'' }}"
                                                   class="df-table-input"
@@ -75,6 +85,7 @@
                                               {% elif child_field.field.field_type == "DATETIME" %}
                                                 <input
                                                   type="datetime-local"
+                                                  id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                                   value="{{ child_field.value|default:'' }}"
                                                   class="df-table-input"
@@ -82,12 +93,14 @@
                                               {% elif child_field.field.field_type == "BOOLEAN" %}
                                                 <input
                                                   type="checkbox"
+                                                  id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                                   {% if child_field.value %}checked{% endif %}
                                                   class="df-table-checkbox"
                                                 />
                                               {% elif child_field.field.field_type == "SELECT" %}
                                                 <select
+                                                  id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                                   class="df-table-input"
                                                   data-field-id="{{ child_field.field.pk }}"
@@ -160,40 +173,47 @@
                                           {% if template_field.field.field_type == "TEXT" %}
                                             <input
                                               type="text"
+                                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                               class="df-table-input"
                                             />
                                           {% elif template_field.field.field_type == "TEXTAREA" %}
                                             <textarea
+                                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                               class="df-table-input df-table-textarea"
                                             ></textarea>
                                           {% elif template_field.field.field_type == "NUMBER" %}
                                             <input
                                               type="number"
+                                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                               class="df-table-input"
                                             />
                                           {% elif template_field.field.field_type == "DATE" %}
                                             <input
                                               type="date"
+                                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                               class="df-table-input"
                                             />
                                           {% elif template_field.field.field_type == "DATETIME" %}
                                             <input
                                               type="datetime-local"
+                                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                               class="df-table-input"
                                             />
                                           {% elif template_field.field.field_type == "BOOLEAN" %}
                                             <input
                                               type="checkbox"
+                                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                               class="df-table-checkbox"
                                             />
                                           {% elif template_field.field.field_type == "SELECT" %}
                                             <select
+                                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                               class="df-table-input"
                                             >
@@ -262,6 +282,12 @@
                                 {% endif %}
 
                                 {% for child_field in child_item.fields %}
+                                          <label
+                                            class="df-accessible-label"
+                                            for="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                          >
+                                            {{ child_field.field.label }}
+                                          </label>
                                   <div
                                     class="df-form-field"
                                     data-field-code="{{ child_field.field.code }}"
@@ -275,40 +301,47 @@
                                       {% if child_field.field.field_type == "TEXT" %}
                                         <input
                                           type="text"
-                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                           value="{{ child_field.value|default:'' }}"
                                         />
                                       {% elif child_field.field.field_type == "TEXTAREA" %}
                                         <textarea
-                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                         >{{ child_field.value|default:'' }}</textarea>
                                       {% elif child_field.field.field_type == "NUMBER" %}
                                         <input
                                           type="number"
-                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                           value="{{ child_field.value|default:'' }}"
                                         />
                                       {% elif child_field.field.field_type == "DATE" %}
                                         <input
                                           type="date"
-                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                           value="{{ child_field.value|default:'' }}"
                                         />
                                       {% elif child_field.field.field_type == "DATETIME" %}
                                         <input
                                           type="datetime-local"
-                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                           value="{{ child_field.value|default:'' }}"
                                         />
                                       {% elif child_field.field.field_type == "BOOLEAN" %}
                                         <input
                                           type="checkbox"
-                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                           {% if child_field.value %}checked{% endif %}
                                         />
                                       {% elif child_field.field.field_type == "SELECT" %}
                                         <select
-                                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                         >
                                           <option value="">---------</option>
                                           {% for choice in child_field.choices %}
@@ -348,35 +381,42 @@
                                   {% if template_field.field.field_type == "TEXT" %}
                                     <input
                                       type="text"
-                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                      id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                     />
                                   {% elif template_field.field.field_type == "TEXTAREA" %}
                                     <textarea
-                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                      id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                     ></textarea>
                                   {% elif template_field.field.field_type == "NUMBER" %}
                                     <input
                                       type="number"
-                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                      id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                     />
                                   {% elif template_field.field.field_type == "DATE" %}
                                     <input
                                       type="date"
-                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                      id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                     />
                                   {% elif template_field.field.field_type == "DATETIME" %}
                                     <input
                                       type="datetime-local"
-                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                      id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                     />
                                   {% elif template_field.field.field_type == "BOOLEAN" %}
                                     <input
                                       type="checkbox"
-                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                      id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                     />
                                   {% elif template_field.field.field_type == "SELECT" %}
                                     <select
-                                      name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                      id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                     >
                                       <option value="">---------</option>
                                     </select>
