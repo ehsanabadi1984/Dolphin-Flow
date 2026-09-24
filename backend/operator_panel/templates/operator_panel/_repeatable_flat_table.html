@@ -5,6 +5,7 @@
       data-repeatable-item
       data-repeatable-row-group="{{ row.row_group_code }}"
       data-root-index="{{ row.path.0.1 }}"
+      data-row-path="{{ row.path_key }}"
       data-row-id="{{ row.row_id }}"
       data-parent-row-id="{{ row.parent_row_id|default:'' }}"
     >
@@ -179,109 +180,4 @@
       name="{{ group.group.code }}_TEMPLATE__id"
       value=""
     />
-    {% for child_group in group.group.child_groups.all %}
-      {% if child_group.is_active %}
-        {% if child_group.display_type == "TABLE" %}
-          <button
-            type="button"
-            class="df-button df-button-secondary df-repeatable-child-add"
-            data-group-code="{{ child_group.code }}"
-            data-parent-row-id=""
-          >
-            + افزودن {{ child_group.name }}
-          </button>
-        {% endif %}
-      {% endif %}
-    {% endfor %}
-  </td>
-</tr>
-
-{% for child_group in group.group.child_groups.all %}
-  {% if child_group.is_active %}
-    {% if child_group.display_type == "TABLE" %}
-      <tr
-        class="df-repeatable-flat-template"
-        data-repeatable-template
-        data-repeatable-child-template
-        data-child-group-code="{{ child_group.code }}"
-        style="display:none;"
-      >
-        {% for column in group.flat_table.columns %}
-          <td data-column-group="{{ column.group_code }}">
-            {% if column.group_code == child_group.code %}
-              {% with field_context=column.field_context %}
-                {% if field_context.field.field_type == "TEXT" %}
-                  <input
-                    type="text"
-                    name="{{ group.group.code }}_PARENT_{{ child_group.code }}_TEMPLATE_{{ field_context.field.code }}"
-                    class="df-table-input"
-                  />
-                {% elif field_context.field.field_type == "TEXTAREA" %}
-                  <textarea
-                    name="{{ group.group.code }}_PARENT_{{ child_group.code }}_TEMPLATE_{{ field_context.field.code }}"
-                    class="df-table-input df-table-textarea"
-                  ></textarea>
-                {% elif field_context.field.field_type == "NUMBER" %}
-                  <input
-                    type="number"
-                    name="{{ group.group.code }}_PARENT_{{ child_group.code }}_TEMPLATE_{{ field_context.field.code }}"
-                    class="df-table-input"
-                  />
-                {% elif field_context.field.field_type == "DATE" %}
-                  <input
-                    type="date"
-                    name="{{ group.group.code }}_PARENT_{{ child_group.code }}_TEMPLATE_{{ field_context.field.code }}"
-                    class="df-table-input"
-                  />
-                {% elif field_context.field.field_type == "DATETIME" %}
-                  <input
-                    type="datetime-local"
-                    name="{{ group.group.code }}_PARENT_{{ child_group.code }}_TEMPLATE_{{ field_context.field.code }}"
-                    class="df-table-input"
-                  />
-                {% elif field_context.field.field_type == "BOOLEAN" %}
-                  <input
-                    type="checkbox"
-                    name="{{ group.group.code }}_PARENT_{{ child_group.code }}_TEMPLATE_{{ field_context.field.code }}"
-                    class="df-table-checkbox"
-                  />
-                {% elif field_context.field.field_type == "SELECT" %}
-                  <select
-                    name="{{ group.group.code }}_PARENT_{{ child_group.code }}_TEMPLATE_{{ field_context.field.code }}"
-                    class="df-table-input"
-                    data-field-id="{{ field_context.field.pk }}"
-                    data-field-code="{{ field_context.field.code }}"
-                    {% if field_context.parent_code %}
-                    data-depends-on="{{ field_context.parent_code }}"
-                    data-options-url="{% url 'operator_panel:dependent_field_options' %}"
-                    {% endif %}
-                  >
-                    <option value="">---------</option>
-                    {% for choice in field_context.choices %}
-                      <option value="{{ choice.value }}">{{ choice.label }}</option>
-                    {% endfor %}
-                  </select>
-                {% endif %}
-              {% endwith %}
-            {% endif %}
-          </td>
-        {% endfor %}
-        <td class="df-table-actions">
-          <input
-            type="hidden"
-            name="{{ group.group.code }}_PARENT_{{ child_group.code }}_TEMPLATE__id"
-            value=""
-          />
-          <button
-            type="button"
-            class="df-button df-button-danger df-repeatable-delete"
-            data-delete-label="{{ child_group.name }}"
-            data-group-code="{{ child_group.code }}"
-          >
-            حذف {{ child_group.name }}
-          </button>
-        </td>
-      </tr>
-    {% endif %}
-  {% endif %}
-{% endfor %}
+    {% include "operator_panel/_repeatable_flat_table_templates.html" with parent_group=group.group flat_columns=group.flat_table.columns %}
