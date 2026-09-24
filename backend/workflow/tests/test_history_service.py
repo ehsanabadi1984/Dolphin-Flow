@@ -1808,3 +1808,89 @@ class HistoryServiceTests(TestCase):
             first_execution.data["history"]["fields"][0]["value"],
             second_history["fields"][0]["value"],
         )
+
+
+    def test_deleting_one_execution_removes_only_its_history_snapshot(self):
+        instance = self._instance(
+            data={"problem": "Current problem"},
+        )
+
+        first_execution = instance.step_executions.get(workflow_step=self.step)
+        first_execution.is_submitted = True
+        first_execution.data = {
+            "history": {
+                "version": 1,
+                "fields": [
+                    {
+                        "code": self.problem_field.code,
+                        "value": "First transition",
+                    }
+                ],
+                "repeatable_groups": [],
+            }
+        }
+        first_execution.save(update_fields=["is_submitted", "data"])
+
+        second_execution = WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step,
+            performed_by=self.user,
+            is_submitted=True,
+            data={
+                "history": {
+                    "version": 1,
+                    "fields": [
+                        {
+                            "code": self.problem_field.code,
+                            "value": "Second transition",
+                        }
+                    ],
+                    "repeatable_groups": [],
+                }
+            },
+        )
+
+        first_execution.delete()
+
+        remaining = list(
+            WorkflowStepExecution.objects
+            .filter(instance=instance, is_submitted=True)
+            .order_by("pk")
+        )
+
+        self.assertEqual([execution.pk for execution in remaining], [second_execution.pk])
+        self.assertEqual(
+            remaining[0].data["history"]["fields"][0]["value"],
+            "Second transition",
+        )
+
+    def test_deleting_current_form_data_does_not_remove_transition_history(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.problem_field,
+            display_label="شرح مشکل",
+            display_order=1,
+        )
+
+        instance = self._instance(
+            data={"problem": "Historical problem"},
+        )
+        execution = instance.step_executions.get(workflow_step=self.step)
+        execution.is_submitted = True
+        execution.data = {
+            "history": HistoryService.build_snapshot(
+                instance=instance,
+                user=self.user,
+            )
+        }
+        execution.save(update_fields=["is_submitted", "data"])
+
+        FormData.objects.get(instance=instance).delete()
+
+        execution.refresh_from_db()
+
+        self.assertEqual(
+            execution.data["history"]["fields"][0]["value"],
+            "Historical problem",
+        )
