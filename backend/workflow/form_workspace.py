@@ -334,7 +334,16 @@ def form_workspace(request, workflow_id):
                 messages.error(request, "این گروه دارای داده یا وابستگی محافظت‌شده است و قابل حذف نیست."); return _redirect_designer(workflow, section=section, group=obj)
         elif action in {"move_group_up", "move_group_down"}:
             obj = get_object_or_404(FormRepeatableGroup, pk=request.POST.get("group_id"), section__form=form_definition)
-            moved = _move_within_queryset(obj, direction="up" if action.endswith("up") else "down", queryset=FormRepeatableGroup.objects.filter(section=obj.section))
+            sibling_queryset = FormRepeatableGroup.objects.filter(section=obj.section)
+            if obj.parent_group_id is None:
+                sibling_queryset = sibling_queryset.filter(parent_group__isnull=True)
+            else:
+                sibling_queryset = sibling_queryset.filter(parent_group_id=obj.parent_group_id)
+            moved = _move_within_queryset(
+                obj,
+                direction="up" if action.endswith("up") else "down",
+                queryset=sibling_queryset,
+            )
             if moved: messages.success(request, "ترتیب Repeatable تغییر کرد.")
             return _redirect_designer(workflow, section=obj.section, group=obj)
         elif action == "add_field":
