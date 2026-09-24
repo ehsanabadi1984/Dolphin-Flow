@@ -237,57 +237,74 @@ def _can_view_q(user):
 
 
 def _actionability_annotations(user):
-    """Return the complete database-side actionability annotations."""
+    """Return the DB-side annotations needed by dashboard authorization."""
+    transition_user_allow = WorkflowPermission.objects.filter(
+        transition_id=OuterRef("pk"),
+        action=WorkflowPermission.Action.TRANSITION,
+        effect=WorkflowPermission.Effect.ALLOW,
+        user=user,
+    )
+    transition_user_deny = WorkflowPermission.objects.filter(
+        transition_id=OuterRef("pk"),
+        action=WorkflowPermission.Action.TRANSITION,
+        effect=WorkflowPermission.Effect.DENY,
+        user=user,
+    )
+    transition_role_allow = WorkflowPermission.objects.filter(
+        transition_id=OuterRef("pk"),
+        action=WorkflowPermission.Action.TRANSITION,
+        effect=WorkflowPermission.Effect.ALLOW,
+        user__isnull=True,
+        role__in=WorkflowMembership.objects.filter(
+            workflow_id=OuterRef("workflow_id"),
+            user=user,
+            is_active=True,
+        ).values("role"),
+    )
+    transition_role_deny = WorkflowPermission.objects.filter(
+        transition_id=OuterRef("pk"),
+        action=WorkflowPermission.Action.TRANSITION,
+        effect=WorkflowPermission.Effect.DENY,
+        user__isnull=True,
+        role__in=WorkflowMembership.objects.filter(
+            workflow_id=OuterRef("workflow_id"),
+            user=user,
+            is_active=True,
+        ).values("role"),
+    )
+
+    granted_transition = (
+        WorkflowTransition.objects
+        .filter(
+            workflow_id=OuterRef("workflow_id"),
+            from_step_id=OuterRef("current_step_id"),
+            is_active=True,
+        )
+        .filter(
+            Q(
+                ~Exists(transition_user_deny),
+                Exists(transition_user_allow),
+            )
+            | Q(
+                ~Exists(transition_user_deny),
+                ~Exists(transition_user_allow),
+                ~Exists(transition_role_deny),
+                Exists(transition_role_allow),
+            )
+        )
+    )
+
     return {
+        **_view_annotations(user),
         **_execute_annotations(user),
-        "_df_transition_user_allow": Exists(
-            WorkflowPermission.objects.filter(
-                workflow_id=OuterRef("workflow_id"),
-                action=WorkflowPermission.Action.TRANSITION,
-                effect=WorkflowPermission.Effect.ALLOW,
-                user=user,
-                transition__is_active=True,
-                transition__from_step_id=OuterRef("current_step_id"),
-            )
-        ),
-        "_df_transition_user_deny": Exists(
-            WorkflowPermission.objects.filter(
-                workflow_id=OuterRef("workflow_id"),
-                action=WorkflowPermission.Action.TRANSITION,
-                effect=WorkflowPermission.Effect.DENY,
-                user=user,
-                transition__is_active=True,
-                transition__from_step_id=OuterRef("current_step_id"),
-            )
-        ),
-        "_df_transition_role_allow": Exists(
-            WorkflowPermission.objects.filter(
-                workflow_id=OuterRef("workflow_id"),
-                action=WorkflowPermission.Action.TRANSITION,
-                effect=WorkflowPermission.Effect.ALLOW,
-                user__isnull=True,
-                role__in=_roles_subquery(user),
-                transition__is_active=True,
-                transition__from_step_id=OuterRef("current_step_id"),
-            )
-        ),
-        "_df_transition_role_deny": Exists(
-            WorkflowPermission.objects.filter(
-                workflow_id=OuterRef("workflow_id"),
-                action=WorkflowPermission.Action.TRANSITION,
-                effect=WorkflowPermission.Effect.DENY,
-                user__isnull=True,
-                role__in=_roles_subquery(user),
-                transition__is_active=True,
-                transition__from_step_id=OuterRef("current_step_id"),
-            )
-        ),
+        "_df_member": _membership_exists(user),
+        "_df_transition_granted": Exists(granted_transition),
     }
 
 
 def _can_take_action_q(user):
-    """Return the database-side EXECUTE-or-TRANSITION predicate."""
-    return (
+    """Return the database-side VIEW-and-(EXECUTE-or-TRANSITION) predicate."""
+    execute_granted = (
         Q(
             _df_execute_user_deny=False,
             _df_execute_user_allow=True,
@@ -298,16 +315,11 @@ def _can_take_action_q(user):
             _df_execute_role_deny=False,
             _df_execute_role_allow=True,
         )
-        | Q(
-            _df_transition_user_deny=False,
-            _df_transition_user_allow=True,
-        )
-        | Q(
-            _df_transition_user_deny=False,
-            _df_transition_user_allow=False,
-            _df_transition_role_deny=False,
-            _df_transition_role_allow=True,
-        )
+    )
+    return (
+        Q(_df_member=True)
+        & _can_view_q(user)
+        & (execute_granted | Q(_df_transition_granted=True))
     )
 
 
