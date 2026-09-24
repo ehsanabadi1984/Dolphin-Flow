@@ -261,10 +261,10 @@ def _preview_items(sections):
         items = []
         for field in section.top_level_fields:
             items.append({"kind": "field", "field": field})
-        for group in section.active_groups:
-            items.append({"kind": "group", "group": group})
+        for node in section.active_group_tree:
+            items.append({"kind": "group", "node": node})
         items.sort(key=lambda item: (
-            item["field"].order if item["kind"] == "field" else item["group"].order,
+            item["field"].order if item["kind"] == "field" else item["node"]["group"].order,
             0 if item["kind"] == "field" else 1,
         ))
         preview.append((section, items))
