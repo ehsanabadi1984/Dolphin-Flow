@@ -279,12 +279,36 @@ class DashboardService:
         )
 
     def _my_active_queryset(self):
+        meaningful = (
+            Q(
+                Exists(
+                    FormData.objects.filter(
+                        instance_id=OuterRef("pk"),
+                    )
+                )
+            )
+            | Q(
+                Exists(
+                    InstanceDevice.objects.filter(
+                        instance_id=OuterRef("pk"),
+                    )
+                )
+            )
+            | Q(
+                Exists(
+                    WorkflowTransitionExecution.objects.filter(
+                        instance_id=OuterRef("pk"),
+                    )
+                )
+            )
+        )
         return (
             WorkflowInstance.objects
             .filter(
                 started_by=self.user,
                 status=WorkflowInstance.Status.ACTIVE,
             )
+            .filter(meaningful)
             .select_related("workflow", "current_step")
         )
 
@@ -435,12 +459,29 @@ class DashboardService:
     def _build_sla_summary(self, *, now):
         warning = 0
         breached = 0
-        executions = WorkflowStepExecution.objects.filter(
-            instance__in=self._accessible_active_queryset(),
-            is_submitted=False,
-            sla_due_at__isnull=False,
-        ).only("sla_due_at", "sla_warning_at", "sla_breached_at")
+        executions = (
+            WorkflowStepExecution.objects
+            .filter(
+                instance__in=self._accessible_active_queryset(),
+                is_submitted=False,
+                sla_due_at__isnull=False,
+                sla_completed_at__isnull=True,
+            )
+            .order_by("instance_id", "-performed_at")
+            .only(
+                "instance_id",
+                "performed_at",
+                "sla_due_at",
+                "sla_warning_at",
+                "sla_breached_at",
+                "sla_completed_at",
+            )
+        )
+        current = {}
         for execution in executions:
+            current.setdefault(execution.instance_id, execution)
+
+        for execution in current.values():
             if execution.sla_breached_at is not None or now >= execution.sla_due_at:
                 breached += 1
             elif execution.sla_warning_at is not None and now >= execution.sla_warning_at:
