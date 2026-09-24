@@ -185,15 +185,23 @@ class HistoryBrowserService:
         history = []
         form_cache = {}
         permission_cache = {}
+        authorization_cache = {}
 
         for execution in cls._base_queryset(
             instance_id=instance_id,
             device_id=device_id,
         ):
-            if not cls._is_authorized(
-                execution=execution,
-                user=user,
-            ):
+            authorization_key = (
+                execution.instance.workflow_id,
+                execution.workflow_step_id,
+                getattr(user, "pk", None),
+            )
+            if authorization_key not in authorization_cache:
+                authorization_cache[authorization_key] = cls._is_authorized(
+                    execution=execution,
+                    user=user,
+                )
+            if not authorization_cache[authorization_key]:
                 continue
 
             snapshot = execution.data.get("history") if execution.data else None
