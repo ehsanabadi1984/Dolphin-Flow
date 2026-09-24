@@ -984,7 +984,14 @@ class DynamicFormService:
 
             return cells
 
-        def emit(item, context, path, ancestor_cells, ancestor_visibility):
+        def emit(
+            item,
+            context,
+            path,
+            ancestor_cells,
+            ancestor_visibility,
+            on_leaf=None,
+        ):
             own_cells = field_cells(item, context, path)
             child_contexts = list(item["child_groups"])
             populated_children = [
@@ -1036,9 +1043,20 @@ class DynamicFormService:
                     "delete_group_code": context["group"].code,
                     "delete_group_name": context["group"].name,
                 })
+
+                if on_leaf is not None:
+                    on_leaf()
+
                 return
 
             first_leaf = True
+            first_row_index = None
+
+            def mark_leaf_emitted():
+                nonlocal first_leaf
+                first_leaf = False
+                if on_leaf is not None:
+                    on_leaf()
 
             for child in populated_children:
                 for child_index, child_item in enumerate(child["items"]):
@@ -1052,10 +1070,14 @@ class DynamicFormService:
                         ],
                         ancestor_cells + [own_cells],
                         ancestor_visibility + [first_leaf],
+                        on_leaf=mark_leaf_emitted,
                     )
 
-                    if before < len(rows) and first_leaf:
-                        rows[-1]["add_children"] = [
+                    if before < len(rows) and first_row_index is None:
+                        first_row_index = before
+
+                    if before < len(rows) and first_row_index == before:
+                        rows[before]["add_children"] = [
                             {
                                 "group_code": child["group"].code,
                                 "group_name": child["group"].name,
@@ -1064,9 +1086,6 @@ class DynamicFormService:
                             }
                             for child in child_contexts
                         ]
-
-                    if before < len(rows):
-                        first_leaf = False
 
         for root_index, item in enumerate(group_context["items"]):
             emit(
