@@ -221,6 +221,22 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
         self.assertTrue(bound.is_valid(), bound.errors)
         self.assertIsNone(bound.cleaned_data["parent_group"])
 
+    def test_workspace_add_group_form_uses_selected_group_as_parent(self):
+        request = RequestFactory().get(
+            "/admin/",
+            {"section": self.section.pk, "group": self.root.pk},
+        )
+
+        with patch("workflow.form_workspace.render") as render:
+            render.return_value = object()
+            form_workspace(request, self.workflow.pk)
+
+        context = render.call_args.args[2]
+        self.assertEqual(
+            context["group_form"].initial["parent_group"],
+            self.root,
+        )
+
     def test_workspace_edit_excludes_self_and_all_descendants(self):
         form = FormRepeatableGroupWorkspaceForm(
             instance=self.root,
