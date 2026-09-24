@@ -589,7 +589,7 @@ class FormulaPersistenceTestCase(TestCase):
     def test_clearing_all_rows_sets_empty_group_and_zero_aggregate(self):
         instance = self.save_rows([
             {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
-        ])
+        ], note="history-source-test")
         self.save_draft(
             instance=instance,
             user=self.user,
