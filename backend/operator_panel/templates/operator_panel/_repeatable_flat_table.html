@@ -170,6 +170,20 @@
       name="{{ group.group.code }}_TEMPLATE__id"
       value=""
     />
+    {% for child_group in group.group.child_groups.all %}
+      {% if child_group.is_active %}
+        {% if child_group.display_type == "TABLE" %}
+          <button
+            type="button"
+            class="df-button df-button-secondary df-repeatable-child-add"
+            data-group-code="{{ child_group.code }}"
+            data-parent-row-id=""
+          >
+            + افزودن {{ child_group.name }}
+          </button>
+        {% endif %}
+      {% endif %}
+    {% endfor %}
   </td>
 </tr>
 
