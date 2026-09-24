@@ -160,7 +160,7 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
 
         self.assertIn('data-repeatable-template', rendered)
         self.assertIn(
-            'name="PARENT_0_CHILD_TEMPLATE_child_field"',
+            'name="PARENT_0_CHILD_TEMPLATE_CHILD_field"',
             rendered,
         )
 
@@ -181,7 +181,7 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
 
         self.assertIn('data-repeatable-template', rendered)
         self.assertIn(
-            'name="PARENT_0_CHILD_TEMPLATE_child_field"',
+            'name="PARENT_0_CHILD_TEMPLATE_CHILD_field"',
             rendered,
         )
 
