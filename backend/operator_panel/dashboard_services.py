@@ -1,4 +1,4 @@
-from django.db.models import Exists, OuterRef, Q, Subquery
+from django.db.models import Exists, OuterRef, Prefetch, Q, Subquery
 from django.utils import timezone
 
 from workflow.authorization import WorkflowAuthorizationService
@@ -236,16 +236,78 @@ def _can_view_q(user):
     ) & workflow_scope
 
 
+def _actionability_annotations(user):
+    """Return the complete database-side actionability annotations."""
+    return {
+        **_execute_annotations(user),
+        "_df_transition_user_allow": Exists(
+            WorkflowPermission.objects.filter(
+                workflow_id=OuterRef("workflow_id"),
+                action=WorkflowPermission.Action.TRANSITION,
+                effect=WorkflowPermission.Effect.ALLOW,
+                user=user,
+                transition__is_active=True,
+                transition__from_step_id=OuterRef("current_step_id"),
+            )
+        ),
+        "_df_transition_user_deny": Exists(
+            WorkflowPermission.objects.filter(
+                workflow_id=OuterRef("workflow_id"),
+                action=WorkflowPermission.Action.TRANSITION,
+                effect=WorkflowPermission.Effect.DENY,
+                user=user,
+                transition__is_active=True,
+                transition__from_step_id=OuterRef("current_step_id"),
+            )
+        ),
+        "_df_transition_role_allow": Exists(
+            WorkflowPermission.objects.filter(
+                workflow_id=OuterRef("workflow_id"),
+                action=WorkflowPermission.Action.TRANSITION,
+                effect=WorkflowPermission.Effect.ALLOW,
+                user__isnull=True,
+                role__in=_roles_subquery(user),
+                transition__is_active=True,
+                transition__from_step_id=OuterRef("current_step_id"),
+            )
+        ),
+        "_df_transition_role_deny": Exists(
+            WorkflowPermission.objects.filter(
+                workflow_id=OuterRef("workflow_id"),
+                action=WorkflowPermission.Action.TRANSITION,
+                effect=WorkflowPermission.Effect.DENY,
+                user__isnull=True,
+                role__in=_roles_subquery(user),
+                transition__is_active=True,
+                transition__from_step_id=OuterRef("current_step_id"),
+            )
+        ),
+    }
+
+
 def _can_take_action_q(user):
-    """Return the database-side EXECUTE permission predicate."""
-    return Q(
-        _df_execute_user_deny=False,
-        _df_execute_user_allow=True,
-    ) | Q(
-        _df_execute_user_deny=False,
-        _df_execute_user_allow=False,
-        _df_execute_role_deny=False,
-        _df_execute_role_allow=True,
+    """Return the database-side EXECUTE-or-TRANSITION predicate."""
+    return (
+        Q(
+            _df_execute_user_deny=False,
+            _df_execute_user_allow=True,
+        )
+        | Q(
+            _df_execute_user_deny=False,
+            _df_execute_user_allow=False,
+            _df_execute_role_deny=False,
+            _df_execute_role_allow=True,
+        )
+        | Q(
+            _df_transition_user_deny=False,
+            _df_transition_user_allow=True,
+        )
+        | Q(
+            _df_transition_user_deny=False,
+            _df_transition_user_allow=False,
+            _df_transition_role_deny=False,
+            _df_transition_role_allow=True,
+        )
     )
 
 
@@ -263,7 +325,7 @@ class DashboardService:
         """
         annotations = {
             **_view_annotations(self.user),
-            **_execute_annotations(self.user),
+            **_actionability_annotations(self.user),
         }
         return (
             WorkflowInstance.objects
@@ -303,18 +365,33 @@ class DashboardService:
             )
         )
         return (
-            WorkflowInstance.objects
-            .filter(
-                started_by=self.user,
-                status=WorkflowInstance.Status.ACTIVE,
-            )
+            self._accessible_active_queryset()
+            .filter(started_by=self.user)
             .filter(meaningful)
             .select_related("workflow", "current_step")
+            .prefetch_related(
+                Prefetch(
+                    "workflow__steps",
+                    queryset=WorkflowStep.objects.filter(is_active=True).order_by("order"),
+                    to_attr="dashboard_steps",
+                )
+            )
         )
 
     def my_processes_queryset(self):
-        return WorkflowInstance.objects.filter(started_by=self.user).select_related(
-            "workflow", "current_step"
+        annotations = _view_annotations(self.user)
+        return (
+            WorkflowInstance.objects
+            .filter(
+                started_by=self.user,
+                workflow__is_active=True,
+                workflow__memberships__user=self.user,
+                workflow__memberships__is_active=True,
+            )
+            .annotate(**annotations)
+            .filter(_can_view_q(self.user))
+            .select_related("workflow", "current_step")
+            .distinct()
         )
 
     def get_sidebar_counts(self):
@@ -488,10 +565,31 @@ class DashboardService:
                 warning += 1
         return {"warning": warning, "breached": breached}
 
-    def build_tracker(self, instance, *, submitted_step_ids, transitioned_from_ids):
-        steps = list(
-            instance.workflow.steps.filter(is_active=True).order_by("order")
-        )
+    def build_tracker(
+        self,
+        instance,
+        *,
+        submitted_step_ids=None,
+        transitioned_from_ids=None,
+    ):
+        if submitted_step_ids is None:
+            submitted_step_ids = set(
+                WorkflowStepExecution.objects
+                .filter(instance_id=instance.pk, is_submitted=True)
+                .values_list("instance_id", "workflow_step_id")
+            )
+        if transitioned_from_ids is None:
+            transitioned_from_ids = set(
+                WorkflowTransitionExecution.objects
+                .filter(instance_id=instance.pk)
+                .values_list("instance_id", "transition__from_step_id")
+            )
+
+        steps = getattr(instance.workflow, "dashboard_steps", None)
+        if steps is None:
+            steps = list(
+                instance.workflow.steps.filter(is_active=True).order_by("order")
+            )
         completed_ids = {
             step_id
             for instance_id, step_id in submitted_step_ids
