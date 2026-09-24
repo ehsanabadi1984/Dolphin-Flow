@@ -451,6 +451,101 @@ class RepeatableFilePersistenceTests(TestCase):
         )
 
 
+    def test_new_grandchild_repeatable_row_uses_grandchild_row_pk_for_file(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items_file_grandchild",
+            order=2,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Grandchild Items",
+            code="grandchild_items_file",
+            order=3,
+        )
+        grandchild_file_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Grandchild Attachment",
+            code="grandchild_attachment",
+            label="Grandchild Attachment",
+            field_type=FormField.FieldType.FILE,
+            is_required=False,
+        )
+        for group in (child_group, grandchild_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+        FieldAccess.objects.create(
+            field=grandchild_file_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        result = self._save(
+            submitted_data={
+                "items_file": [
+                    {
+                        "child_items_file_grandchild": [
+                            {
+                                "grandchild_items_file": [
+                                    {},
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+
+        parent_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=self.group,
+            parent_row__isnull=True,
+        )
+        child_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+        )
+        grandchild_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=grandchild_group,
+            parent_row=child_row,
+        )
+
+        save_uploaded_form_files(
+            instance=self.instance,
+            user=self.user,
+            submitted_files={
+                (
+                    "items_file_0_child_items_file_grandchild_0_"
+                    "grandchild_items_file_0_grandchild_attachment"
+                ): self._upload("grandchild.txt"),
+            },
+            save_result=result,
+        )
+
+        form_file = FormFile.objects.get(
+            form_data=self.form_data,
+            field=grandchild_file_field,
+        )
+        self.assertEqual(form_file.row_id, str(grandchild_row.pk))
+        self.assertNotEqual(form_file.row_id, str(child_row.pk))
+        self.assertNotEqual(form_file.row_id, str(parent_row.pk))
+
+
 class NestedRepeatableFileValidationTests(RepeatableFilePersistenceTests):
     def _create_nested_required_file_field(self):
         child_group = FormRepeatableGroup.objects.create(
