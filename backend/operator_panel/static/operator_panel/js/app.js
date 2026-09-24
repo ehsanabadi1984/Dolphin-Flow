@@ -842,7 +842,7 @@ const submitNewDevice = (modal, groupCode) => {
     deleteButton.className =
         "df-button df-button-danger df-device-delete";
 
-    deleteButton.textContent = "حذف";
+    deleteButton.textContent = "حذف دستگاه";
 
     actionsCell.appendChild(
         deleteButton
@@ -2297,7 +2297,7 @@ document.addEventListener("click", (event) => {
 
         if (
             window.confirm(
-                "آیا از حذف این ردیف مطمئن هستید؟"
+                `آیا از حذف این ${repeatableDeleteBtn.dataset.deleteLabel || "ردیف"} مطمئن هستید؟`
             )
         ) {
             row.remove();
