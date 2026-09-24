@@ -2342,6 +2342,9 @@ function updateRepeatableDeleteState(container) {
     /* DEVICE groups must remain completely unaffected. */
     if (group.classList.contains("df-device-group")) return;
 
+    /* Flat TABLE rows have parent-scoped delete semantics. */
+    if (group.classList.contains("df-table-group")) return;
+
     const rows = getDirectRepeatableItems(container);
 
     const buttons = getDirectRepeatableItems(container).flatMap(
