@@ -2461,6 +2461,74 @@ document.addEventListener("click", (event) => {
     );
 
     if (repeatableDeleteBtn) {
+        const flatTable = repeatableDeleteBtn.closest(".df-table-group");
+        const flatRow = repeatableDeleteBtn.closest("[data-repeatable-item]");
+
+        if (flatTable && flatRow) {
+            if (!isEditMode()) return;
+
+            const container = flatTable.querySelector(".df-repeatable-items");
+            const rootGroupCode = flatTable.dataset.repeatableGroup;
+            const rowGroupCode = flatRow.dataset.repeatableRowGroup;
+            const label =
+                repeatableDeleteBtn.dataset.deleteLabel || "ردیف";
+
+            if (!container) return;
+
+            if (!window.confirm(`آیا از حذف این ${label} مطمئن هستید؟`)) {
+                return;
+            }
+
+            if (rowGroupCode === rootGroupCode) {
+                const removedIds = new Set([flatRow.dataset.rowId]);
+                let changed = true;
+
+                while (changed) {
+                    changed = false;
+                    Array.from(
+                        container.querySelectorAll("[data-repeatable-item]")
+                    ).forEach((candidate) => {
+                        if (
+                            candidate.dataset.parentRowId &&
+                            removedIds.has(candidate.dataset.parentRowId) &&
+                            !removedIds.has(candidate.dataset.rowId)
+                        ) {
+                            removedIds.add(candidate.dataset.rowId);
+                            changed = true;
+                        }
+                    });
+                }
+
+                Array.from(
+                    container.querySelectorAll("[data-repeatable-item]")
+                )
+                    .filter((candidate) =>
+                        removedIds.has(candidate.dataset.rowId)
+                    )
+                    .forEach((candidate) => candidate.remove());
+
+                reindexFlatTableRootRows(
+                    container,
+                    rootGroupCode
+                );
+            } else {
+                const parentRowId = flatRow.dataset.parentRowId;
+                const rootIndex = flatRow.dataset.rootIndex;
+
+                flatRow.remove();
+
+                reindexFlatTableChildRows(
+                    container,
+                    rootGroupCode,
+                    rowGroupCode,
+                    parentRowId,
+                    rootIndex
+                );
+            }
+
+            return;
+        }
+
         /* Do not allow deleting the last row. */
         if (repeatableDeleteBtn.disabled) return;
 
