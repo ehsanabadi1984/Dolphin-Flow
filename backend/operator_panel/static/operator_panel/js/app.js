@@ -167,6 +167,9 @@ function reindexFlatTableChildRows(
         );
 
     childRows.forEach((row, childIndex) => {
+        row.dataset.rowPath =
+            `${parentPath}_${childGroupCode}_${childIndex}`;
+
         row.querySelectorAll("input, textarea, select").forEach((field) => {
             const name = field.getAttribute("name");
             if (!name) return;
