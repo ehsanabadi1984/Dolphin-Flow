@@ -591,6 +591,7 @@ def delete_form_file(request, file_id):
 
 
 @login_required
+@transaction.atomic
 def workflow_instance_with_files(request, instance_id):
     from operator_panel import views
 
