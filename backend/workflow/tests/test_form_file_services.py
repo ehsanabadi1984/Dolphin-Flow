@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
@@ -448,6 +449,93 @@ class RepeatableFilePersistenceTests(TestCase):
                 str(child_rows[1].pk): "parent-1-child.txt",
             },
         )
+
+
+class NestedRepeatableFileValidationTests(RepeatableFilePersistenceTests):
+    def _create_nested_required_file_field(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items_file_validation",
+            order=2,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Grandchild Items",
+            code="grandchild_items_file_validation",
+            order=3,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Grandchild Attachment",
+            code="grandchild_attachment",
+            label="Grandchild Attachment",
+            field_type=FormField.FieldType.FILE,
+            is_required=True,
+        )
+        for group in (child_group, grandchild_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+        return child_group, grandchild_group, field
+
+    def _nested_submitted_data(self):
+        return {
+            "items_file_0__id": "",
+            "items_file_0_child_items_file_validation_0__id": "",
+            "items_file_0_child_items_file_validation_0_grandchild_items_file_validation_0__id": "",
+        }
+
+    def test_nested_required_file_accepts_canonical_upload_path(self):
+        _, grandchild_group, field = self._create_nested_required_file_field()
+
+        form_file_services.validate_uploaded_files(
+            instance=self.instance,
+            user=self.user,
+            submitted_data=self._nested_submitted_data(),
+            submitted_files={
+                (
+                    "items_file_0_child_items_file_validation_0_"
+                    "grandchild_items_file_validation_0_grandchild_attachment"
+                ): self._upload("nested-validation.txt"),
+            },
+        )
+
+        self.assertEqual(grandchild_group.parent_group_id, self.group.pk)
+        self.assertEqual(field.repeatable_group_id, grandchild_group.pk)
+
+    def test_nested_required_file_reports_missing_canonical_upload(self):
+        _, grandchild_group, field = self._create_nested_required_file_field()
+
+        with self.assertRaises(ValidationError) as raised:
+            form_file_services.validate_uploaded_files(
+                instance=self.instance,
+                user=self.user,
+                submitted_data=self._nested_submitted_data(),
+                submitted_files={},
+            )
+
+        errors = raised.exception.validation_errors
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["group_code"], grandchild_group.code)
+        self.assertEqual(errors[0]["field_code"], field.code)
+        self.assertEqual(errors[0]["item_index"], 0)
 
 
 class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
