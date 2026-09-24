@@ -4,6 +4,7 @@ from django.test import RequestFactory, TestCase
 from workflow.admin import (
     FormRepeatableGroupAdmin,
     FormRepeatableGroupInline,
+    FormSectionAdmin,
     dolphin_admin_site,
 )
 from workflow.form_workspace import FormRepeatableGroupWorkspaceForm
@@ -166,7 +167,7 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
 
     def test_repeatable_group_inline_scopes_parent_group_per_row(self):
         inline = FormRepeatableGroupInline(
-            FormRepeatableGroup,
+            FormSection,
             dolphin_admin_site,
         )
         request = RequestFactory().get("/admin/")
