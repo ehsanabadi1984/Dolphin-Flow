@@ -800,6 +800,124 @@ class DynamicFormService:
         }
 
     @staticmethod
+    def _build_flat_table_context(group_context):
+        """
+        Derive flat TABLE rows/columns from the canonical repeatable tree.
+        This changes presentation only; the RepeatableRow hierarchy remains
+        the source of truth.
+        """
+        columns = []
+
+        def collect_columns(context):
+            for field_context in context["fields"]:
+                columns.append({
+                    "group_code": context["group"].code,
+                    "group_name": context["group"].name,
+                    "field": field_context["field"],
+                })
+            for item in context["items"]:
+                for child in item["child_groups"]:
+                    collect_columns(child)
+
+        collect_columns(group_context)
+
+        rows = []
+
+        def field_cells(item, context):
+            cells = []
+            values = {
+                value["field"].code: value
+                for value in item["fields"]
+            }
+            for field_context in context["fields"]:
+                value = values.get(field_context["field"].code, {})
+                cells.append({
+                    "group_code": context["group"].code,
+                    "field": field_context["field"],
+                    "value": value.get("value", ""),
+                    "display_value": value.get("display_value", ""),
+                    "can_edit": field_context["can_edit"],
+                })
+            return cells
+
+        def emit(item, context, ancestor_cells, ancestor_visible):
+            own_cells = field_cells(item, context)
+            child_contexts = [
+                child for child in item["child_groups"]
+                if child.get("items")
+            ]
+
+            if not child_contexts:
+                rows.append({
+                    "row_id": item["row_id"],
+                    "row_group_code": context["group"].code,
+                    "parent_row_id": item["parent_row_id"],
+                    "cells": ancestor_cells + [
+                        dict(cell, show=True)
+                        for cell in own_cells
+                    ],
+                    "add_children": [],
+                    "can_delete": context["permissions"]["can_delete"],
+                    "delete_group_code": context["group"].code,
+                    "delete_group_name": context["group"].name,
+                })
+                return
+
+            first_leaf = True
+            for child in child_contexts:
+                for child_item in child["items"]:
+                    visible_own = ancestor_visible and first_leaf
+                    before = len(rows)
+                    emit(
+                        child_item,
+                        child,
+                        ancestor_cells + [
+                            dict(cell, show=visible_own)
+                            for cell in own_cells
+                        ],
+                        visible_own,
+                    )
+                    if before < len(rows) and first_leaf:
+                        rows[-1]["add_children"] = [
+                            {
+                                "group_code": child["group"].code,
+                                "group_name": child["group"].name,
+                                "can_add": child["permissions"]["can_add"],
+                                "parent_row_id": item["row_id"],
+                            }
+                            for child in child_contexts
+                        ]
+                    first_leaf = False
+
+        for item in group_context["items"]:
+            emit(item, group_context, [], True)
+
+        for row in rows:
+            row["column_cells"] = [
+                next(
+                    (
+                        cell for cell in row["cells"]
+                        if cell["group_code"] == column["group_code"]
+                        and cell["field"].code == column["field"].code
+                    ),
+                    {
+                        "group_code": column["group_code"],
+                        "field": column["field"],
+                        "value": "",
+                        "display_value": "",
+                        "can_edit": False,
+                        "show": False,
+                    },
+                )
+                for column in columns
+            ]
+
+        return {
+            "columns": columns,
+            "rows": rows,
+        }
+
+    @staticmethod
     def get_form_for_step(
         *,
         instance,
