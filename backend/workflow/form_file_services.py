@@ -710,23 +710,28 @@ def workflow_instance_with_files(request, instance_id):
     )
 
     request._post = submitted_data
-    result = views.workflow_instance(
-        request,
-        instance_id,
-        _return_save_result=True,
-    )
-    if isinstance(result, tuple):
-        response, save_result = result
-    else:
-        response, save_result = result, None
-    if 300 <= response.status_code < 400:
-        save_uploaded_form_files(
-            instance=instance,
-            user=request.user,
-            submitted_files=request.FILES,
-            save_result=save_result,
+    storage_files = []
+    try:
+        result = views.workflow_instance(
+            request,
+            instance_id,
+            _return_save_result=True,
         )
-    return response
+        if isinstance(result, tuple):
+            response, save_result = result
+        else:
+            response, save_result = result, None
+        if 300 <= response.status_code < 400:
+            storage_files = save_uploaded_form_files(
+                instance=instance,
+                user=request.user,
+                submitted_files=request.FILES,
+                save_result=save_result,
+            )
+        return response
+    except Exception:
+        _cleanup_storage_files(storage_files)
+        raise
 
 
 @login_required
