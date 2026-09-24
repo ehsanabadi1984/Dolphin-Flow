@@ -1,7 +1,8 @@
 from types import SimpleNamespace
 
+from django.test import RequestFactory, SimpleTestCase
 from django.template.loader import get_template
-from django.test import SimpleTestCase
+from django.contrib.auth.models import AnonymousUser
 
 
 class HistoryTemplateTests(SimpleTestCase):
@@ -27,7 +28,11 @@ class HistoryTemplateTests(SimpleTestCase):
 
     def _render(self, snapshot):
         template = get_template(self.template_name)
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+        request.resolver_match = SimpleNamespace(url_name="history", app_name="operator_panel")
         return template.render({
+            "request": request,
             "history_title": "سوابق",
             "history_subtitle": "Workflow",
             "history": [
