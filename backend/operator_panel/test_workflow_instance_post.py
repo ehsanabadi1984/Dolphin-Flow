@@ -1,4 +1,7 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
@@ -228,6 +231,49 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         )
 
     
+    def test_workflow_file_save_failure_rolls_back_draft_transaction(self):
+        file_field = FormField.objects.create(
+            section=self.section,
+            name="Attachment",
+            code="attachment",
+            label="Attachment",
+            field_type=FormField.FieldType.FILE,
+            order=3,
+        )
+        FieldAccess.objects.create(
+            field=file_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        self.client.raise_request_exception = False
+
+        with patch(
+            "workflow.form_file_services.save_uploaded_form_files",
+            side_effect=RuntimeError("forced file persistence failure"),
+        ):
+            response = self.client.post(
+                reverse(
+                    "operator_panel:workflow_instance",
+                    args=[self.instance.pk],
+                ),
+                {
+                    "customer_name": "Draft that must roll back",
+                    "attachment": SimpleUploadedFile(
+                        "rollback.txt",
+                        b"rollback-content",
+                        content_type="text/plain",
+                    ),
+                },
+            )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertFalse(
+            FormData.objects.filter(instance=self.instance).exists()
+        )
+
     def test_workflow_instance_post_validation_error_does_not_persist_invalid_value_and_preserves_posted_value(self):
         response = self.client.post(
             reverse(
