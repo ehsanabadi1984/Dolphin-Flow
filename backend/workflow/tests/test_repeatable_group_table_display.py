@@ -484,10 +484,17 @@ class TableModeRenderTests(TestCase):
                 row_order=0,
             ),
         ]
+        parent_choice = LookupItem.objects.create(
+            lookup_list=self.lookup_list,
+            value="parent",
+            label="Parent",
+            order=3,
+            is_active=True,
+        )
         RepeatableRowValue.objects.create(
             row=parent_row,
             field=self.part_field,
-            text_value="parent",
+            lookup_item=parent_choice,
         )
         RepeatableRowValue.objects.create(
             row=child_one,
