@@ -15,6 +15,7 @@ from django.core.exceptions import PermissionDenied
 
 import json
 
+from .form_workspace import get_valid_parent_group_queryset
 from .models import (
     Workflow,
     WorkflowMembership,
@@ -2016,8 +2017,20 @@ class FormFieldInline(admin.TabularInline):
             )
         )
 
+class FormRepeatableGroupInlineFormSet(forms.BaseInlineFormSet):
+
+    def _construct_form(self, i, **kwargs):
+        form = super()._construct_form(i, **kwargs)
+        form.fields["parent_group"].queryset = get_valid_parent_group_queryset(
+            self.instance,
+            form.instance,
+        )
+        return form
+
+
 class FormRepeatableGroupInline(admin.TabularInline):
     model = FormRepeatableGroup
+    formset = FormRepeatableGroupInlineFormSet
     extra = 0
     fields = (
         "name",
@@ -2025,6 +2038,7 @@ class FormRepeatableGroupInline(admin.TabularInline):
         "group_type",
         "display_type",
         "description",
+        "parent_group",
         "order",
         "is_required",
         "is_active",
@@ -2552,6 +2566,14 @@ class FormRepeatableGroupAdmin(admin.ModelAdmin):
                 .order_by(
                     "form__name",
                     "order",
+                )
+            )
+
+        if obj and "parent_group" in form.base_fields:
+            form.base_fields["parent_group"].queryset = (
+                get_valid_parent_group_queryset(
+                    obj.section,
+                    obj,
                 )
             )
 
