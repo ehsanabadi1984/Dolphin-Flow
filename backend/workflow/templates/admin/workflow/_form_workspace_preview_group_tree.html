@@ -1,0 +1,18 @@
+<div class="df-fw-preview-group-tree">
+<div class="df-fw-preview-group">
+  <a class="df-fw-preview-group-link" href="?section={{ section.pk }}&group={{ node.group.pk }}">
+    <strong>↻ {{ node.group.name }}</strong>
+    <span class="df-fw-pill">{{ node.group.get_display_type_display }}</span>
+  </a>
+  <div class="df-fw-group-fields">
+    {% for field in node.group.fields.all %}
+      {% if field.is_active %}
+        <a class="{% if selected_field.pk == field.pk %}selected{% endif %}" href="?section={{ section.pk }}&group={{ node.group.pk }}&field={{ field.pk }}">{{ field.label }} · {{ field.get_field_type_display }}</a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% for child in node.children %}
+  {% include "admin/workflow/_form_workspace_preview_group_tree.html" with node=child section=section selected_field=selected_field %}
+{% endfor %}
+</div>
