@@ -312,7 +312,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             reverse(
                 "operator_panel:workflow_instance",
                 args=[self.instance.pk],
-            ),
+            ) + "?edit=1",
             {
                 "devices_0_label": "Updated device",
                 "devices_0_instance_device_id": str(instance_device.pk),
@@ -620,7 +620,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             reverse(
                 "operator_panel:workflow_instance",
                 args=[self.instance.pk],
-            ),
+            ) + "?edit=1",
             {
                 "devices_0_label": "Protected device",
                 "devices_0_instance_device_id": str(instance_device.pk),
@@ -709,7 +709,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         )
 
         response = self.client.post(
-            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]) + "?edit=1",
             {
                 "system_devices_0_system_imei": "333333333333333",
                 "system_devices_0_system_type": str(device_type.pk),
@@ -878,7 +878,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         )
 
         response = self.client.post(
-            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]) + "?edit=1",
             {
                 "system_devices_0_system_imei": "666666666666666",
                 "system_devices_0_system_type": str(device_type.pk),
