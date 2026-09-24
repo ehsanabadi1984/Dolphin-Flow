@@ -47,6 +47,7 @@ class RepeatableRowReadService:
             )
             .select_related(
                 "group",
+                "group__fields",
                 "instance_device",
                 "instance_device__device",
                 "instance_device__device__device_model",
