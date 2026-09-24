@@ -672,6 +672,17 @@ class RepeatableFilePersistenceTests(TestCase):
             field_type=FormField.FieldType.TEXT,
             order=0,
         )
+        name_field = FormField.objects.get(
+            repeatable_group=self.group,
+            code="name",
+        )
+        FieldAccess.objects.create(
+            field=name_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
         row = RepeatableRow.objects.create(
             instance=self.instance,
             group=self.group,
