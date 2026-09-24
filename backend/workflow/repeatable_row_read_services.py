@@ -101,9 +101,10 @@ class RepeatableRowReadService:
 
         fields = []
 
-        for field in row.group.fields.filter(
-            is_active=True,
-        ).order_by("order", "id"):
+        for field in sorted(
+            (field for field in row.group.fields.all() if field.is_active),
+            key=lambda field: (field.order, field.id),
+        ):
             if field.system_key != FormField.SystemKey.NONE:
                 value, display_value = (
                     RepeatableRowReadService._system_value(
@@ -224,9 +225,10 @@ class RepeatableRowReadService:
 
         fields = []
 
-        for field in row.group.fields.filter(
-            is_active=True,
-        ).order_by("order", "id"):
+        for field in sorted(
+            (field for field in row.group.fields.all() if field.is_active),
+            key=lambda field: (field.order, field.id),
+        ):
             if field.system_key != FormField.SystemKey.NONE:
                 value, display_value = (
                     RepeatableRowReadService._system_value(
