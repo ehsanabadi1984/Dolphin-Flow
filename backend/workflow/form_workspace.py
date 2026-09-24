@@ -400,12 +400,18 @@ def form_workspace(request, workflow_id):
         "selected_section": selected_section, "selected_group": selected_group, "selected_field": selected_field,
         "form_form": FormDefinitionWorkspaceForm(instance=form_definition),
         "section_form": FormSectionWorkspaceForm(form_definition=form_definition),
-        "group_form": FormRepeatableGroupWorkspaceForm(section=selected_section),
+        "group_form": FormRepeatableGroupWorkspaceForm(
+            section=selected_section,
+            parent_group=selected_group,
+        ),
         "field_form": FormFieldWorkspaceForm(form_definition=form_definition),
     }
     if selected_section:
         context["selected_section_form"] = FormSectionWorkspaceForm(instance=selected_section, form_definition=form_definition)
-        context["group_form"] = FormRepeatableGroupWorkspaceForm(section=selected_section)
+        context["group_form"] = FormRepeatableGroupWorkspaceForm(
+            section=selected_section,
+            parent_group=selected_group,
+        )
     if selected_group:
         context["selected_group_form"] = FormRepeatableGroupWorkspaceForm(instance=selected_group, section=selected_group.section)
     if selected_field:
