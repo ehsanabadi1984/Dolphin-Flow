@@ -51,7 +51,14 @@ class HistoryBrowserService:
         )
 
     @staticmethod
-    def _filter_snapshot_by_permissions(\n        *, snapshot, execution, user, form=None, permission_context=None\n    ):
+    def _filter_snapshot_by_permissions(
+        *,
+        snapshot,
+        execution,
+        user,
+        form=None,
+        permission_context=None,
+    ):
         if not isinstance(snapshot, dict):
             return None
 
