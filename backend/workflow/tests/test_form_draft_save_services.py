@@ -1455,3 +1455,109 @@ class FormDraftSaveServiceContractTests(TestCase):
             1,
         )
 
+
+
+    def test_adding_child_to_one_root_preserves_all_root_values(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Parents",
+            code="parents_child_regression",
+            order=10,
+        )
+        parent_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Address",
+            code="address_child_regression",
+            label="Address",
+            field_type=FormField.FieldType.TEXTAREA,
+            order=0,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="Children",
+            code="children_child_regression",
+            order=11,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Name",
+            code="child_name_regression",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        self.grant_repeatable_write_permissions(parent_group, parent_field)
+        self.grant_repeatable_write_permissions(child_group, child_field)
+
+        first_save = self.call(
+            submitted_data={
+                "parents_child_regression": [
+                    {
+                        "row_id": None,
+                        "address_child_regression": "آقایی",
+                    },
+                    {
+                        "row_id": None,
+                        "address_child_regression": "صمدی",
+                    },
+                ],
+            },
+        )
+        self.assertTrue(first_save.saved)
+
+        parent_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=parent_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(
+            [row.values.get(field=parent_field).text_value for row in parent_rows],
+            ["آقایی", "صمدی"],
+        )
+
+        second_save = self.call(
+            submitted_data={
+                "parents_child_regression": [
+                    {
+                        "row_id": parent_rows[0].pk,
+                        "address_child_regression": "آقایی",
+                    },
+                    {
+                        "row_id": parent_rows[1].pk,
+                        "address_child_regression": "صمدی",
+                        "children_child_regression": [
+                            {
+                                "row_id": None,
+                                "child_name_regression": "فرزند صمدی",
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(second_save.saved)
+
+        parent_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=parent_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(
+            [row.values.get(field=parent_field).text_value for row in parent_rows],
+            ["آقایی", "صمدی"],
+        )
+
+        child_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=child_group,
+        )
+        self.assertEqual(child_row.parent_row_id, parent_rows[1].pk)
+        self.assertEqual(
+            child_row.values.get(field=child_field).text_value,
+            "فرزند صمدی",
+        )
