@@ -85,14 +85,16 @@
           </button>
         {% endif %}
       {% endfor %}
-      <button
-        type="button"
-        class="df-button df-button-danger df-repeatable-delete"
-        data-delete-label="{{ child_template.group.label }}"
-        data-group-code="{{ child_template.group.code }}"
-      >
-        حذف {{ child_template.group.label }}
-      </button>
+      {% if edit_mode and not dynamic_form.is_submitted and child_template.can_delete %}
+        <button
+          type="button"
+          class="df-button df-button-danger df-repeatable-delete"
+          data-delete-label="{{ child_template.group.label }}"
+          data-group-code="{{ child_template.group.code }}"
+        >
+          حذف {{ child_template.group.label }}
+        </button>
+      {% endif %}
     </td>
   </tr>
 
