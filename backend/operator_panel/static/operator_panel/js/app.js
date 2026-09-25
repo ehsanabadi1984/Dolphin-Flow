@@ -2504,7 +2504,7 @@ document.addEventListener("click", (event) => {
             if (!isChildField && !isChildRowId) return;
 
             if (isChildRowId) {
-                field.name = `${childPrefix}__id`;
+                field.name = `${parentPath}_${childGroupCode}_${childIndex}__id`;
                 field.value = newRowId;
                 return;
             }
