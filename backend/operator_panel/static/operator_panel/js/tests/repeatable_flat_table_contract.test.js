@@ -385,7 +385,7 @@ test("flat TABLE child row identity is scoped to its parent row path", () => {
         /const childPrefix\s*=\s*\`\$\{parentPath\}_\$\{childGroupCode\}_\$\{childIndex\}_\`;/s,
     );
     assert.ok(
-        appJs.includes("field.name = \`${childPrefix}__id\`;"),
+        appJs.includes("field.name = `${parentPath}_${childGroupCode}_${childIndex}__id`;"),
     );
 });
 test("flat TABLE child clone scopes field mutation to child template fields", () => {
