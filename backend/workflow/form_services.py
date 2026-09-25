@@ -959,6 +959,44 @@ class DynamicFormService:
                     for nested in nested_item["child_groups"]:
                         append_context_columns(nested)
 
+        child_template_contexts = []
+
+        def build_child_template_context(child_group):
+            group_permission = permission_context.group(child_group)
+            if not group_permission.can_view:
+                return None
+
+            child_context = {
+                "group": child_group,
+                "can_add": (
+                    group_permission.can_add
+                    and not is_submitted
+                ),
+                "child_groups": [],
+            }
+
+            for nested_group in child_group.child_groups.filter(
+                is_active=True,
+            ).order_by("order", "id"):
+                nested_context = build_child_template_context(
+                    nested_group
+                )
+                if nested_context is not None:
+                    child_context["child_groups"].append(
+                        nested_context
+                    )
+
+            return child_context
+
+        for child_group in group_context["group"].child_groups.filter(
+            is_active=True,
+        ).order_by("order", "id"):
+            child_template_context = build_child_template_context(
+                child_group
+            )
+            if child_template_context is not None:
+                child_template_contexts.append(child_template_context)
+
         rows = []
 
         def field_cells(item, context, path):
@@ -1118,6 +1156,7 @@ class DynamicFormService:
         return {
             "columns": columns,
             "rows": rows,
+            "child_templates": child_template_contexts,
         }
 
     @staticmethod
