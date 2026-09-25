@@ -1311,8 +1311,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             "parts_create_0_child_parts_create_0__id": "child-create-0",
             "parts_create_0_child_parts_create_0_child_name": "Child 1",
         })
-        payload.appendlist("parts_create_0_address", "Tehran")
-        payload.appendlist("parts_create_0_address", "")
+        payload["parts_create_0_address"] = "Tehran"
 
         response = self.client.post(
             reverse(
