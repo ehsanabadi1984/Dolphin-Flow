@@ -502,6 +502,8 @@ test("adding a child row does not clone its nested grandchild rows", async () =>
 
 
 
+
+
 test("deletes a flat TABLE child row without affecting its parent or sibling rows", async () => {
     const dom = new JSDOM(
         `
@@ -518,64 +520,68 @@ test("deletes a flat TABLE child row without affecting its parent or sibling row
                 data-repeatable-group="owners"
             >
                 <div class="df-repeatable-items">
-                    <tr
-                        class="df-repeatable-item df-repeatable-flat-row"
-                        data-repeatable-item
-                        data-repeatable-row-group="owners"
-                        data-root-index="0"
-                        data-row-path="owners_0"
-                        data-row-id="root-1"
-                        data-parent-row-id=""
-                    >
-                        <td class="df-table-actions">
-                            <button
-                                type="button"
-                                class="df-button df-repeatable-child-add"
-                                data-group-code="phones"
+                    <table>
+                        <tbody>
+                            <tr
+                                class="df-repeatable-item df-repeatable-flat-row"
+                                data-repeatable-item
+                                data-repeatable-row-group="owners"
+                                data-root-index="0"
+                                data-row-path="owners_0"
+                                data-row-id="root-1"
+                                data-parent-row-id=""
+                            >
+                                <td class="df-table-actions">
+                                    <button
+                                        type="button"
+                                        class="df-button df-repeatable-child-add"
+                                        data-group-code="phones"
+                                        data-parent-row-id="root-1"
+                                    >+ افزودن</button>
+                                </td>
+                            </tr>
+
+                            <tr
+                                class="df-repeatable-item df-repeatable-flat-row df-repeatable-child-flat-row"
+                                data-repeatable-item
+                                data-repeatable-row-group="phones"
+                                data-root-index="0"
+                                data-row-path="owners_0_phones_0"
+                                data-row-id="child-1"
                                 data-parent-row-id="root-1"
-                            >+ افزودن</button>
-                        </td>
-                    </tr>
+                            >
+                                <td>keep</td>
+                                <td class="df-table-actions">
+                                    <button
+                                        type="button"
+                                        class="df-button df-repeatable-delete"
+                                        data-delete-label="شماره تماس"
+                                        data-group-code="phones"
+                                    >حذف</button>
+                                </td>
+                            </tr>
 
-                    <tr
-                        class="df-repeatable-item df-repeatable-flat-row df-repeatable-child-flat-row"
-                        data-repeatable-item
-                        data-repeatable-row-group="phones"
-                        data-root-index="0"
-                        data-row-path="owners_0_phones_0"
-                        data-row-id="child-1"
-                        data-parent-row-id="root-1"
-                    >
-                        <td>keep</td>
-                        <td class="df-table-actions">
-                            <button
-                                type="button"
-                                class="df-repeatable-delete"
-                                data-delete-label="شماره تماس"
-                                data-group-code="phones"
-                            >حذف</button>
-                        </td>
-                    </tr>
-
-                    <tr
-                        class="df-repeatable-item df-repeatable-flat-row df-repeatable-child-flat-row"
-                        data-repeatable-item
-                        data-repeatable-row-group="phones"
-                        data-root-index="0"
-                        data-row-path="owners_0_phones_1"
-                        data-row-id="child-2"
-                        data-parent-row-id="root-1"
-                    >
-                        <td>delete</td>
-                        <td class="df-table-actions">
-                            <button
-                                type="button"
-                                class="df-repeatable-delete"
-                                data-delete-label="شماره تماس"
-                                data-group-code="phones"
-                            >حذف</button>
-                        </td>
-                    </tr>
+                            <tr
+                                class="df-repeatable-item df-repeatable-flat-row df-repeatable-child-flat-row"
+                                data-repeatable-item
+                                data-repeatable-row-group="phones"
+                                data-root-index="0"
+                                data-row-path="owners_0_phones_1"
+                                data-row-id="child-2"
+                                data-parent-row-id="root-1"
+                            >
+                                <td>delete</td>
+                                <td class="df-table-actions">
+                                    <button
+                                        type="button"
+                                        class="df-button df-repeatable-delete"
+                                        data-delete-label="شماره تماس"
+                                        data-group-code="phones"
+                                    >حذف</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
         </form>
@@ -626,7 +632,7 @@ test("deletes a flat TABLE child row without affecting its parent or sibling row
     );
 
     const rows = document.querySelectorAll(
-        ".df-table-group .df-repeatable-items > [data-repeatable-item]"
+        ".df-table-group .df-repeatable-items tbody > [data-repeatable-item]"
     );
     assert.equal(rows.length, 3);
 
@@ -635,7 +641,7 @@ test("deletes a flat TABLE child row without affecting its parent or sibling row
     );
 
     const remaining = document.querySelectorAll(
-        ".df-table-group .df-repeatable-items > [data-repeatable-item]"
+        ".df-table-group .df-repeatable-items tbody > [data-repeatable-item]"
     );
 
     assert.equal(remaining.length, 2);
