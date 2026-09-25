@@ -2422,6 +2422,9 @@ document.addEventListener("click", (event) => {
 
         newItem.removeAttribute("data-repeatable-template");
         newItem.removeAttribute("data-repeatable-child-template");
+        newItem.setAttribute("data-repeatable-item", "");
+        newItem.classList.remove("df-repeatable-flat-template");
+        newItem.classList.add("df-repeatable-flat-row");
         newItem.style.display = "";
         newItem.dataset.rowId = newRowId;
         newItem.dataset.repeatableRowGroup = childGroupCode;
