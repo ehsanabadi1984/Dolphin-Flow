@@ -129,7 +129,7 @@ test("flat TABLE child templates keep the complete parent path", () => {
 
     assert.match(
         appJs,
-        /\.replace\(\s*"PARENT_PREFIX",\s*`\$\{parentRow\.dataset\.rowPath\}_`\s*\)/s,
+                /\.replace\(\s*"PARENT_PREFIX",\s*`\$\{parentPath\}_`\s*\)/s,
     );
 
     assert.match(
