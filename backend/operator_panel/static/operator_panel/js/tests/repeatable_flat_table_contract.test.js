@@ -166,6 +166,11 @@ test("flat TABLE root and child reindex keeps both root trees isolated", () => {
 
     const rows = [];
     const container = {
+        querySelector(selector) {
+            const rowIdMatch = selector.match(/data-row-id="([^"]+)"/);
+            if (!rowIdMatch) return null;
+            return rows.find((row) => row.dataset.rowId === rowIdMatch[1]) || null;
+        },
         querySelectorAll(selector) {
             if (!selector.includes("[data-repeatable-item]")) return [];
             const groupMatch = selector.match(/data-repeatable-row-group="([^"]+)"/);
