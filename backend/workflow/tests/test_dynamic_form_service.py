@@ -333,6 +333,75 @@ class DynamicFormServiceTests(TestCase):
 
         return device
 
+    def test_get_form_for_step_marks_canonical_repeatable_rows_as_saved_data(self):
+        normal_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Parts",
+            code="parts",
+            order=10,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            is_active=True,
+        )
+        part_name = FormField.objects.create(
+            section=self.section,
+            repeatable_group=normal_group,
+            name="Part Name",
+            code="part_name",
+            field_type=FormField.FieldType.TEXT,
+            label="Part",
+            order=1,
+            is_active=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=normal_group,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=part_name,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+
+        instance = self.create_instance()
+        row = RepeatableRow.objects.create(
+            instance=instance,
+            group=normal_group,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=part_name,
+            text_value="Brake pad",
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+            edit_mode=False,
+        )
+
+        self.assertTrue(result["has_saved_data"])
+        self.assertTrue(result["has_editable_fields"])
+        self.assertTrue(result["can_reenter_edit_mode"])
+
+        parts = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].pk == normal_group.pk
+        )
+        self.assertEqual(
+            parts["items"][0]["fields"][0]["value"],
+            "Brake pad",
+        )
+
     def test_get_form_for_step_uses_repeatable_row_id_for_device_rows(self):
         instance = self.create_instance()
 
