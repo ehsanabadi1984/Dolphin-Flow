@@ -314,7 +314,7 @@ test("flat TABLE root reindex preserves child group segments", () => {
         /field\.name = name\.replace\(\s*rootPattern,\s*\`\$\{rootGroupCode\}_\$\{rootIndex\}_\`\s*\)/s,
     );
 });
-test("flat TABLE child add resolves the logical root parent path", () => {
+test("flat TABLE child add resolves the logical parent row path", () => {
     const extractFunction = (source, functionName) => {
         const start = source.indexOf("function " + functionName + "(");
         assert.notEqual(start, -1, functionName + " must exist");
@@ -335,38 +335,41 @@ test("flat TABLE child add resolves the logical root parent path", () => {
         "\nreturn getFlatTableChildParentPath;"
     )();
 
-    const table = { dataset: { repeatableGroup: "parts" } };
-
-    assert.equal(
-        resolve(table, {
+    const rows = [
+        {
             dataset: {
+                rowId: "child-0",
                 rootIndex: "0",
-                repeatableRowGroup: "child_parts",
                 rowPath: "parts_0_child_parts_0",
             },
-        }),
+        },
+    ];
+    const table = {
+        dataset: { repeatableGroup: "parts" },
+        querySelector(selector) {
+            const match = selector.match(/data-row-id="([^"]+)"/);
+            return rows.find((row) => row.dataset.rowId === match?.[1]) || null;
+        },
+    };
+    const visualChildRow = {
+        dataset: {
+            rootIndex: "0",
+            rowPath: "parts_0_child_parts_0",
+        },
+    };
+
+    assert.equal(
+        resolve(table, visualChildRow, "root-0"),
         "parts_0",
     );
 
     assert.equal(
-        resolve(table, {
-            dataset: {
-                rootIndex: "0",
-                repeatableRowGroup: "grandchild_parts",
-                rowPath: "parts_0_child_parts_0_grandchild_parts_0",
-            },
-        }),
-        "parts_0",
+        resolve(table, visualChildRow, "child-0"),
+        "parts_0_child_parts_0",
     );
 
     assert.equal(
-        resolve(table, {
-            dataset: {
-                rootIndex: "0",
-                repeatableRowGroup: "parts",
-                rowPath: "parts_0",
-            },
-        }),
+        resolve(table, visualChildRow, ""),
         "parts_0",
     );
 });
