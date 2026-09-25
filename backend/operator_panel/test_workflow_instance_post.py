@@ -1038,6 +1038,159 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             1,
         )
 
+    def test_normal_nested_table_preserves_root_address_and_row_identity_on_edit_save(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Parts",
+            code="parts",
+            order=5,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            is_active=True,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Child Parts",
+            code="child_parts",
+            order=6,
+            parent_group=parent_group,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            is_active=True,
+        )
+        address_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Address",
+            code="address",
+            label="Address",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+            is_active=True,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Name",
+            code="child_name",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+            is_active=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=parent_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        for field in (address_field, child_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+            )
+
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent_group,
+            row_order=0,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=address_field,
+            text_value="Tehran",
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=child_field,
+            text_value="Child 1",
+        )
+
+        response = self.client.get(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {"edit": "1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('name="parts_0_address"', html)
+        self.assertIn('value="Tehran"', html)
+        self.assertIn(
+            f'name="parts_0__id" value="{parent_row.pk}"',
+            html,
+        )
+        self.assertIn(
+            f'name="parts_0_child_parts_0__id" value="{child_row.pk}"',
+            html,
+        )
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk])
+            + "?edit=1",
+            {
+                "parts_0_address": "Tehran",
+                "parts_0__id": str(parent_row.pk),
+                "parts_0_child_parts_0_child_name": "Child 1",
+                "parts_0_child_parts_0__id": str(child_row.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        parent_row.refresh_from_db()
+        child_row.refresh_from_db()
+        self.assertEqual(parent_row.pk, parent_row.pk)
+        self.assertEqual(child_row.pk, child_row.pk)
+        self.assertEqual(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=parent_group,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=child_group,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=parent_row,
+                field=address_field,
+            ).text_value,
+            "Tehran",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=child_row,
+                field=child_field,
+            ).text_value,
+            "Child 1",
+        )
+
     def test_workflow_instance_renders_nested_repeatable_children(self):
         parent_group = FormRepeatableGroup.objects.create(
             section=self.section,
