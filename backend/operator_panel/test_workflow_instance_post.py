@@ -1236,6 +1236,129 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         )
         self.assertIn('class="df-table-input"', edit_html)
 
+    def test_normal_nested_table_create_root_with_child_preserves_root_address_on_save(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Parts Create",
+            code="parts_create",
+            order=5,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            is_active=True,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Child Parts Create",
+            code="child_parts_create",
+            order=6,
+            parent_group=parent_group,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            is_active=True,
+        )
+        address_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Address",
+            code="address",
+            label="Address",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+            is_active=True,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Name",
+            code="child_name",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+            is_active=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=parent_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        for field in (address_field, child_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+            )
+
+        from django.http import QueryDict
+
+        payload = QueryDict("", mutable=True)
+        payload.update({
+            "parts_create_0__id": "root-create-0",
+            "parts_create_0_child_parts_create_0__id": "child-create-0",
+            "parts_create_0_child_parts_create_0_child_name": "Child 1",
+        })
+        payload.appendlist("parts_create_0_address", "Tehran")
+        payload.appendlist("parts_create_0_address", "")
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            payload,
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        parent_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=parent_group,
+        )
+        child_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+        )
+
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=parent_row,
+                field=address_field,
+            ).text_value,
+            "Tehran",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=child_row,
+                field=child_field,
+            ).text_value,
+            "Child 1",
+        )
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Tehran")
+        self.assertContains(response, "Child 1")
+
     def test_workflow_instance_renders_nested_repeatable_children(self):
         parent_group = FormRepeatableGroup.objects.create(
             section=self.section,
