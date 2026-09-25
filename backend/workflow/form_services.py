@@ -962,6 +962,9 @@ class DynamicFormService:
         child_template_contexts = []
 
         def build_child_template_context(child_group):
+            if child_group.display_type != FormRepeatableGroup.DisplayType.TABLE:
+                return None
+
             group_permission = permission_context.group(child_group)
             if not group_permission.can_view:
                 return None
