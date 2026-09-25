@@ -2492,6 +2492,7 @@ document.addEventListener("click", (event) => {
                     `${childGroupCode}_TEMPLATE_`
                 );
             const isChildRowId =
+                isChildField &&
                 field.type === "hidden" &&
                 oldName.endsWith("__id");
 
