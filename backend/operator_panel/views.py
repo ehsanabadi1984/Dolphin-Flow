@@ -13,6 +13,7 @@ from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.repeatable_row_read_services import RepeatableRowReadService
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.permission_context import PermissionContext
+from workflow.history_permissions import HISTORY_ACTION
 from workflow.models import (
     DeviceModel,
     DeviceIdentifier,
