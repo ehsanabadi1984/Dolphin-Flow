@@ -487,6 +487,63 @@ class FormPostAdapterTests(TestCase):
         self.assertIsInstance(payload["items"][0]["title"], str)
         self.assertIsInstance(payload["items"][1]["title"], str)
 
+    def test_two_root_rows_each_keep_their_field_and_child_values(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "آقایی",
+            "items_0_child_items_0_child_title": "فرزند آقایی",
+            "items_1_title": "صمدی",
+            "items_1_child_items_0_child_title": "فرزند صمدی",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {
+                    "title": "آقایی",
+                    "child_items": [{"child_title": "فرزند آقایی"}],
+                },
+                {
+                    "title": "صمدی",
+                    "child_items": [{"child_title": "فرزند صمدی"}],
+                },
+            ],
+        )
+        self.assertEqual(
+            [row["title"] for row in payload["items"]],
+            ["آقایی", "صمدی"],
+        )
+        self.assertEqual(
+            [
+                row["child_items"][0]["child_title"]
+                for row in payload["items"]
+            ],
+            ["فرزند آقایی", "فرزند صمدی"],
+        )
+
     def test_child_row_cannot_change_sibling_root_field_payload(self):
         child_group = FormRepeatableGroup.objects.create(
             section=self.section,
