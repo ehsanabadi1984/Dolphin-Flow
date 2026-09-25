@@ -193,3 +193,13 @@
       {% endif %}
     {% endfor %}
     {% include "operator_panel/_repeatable_flat_table_templates.html" with parent_templates=group.flat_table.child_templates flat_columns=group.flat_table.columns %}
+    {% if edit_mode and not dynamic_form.is_submitted and group.permissions.can_delete %}
+      <button
+        type="button"
+        class="df-button df-button-danger df-repeatable-delete"
+        data-delete-label="{{ group.group.label }}"
+        data-group-code="{{ group.group.code }}"
+      >
+        حذف {{ group.group.label }}
+      </button>
+    {% endif %}
