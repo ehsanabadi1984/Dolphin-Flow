@@ -657,9 +657,10 @@ class DynamicFormService:
 
         group_permission = permission_context.group(group)
         group_can_view = group_permission.can_view
-        effective_group_can_edit = (
-            group_permission.can_edit and group_can_edit
-        )
+        # Nested group permissions are evaluated independently. A
+        # parent group's edit permission must not grant or revoke the
+        # child's own edit permission.
+        effective_group_can_edit = group_permission.can_edit
         group_can_add = group_permission.can_add
         group_can_delete = group_permission.can_delete
 
