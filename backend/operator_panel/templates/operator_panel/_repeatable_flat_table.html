@@ -192,7 +192,7 @@
         </button>
       {% endif %}
     {% endfor %}
-    {% include "operator_panel/_repeatable_flat_table_templates.html" with parent_templates=group.flat_table.child_templates flat_columns=group.flat_table.columns %}
+
     {% if edit_mode and not dynamic_form.is_submitted and group.permissions.can_delete %}
       <button
         type="button"
@@ -206,3 +206,4 @@
 
   </td>
 </tr>
+    {% include "operator_panel/_repeatable_flat_table_templates.html" with parent_templates=group.flat_table.child_templates flat_columns=group.flat_table.columns %}
