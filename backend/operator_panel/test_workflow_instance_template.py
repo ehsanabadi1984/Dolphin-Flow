@@ -35,7 +35,7 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
 
     def _group(self, code, display_type, item):
         field = self._field(f"{code}_field", f"{code} field")
-        return SimpleNamespace(
+        group = SimpleNamespace(
             group=SimpleNamespace(
                 code=code,
                 name=code,
@@ -48,6 +48,88 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
             can_edit=False,
             can_delete=False,
         )
+
+        if display_type == "TABLE":
+            rows = [
+                SimpleNamespace(
+                    row_group_code=code,
+                    path=[(code, 0)],
+                    path_key=f"{code}:0",
+                    row_id=item.row_id,
+                    parent_row_id=None,
+                    column_cells=[
+                        SimpleNamespace(
+                            show=True,
+                            group_code=code,
+                            field=field,
+                            field_context=SimpleNamespace(
+                                field=field,
+                                parent_code=None,
+                                choices=[],
+                            ),
+                            can_edit=False,
+                            value=item.fields[0].value,
+                            display_value=item.fields[0].display_value,
+                        )
+                    ],
+                    id_input_name=f"{code}_0__id",
+                    add_children=[],
+                    can_delete=False,
+                    delete_group_name=code,
+                    delete_group_code=code,
+                )
+            ]
+
+            for child_group in item.child_groups:
+                child_field = child_group.fields[0].field
+                child_item = child_group.items[0]
+                rows.append(
+                    SimpleNamespace(
+                        row_group_code=child_group.group.code,
+                        path=[(code, 0), (child_group.group.code, 0)],
+                        path_key=f"{code}:0/{child_group.group.code}:0",
+                        row_id=child_item.row_id,
+                        parent_row_id=item.row_id,
+                        column_cells=[
+                            SimpleNamespace(
+                                show=True,
+                                group_code=child_group.group.code,
+                                field=child_field,
+                                field_context=SimpleNamespace(
+                                    field=child_field,
+                                    parent_code=None,
+                                    choices=[],
+                                ),
+                                can_edit=False,
+                                value=child_item.fields[0].value,
+                                display_value=child_item.fields[0].display_value,
+                            )
+                        ],
+                        id_input_name=(
+                            f"{code}_0_{child_group.group.code}_0__id"
+                        ),
+                        add_children=[],
+                        can_delete=False,
+                        delete_group_name=child_group.group.code,
+                        delete_group_code=child_group.group.code,
+                    )
+                )
+
+            group.flat_table = SimpleNamespace(
+                columns=[
+                    SimpleNamespace(
+                        group_code=code,
+                        field_context=SimpleNamespace(
+                            field=field,
+                            parent_code=None,
+                            choices=[],
+                        ),
+                    )
+                ],
+                rows=rows,
+            )
+
+        return group
 
     def _context(self, parent_display_type, child_display_type):
         child_field = self._field("child_field", "Child Field")
@@ -137,11 +219,11 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
         self.assertIn("df-table-group", rendered)
         self.assertIn("df-normal-table", rendered)
 
-    def test_table_parent_renders_list_child(self):
+    def test_table_parent_renders_nested_child_as_flat_row(self):
         rendered = self._render("TABLE", "LIST")
 
-        self.assertIn('data-repeatable-group="CHILD"', rendered)
-        self.assertIn("df-repeatable-child-group", rendered)
+        self.assertIn('data-repeatable-row-group="CHILD"', rendered)
+        self.assertIn("df-repeatable-child-flat-row", rendered)
 
     def test_empty_nested_list_group_renders_add_row_template(self):
         context = self._context("LIST", "LIST")
@@ -185,9 +267,9 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
             rendered,
         )
 
-    def test_table_parent_renders_table_child(self):
+    def test_table_parent_renders_nested_child_independent_of_child_display_type(self):
         rendered = self._render("TABLE", "TABLE")
 
-        self.assertIn('data-repeatable-group="CHILD"', rendered)
-        self.assertIn("df-table-group", rendered)
-        self.assertIn("df-normal-table", rendered)
+        self.assertIn('data-repeatable-row-group="CHILD"', rendered)
+        self.assertIn("df-repeatable-child-flat-row", rendered)
+        self.assertIn('data-parent-row-id="parent-row-1"', rendered)
