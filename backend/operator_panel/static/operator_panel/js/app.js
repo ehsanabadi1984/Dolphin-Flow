@@ -2488,8 +2488,18 @@ document.addEventListener("click", (event) => {
     );
 
     if (repeatableDeleteBtn) {
-        const flatTable = repeatableDeleteBtn.closest(".df-table-group");
-        const flatRow = repeatableDeleteBtn.closest("[data-repeatable-item]");
+        /*
+         * TABLE delete actions are fully client-side. Prevent the click
+         * from being interpreted by any surrounding form/row interaction
+         * before resolving the flat-row context.
+         */
+        event.preventDefault();
+        event.stopPropagation();
+
+        const flatRow = repeatableDeleteBtn.closest(
+            ".df-repeatable-flat-row, [data-repeatable-item]"
+        );
+        const flatTable = flatRow?.closest(".df-table-group");
 
         if (flatTable && flatRow) {
             if (!isEditMode()) return;
