@@ -102,54 +102,73 @@ test("flat TABLE root delete uses serialized group permission contract", () => {
     );
 });
 
+
 test("flat TABLE root field names remain root-scoped", () => {
-    assert.match(
-        rootTemplate,
-        /name="{{ cell\\.input_prefix }}{{ cell\\.field\\.code }}"/,
+    assert.ok(
+        rootTemplate.includes(
+            'name="{{ cell.input_prefix }}{{ cell.field.code }}"',
+        ),
     );
-    assert.match(
-        rootTemplate,
-        /name="{{ group\\.group\\.code }}_TEMPLATE_{{ field_context\\.field\\.code }}"/,
+    assert.ok(
+        rootTemplate.includes(
+            'name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}"',
+        ),
     );
     assert.doesNotMatch(
         rootTemplate,
-        /name="{{ field_context\\.field\\.code }}"/,
+        /name="{{ field_context\.field\.code }}"/,
     );
 });
 
 test("flat TABLE child templates keep the complete parent path", () => {
-    assert.match(
-        nestedTemplate,
-        /name="PARENT_PREFIX{{ child_template\\.group\\.code }}_TEMPLATE_{{ field_context\\.field\\.code }}"/,
+    assert.ok(
+        nestedTemplate.includes(
+            'name="PARENT_PREFIX{{ child_template.group.code }}_TEMPLATE_{{ field_context.field.code }}"',
+        ),
     );
-    assert.match(
-        appJs,
-        /\\.replace\\(\\s*"PARENT_PREFIX",\\s*\\x60\\$\\{parentRow\\.dataset\\.rowPath\\}_\\x60\\s*\\)/s,
+    assert.ok(
+        appJs.includes(
+            '.replace(
+                        "PARENT_PREFIX",
+                        `${parentRow.dataset.rowPath}_`,
+                    )',
+        ),
     );
-    assert.match(
-        appJs,
-        /\\.replace\\(\\s*\\x60_\\$\\{childGroupCode\\}_TEMPLATE_\\x60,\\s*\\x60_\\$\\{childGroupCode\\}_\\$\\{childIndex\\}_\\x60\\s*\\)/s,
+    assert.ok(
+        appJs.includes(
+            '.replace(
+                        `_${childGroupCode}_TEMPLATE_`,
+                        `_${childGroupCode}_${childIndex}_`,
+                    )',
+        ),
     );
 });
 
 test("flat TABLE root reindex preserves child group segments", () => {
-    assert.match(
-        appJs,
-        /const rootPattern =\\s*new RegExp\\(\\x60\\^\\$\\{escapeRegExp\\(rootGroupCode\\)\\}_\\\\\\\\d\\+_\\x60\\)/s,
+    assert.ok(
+        appJs.includes(
+            'const rootPattern =
+            new RegExp(`^${escapeRegExp(rootGroupCode)}_\\d+_`);',
+        ),
     );
-    assert.match(
-        appJs,
-        /field\\.name = name\\.replace\\(\\s*rootPattern,\\s*\\x60\\$\\{rootGroupCode\\}_\\$\\{rootIndex\\}_\\x60\\s*\\)/s,
+    assert.ok(
+        appJs.includes(
+            'field.name = name.replace(
+                    rootPattern,
+                    `${rootGroupCode}_${rootIndex}_`
+                );',
+        ),
     );
 });
 
 test("flat TABLE child row identity is scoped to its parent row path", () => {
-    assert.match(
-        appJs,
-        /const childPrefix =\\s*\\x60\\$\\{parentRow\\.dataset\\.rowPath\\}_\\$\\{childGroupCode\\}_\\$\\{childIndex\\}_\\x60;/s,
+    assert.ok(
+        appJs.includes(
+            'const childPrefix =
+            `${parentRow.dataset.rowPath}_${childGroupCode}_${childIndex}_`;',
+        ),
     );
-    assert.match(
-        appJs,
-        /field\\.name = `\\$\\{childPrefix\\}__id`;/,
+    assert.ok(
+        appJs.includes('field.name = `${childPrefix}__id`;'),
     );
 });
