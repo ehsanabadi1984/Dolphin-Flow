@@ -1137,19 +1137,13 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertIn('name="parts_0_address"', html)
         self.assertIn('value="Tehran"', html)
 
-        soup = BeautifulSoup(html, "html.parser")
-        hidden_inputs = {
-            input_tag.get("name"): input_tag.get("value")
-            for input_tag in soup.select('input[type="hidden"]')
-            if input_tag.get("name")
-        }
-        self.assertEqual(
-            hidden_inputs.get("parts_0__id"),
-            str(parent_row.pk),
+        self.assertRegex(
+            html,
+            rf'name="parts_0__id"\\s+value="{parent_row.pk}"',
         )
-        self.assertEqual(
-            hidden_inputs.get("parts_0_child_parts_0__id"),
-            str(child_row.pk),
+        self.assertRegex(
+            html,
+            rf'name="parts_0_child_parts_0__id"\\s+value="{child_row.pk}"',
         )
 
         parent_row_id = parent_row.pk
