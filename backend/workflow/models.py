@@ -1033,7 +1033,7 @@ class FormRepeatableGroup(models.Model):
     def __str__(self):
         return (
             f"{self.section.name} - "
-            f"{self.name}"
+            f"{self.label or self.name}"
         )
 
 class StaticChoiceSet(models.Model):
