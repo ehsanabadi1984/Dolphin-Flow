@@ -497,7 +497,8 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
 
     def test_workflow_instance_post_rejects_imei_change_on_resolved_device(self):
-        group, fields = self._create_device_system_fields()        device_type = __import__("workflow.models", fromlist=["DeviceType"]).DeviceType.objects.create(
+        group, fields = self._create_device_system_fields()
+        device_type = __import__("workflow.models", fromlist=["DeviceType"]).DeviceType.objects.create(
             name="Phone",
             code="OP_POST_IMEI_TYPE",
             is_active=True,
