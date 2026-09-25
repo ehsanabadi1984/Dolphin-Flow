@@ -126,13 +126,15 @@ test("flat TABLE child templates keep the complete parent path", () => {
             'name="PARENT_PREFIX{{ child_template.group.code }}_TEMPLATE_{{ field_context.field.code }}"',
         ),
     );
+
     assert.match(
         appJs,
-        /\.replace\(\s*"PARENT_PREFIX",\s*\`\$\{parentRow\.dataset\.rowPath\}_\`,\s*\)/s,
+        /\.replace\(\s*"PARENT_PREFIX",\s*`\$\{parentRow\.dataset\.rowPath\}_`\s*\)/s,
     );
+
     assert.match(
         appJs,
-        /\.replace\(\s*\`_\$\{childGroupCode\}_TEMPLATE_\`,\s*\`_\$\{childGroupCode\}_\$\{childIndex\}_\`,\s*\)/s,
+        /\.replace\(\s*`_\$\{childGroupCode\}_TEMPLATE_`,\s*`_\$\{childGroupCode\}_\$\{childIndex\}_`\s*\)/s,
     );
 });
 test("flat TABLE root reindex preserves child group segments", () => {
