@@ -1263,8 +1263,14 @@ class DynamicFormService:
             .exists()
         )
 
+        has_repeatable_data = any(
+            items
+            for items in repeatable_data.values()
+        )
+
         has_saved_data = (
             bool(data)
+            or has_repeatable_data
             or has_saved_device_data
         )
         permission_context = PermissionContext.build(
