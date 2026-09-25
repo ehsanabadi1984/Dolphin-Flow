@@ -233,6 +233,7 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
         bound = FormRepeatableGroupWorkspaceForm(
             data={
                 "name": "New Child",
+                "label": "New Child Label",
                 "code": "NEW_CHILD",
                 "group_type": FormRepeatableGroup.GroupType.NORMAL,
                 "display_type": FormRepeatableGroup.DisplayType.LIST,
@@ -283,6 +284,7 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
         form = FormRepeatableGroupWorkspaceForm(
             data={
                 "name": self.child.name,
+                "label": self.child.label or self.child.name,
                 "code": self.child.code,
                 "group_type": self.child.group_type,
                 "display_type": self.child.display_type,
@@ -302,6 +304,7 @@ class RepeatableGroupHierarchyAdminTests(TestCase):
         form = FormRepeatableGroupWorkspaceForm(
             data={
                 "name": self.sibling.name,
+                "label": self.sibling.label or self.sibling.name,
                 "code": self.sibling.code,
                 "group_type": self.sibling.group_type,
                 "display_type": self.sibling.display_type,
