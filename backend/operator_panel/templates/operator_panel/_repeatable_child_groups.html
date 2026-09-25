@@ -149,10 +149,7 @@
                                         {% endif %}
                                         </td>
                                       </tr>
-                                    
-                          {% include "operator_panel/_repeatable_child_groups.html" with group=child_group item=child_item item_index=child_index %}
-
-                      {% endwith %}
+                                      {% endwith %}
                                   {% endfor %}
                                 {% else %}
                                   <tr class="df-table-empty">
@@ -241,6 +238,12 @@
                             </table>
                           </div>
                         </section>
+
+                        {% for child_item in child_group.items %}
+                          {% with child_index=forloop.counter0 %}
+                            {% include "operator_panel/_repeatable_child_groups.html" with group=child_group item=child_item item_index=child_index %}
+                          {% endwith %}
+                        {% endfor %}
                       {% else %}
                       <section
                         class="df-repeatable-group df-repeatable-child-group"
