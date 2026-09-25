@@ -2285,7 +2285,7 @@ function getGroupOwnedElements(item, group, selector) {
 function getRowOwnedElements(item, selector) {
     return Array.from(item.querySelectorAll(selector)).filter(
         (element) =>
-            !element.closest(".df-repeatable-group")
+            element.closest("[data-repeatable-item]") === item
     );
 }
 
