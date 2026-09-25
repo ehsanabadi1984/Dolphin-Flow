@@ -2369,9 +2369,9 @@ function getFlatTableChildParentPath(table, parentRow, parentRowId) {
     }
 
     const logicalParentRow = parentRowId
-        ? table.querySelector(
-            `[data-repeatable-item][data-row-id="${CSS.escape(parentRowId)}"]`
-        )
+        ? Array.from(
+            table.querySelectorAll("[data-repeatable-item]")
+        ).find((row) => row.dataset.rowId === parentRowId)
         : null;
 
     if (logicalParentRow?.dataset?.rowPath) {
