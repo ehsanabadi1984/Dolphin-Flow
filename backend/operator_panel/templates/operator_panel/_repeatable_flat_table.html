@@ -193,7 +193,7 @@
       {% endif %}
     {% endfor %}
 
-    {% if edit_mode and not dynamic_form.is_submitted and group.permissions.can_delete %}
+    {% if edit_mode and not dynamic_form.is_submitted and group.can_delete %}
       <button
         type="button"
         class="df-button df-button-danger df-repeatable-delete"
