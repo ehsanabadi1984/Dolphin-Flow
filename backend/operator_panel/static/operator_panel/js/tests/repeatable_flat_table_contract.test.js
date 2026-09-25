@@ -66,11 +66,27 @@ test("flat TABLE root and child templates expose delete actions", () => {
 test("flat TABLE delete handler covers root and child rows", () => {
     assert.match(
         appJs,
-        /const flatTable = repeatableDeleteBtn\.closest\("\.df-table-group"\);/,
+        /const flatRow = repeatableDeleteBtn\.closest\(\s*"\.df-repeatable-flat-row, \[data-repeatable-item\]"\s*\);/,
+    );
+    assert.match(
+        appJs,
+        /const flatTable = flatRow\?\.closest\("\.df-table-group"\);/,
     );
     assert.match(
         appJs,
         /if \(rowGroupCode === rootGroupCode\)/,
+    );
+});
+
+
+test("flat TABLE child clones become live rows for delete handling", () => {
+    assert.match(
+        appJs,
+        /newItem\.removeAttribute\("data-repeatable-child-template"\);\s*newItem\.setAttribute\("data-repeatable-item", ""\);/s,
+    );
+    assert.match(
+        appJs,
+        /newItem\.classList\.remove\("df-repeatable-flat-template"\);\s*newItem\.classList\.add\("df-repeatable-flat-row"\);/s,
     );
 });
 
