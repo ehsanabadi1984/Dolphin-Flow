@@ -835,7 +835,7 @@ class DynamicFormService:
                 seen_columns.add(key)
                 columns.append({
                     "group_code": context["group"].code,
-                    "group_name": context["group"].name,
+                    "group_label": context["group"].label,
                     "field_context": field_context,
                 })
 
@@ -844,9 +844,11 @@ class DynamicFormService:
             if not group_permission.can_view:
                 return None
 
+            # Child-group edit permission is independent of the parent-group
+            # edit permission. The parent controls its own row actions; a
+            # child group must be evaluated from its own access rule.
             can_edit = (
                 group_permission.can_edit
-                and inherited_can_edit
                 and edit_mode
                 and not is_submitted
             )
@@ -1029,7 +1031,7 @@ class DynamicFormService:
                     "add_children": [
                         {
                             "group_code": child["group"].code,
-                            "group_name": child["group"].name,
+                            "group_label": child["group"].label,
                             "can_add": child["permissions"]["can_add"],
                             "parent_row_id": item["row_id"],
                         }
@@ -1037,7 +1039,7 @@ class DynamicFormService:
                     ],
                     "can_delete": context["permissions"]["can_delete"],
                     "delete_group_code": context["group"].code,
-                    "delete_group_name": context["group"].name,
+                    "delete_group_label": context["group"].label,
                 })
                 return
 
@@ -1061,7 +1063,7 @@ class DynamicFormService:
                 rows[first_row_index]["add_children"] = [
                     {
                         "group_code": child["group"].code,
-                        "group_name": child["group"].name,
+                        "group_label": child["group"].label,
                         "can_add": child["permissions"]["can_add"],
                         "parent_row_id": item["row_id"],
                     }

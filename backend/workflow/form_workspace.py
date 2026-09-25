@@ -82,6 +82,7 @@ class FormRepeatableGroupWorkspaceForm(forms.ModelForm):
         model = FormRepeatableGroup
         fields = (
             "name",
+            "label",
             "code",
             "group_type",
             "display_type",

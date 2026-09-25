@@ -215,7 +215,7 @@
 
                 <div class="df-form-section-header">
                     <div>
-                        <h3>{{ group.group.name }}</h3>
+                        <h3>{{ group.group.label }}</h3>
                     </div>
 
 
@@ -477,7 +477,7 @@
             >
               <div class="df-form-section-header">
                 <div>
-                  <h3>{{ group.group.name }}</h3>
+                  <h3>{{ group.group.label }}</h3>
                 </div>
 
                 {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
@@ -486,7 +486,7 @@
                     class="df-button df-button-secondary df-repeatable-add"
                     data-group-code="{{ group.group.code }}"
                   >
-                    + افزودن {{ group.group.name }}
+                    + افزودن {{ group.group.label }}
                   </button>
                 {% endif %}
               </div>
@@ -528,7 +528,7 @@
             >
               <div class="df-form-section-header">
                 <div>
-                  <h3>{{ group.group.name }}</h3>
+                  <h3>{{ group.group.label }}</h3>
                 </div>
 
                 {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}

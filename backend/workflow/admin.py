@@ -2035,6 +2035,7 @@ class FormRepeatableGroupInline(admin.TabularInline):
     extra = 0
     fields = (
         "name",
+        "label",
         "code",
         "group_type",
         "display_type",
@@ -2169,6 +2170,7 @@ class FormSectionAdmin(admin.ModelAdmin):
                 "id",
                 "code",
                 "name",
+                "label",
                 "layout_order",
                 "order",
             )
@@ -2209,7 +2211,7 @@ class FormSectionAdmin(admin.ModelAdmin):
                     "type": "group",
                     "id": group.id,
                     "code": group.code,
-                    "label": group.name,
+                    "label": group.label,
                     "layout_order": (
                         group.layout_order
                         if group.layout_order is not None

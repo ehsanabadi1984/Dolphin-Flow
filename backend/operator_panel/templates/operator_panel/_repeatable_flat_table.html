@@ -104,7 +104,7 @@
               data-group-code="{{ child_action.group_code }}"
               data-parent-row-id="{{ child_action.parent_row_id }}"
             >
-              + افزودن {{ child_action.group_name }}
+              + افزودن {{ child_action.group_label }}
             </button>
           {% endif %}
         {% endfor %}
@@ -113,10 +113,10 @@
           <button
             type="button"
             class="df-button df-button-danger df-repeatable-delete"
-            data-delete-label="{{ row.delete_group_name }}"
+            data-delete-label="{{ row.delete_group_label }}"
             data-group-code="{{ row.delete_group_code }}"
           >
-            حذف {{ row.delete_group_name }}
+            حذف {{ row.delete_group_label }}
           </button>
         {% endif %}
       </td>
