@@ -1207,6 +1207,35 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             "Child 1",
         )
 
+        # The real operator lifecycle is: save -> read-only GET -> Edit GET.
+        # The POST/DB assertions above alone do not prove that the canonical
+        # row data is reconstructed into the flat TABLE after the redirect.
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        read_html = response.content.decode()
+        self.assertIn("Tehran", read_html)
+        self.assertIn("Child 1", read_html)
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"edit": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        edit_html = response.content.decode()
+        self.assertRegex(
+            edit_html,
+            r'name="parts_0_address"\\s+value="Tehran"',
+        )
+        self.assertIn('class="df-table-input"', edit_html)
+
     def test_workflow_instance_renders_nested_repeatable_children(self):
         parent_group = FormRepeatableGroup.objects.create(
             section=self.section,
