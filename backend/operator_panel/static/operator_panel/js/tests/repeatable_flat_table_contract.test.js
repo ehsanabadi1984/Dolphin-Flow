@@ -506,3 +506,267 @@ test("flat TABLE browser-like add-child submit keeps root and child field names"
     assert.equal(rootField.name, rootName);
     assert.equal(rootField.value, "Tehran");
 });
+
+test("flat TABLE add-child lifecycle preserves root value through reindex and submit", () => {
+    const extractFunction = (source, functionName) => {
+        const start = source.indexOf("function " + functionName + "(");
+        assert.notEqual(start, -1, functionName + " must exist");
+        let depth = 0;
+        let opened = false;
+        for (let index = source.indexOf("{", start); index < source.length; index += 1) {
+            if (source[index] === "{") {
+                depth += 1;
+                opened = true;
+            } else if (source[index] === "}") {
+                depth -= 1;
+                if (opened && depth === 0) {
+                    return source.slice(start, index + 1);
+                }
+            }
+        }
+        throw new Error("Could not extract " + functionName);
+    };
+
+    const makeField = (name, value = "", type = "text") => ({
+        name,
+        value,
+        type,
+        tagName: "INPUT",
+        getAttribute(attribute) {
+            return attribute === "name" ? this.name : null;
+        },
+    });
+
+    const makeRow = ({
+        id,
+        group,
+        parentId = "",
+        path,
+        fields,
+    }) => ({
+        dataset: {
+            rowId: id,
+            repeatableRowGroup: group,
+            parentRowId: parentId,
+            rowPath: path,
+            rootIndex: "0",
+        },
+        fields,
+        querySelectorAll(selector) {
+            return selector === "input, textarea, select"
+                ? this.fields
+                : [];
+        },
+    });
+
+    const rootGroupCode = "parts_create";
+    const childGroupCode = "child_parts_create";
+    const parentPath = "parts_create_0";
+    const rootRowId = "root-create-0";
+    const childRowId = "child-created-0";
+
+    const rootField = makeField(
+        "parts_create_0_address",
+        "Tehran",
+    );
+    const rootRow = makeRow({
+        id: rootRowId,
+        group: rootGroupCode,
+        path: parentPath,
+        fields: [rootField],
+    });
+
+    const childTemplateFields = [
+        makeField(
+            "PARENT_PREFIXchild_parts_create_TEMPLATE_child_name",
+            "",
+        ),
+        makeField(
+            "PARENT_PREFIXchild_parts_create_TEMPLATE__id",
+            "",
+            "hidden",
+        ),
+    ];
+
+    /*
+     * Simulate the actual browser Add Child operation.
+     * The root row remains in the same container; only the child
+     * template is cloned and its child-owned fields are rewritten.
+     */
+    const childIndex = 0;
+    const clonedChildFields = childTemplateFields.map((field) => ({
+        ...field,
+    }));
+
+    clonedChildFields.forEach((field) => {
+        const oldName = field.name;
+        const isChildField =
+            oldName.startsWith("PARENT_PREFIX") &&
+            oldName.includes(
+                childGroupCode + "_TEMPLATE_",
+            );
+        const isChildRowId =
+            field.type === "hidden" &&
+            oldName.endsWith("__id");
+
+        if (!isChildField && !isChildRowId) {
+            return;
+        }
+
+        if (isChildRowId) {
+            field.name =
+                parentPath +
+                "_" +
+                childGroupCode +
+                "_" +
+                childIndex +
+                "__id";
+            field.value = childRowId;
+            return;
+        }
+
+        field.name = oldName
+            .replace(
+                "PARENT_PREFIX",
+                parentPath + "_",
+            )
+            .replace(
+                "_" + childGroupCode + "_TEMPLATE_",
+                "_" + childGroupCode + "_" + childIndex + "_",
+            );
+        field.value = "Child 1";
+    });
+
+    const childRow = makeRow({
+        id: childRowId,
+        group: childGroupCode,
+        parentId: rootRowId,
+        path: parentPath + "_" + childGroupCode + "_0",
+        fields: clonedChildFields,
+    });
+
+    const rows = [rootRow, childRow];
+
+    const container = {
+        querySelector(selector) {
+            const rowIdMatch =
+                selector.match(/data-row-id="([^"]+)"/);
+            if (!rowIdMatch) {
+                return null;
+            }
+            return rows.find(
+                (row) => row.dataset.rowId === rowIdMatch[1],
+            ) || null;
+        },
+        querySelectorAll(selector) {
+            if (!selector.includes("[data-repeatable-item]")) {
+                return [];
+            }
+
+            const groupMatch =
+                selector.match(
+                    /data-repeatable-row-group="([^"]+)"/,
+                );
+            const parentMatch =
+                selector.match(
+                    /data-parent-row-id="([^"]+)"/,
+                );
+
+            return rows.filter((row) => {
+                if (
+                    groupMatch &&
+                    row.dataset.repeatableRowGroup !== groupMatch[1]
+                ) {
+                    return false;
+                }
+                if (
+                    parentMatch &&
+                    row.dataset.parentRowId !== parentMatch[1]
+                ) {
+                    return false;
+                }
+                return true;
+            });
+        },
+    };
+
+    const CSS = {
+        escape: (value) => value,
+    };
+    const invoke = new Function(
+        "CSS",
+        extractFunction(appJs, "escapeRegExp") +
+            "\n" +
+            extractFunction(appJs, "reindexFlatTableRootRows") +
+            "\n" +
+            extractFunction(appJs, "reindexFlatTableChildRows") +
+            "\nreturn { reindexFlatTableRootRows, reindexFlatTableChildRows };",
+    )(CSS);
+
+    /*
+     * Simulate the lifecycle after Add Child:
+     * root reindex -> child reindex -> native form submission.
+     */
+    invoke.reindexFlatTableRootRows(
+        container,
+        rootGroupCode,
+    );
+    invoke.reindexFlatTableChildRows(
+        container,
+        childGroupCode,
+        rootRowId,
+        parentPath,
+    );
+
+    const submittedFields = rows.flatMap(
+        (row) => row.fields,
+    );
+
+    const submittedNames = submittedFields.map(
+        (field) => field.name,
+    );
+    const submittedValues = new Map(
+        submittedFields.map(
+            (field) => [field.name, field.value],
+        ),
+    );
+
+    assert.equal(
+        rootField.name,
+        "parts_create_0_address",
+    );
+    assert.equal(
+        rootField.value,
+        "Tehran",
+    );
+    assert.equal(
+        submittedValues.get(
+            "parts_create_0_address",
+        ),
+        "Tehran",
+    );
+    assert.equal(
+        submittedValues.get(
+            "parts_create_0_child_parts_create_0_child_name",
+        ),
+        "Child 1",
+    );
+    assert.equal(
+        submittedValues.get(
+            "parts_create_0_child_parts_create_0__id",
+        ),
+        childRowId,
+    );
+    assert.deepEqual(
+        submittedNames,
+        [
+            "parts_create_0_address",
+            "parts_create_0_child_parts_create_0_child_name",
+            "parts_create_0_child_parts_create_0__id",
+        ],
+    );
+    assert.equal(
+        new Set(submittedNames).size,
+        submittedNames.length,
+    );
+});
