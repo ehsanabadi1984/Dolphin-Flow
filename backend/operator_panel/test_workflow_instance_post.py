@@ -1139,11 +1139,11 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
 
         self.assertRegex(
             html,
-            rf'name="parts_0__id"\\s+value="{parent_row.pk}"',
+            rf'name="parts_0__id"\s+value="{parent_row.pk}"',
         )
         self.assertRegex(
             html,
-            rf'name="parts_0_child_parts_0__id"\\s+value="{child_row.pk}"',
+            rf'name="parts_0_child_parts_0__id"\s+value="{child_row.pk}"',
         )
 
         parent_row_id = parent_row.pk
