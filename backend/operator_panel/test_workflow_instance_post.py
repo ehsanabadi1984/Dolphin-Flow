@@ -1038,6 +1038,190 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             1,
         )
 
+    def test_normal_nested_table_add_child_after_root_was_persisted_preserves_root_address(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Parts Lifecycle",
+            code="parts_lifecycle",
+            order=5,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            is_active=True,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Child Parts Lifecycle",
+            code="child_parts_lifecycle",
+            order=6,
+            parent_group=parent_group,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            is_active=True,
+        )
+        address_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Address",
+            code="address_lifecycle",
+            label="Address",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+            is_active=True,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Name",
+            code="child_name_lifecycle",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+            is_active=True,
+        )
+        for group in (parent_group, child_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+        for field in (address_field, child_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+            )
+
+        # Phase 1: create only the root row and persist it.
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "parts_lifecycle_0__id": "root-create-0",
+                "parts_lifecycle_0_address_lifecycle": "Tehran",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        root_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=parent_group,
+        )
+        root_pk = root_row.pk
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=root_row,
+                field=address_field,
+            ).text_value,
+            "Tehran",
+        )
+
+        # The next edit GET must expose the persisted integer DB PK, not the
+        # client-generated UUID that was used when the root was first created.
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"edit": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        edit_html = response.content.decode()
+        self.assertRegex(
+            edit_html,
+            rf'name="parts_lifecycle_0__id"\\s+value="{root_pk}"',
+        )
+        self.assertRegex(
+            edit_html,
+            r'name="parts_lifecycle_0_address_lifecycle"\\s+value="Tehran"',
+        )
+
+        # Phase 2: this is the real browser lifecycle after Add Child:
+        # the persisted root keeps its integer PK while the child is new.
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ) + "?edit=1",
+            {
+                "parts_lifecycle_0__id": str(root_pk),
+                "parts_lifecycle_0_address_lifecycle": "Tehran",
+                "parts_lifecycle_0_child_parts_lifecycle_0__id": "child-create-0",
+                "parts_lifecycle_0_child_parts_lifecycle_0_child_name_lifecycle": "Child 1",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        root_row.refresh_from_db()
+        self.assertEqual(root_row.pk, root_pk)
+        self.assertEqual(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=parent_group,
+            ).count(),
+            1,
+        )
+        child_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=child_group,
+        )
+        self.assertEqual(child_row.parent_row_id, root_pk)
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=root_row,
+                field=address_field,
+            ).text_value,
+            "Tehran",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=child_row,
+                field=child_field,
+            ).text_value,
+            "Child 1",
+        )
+
+        # Verify the saved canonical rows are reconstructed correctly after
+        # the redirect, both in read-only mode and in the next edit GET.
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Tehran")
+        self.assertContains(response, "Child 1")
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"edit": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        edit_html = response.content.decode()
+        self.assertRegex(
+            edit_html,
+            r'name="parts_lifecycle_0_address_lifecycle"\\s+value="Tehran"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="parts_lifecycle_0__id"\\s+value="{root_pk}"',
+        )
+        self.assertRegex(
+            edit_html,
+            r'name="parts_lifecycle_0_child_parts_lifecycle_0__id"\\s+value="\\d+"',
+        )
+
     def test_normal_nested_table_preserves_root_address_and_row_identity_on_edit_save(self):
         parent_group = FormRepeatableGroup.objects.create(
             section=self.section,
