@@ -214,6 +214,96 @@ test("flat TABLE root and child reindex keeps both root trees isolated", () => {
     );
     assert.equal(new Set([root0Field.name, child0Field.name, root1Field.name, child1Field.name]).size, 4);
 });
+test("flat TABLE submit names stay unique after root and child mutations", () => {
+    const extractFunction = (source, functionName) => {
+        const start = source.indexOf("function " + functionName + "(");
+        assert.notEqual(start, -1, functionName + " must exist");
+        let depth = 0;
+        let opened = false;
+        for (let index = source.indexOf("{", start); index < source.length; index += 1) {
+            if (source[index] === "{") { depth += 1; opened = true; }
+            else if (source[index] === "}") {
+                depth -= 1;
+                if (opened && depth === 0) return source.slice(start, index + 1);
+            }
+        }
+        throw new Error("Could not extract " + functionName);
+    };
+
+    const makeField = (name) => ({
+        name,
+        getAttribute(attribute) { return attribute === "name" ? this.name : null; },
+    });
+
+    const makeRow = ({ id, group, parentId = "", path, fields }) => ({
+        dataset: { rowId: id, repeatableRowGroup: group, parentRowId: parentId, rowPath: path, rootIndex: "" },
+        fields,
+        querySelectorAll(selector) {
+            return selector === "input, textarea, select" ? this.fields : [];
+        },
+    });
+
+    const rows = [];
+    const container = {
+        querySelector(selector) {
+            const rowIdMatch = selector.match(/data-row-id="([^"]+)"/);
+            if (!rowIdMatch) return null;
+            return rows.find((row) => row.dataset.rowId === rowIdMatch[1]) || null;
+        },
+        querySelectorAll(selector) {
+            if (!selector.includes("[data-repeatable-item]")) return [];
+            const groupMatch = selector.match(/data-repeatable-row-group="([^"]+)"/);
+            const parentMatch = selector.match(/data-parent-row-id="([^"]+)"/);
+            return rows.filter((row) => {
+                if (groupMatch && row.dataset.repeatableRowGroup !== groupMatch[1]) return false;
+                if (parentMatch && row.dataset.parentRowId !== parentMatch[1]) return false;
+                return true;
+            });
+        },
+    };
+
+    const root0Field = makeField("parts_9_name");
+    const child0Field = makeField("parts_9_child_parts_7_address");
+    const root1Field = makeField("parts_3_name");
+    const child1Field = makeField("parts_3_child_parts_4_address");
+    const root0 = makeRow({ id: "root-0", group: "parts", path: "parts_9", fields: [root0Field] });
+    const child0 = makeRow({ id: "child-0", group: "child_parts", parentId: "root-0", path: "parts_9_child_parts_7", fields: [child0Field] });
+    const root1 = makeRow({ id: "root-1", group: "parts", path: "parts_3", fields: [root1Field] });
+    const child1 = makeRow({ id: "child-1", group: "child_parts", parentId: "root-1", path: "parts_3_child_parts_4", fields: [child1Field] });
+    rows.push(root0, child0, root1, child1);
+
+    const CSS = { escape: (value) => value };
+    const escapeRegExp = extractFunction(appJs, "escapeRegExp");
+    const rootReindex = extractFunction(appJs, "reindexFlatTableRootRows");
+    const childReindex = extractFunction(appJs, "reindexFlatTableChildRows");
+    const invoke = new Function(
+        "CSS",
+        escapeRegExp + "\n" + rootReindex + "\n" + childReindex +
+        "\nreturn { reindexFlatTableRootRows, reindexFlatTableChildRows };"
+    )(CSS);
+
+    invoke.reindexFlatTableRootRows(container, "parts");
+    invoke.reindexFlatTableChildRows(container, "child_parts", "root-0", "parts_0");
+    invoke.reindexFlatTableChildRows(container, "child_parts", "root-1", "parts_1");
+
+    const submittedNames = rows.flatMap((row) =>
+        row.fields.map((field) => field.getAttribute("name"))
+    );
+
+    assert.deepEqual(submittedNames, [
+        "parts_0_name",
+        "parts_0_child_parts_0_address",
+        "parts_1_name",
+        "parts_1_child_parts_0_address",
+    ]);
+    assert.equal(new Set(submittedNames).size, submittedNames.length);
+    assert.ok(submittedNames.every((name) => !/^parts_[^_]+$/.test(name)));
+    assert.deepEqual(
+        submittedNames.filter((name) => name.endsWith("_name")),
+        ["parts_0_name", "parts_1_name"],
+    );
+});
+
 test("flat TABLE root reindex preserves child group segments", () => {
     assert.match(
         appJs,
