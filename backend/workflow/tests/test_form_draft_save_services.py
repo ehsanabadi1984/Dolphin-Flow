@@ -1457,7 +1457,7 @@ class FormDraftSaveServiceContractTests(TestCase):
 
 
 
-    def test_adding_child_to_one_root_preserves_all_root_values(self):
+    def test_adding_children_to_both_root_rows_preserves_each_root_and_child(self):
         parent_group = FormRepeatableGroup.objects.create(
             section=self.section,
             name="Parents",
@@ -1525,6 +1525,12 @@ class FormDraftSaveServiceContractTests(TestCase):
                     {
                         "row_id": parent_rows[0].pk,
                         "address_child_regression": "آقایی",
+                        "children_child_regression": [
+                            {
+                                "row_id": None,
+                                "child_name_regression": "فرزند آقایی",
+                            },
+                        ],
                     },
                     {
                         "row_id": parent_rows[1].pk,
@@ -1552,12 +1558,22 @@ class FormDraftSaveServiceContractTests(TestCase):
             ["آقایی", "صمدی"],
         )
 
-        child_row = RepeatableRow.objects.get(
-            instance=self.instance,
-            group=child_group,
+        child_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=child_group,
+            ).order_by("parent_row_id", "row_order", "pk")
         )
-        self.assertEqual(child_row.parent_row_id, parent_rows[1].pk)
+        self.assertEqual(child_rows.__len__(), 2)
         self.assertEqual(
-            child_row.values.get(field=child_field).text_value,
-            "فرزند صمدی",
+            [row.parent_row_id for row in child_rows],
+            [parent_rows[0].pk, parent_rows[1].pk],
         )
+        self.assertEqual(
+            [
+                row.values.get(field=child_field).text_value
+                for row in child_rows
+            ],
+            ["فرزند آقایی", "فرزند صمدی"],
+        )
+
