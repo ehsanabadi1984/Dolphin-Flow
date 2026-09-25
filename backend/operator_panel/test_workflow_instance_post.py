@@ -1145,6 +1145,9 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             html,
         )
 
+        parent_row_id = parent_row.pk
+        child_row_id = child_row.pk
+
         response = self.client.post(
             reverse("operator_panel:workflow_instance", args=[self.instance.pk])
             + "?edit=1",
@@ -1158,10 +1161,22 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
 
-        parent_row.refresh_from_db()
-        child_row.refresh_from_db()
-        self.assertEqual(parent_row.pk, parent_row.pk)
-        self.assertEqual(child_row.pk, child_row.pk)
+        self.assertTrue(
+            RepeatableRow.objects.filter(
+                pk=parent_row_id,
+                instance=self.instance,
+                group=parent_group,
+            ).exists()
+        )
+        self.assertTrue(
+            RepeatableRow.objects.filter(
+                pk=child_row_id,
+                instance=self.instance,
+                group=child_group,
+            ).exists()
+        )
+        parent_row = RepeatableRow.objects.get(pk=parent_row_id)
+        child_row = RepeatableRow.objects.get(pk=child_row_id)
         self.assertEqual(
             RepeatableRow.objects.filter(
                 instance=self.instance,
