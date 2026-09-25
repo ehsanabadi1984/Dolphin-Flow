@@ -2484,23 +2484,39 @@ document.addEventListener("click", (event) => {
         newItem.querySelectorAll("input, textarea, select").forEach((field) => {
             const oldName = field.getAttribute("name");
 
-            if (oldName) {
-                field.name = oldName
-                    .replace(
-                        "PARENT_PREFIX",
-                        `${parentPath}_`
-                    )
-                    .replace(
-                        `_${childGroupCode}_TEMPLATE_`,
-                        `_${childGroupCode}_${childIndex}_`
-                    );
-            }
+            if (!oldName) return;
 
-            if (field.type === "hidden" && oldName?.endsWith("__id")) {
+            const isChildField =
+                oldName.includes(
+                    `_${childGroupCode}_TEMPLATE_`
+                );
+            const isChildRowId =
+                field.type === "hidden" &&
+                oldName.endsWith("__id");
+
+            /*
+             * A flat TABLE child row is a visual row, not necessarily a
+             * logical-only row. Keep the clone operation scoped to fields
+             * belonging to the child template so ancestor/root inputs can
+             * never be cleared or renamed accidentally.
+             */
+            if (!isChildField && !isChildRowId) return;
+
+            if (isChildRowId) {
                 field.name = `${childPrefix}__id`;
                 field.value = newRowId;
                 return;
             }
+
+            field.name = oldName
+                .replace(
+                    "PARENT_PREFIX",
+                    `${parentPath}_`
+                )
+                .replace(
+                    `_${childGroupCode}_TEMPLATE_`,
+                    `_${childGroupCode}_${childIndex}_`
+                );
 
             if (field.type === "checkbox" || field.type === "radio") {
                 field.checked = false;
