@@ -189,9 +189,10 @@ test("flat TABLE root and child reindex keeps both root trees isolated", () => {
     rows.push(root0, child0, root1, child1);
 
     const CSS = { escape: (value) => value };
+    const escapeRegExp = extractFunction(appJs, "escapeRegExp");
     const rootReindex = extractFunction(appJs, "reindexFlatTableRootRows");
     const childReindex = extractFunction(appJs, "reindexFlatTableChildRows");
-    const invoke = new Function("CSS", rootReindex + "\n" + childReindex + "\nreturn { reindexFlatTableRootRows, reindexFlatTableChildRows };")(CSS);
+    const invoke = new Function("CSS", escapeRegExp + "\n" + rootReindex + "\n" + childReindex + "\nreturn { reindexFlatTableRootRows, reindexFlatTableChildRows };")(CSS);
 
     invoke.reindexFlatTableRootRows(container, "parts");
     assert.deepEqual(
