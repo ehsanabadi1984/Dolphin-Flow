@@ -762,6 +762,7 @@ class DynamicFormServiceTests(TestCase):
             name="Permission Parent",
             code="permission_parent_independent",
             group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
             order=20,
             is_active=True,
         )
@@ -771,6 +772,7 @@ class DynamicFormServiceTests(TestCase):
             name="Permission Child",
             code="permission_child_independent",
             group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
             order=21,
             is_active=True,
         )
