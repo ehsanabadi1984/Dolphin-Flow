@@ -1136,11 +1136,11 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         edit_html = response.content.decode()
         self.assertRegex(
             edit_html,
-            rf'name="parts_lifecycle_0__id"\\s+value="{root_pk}"',
+            rf'name="parts_lifecycle_0__id"\s+value="{root_pk}"',
         )
         self.assertRegex(
             edit_html,
-            r'name="parts_lifecycle_0_address_lifecycle"\\s+value="Tehran"',
+            r'name="parts_lifecycle_0_address_lifecycle"\s+value="Tehran"',
         )
 
         # Phase 2: this is the real browser lifecycle after Add Child:
@@ -1211,15 +1211,15 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         edit_html = response.content.decode()
         self.assertRegex(
             edit_html,
-            r'name="parts_lifecycle_0_address_lifecycle"\\s+value="Tehran"',
+            r'name="parts_lifecycle_0_address_lifecycle"\s+value="Tehran"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="parts_lifecycle_0__id"\\s+value="{root_pk}"',
+            rf'name="parts_lifecycle_0__id"\s+value="{root_pk}"',
         )
         self.assertRegex(
             edit_html,
-            r'name="parts_lifecycle_0_child_parts_lifecycle_0__id"\\s+value="\\d+"',
+            r'name="parts_lifecycle_0_child_parts_lifecycle_0__id"\s+value="\d+"',
         )
 
     def test_normal_nested_table_preserves_root_address_and_row_identity_on_edit_save(self):
