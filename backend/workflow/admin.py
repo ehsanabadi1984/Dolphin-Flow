@@ -620,6 +620,7 @@ class WorkflowAdmin(admin.ModelAdmin):
 
     search_fields = (
         "name",
+        "label",
         "code",
         "description",
     )
@@ -2515,6 +2516,7 @@ class FormRepeatableGroupAdmin(admin.ModelAdmin):
     admin_category = "forms"
 
     list_display = (
+        "label",
         "name",
         "section",
         "code",
