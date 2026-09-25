@@ -389,8 +389,8 @@ test("flat TABLE child row identity is scoped to its parent row path", () => {
     );
 });
 test("flat TABLE child clone scopes field mutation to child template fields", () => {
-    assert.match(appJs, /const isChildField\\s*=\\s*oldName\\.includes\\(/s);
-    assert.match(appJs, /const isChildRowId\\s*=\\s*field\\.type === "hidden"\\s*&&\\s*oldName\\.endsWith\\("__id"\\)/s);
-    assert.match(appJs, /if \\(!isChildField && !isChildRowId\\) return;/);
-    assert.match(appJs, /field\\.name = oldName\\s*\\.replace\\(\\s*"PARENT_PREFIX"/s);
+    assert.match(appJs, /const isChildField\s*=\s*oldName\.includes\(/s);
+    assert.match(appJs, /const isChildRowId\s*=\s*field\.type === "hidden"\s*&&\s*oldName\.endsWith\("__id"\)/s);
+    assert.match(appJs, /if \(!isChildField && !isChildRowId\) return/);
+    assert.match(appJs, /field\.name = oldName\s*\.replace\(\s*"PARENT_PREFIX"/s);
 });
