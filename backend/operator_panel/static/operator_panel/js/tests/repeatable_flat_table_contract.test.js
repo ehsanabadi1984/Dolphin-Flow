@@ -446,7 +446,7 @@ test("flat TABLE browser-like add-child submit keeps root and child field names"
         }
 
         if (isChildRowId) {
-            field.name = `${childPrefix}__id`;
+            field.name = `${parentPath}_${childGroupCode}_${childIndex}__id`;
             field.value = newRowId;
             return;
         }
