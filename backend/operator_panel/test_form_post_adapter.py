@@ -166,17 +166,15 @@ class FormPostAdapterTests(TestCase):
             [
                 {
                     "title": "Parent",
-                    "child_groups": {
-                        "child_items": (
-                            {
-                                "child_title": "First child",
-                            },
-                            {
-                                "child_title": "Second child",
-                                "row_id": 21,
-                            },
-                        ),
-                    },
+                    "child_items": [
+                        {
+                            "child_title": "First child",
+                        },
+                        {
+                            "child_title": "Second child",
+                            "row_id": 21,
+                        },
+                    ],
                 },
             ],
         )
@@ -219,15 +217,11 @@ class FormPostAdapterTests(TestCase):
             [
                 {
                     "title": "Parent 1",
-                    "child_groups": {
-                        "child_items": ({"child_title": "P1 child"},),
-                    },
+                    "child_items": [{"child_title": "P1 child"}],
                 },
                 {
                     "title": "Parent 2",
-                    "child_groups": {
-                        "child_items": ({"child_title": "P2 child"},),
-                    },
+                    "child_items": [{"child_title": "P2 child"}],
                 },
             ],
         )
@@ -287,24 +281,55 @@ class FormPostAdapterTests(TestCase):
             [
                 {
                     "title": "Parent",
-                    "child_groups": {
-                        "child_items": (
-                            {
-                                "child_title": "Child",
-                                "child_groups": {
-                                    "grandchild_items": (
-                                        {
-                                            "grandchild_title": "Grandchild",
-                                            "row_id": 31,
-                                        },
-                                    ),
+                    "child_items": [
+                        {
+                            "child_title": "Child",
+                            "grandchild_items": [
+                                {
+                                    "grandchild_title": "Grandchild",
+                                    "row_id": 31,
                                 },
-                            },
-                        ),
-                    },
+                            ],
+                        },
+                    ],
                 },
             ],
         )
+
+    def test_nested_payload_uses_group_codes_without_child_groups_wrapper(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post["items_0_title"] = "Parent"
+        post["items_0_child_items_0_child_title"] = "Child"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"][0]["child_items"],
+            [{"child_title": "Child"}],
+        )
+        self.assertNotIn("child_groups", payload["items"][0])
+
 
     def test_canonical_row_id_is_not_overwritten_by_instance_device_fallback(self):
         device_group = FormRepeatableGroup.objects.create(
