@@ -756,6 +756,112 @@ class DynamicFormServiceTests(TestCase):
         # explicit read-only permission.
         self.assertTrue(customers["can_edit"])
 
+    def test_get_form_for_step_keeps_child_group_permissions_independent_from_parent(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Permission Parent",
+            code="permission_parent_independent",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=20,
+            is_active=True,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="Permission Child",
+            code="permission_child_independent",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=21,
+            is_active=True,
+        )
+
+        parent_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Parent Field",
+            code="permission_parent_field",
+            field_type=FormField.FieldType.TEXT,
+            label="Parent",
+            order=1,
+            is_active=True,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Field",
+            code="permission_child_field",
+            field_type=FormField.FieldType.TEXT,
+            label="Child",
+            order=1,
+            is_active=True,
+        )
+
+        for group in (parent_group, child_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step_one,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+
+        for field in (parent_field, child_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step_one,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=True,
+            )
+
+        instance = self.create_instance()
+        parent_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=parent_group,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=parent_field,
+            text_value="Parent",
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=child_field,
+            text_value="Child",
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+            edit_mode=True,
+        )
+
+        parent = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].pk == parent_group.pk
+        )
+        child = parent["items"][0]["child_groups"][0]
+
+        self.assertTrue(parent["can_edit"])
+        self.assertTrue(parent["can_add"])
+        self.assertTrue(parent["can_delete"])
+        self.assertTrue(child["can_view"])
+        self.assertTrue(child["can_edit"])
+        self.assertTrue(child["can_add"])
+        self.assertTrue(child["can_delete"])
+        self.assertTrue(child["items"][0]["fields"][0]["can_edit"])
+
     def test_get_form_for_step_returns_repeatable_device_group(self):
         instance = self.create_instance()
 
