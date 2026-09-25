@@ -394,3 +394,115 @@ test("flat TABLE child clone scopes field mutation to child template fields", ()
     assert.match(appJs, /if \(!isChildField && !isChildRowId\) return/);
     assert.match(appJs, /field\.name = oldName\s*\.replace\(\s*"PARENT_PREFIX"/s);
 });
+
+test("flat TABLE browser-like add-child submit keeps root and child field names", () => {
+    const rootName = "parts_create_0_address";
+    const childTemplateName =
+        "PARENT_PREFIXchild_parts_create_TEMPLATE_child_name";
+
+    const rootField = {
+        name: rootName,
+        value: "Tehran",
+        type: "text",
+        tagName: "INPUT",
+    };
+    const childField = {
+        name: childTemplateName,
+        value: "",
+        type: "text",
+        tagName: "INPUT",
+    };
+    const childRowIdField = {
+        name: "PARENT_PREFIXchild_parts_create_TEMPLATE__id",
+        value: "",
+        type: "hidden",
+        tagName: "INPUT",
+    };
+
+    const childGroupCode = "child_parts_create";
+    const parentPath = "parts_create_0";
+    const childIndex = 0;
+    const newRowId = "child-created-0";
+    const childPrefix =
+        `${parentPath}_${childGroupCode}_${childIndex}_`;
+
+    const clonedFields = [childField, childRowIdField].map((field) => ({
+        ...field,
+    }));
+
+    clonedFields.forEach((field) => {
+        const oldName = field.name;
+        const isChildField =
+            oldName.startsWith("PARENT_PREFIX") &&
+            oldName.includes(
+                `${childGroupCode}_TEMPLATE_`
+            );
+        const isChildRowId =
+            field.type === "hidden" &&
+            oldName.endsWith("__id");
+
+        if (!isChildField && !isChildRowId) {
+            return;
+        }
+
+        if (isChildRowId) {
+            field.name = `${childPrefix}__id`;
+            field.value = newRowId;
+            return;
+        }
+
+        field.name = oldName
+            .replace(
+                "PARENT_PREFIX",
+                `${parentPath}_`
+            )
+            .replace(
+                `_${childGroupCode}_TEMPLATE_`,
+                `_${childGroupCode}_${childIndex}_`
+            );
+
+        field.value = "";
+    });
+
+    clonedFields[0].value = "Child 1";
+
+    const submittedFields = [rootField, ...clonedFields];
+
+    const submittedNames = submittedFields.map((field) => field.name);
+    const submittedValues = new Map(
+        submittedFields.map((field) => [field.name, field.value]),
+    );
+
+    assert.deepEqual(
+        submittedNames,
+        [
+            "parts_create_0_address",
+            "parts_create_0_child_parts_create_0_child_name",
+            "parts_create_0_child_parts_create_0__id",
+        ],
+    );
+    assert.equal(
+        submittedValues.get("parts_create_0_address"),
+        "Tehran",
+    );
+    assert.equal(
+        submittedValues.get(
+            "parts_create_0_child_parts_create_0_child_name",
+        ),
+        "Child 1",
+    );
+    assert.equal(
+        submittedValues.get(
+            "parts_create_0_child_parts_create_0__id",
+        ),
+        newRowId,
+    );
+    assert.equal(new Set(submittedNames).size, submittedNames.length);
+
+    /*
+     * The root field must not be touched by the child-clone operation.
+     * This is the exact regression we are protecting against.
+     */
+    assert.equal(rootField.name, rootName);
+    assert.equal(rootField.value, "Tehran");
+});
