@@ -707,9 +707,9 @@
 
                     {% endfor %}
 
-                        <tr class="df-repeatable-child-row">
-                          <td colspan="{{ group.fields|length|add:1 }}">
-                            {% include "operator_panel/_repeatable_child_groups.html" with group=group item=item item_index=item_index %}
+                        <div class="df-repeatable-child-row">
+                          {% include "operator_panel/_repeatable_child_groups.html" with group=group item=item item_index=item_index %}
+                        </div>
                     {% if edit_mode and not dynamic_form.is_submitted and group.can_delete %}
                       <div class="df-repeatable-item-actions">
                         <button
