@@ -126,49 +126,31 @@ test("flat TABLE child templates keep the complete parent path", () => {
             'name="PARENT_PREFIX{{ child_template.group.code }}_TEMPLATE_{{ field_context.field.code }}"',
         ),
     );
-    assert.ok(
-        appJs.includes(
-            '.replace(
-                        "PARENT_PREFIX",
-                        `${parentRow.dataset.rowPath}_`,
-                    )',
-        ),
+    assert.match(
+        appJs,
+        /\.replace\(\s*"PARENT_PREFIX",\s*\`\$\{parentRow\.dataset\.rowPath\}_\`,\s*\)/s,
     );
-    assert.ok(
-        appJs.includes(
-            '.replace(
-                        `_${childGroupCode}_TEMPLATE_`,
-                        `_${childGroupCode}_${childIndex}_`,
-                    )',
-        ),
+    assert.match(
+        appJs,
+        /\.replace\(\s*\`_\$\{childGroupCode\}_TEMPLATE_\`,\s*\`_\$\{childGroupCode\}_\$\{childIndex\}_\`,\s*\)/s,
     );
 });
-
 test("flat TABLE root reindex preserves child group segments", () => {
-    assert.ok(
-        appJs.includes(
-            'const rootPattern =
-            new RegExp(`^${escapeRegExp(rootGroupCode)}_\\d+_`);',
-        ),
+    assert.match(
+        appJs,
+        /const rootPattern\s*=\s*new RegExp\(\`\^\$\{escapeRegExp\(rootGroupCode\)\}_\\\\d\+_\`\);/s,
     );
-    assert.ok(
-        appJs.includes(
-            'field.name = name.replace(
-                    rootPattern,
-                    `${rootGroupCode}_${rootIndex}_`
-                );',
-        ),
+    assert.match(
+        appJs,
+        /field\.name = name\.replace\(\s*rootPattern,\s*\`\$\{rootGroupCode\}_\$\{rootIndex\}_\`\s*\)/s,
     );
 });
-
 test("flat TABLE child row identity is scoped to its parent row path", () => {
-    assert.ok(
-        appJs.includes(
-            'const childPrefix =
-            `${parentRow.dataset.rowPath}_${childGroupCode}_${childIndex}_`;',
-        ),
+    assert.match(
+        appJs,
+        /const childPrefix\s*=\s*\`\$\{parentRow\.dataset\.rowPath\}_\$\{childGroupCode\}_\$\{childIndex\}_\`;/s,
     );
     assert.ok(
-        appJs.includes('field.name = `${childPrefix}__id`;'),
+        appJs.includes("field.name = \`${childPrefix}__id\`;"),
     );
 });
