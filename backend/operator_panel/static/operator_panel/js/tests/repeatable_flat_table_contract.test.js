@@ -314,6 +314,63 @@ test("flat TABLE root reindex preserves child group segments", () => {
         /field\.name = name\.replace\(\s*rootPattern,\s*\`\$\{rootGroupCode\}_\$\{rootIndex\}_\`\s*\)/s,
     );
 });
+test("flat TABLE child add resolves the logical root parent path", () => {
+    const extractFunction = (source, functionName) => {
+        const start = source.indexOf("function " + functionName + "(");
+        assert.notEqual(start, -1, functionName + " must exist");
+        let depth = 0;
+        let opened = false;
+        for (let index = source.indexOf("{", start); index < source.length; index += 1) {
+            if (source[index] === "{") { depth += 1; opened = true; }
+            else if (source[index] === "}") {
+                depth -= 1;
+                if (opened && depth === 0) return source.slice(start, index + 1);
+            }
+        }
+        throw new Error("Could not extract " + functionName);
+    };
+
+    const resolve = new Function(
+        extractFunction(appJs, "getFlatTableChildParentPath") +
+        "\nreturn getFlatTableChildParentPath;"
+    )();
+
+    const table = { dataset: { repeatableGroup: "parts" } };
+
+    assert.equal(
+        resolve(table, {
+            dataset: {
+                rootIndex: "0",
+                repeatableRowGroup: "child_parts",
+                rowPath: "parts_0_child_parts_0",
+            },
+        }),
+        "parts_0",
+    );
+
+    assert.equal(
+        resolve(table, {
+            dataset: {
+                rootIndex: "0",
+                repeatableRowGroup: "grandchild_parts",
+                rowPath: "parts_0_child_parts_0_grandchild_parts_0",
+            },
+        }),
+        "parts_0",
+    );
+
+    assert.equal(
+        resolve(table, {
+            dataset: {
+                rootIndex: "0",
+                repeatableRowGroup: "parts",
+                rowPath: "parts_0",
+            },
+        }),
+        "parts_0",
+    );
+});
+
 test("flat TABLE child row identity is scoped to its parent row path", () => {
     assert.match(
         appJs,
