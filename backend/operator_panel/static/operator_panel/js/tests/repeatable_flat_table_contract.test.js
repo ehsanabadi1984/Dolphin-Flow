@@ -26,10 +26,7 @@ test("flat TABLE root clone keeps recursive child-add contract", () => {
         rootTemplate,
         /group\.flat_table\.child_templates/,
     );
-    assert.match(
-        rootTemplate,
-        /class="df-repeatable-child-add"/,
-    );
+    assert.ok(rootTemplate.includes('class="df-repeatable-child-add"'));
     assert.match(
         rootTemplate,
         /data-group-code="{{ child_template\.group\.code }}"/,
@@ -39,10 +36,7 @@ test("flat TABLE root clone keeps recursive child-add contract", () => {
         nestedTemplate,
         /child_template\.child_groups/,
     );
-    assert.match(
-        nestedTemplate,
-        /class="df-repeatable-child-add"/,
-    );
+    assert.ok(nestedTemplate.includes('class="df-repeatable-child-add"'));
     assert.match(
         nestedTemplate,
         /data-group-code="{{ nested_template\.group\.code }}"/,
