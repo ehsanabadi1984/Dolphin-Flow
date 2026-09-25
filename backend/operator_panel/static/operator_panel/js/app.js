@@ -2488,7 +2488,7 @@ document.addEventListener("click", (event) => {
                 field.name = oldName
                     .replace(
                         "PARENT_PREFIX",
-                        `${parentRow.dataset.rowPath}_`
+                        `${parentPath}_`
                     )
                     .replace(
                         `_${childGroupCode}_TEMPLATE_`,
