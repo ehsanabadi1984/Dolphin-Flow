@@ -38,7 +38,8 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
         group = SimpleNamespace(
             group=SimpleNamespace(
                 code=code,
-                name=code,
+                name=f"internal_{code}",
+                label=f"Label {code}",
                 group_type="NORMAL",
                 display_type=display_type,
             ),
@@ -204,6 +205,15 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
         request.user = AnonymousUser()
         context["request"] = request
         return template.render(context)
+
+
+    def test_repeatable_group_uses_label_not_internal_name(self):
+        rendered = self._render("LIST", "LIST")
+
+        self.assertIn("Label PARENT", rendered)
+        self.assertIn("Label CHILD", rendered)
+        self.assertNotIn("internal_PARENT", rendered)
+        self.assertNotIn("internal_CHILD", rendered)
 
     def test_list_parent_renders_list_child(self):
         rendered = self._render("LIST", "LIST")
