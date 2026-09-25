@@ -167,9 +167,7 @@ class OperatorPanelFormPostAdapter:
                     prefix=child_prefix,
                 )
                 if child_rows is not None:
-                    row.setdefault("child_groups", {})[
-                        child_group.code
-                    ] = tuple(child_rows)
+                    row[child_group.code] = child_rows
 
             rows.append(row)
 
