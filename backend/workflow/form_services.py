@@ -1161,14 +1161,25 @@ class DynamicFormService:
         first_ancestor_rows = set()
 
         for row in rows:
+            ancestor_paths = set()
+
             for cell in row["cells"]:
-                ancestor_path = cell.pop("_ancestor_path", None)
-                if ancestor_path is None:
+                ancestor_path = cell.get("_ancestor_path")
+                if ancestor_path is not None:
+                    ancestor_paths.add(ancestor_path)
+
+            for ancestor_path in ancestor_paths:
+                if ancestor_path in first_ancestor_rows:
                     continue
 
-                if ancestor_path not in first_ancestor_rows:
-                    cell["show"] = True
-                    first_ancestor_rows.add(ancestor_path)
+                for cell in row["cells"]:
+                    if cell.get("_ancestor_path") == ancestor_path:
+                        cell["show"] = True
+
+                first_ancestor_rows.add(ancestor_path)
+
+            for cell in row["cells"]:
+                cell.pop("_ancestor_path", None)
 
         for row in rows:
             row["column_cells"] = [
