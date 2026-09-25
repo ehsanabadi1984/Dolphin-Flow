@@ -1232,7 +1232,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         edit_html = response.content.decode()
         self.assertRegex(
             edit_html,
-            r'name="parts_0_address"\\s+value="Tehran"',
+            r'name="parts_0_address"\s+value="Tehran"',
         )
         self.assertIn('class="df-table-input"', edit_html)
 
