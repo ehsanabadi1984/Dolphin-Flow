@@ -2360,7 +2360,7 @@ function getRepeatableGroupPrefix(group) {
  * Deeper nested children keep their own rowPath because they are
  * real parent rows for their descendants.
  */
-function getFlatTableChildParentPath(table, parentRow) {
+function getFlatTableChildParentPath(table, parentRow, parentRowId) {
     const rootGroupCode = table?.dataset?.repeatableGroup;
     const rootIndex = parentRow?.dataset?.rootIndex;
 
@@ -2368,11 +2368,17 @@ function getFlatTableChildParentPath(table, parentRow) {
         return parentRow?.dataset?.rowPath || "";
     }
 
-    if (parentRow?.dataset?.repeatableRowGroup === rootGroupCode) {
-        return parentRow.dataset.rowPath || `${rootGroupCode}_${rootIndex}`;
+    const logicalParentRow = parentRowId
+        ? table.querySelector(
+            `[data-repeatable-item][data-row-id="${CSS.escape(parentRowId)}"]`
+        )
+        : null;
+
+    if (logicalParentRow?.dataset?.rowPath) {
+        return logicalParentRow.dataset.rowPath;
     }
 
-    return parentRow?.dataset?.rowPath || `${rootGroupCode}_${rootIndex}`;
+    return `${rootGroupCode}_${rootIndex}`;
 }
 
 function updateRepeatableDeleteState(container) {
@@ -2456,7 +2462,7 @@ document.addEventListener("click", (event) => {
         newItem.dataset.parentRowId = parentRowId;
         newItem.dataset.rootIndex = rootIndex;
         const parentPath =
-            getFlatTableChildParentPath(table, parentRow);
+            getFlatTableChildParentPath(table, parentRow, parentRowId);
 
         if (!parentPath) {
             console.error("Flat TABLE parent row path is missing.");
