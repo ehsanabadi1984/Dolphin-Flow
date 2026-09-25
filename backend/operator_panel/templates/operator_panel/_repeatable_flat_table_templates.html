@@ -82,17 +82,17 @@
               data-group-code="{{ nested_group.code }}"
               data-parent-row-id=""
             >
-              + افزودن {{ nested_group.name }}
+              + افزودن {{ nested_group.label }}
             </button>
           {% endif %}
         {% endfor %}
         <button
           type="button"
           class="df-button df-button-danger df-repeatable-delete"
-          data-delete-label="{{ child_group.name }}"
+          data-delete-label="{{ child_group.label }}"
           data-group-code="{{ child_group.code }}"
         >
-          حذف {{ child_group.name }}
+          حذف {{ child_group.label }}
         </button>
       </td>
     </tr>
