@@ -278,7 +278,32 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
         )
 
     def test_table_parent_renders_nested_child_independent_of_child_display_type(self):
-        rendered = self._render("TABLE", "TABLE")
+        context = self._context("TABLE", "TABLE")
+        context["edit_mode"] = True
+        context["dynamic_form"].is_submitted = False
+
+        parent_group = context["dynamic_form"].sections[0].layout_items[0].item
+        rows = parent_group.flat_table.rows
+        parent_row, child_row = rows
+
+        parent_row.column_cells[0].can_edit = True
+        parent_row.add_children = [
+            SimpleNamespace(
+                can_add=True,
+                group_code="CHILD",
+                group_label="Label CHILD",
+                parent_row_id="parent-row-1",
+            )
+        ]
+        child_row.column_cells[0].can_edit = True
+        child_row.can_delete = True
+        child_row.delete_group_label = "Label CHILD"
+
+        template = get_template(self.template_name)
+        request = RequestFactory().get("/operator/workflow/1/")
+        request.user = AnonymousUser()
+        context["request"] = request
+        rendered = template.render(context)
 
         self.assertIn('data-repeatable-row-group="CHILD"', rendered)
         self.assertIn("df-repeatable-child-flat-row", rendered)
