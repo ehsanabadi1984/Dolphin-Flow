@@ -129,7 +129,7 @@ test("flat TABLE child templates keep the complete parent path", () => {
 
     assert.match(
         appJs,
-                /\.replace\(\s*"PARENT_PREFIX",\s*`\$\{parentPath\}_`\s*\)/s,
+        /\\.replace\\(\\s*"PARENT_PREFIX",\\s*`\\$\\{parentPath\\}_`\\s*\\)/s,
     );
 
     assert.match(
@@ -350,6 +350,11 @@ test("flat TABLE child add resolves the logical parent row path", () => {
             const match = selector.match(/data-row-id="([^"]+)"/);
             return rows.find((row) => row.dataset.rowId === match?.[1]) || null;
         },
+
+        querySelectorAll(selector) {
+            if (selector !== "[data-repeatable-item]") return [];
+            return rows;
+        },
     };
     const visualChildRow = {
         dataset: {
@@ -377,7 +382,7 @@ test("flat TABLE child add resolves the logical parent row path", () => {
 test("flat TABLE child row identity is scoped to its parent row path", () => {
     assert.match(
         appJs,
-        /const childPrefix\s*=\s*\`\$\{parentRow\.dataset\.rowPath\}_\$\{childGroupCode\}_\$\{childIndex\}_\`;/s,
+        /const childPrefix\s*=\s*\`\$\{parentPath\}_\$\{childGroupCode\}_\$\{childIndex\}_\`;/s,
     );
     assert.ok(
         appJs.includes("field.name = \`${childPrefix}__id\`;"),
