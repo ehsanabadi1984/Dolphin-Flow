@@ -283,7 +283,7 @@
 
                                                         <select
                                                             id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                                                             {% if item_field.field.system_key == "DEVICE_TYPE" %}disabled{% endif %}
                                                         >
                                                             <option value="">---------</option>
@@ -304,7 +304,7 @@
 
                                                         <select
                                                             id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                                                             disabled
                                                         >
                                                             <option value="">---------</option>
@@ -333,14 +333,14 @@
 
                                                         <textarea
                                                             id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                                                         >{{ item_field.value|default:"" }}</textarea>
 
                                                     {% elif item_field.field.field_type == "SELECT" %}
 
                                                         <select
                                                             id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                                                         >
                                                             <option value="">---------</option>
 
@@ -361,7 +361,7 @@
                                                         <input
                                                             type="{% if item_field.field.field_type == 'NUMBER' %}number{% elif item_field.field.field_type == 'DATE' %}date{% elif item_field.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
                                                             id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                                                             value="{{ item_field.value|default:'' }}"
                                                         >
 
@@ -599,7 +599,7 @@
                             <input
                               type="text"
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                               value="{{ item_field.value|default:'' }}"
                             />
 
@@ -607,7 +607,7 @@
 
                             <textarea
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                             >{{ item_field.value|default:'' }}</textarea>
 
                           {% elif item_field.field.field_type == "NUMBER" %}
@@ -615,7 +615,7 @@
                             <input
                               type="number"
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                               value="{{ item_field.value|default:'' }}"
                             />
 
@@ -624,7 +624,7 @@
                             <input
                               type="date"
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                               value="{{ item_field.value|default:'' }}"
                             />
 
@@ -633,7 +633,7 @@
                             <input
                               type="datetime-local"
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                               value="{{ item_field.value|default:'' }}"
                             />
 
@@ -642,7 +642,7 @@
                             <input
                               type="checkbox"
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                               {% if item_field.value %}checked{% endif %}
                             />
 
@@ -650,7 +650,7 @@
 
                             <select
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ forloop.parentloop.counter0 }}_{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                               data-field-id="{{ item_field.field.pk }}"
                               data-field-code="{{ item_field.field.code }}"
                               {% if item_field.parent_code %}
