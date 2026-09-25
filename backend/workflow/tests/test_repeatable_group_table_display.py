@@ -498,6 +498,11 @@ class TableModeRenderTests(TestCase):
             lookup_item=parent_choice,
         )
         RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=self.desc_field,
+            text_value="parent-description",
+        )
+        RepeatableRowValue.objects.create(
             row=child_one,
             field=child_field,
             text_value="child-1",
@@ -568,6 +573,23 @@ class TableModeRenderTests(TestCase):
         )
         self.assertEqual(
             [cell["show"] for cell in parent_part_cells],
+            [True, False, False],
+        )
+
+        parent_description_cells = [
+            next(
+                cell
+                for cell in row["column_cells"]
+                if cell["field"].code == "description"
+            )
+            for row in rows
+        ]
+        self.assertEqual(
+            [cell["value"] for cell in parent_description_cells],
+            ["parent-description", "parent-description", "parent-description"],
+        )
+        self.assertEqual(
+            [cell["show"] for cell in parent_description_cells],
             [True, False, False],
         )
 
