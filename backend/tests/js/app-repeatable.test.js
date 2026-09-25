@@ -500,3 +500,161 @@ test("adding a child row does not clone its nested grandchild rows", async () =>
     dom.window.close();
 });
 
+
+
+test("deletes a flat TABLE child row without affecting its parent or sibling rows", async () => {
+    const dom = new JSDOM(
+        `
+        <button id="df-notification-toggle" type="button" aria-expanded="false"></button>
+        <div id="df-notification-menu" aria-hidden="true">
+            <div id="df-notification-list"></div>
+            <span id="df-notification-badge"></span>
+            <span id="df-notification-menu-count"></span>
+        </div>
+
+        <form data-instance-id="1" data-edit-mode="1">
+            <section
+                class="df-repeatable-group df-table-group"
+                data-repeatable-group="owners"
+            >
+                <div class="df-repeatable-items">
+                    <tr
+                        class="df-repeatable-item df-repeatable-flat-row"
+                        data-repeatable-item
+                        data-repeatable-row-group="owners"
+                        data-root-index="0"
+                        data-row-path="owners_0"
+                        data-row-id="root-1"
+                        data-parent-row-id=""
+                    >
+                        <td class="df-table-actions">
+                            <button
+                                type="button"
+                                class="df-button df-repeatable-child-add"
+                                data-group-code="phones"
+                                data-parent-row-id="root-1"
+                            >+ افزودن</button>
+                        </td>
+                    </tr>
+
+                    <tr
+                        class="df-repeatable-item df-repeatable-flat-row df-repeatable-child-flat-row"
+                        data-repeatable-item
+                        data-repeatable-row-group="phones"
+                        data-root-index="0"
+                        data-row-path="owners_0_phones_0"
+                        data-row-id="child-1"
+                        data-parent-row-id="root-1"
+                    >
+                        <td>keep</td>
+                        <td class="df-table-actions">
+                            <button
+                                type="button"
+                                class="df-repeatable-delete"
+                                data-delete-label="شماره تماس"
+                                data-group-code="phones"
+                            >حذف</button>
+                        </td>
+                    </tr>
+
+                    <tr
+                        class="df-repeatable-item df-repeatable-flat-row df-repeatable-child-flat-row"
+                        data-repeatable-item
+                        data-repeatable-row-group="phones"
+                        data-root-index="0"
+                        data-row-path="owners_0_phones_1"
+                        data-row-id="child-2"
+                        data-parent-row-id="root-1"
+                    >
+                        <td>delete</td>
+                        <td class="df-table-actions">
+                            <button
+                                type="button"
+                                class="df-repeatable-delete"
+                                data-delete-label="شماره تماس"
+                                data-group-code="phones"
+                            >حذف</button>
+                        </td>
+                    </tr>
+                </div>
+            </section>
+        </form>
+        `,
+        {
+            url: "http://localhost/workflow/1/",
+            runScripts: "outside-only",
+        }
+    );
+
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.CSS = dom.window.CSS;
+    globalThis.confirm = () => true;
+    dom.window.confirm = () => true;
+    globalThis.setTimeout = () => 0;
+    globalThis.clearTimeout = () => {};
+
+    class WebSocketStub {
+        static OPEN = 1;
+        static CONNECTING = 0;
+
+        constructor() {
+            this.readyState = WebSocketStub.OPEN;
+        }
+
+        addEventListener() {}
+    }
+
+    globalThis.WebSocket = WebSocketStub;
+    dom.window.WebSocket = WebSocketStub;
+
+    const namingPath = new URL(
+        "../../operator_panel/static/operator_panel/js/repeatable-naming.js",
+        import.meta.url
+    );
+    const namingSource = await readFile(namingPath, "utf8");
+    dom.window.eval(namingSource);
+    globalThis.reindexRepeatableFieldName =
+        dom.window.DolphinFlowRepeatableNaming.reindexRepeatableFieldName;
+    globalThis.buildRepeatableGroupPrefix =
+        dom.window.DolphinFlowRepeatableNaming.buildRepeatableGroupPrefix;
+
+    await import(`${appPath.href}?flat-table-delete-test`);
+
+    document.dispatchEvent(
+        new dom.window.Event("DOMContentLoaded", { bubbles: true })
+    );
+
+    const rows = document.querySelectorAll(
+        ".df-table-group .df-repeatable-items > [data-repeatable-item]"
+    );
+    assert.equal(rows.length, 3);
+
+    rows[2].querySelector(".df-repeatable-delete").dispatchEvent(
+        new dom.window.MouseEvent("click", { bubbles: true })
+    );
+
+    const remaining = document.querySelectorAll(
+        ".df-table-group .df-repeatable-items > [data-repeatable-item]"
+    );
+
+    assert.equal(remaining.length, 2);
+    assert.ok(
+        document.querySelector(
+            '[data-repeatable-row-group="owners"][data-row-id="root-1"]'
+        )
+    );
+    assert.ok(
+        document.querySelector(
+            '[data-repeatable-row-group="phones"][data-row-id="child-1"]'
+        )
+    );
+    assert.equal(
+        document.querySelector(
+            '[data-repeatable-row-group="phones"][data-row-id="child-2"]'
+        ),
+        null
+    );
+
+    dom.window.close();
+});
