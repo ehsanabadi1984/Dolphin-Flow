@@ -1007,3 +1007,112 @@ class RepeatableAccessibilityContractTests(TestCase):
         self.assertIn('scope="col"', content)
         self.assertIn('for="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-', content)
         self.assertIn('id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ child_group.group.code }}-', content)
+
+
+    def test_flat_table_input_prefixes_are_scoped_to_root_and_child_paths(self):
+        from workflow.form_services import DynamicFormService
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.table_group,
+            name="Child Parts Prefix",
+            code="child_parts_prefix",
+            order=10,
+            is_active=True,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Code Prefix",
+            code="child_code_prefix",
+            field_type=FormField.FieldType.TEXT,
+            label="Child Code Prefix",
+            order=1,
+            is_active=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=child_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        instance = self.create_instance()
+        parent_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=self.table_group,
+            row_order=0,
+        )
+        child_rows = [
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=child_group,
+                parent_row=parent_row,
+                row_order=index,
+            )
+            for index in range(2)
+        ]
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=self.part_field,
+            lookup_item=self.lookup_oil,
+        )
+        for index, row in enumerate(child_rows, start=1):
+            RepeatableRowValue.objects.create(
+                row=row,
+                field=child_field,
+                text_value=f"child-{index}",
+            )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+            edit_mode=True,
+        )
+        table_group = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].code == self.table_group.code
+        )
+
+        rows = table_group["flat_table"]["rows"]
+        self.assertEqual(len(rows), 2)
+
+        root_cell_prefixes = []
+        child_cell_prefixes = []
+        for row in rows:
+            root_cell_prefixes.append(
+                next(
+                    cell["input_prefix"]
+                    for cell in row["column_cells"]
+                    if cell["field"].code == self.part_field.code
+                )
+            )
+            child_cell_prefixes.append(
+                next(
+                    cell["input_prefix"]
+                    for cell in row["column_cells"]
+                    if cell["field"].code == child_field.code
+                )
+            )
+
+        self.assertEqual(root_cell_prefixes, ["parts_0_", "parts_0_"])
+        self.assertEqual(
+            child_cell_prefixes,
+            [
+                "parts_0_child_parts_prefix_0_",
+                "parts_0_child_parts_prefix_1_",
+            ],
+        )
