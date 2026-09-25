@@ -497,8 +497,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertTrue(RepeatableRow.objects.filter(pk=row.pk).exists())
 
     def test_workflow_instance_post_rejects_imei_change_on_resolved_device(self):
-        group, fields = self._create_device_system_fields()
-        device_type = __import__("workflow.models", fromlist=["DeviceType"]).DeviceType.objects.create(
+        group, fields = self._create_device_system_fields()        device_type = __import__("workflow.models", fromlist=["DeviceType"]).DeviceType.objects.create(
             name="Phone",
             code="OP_POST_IMEI_TYPE",
             is_active=True,
@@ -997,8 +996,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             is_active=True,
         )
         device = Device.objects.create(device_model=device_model)
-        DeviceIdentifier.objects.create(
-            device=device,
+        DeviceIdentifier.objects.create(            device=device,
             identifier_type=DeviceIdentifier.IdentifierType.IMEI,
             value="777777777777777",
         )
@@ -1220,6 +1218,191 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertRegex(
             edit_html,
             r'name="parts_lifecycle_0_child_parts_lifecycle_0__id"\s+value="\d+"',
+        )
+
+    def test_normal_nested_table_two_roots_preserve_both_roots_when_child_is_added_to_first(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Parts Two Roots",
+            code="parts_two_roots",
+            order=5,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            is_active=True,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Child Parts Two Roots",
+            code="child_parts_two_roots",
+            order=6,
+            parent_group=parent_group,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            is_active=True,
+        )
+        name_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Owner Name",
+            code="owner_name_two_roots",
+            label="Owner Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+            is_active=True,
+        )
+        address_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Owner Address",
+            code="owner_address_two_roots",
+            label="Owner Address",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+            is_active=True,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Owner Phone",
+            code="owner_phone_two_roots",
+            label="Owner Phone",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+            is_active=True,
+        )
+        for group in (parent_group, child_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+        for field in (name_field, address_field, child_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+            )
+
+        # Phase 1: create two independent roots.
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {
+                "parts_two_roots_0__id": "root-create-0",
+                "parts_two_roots_0_owner_name_two_roots": "Ehsan",
+                "parts_two_roots_0_owner_address_two_roots": "Isfahan",
+                "parts_two_roots_1__id": "root-create-1",
+                "parts_two_roots_1_owner_name_two_roots": "Sadeghi",
+                "parts_two_roots_1_owner_address_two_roots": "Tehran",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        roots = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=parent_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(len(roots), 2)
+        root0, root1 = roots
+
+        self.assertEqual(
+            RepeatableRowValue.objects.get(row=root0, field=name_field).text_value,
+            "Ehsan",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(row=root0, field=address_field).text_value,
+            "Isfahan",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(row=root1, field=name_field).text_value,
+            "Sadeghi",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(row=root1, field=address_field).text_value,
+            "Tehran",
+        )
+
+        # Phase 2: the browser reopens Edit, then Add Child is performed under
+        # root 0 while root 1 remains an independent root.
+        response = self.client.get(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {"edit": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk])
+            + "?edit=1",
+            {
+                "parts_two_roots_0__id": str(root0.pk),
+                "parts_two_roots_0_owner_name_two_roots": "Ehsan",
+                "parts_two_roots_0_owner_address_two_roots": "Isfahan",
+                "parts_two_roots_0_child_parts_two_roots_0__id": "child-create-0",
+                "parts_two_roots_0_child_parts_two_roots_0_owner_phone_two_roots": "09120000000",
+                "parts_two_roots_1__id": str(root1.pk),
+                "parts_two_roots_1_owner_name_two_roots": "Sadeghi",
+                "parts_two_roots_1_owner_address_two_roots": "Tehran",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        # The critical invariant: adding a child to root 0 must not make root
+        # 1 disappear from the canonical RepeatableRow tree.
+        roots = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=parent_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(len(roots), 2)
+        self.assertEqual({root.pk for root in roots}, {root0.pk, root1.pk})
+
+        root0.refresh_from_db()
+        root1.refresh_from_db()
+        child_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=child_group,
+        )
+        self.assertEqual(child_row.parent_row_id, root0.pk)
+
+        self.assertEqual(
+            RepeatableRowValue.objects.get(row=root0, field=address_field).text_value,
+            "Isfahan",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(row=root1, field=address_field).text_value,
+            "Tehran",
+        )
+        self.assertEqual(
+            RepeatableRowValue.objects.get(row=child_row, field=child_field).text_value,
+            "09120000000",
+        )
+
+        # The same invariant must survive reconstruction into the Edit form.
+        response = self.client.get(
+            reverse("operator_panel:workflow_instance", args=[self.instance.pk]),
+            {"edit": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        edit_html = response.content.decode()
+        self.assertRegex(
+            edit_html,
+            rf'name="parts_two_roots_0_owner_address_two_roots"\s+value="Isfahan"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="parts_two_roots_1_owner_address_two_roots"\s+value="Tehran"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="parts_two_roots_0_child_parts_two_roots_0_owner_phone_two_roots"\s+value="09120000000"',
         )
 
     def test_normal_nested_table_preserves_root_address_and_row_identity_on_edit_save(self):
@@ -1497,8 +1680,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         })
         payload["parts_create_0_address"] = "Tehran"
 
-        response = self.client.post(
-            reverse(
+        response = self.client.post(            reverse(
                 "operator_panel:workflow_instance",
                 args=[self.instance.pk],
             ),
@@ -1758,4 +1940,3 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             get_response,
             f'data-row-id="{row.pk}"',
         )
-
