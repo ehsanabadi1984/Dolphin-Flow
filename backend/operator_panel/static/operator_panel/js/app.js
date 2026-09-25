@@ -2863,7 +2863,8 @@ document.addEventListener("click", (event) => {
             field.name = reindexRepeatableFieldName(
                 oldName,
                 groupPrefix,
-                newIndex
+                newIndex,
+                groupCode
             );
         }
 
