@@ -126,7 +126,7 @@ class ResetWorkflowDataCommandTests(TestCase):
         WorkflowStepSLA.objects.create(
             step=self.step1,
             calendar=self.calendar,
-            duration="01:00:00",
+            duration=timedelta(hours=1),
         )
 
         self.form = FormDefinition.objects.create(
