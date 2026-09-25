@@ -89,12 +89,14 @@
       {% endfor %}
 
       <td class="df-table-actions">
-        <input
-          type="hidden"
-          name="{{ row.id_input_name }}"
-          value="{{ row.row_id }}"
-          data-repeatable-row-id
-        />
+        {% for id_input in row.id_inputs %}
+          <input
+            type="hidden"
+            name="{{ id_input.name }}"
+            value="{{ id_input.value }}"
+            {% if id_input.is_root %}data-repeatable-root-row-id{% else %}data-repeatable-row-id{% endif %}
+          />
+        {% endfor %}
 
         {% for child_action in row.add_children %}
           {% if edit_mode and not dynamic_form.is_submitted and child_action.can_add %}
