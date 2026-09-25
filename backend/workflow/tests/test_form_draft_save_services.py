@@ -1,7 +1,10 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.http import QueryDict
 from django.test import TestCase
 from unittest.mock import patch
+
+from operator_panel.form_post_adapter import OperatorPanelFormPostAdapter
 
 from workflow.form_draft_diff_services import RowChangeAction
 from workflow.form_draft_save_services import (
@@ -1456,6 +1459,148 @@ class FormDraftSaveServiceContractTests(TestCase):
         )
 
 
+
+    def test_real_post_adapter_to_save_preserves_two_root_trees(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Parents",
+            code="parents_post_to_save",
+            order=10,
+        )
+        parent_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Address",
+            code="address_post_to_save",
+            label="Address",
+            field_type=FormField.FieldType.TEXTAREA,
+            order=0,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="Children",
+            code="children_post_to_save",
+            order=11,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Name",
+            code="child_name_post_to_save",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        self.grant_repeatable_write_permissions(parent_group, parent_field)
+        self.grant_repeatable_write_permissions(child_group, child_field)
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "parents_post_to_save_0_address_post_to_save": "آقایی",
+            "parents_post_to_save_0_children_post_to_save_0_child_name_post_to_save": "فرزند آقایی",
+            "parents_post_to_save_1_address_post_to_save": "صمدی",
+            "parents_post_to_save_1_children_post_to_save_0_child_name_post_to_save": "فرزند صمدی",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+            instance=self.instance,
+        )
+        self.assertEqual(
+            payload["parents_post_to_save"],
+            [
+                {
+                    "address_post_to_save": "آقایی",
+                    "children_post_to_save": [
+                        {"child_name_post_to_save": "فرزند آقایی"},
+                    ],
+                },
+                {
+                    "address_post_to_save": "صمدی",
+                    "children_post_to_save": [
+                        {"child_name_post_to_save": "فرزند صمدی"},
+                    ],
+                },
+            ],
+        )
+
+        result = self.call(submitted_data=payload)
+        self.assertTrue(result.saved)
+
+        parent_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=parent_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(len(parent_rows), 2)
+        self.assertEqual(
+            [row.values.get(field=parent_field).text_value for row in parent_rows],
+            ["آقایی", "صمدی"],
+        )
+
+        child_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=child_group,
+            ).order_by("parent_row_id", "row_order", "pk")
+        )
+        self.assertEqual(len(child_rows), 2)
+        self.assertEqual(
+            [row.parent_row_id for row in child_rows],
+            [parent_rows[0].pk, parent_rows[1].pk],
+        )
+        self.assertEqual(
+            [row.values.get(field=child_field).text_value for row in child_rows],
+            ["فرزند آقایی", "فرزند صمدی"],
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "parents_post_to_save_0_address_post_to_save": "آقایی تغییرکرده",
+            "parents_post_to_save_0_children_post_to_save_0_child_name_post_to_save": "فرزند آقایی جدید",
+            "parents_post_to_save_1_address_post_to_save": "صمدی تغییرکرده",
+            "parents_post_to_save_1_children_post_to_save_0_child_name_post_to_save": "فرزند صمدی جدید",
+        })
+        post["parents_post_to_save_0__id"] = str(parent_rows[0].pk)
+        post["parents_post_to_save_0_children_post_to_save_0__id"] = str(child_rows[0].pk)
+        post["parents_post_to_save_1__id"] = str(parent_rows[1].pk)
+        post["parents_post_to_save_1_children_post_to_save_0__id"] = str(child_rows[1].pk)
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+            instance=self.instance,
+        )
+        result = self.call(submitted_data=payload)
+        self.assertTrue(result.saved)
+
+        parent_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=parent_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(
+            [row.values.get(field=parent_field).text_value for row in parent_rows],
+            ["آقایی تغییرکرده", "صمدی تغییرکرده"],
+        )
+        child_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=child_group,
+            ).order_by("parent_row_id", "row_order", "pk")
+        )
+        self.assertEqual(
+            [row.parent_row_id for row in child_rows],
+            [parent_rows[0].pk, parent_rows[1].pk],
+        )
+        self.assertEqual(
+            [row.values.get(field=child_field).text_value for row in child_rows],
+            ["فرزند آقایی جدید", "فرزند صمدی جدید"],
+        )
 
     def test_adding_children_to_both_root_rows_preserves_each_root_and_child(self):
         parent_group = FormRepeatableGroup.objects.create(
