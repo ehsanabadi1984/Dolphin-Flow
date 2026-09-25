@@ -3245,6 +3245,8 @@ if (form) {
         "submit",
         (event) => {
 
+            normalizeNestedRepeatableFieldNames(form);
+
             /*
              * Device row save/delete buttons must
              * keep their existing behavior.
