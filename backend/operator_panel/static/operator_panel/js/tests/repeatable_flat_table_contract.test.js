@@ -73,3 +73,15 @@ test("flat TABLE delete handler covers root and child rows", () => {
         /if \(rowGroupCode === rootGroupCode\)/,
     );
 });
+
+
+test("flat TABLE root delete uses serialized group permission contract", () => {
+    assert.match(
+        rootTemplate,
+        /{% if edit_mode and not dynamic_form\.is_submitted and group\.can_delete %}/,
+    );
+    assert.doesNotMatch(
+        rootTemplate,
+        /group\.permissions\.can_delete/,
+    );
+});
