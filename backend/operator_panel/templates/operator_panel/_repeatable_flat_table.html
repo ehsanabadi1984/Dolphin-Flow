@@ -180,4 +180,16 @@
       name="{{ group.group.code }}_TEMPLATE__id"
       value=""
     />
-    {% include "operator_panel/_repeatable_flat_table_templates.html" with parent_group=group.group flat_columns=group.flat_table.columns %}
+    {% for child_template in group.flat_table.child_templates %}
+      {% if edit_mode and not dynamic_form.is_submitted and child_template.can_add %}
+        <button
+          type="button"
+          class="df-button df-button-secondary df-repeatable-child-add"
+          data-group-code="{{ child_template.group.code }}"
+          data-parent-row-id=""
+        >
+          + افزودن {{ child_template.group.label }}
+        </button>
+      {% endif %}
+    {% endfor %}
+    {% include "operator_panel/_repeatable_flat_table_templates.html" with parent_templates=group.flat_table.child_templates flat_columns=group.flat_table.columns %}
