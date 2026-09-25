@@ -283,3 +283,7 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
         self.assertIn('data-repeatable-row-group="CHILD"', rendered)
         self.assertIn("df-repeatable-child-flat-row", rendered)
         self.assertIn('data-parent-row-id="parent-row-1"', rendered)
+        self.assertIn("+ افزودن Label CHILD", rendered)
+        self.assertIn("حذف Label CHILD", rendered)
+        self.assertNotIn("+ افزودن internal_CHILD", rendered)
+        self.assertNotIn("حذف internal_CHILD", rendered)
