@@ -975,6 +975,10 @@ class DynamicFormService:
                     group_permission.can_add
                     and not is_submitted
                 ),
+                "can_delete": (
+                    group_permission.can_delete
+                    and not is_submitted
+                ),
                 "child_groups": [],
             }
 
