@@ -2372,7 +2372,7 @@ function getFlatTableChildParentPath(table, parentRow) {
         return parentRow.dataset.rowPath || `${rootGroupCode}_${rootIndex}`;
     }
 
-    return `${rootGroupCode}_${rootIndex}`;
+    return parentRow?.dataset?.rowPath || `${rootGroupCode}_${rootIndex}`;
 }
 
 function updateRepeatableDeleteState(container) {
