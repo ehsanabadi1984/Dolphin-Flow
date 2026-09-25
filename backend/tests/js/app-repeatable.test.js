@@ -519,9 +519,9 @@ test("deletes a flat TABLE child row without affecting its parent or sibling row
                 class="df-repeatable-group df-table-group"
                 data-repeatable-group="owners"
             >
-                <div class="df-repeatable-items">
+                <div class="df-table-wrapper">
                     <table>
-                        <tbody>
+                        <tbody class="df-repeatable-items" data-group-code="owners">
                             <tr
                                 class="df-repeatable-item df-repeatable-flat-row"
                                 data-repeatable-item
@@ -632,7 +632,7 @@ test("deletes a flat TABLE child row without affecting its parent or sibling row
     );
 
     const rows = document.querySelectorAll(
-        ".df-table-group .df-repeatable-items tbody > [data-repeatable-item]"
+        ".df-table-group .df-repeatable-items > [data-repeatable-item]"
     );
     assert.equal(rows.length, 3);
 
