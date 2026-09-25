@@ -944,6 +944,11 @@ class FormRepeatableGroup(models.Model):
         max_length=150,
     )
 
+    label = models.CharField(
+        max_length=200,
+        default="",
+    )
+
     code = models.CharField(
         max_length=50,
     )
