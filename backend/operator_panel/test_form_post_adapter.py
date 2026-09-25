@@ -440,3 +440,94 @@ class FormPostAdapterTests(TestCase):
                 }
             ],
         )
+
+
+    def test_two_root_rows_keep_independent_values_when_one_root_has_child_rows(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Address",
+            code="address",
+            label="Address",
+            field_type=FormField.FieldType.TEXTAREA,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "آقایی",
+            "items_1_title": "صمدی",
+            "items_1_child_items_0_address": "آدرس صمدی",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {"title": "آقایی"},
+                {
+                    "title": "صمدی",
+                    "child_items": [{"address": "آدرس صمدی"}],
+                },
+            ],
+        )
+
+        self.assertIsInstance(payload["items"][0]["title"], str)
+        self.assertIsInstance(payload["items"][1]["title"], str)
+
+    def test_child_row_cannot_change_sibling_root_field_payload(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "Root 0",
+            "items_1_title": "Root 1",
+            "items_0_child_items_0_child_title": "Child of root 0",
+            "items_1_child_items_0_child_title": "Child of root 1",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            [row["title"] for row in payload["items"]],
+            ["Root 0", "Root 1"],
+        )
+        self.assertEqual(
+            payload["items"][0]["child_items"],
+            [{"child_title": "Child of root 0"}],
+        )
+        self.assertEqual(
+            payload["items"][1]["child_items"],
+            [{"child_title": "Child of root 1"}],
+        )
