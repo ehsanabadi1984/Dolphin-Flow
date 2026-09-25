@@ -1055,7 +1055,7 @@ class DynamicFormService:
                         "".join(
                             f"{group_code}_{index}_"
                             for group_code, index in path
-                        )
+                        ).rstrip("_")
                         + "__id"
                     ),
                     "path_key": "".join(
@@ -1122,6 +1122,41 @@ class DynamicFormService:
                 [(group_context["group"].code, root_index)],
                 [],
             )
+
+        # A flat table may suppress the visual root <tr> when the root
+        # has populated children. The root row identity must still be
+        # submitted exactly once so the diff layer can keep the existing
+        # RepeatableRow instead of treating it as a CREATE.
+        first_row_for_root = set()
+        root_row_ids = {
+            root_index: item["row_id"]
+            for root_index, item in enumerate(group_context["items"])
+        }
+
+        for row in rows:
+            root_index = row["path"][0][1]
+            row["id_inputs"] = [
+                {
+                    "name": row["id_input_name"],
+                    "value": row["row_id"],
+                    "is_root": False,
+                }
+            ]
+
+            if root_index not in first_row_for_root:
+                first_row_for_root.add(root_index)
+                if row["row_group_code"] != group_context["group"].code:
+                    row["id_inputs"].insert(
+                        0,
+                        {
+                            "name": (
+                                f"{group_context['group'].code}_"
+                                f"{root_index}__id"
+                            ),
+                            "value": root_row_ids[root_index],
+                            "is_root": True,
+                        },
+                    )
 
         first_ancestor_rows = set()
 
