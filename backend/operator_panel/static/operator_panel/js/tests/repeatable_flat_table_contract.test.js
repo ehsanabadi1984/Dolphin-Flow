@@ -137,6 +137,77 @@ test("flat TABLE child templates keep the complete parent path", () => {
         /\.replace\(\s*`_\$\{childGroupCode\}_TEMPLATE_`,\s*`_\$\{childGroupCode\}_\$\{childIndex\}_`\s*\)/s,
     );
 });
+test("flat TABLE root and child reindex keeps both root trees isolated", () => {
+    const extractFunction = (source, functionName) => {
+        const start = source.indexOf("function " + functionName + "(");
+        assert.notEqual(start, -1, functionName + " must exist");
+        let depth = 0;
+        let opened = false;
+        for (let index = source.indexOf("{", start); index < source.length; index += 1) {
+            if (source[index] === "{") { depth += 1; opened = true; }
+            else if (source[index] === "}") {
+                depth -= 1;
+                if (opened && depth === 0) return source.slice(start, index + 1);
+            }
+        }
+        throw new Error("Could not extract " + functionName);
+    };
+
+    const makeField = (name) => ({
+        name,
+        getAttribute(attribute) { return attribute === "name" ? this.name : null; },
+    });
+
+    const makeRow = ({ id, group, parentId = "", path, fields }) => ({
+        dataset: { rowId: id, repeatableRowGroup: group, parentRowId: parentId, rowPath: path, rootIndex: "" },
+        fields,
+        querySelectorAll(selector) { return selector === "input, textarea, select" ? this.fields : []; },
+    });
+
+    const rows = [];
+    const container = {
+        querySelectorAll(selector) {
+            if (!selector.includes("[data-repeatable-item]")) return [];
+            const groupMatch = selector.match(/data-repeatable-row-group="([^"]+)"/);
+            const parentMatch = selector.match(/data-parent-row-id="([^"]+)"/);
+            return rows.filter((row) => {
+                if (groupMatch && row.dataset.repeatableRowGroup !== groupMatch[1]) return false;
+                if (parentMatch && row.dataset.parentRowId !== parentMatch[1]) return false;
+                return true;
+            });
+        },
+    };
+
+    const root0Field = makeField("parts_0_name");
+    const child0Field = makeField("parts_0_child_parts_0_address");
+    const root1Field = makeField("parts_1_name");
+    const child1Field = makeField("parts_1_child_parts_0_address");
+    const root0 = makeRow({ id: "root-0", group: "parts", path: "parts_0", fields: [root0Field] });
+    const child0 = makeRow({ id: "child-0", group: "child_parts", parentId: "root-0", path: "parts_0_child_parts_0", fields: [child0Field] });
+    const root1 = makeRow({ id: "root-1", group: "parts", path: "parts_1", fields: [root1Field] });
+    const child1 = makeRow({ id: "child-1", group: "child_parts", parentId: "root-1", path: "parts_1_child_parts_0", fields: [child1Field] });
+    rows.push(root0, child0, root1, child1);
+
+    const CSS = { escape: (value) => value };
+    const rootReindex = extractFunction(appJs, "reindexFlatTableRootRows");
+    const childReindex = extractFunction(appJs, "reindexFlatTableChildRows");
+    const invoke = new Function("CSS", rootReindex + "\n" + childReindex + "\nreturn { reindexFlatTableRootRows, reindexFlatTableChildRows };")(CSS);
+
+    invoke.reindexFlatTableRootRows(container, "parts");
+    assert.deepEqual(
+        [root0Field.name, child0Field.name, root1Field.name, child1Field.name],
+        ["parts_0_name", "parts_0_child_parts_0_address", "parts_1_name", "parts_1_child_parts_0_address"],
+    );
+
+    invoke.reindexFlatTableChildRows(container, "child_parts", "root-0", "parts_0");
+    invoke.reindexFlatTableChildRows(container, "child_parts", "root-1", "parts_1");
+
+    assert.deepEqual(
+        [root0Field.name, child0Field.name, root1Field.name, child1Field.name],
+        ["parts_0_name", "parts_0_child_parts_0_address", "parts_1_name", "parts_1_child_parts_0_address"],
+    );
+    assert.equal(new Set([root0Field.name, child0Field.name, root1Field.name, child1Field.name]).size, 4);
+});
 test("flat TABLE root reindex preserves child group segments", () => {
     assert.match(
         appJs,
