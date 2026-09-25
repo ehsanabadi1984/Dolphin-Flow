@@ -2487,8 +2487,9 @@ document.addEventListener("click", (event) => {
             if (!oldName) return;
 
             const isChildField =
+                oldName.startsWith("PARENT_PREFIX") &&
                 oldName.includes(
-                    `_${childGroupCode}_TEMPLATE_`
+                    `${childGroupCode}_TEMPLATE_`
                 );
             const isChildRowId =
                 field.type === "hidden" &&
