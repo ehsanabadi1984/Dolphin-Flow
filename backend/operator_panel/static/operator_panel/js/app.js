@@ -3153,6 +3153,85 @@ const validateMainWorkflowForm = (form) => {
 };
 
 
+function normalizeNestedRepeatableFieldNames(form) {
+    const rows = Array.from(
+        form.querySelectorAll(
+            '.df-repeatable-group:not(.df-table-group):not(.df-device-group) [data-repeatable-item]:not([data-repeatable-template])'
+        )
+    );
+
+    const pathByRow = new Map();
+
+    const getRowPath = (row) => {
+        if (pathByRow.has(row)) {
+            return pathByRow.get(row);
+        }
+
+        const group = row.closest(".df-repeatable-group");
+        if (!group) {
+            return "";
+        }
+
+        const container = group.querySelector(":scope > .df-repeatable-items");
+        if (!container) {
+            return "";
+        }
+
+        const siblings = Array.from(container.children).filter(
+            (candidate) =>
+                candidate.matches("[data-repeatable-item]") &&
+                !candidate.hasAttribute("data-repeatable-template")
+        );
+
+        const index = siblings.indexOf(row);
+        if (index < 0) {
+            return "";
+        }
+
+        const parentRow = group.closest("[data-repeatable-item]");
+        const parentPath = parentRow
+            ? getRowPath(parentRow)
+            : "";
+
+        const groupCode = group.dataset.repeatableGroup;
+        if (!groupCode) {
+            return "";
+        }
+
+        const path = `${parentPath}${groupCode}_${index}_`;
+        pathByRow.set(row, path);
+        return path;
+    };
+
+    rows.forEach((row) => {
+        const rowPath = getRowPath(row);
+        if (!rowPath) {
+            return;
+        }
+
+        getRowOwnedElements(
+            row,
+            "input, textarea, select"
+        ).forEach((field) => {
+            const fieldWrapper = field.closest("[data-field-code]");
+            const fieldCode = fieldWrapper?.dataset.fieldCode;
+
+            if (fieldCode) {
+                field.name = `${rowPath}${fieldCode}`;
+                return;
+            }
+
+            const currentName = field.getAttribute("name") || "";
+
+            if (currentName.endsWith("__id")) {
+                field.name = `${rowPath}__id`;
+            } else if (currentName.endsWith("_instance_device_id")) {
+                field.name = `${rowPath}instance_device_id`;
+            }
+        });
+    });
+}
+
 const form =
     document.querySelector(
         ".workflow-instance > form"
