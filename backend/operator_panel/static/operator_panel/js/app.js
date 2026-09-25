@@ -2350,6 +2350,31 @@ function getRepeatableGroupPrefix(group) {
     );
 }
 
+/*
+ * Flat TABLE child rows are rendered as the visual row that owns
+ * the child fields. When a child group is nested directly under a
+ * root group, that visual row is NOT the root row, so its rowPath
+ * cannot be used as the parent path for a newly-added child.
+ *
+ * Resolve the logical parent path from the root index in that case.
+ * Deeper nested children keep their own rowPath because they are
+ * real parent rows for their descendants.
+ */
+function getFlatTableChildParentPath(table, parentRow) {
+    const rootGroupCode = table?.dataset?.repeatableGroup;
+    const rootIndex = parentRow?.dataset?.rootIndex;
+
+    if (!rootGroupCode || rootIndex === undefined || rootIndex === "") {
+        return parentRow?.dataset?.rowPath || "";
+    }
+
+    if (parentRow?.dataset?.repeatableRowGroup === rootGroupCode) {
+        return parentRow.dataset.rowPath || `${rootGroupCode}_${rootIndex}`;
+    }
+
+    return `${rootGroupCode}_${rootIndex}`;
+}
+
 function updateRepeatableDeleteState(container) {
     const group = container.closest(".df-repeatable-group");
     if (!group) return;
@@ -2430,8 +2455,16 @@ document.addEventListener("click", (event) => {
         newItem.dataset.repeatableRowGroup = childGroupCode;
         newItem.dataset.parentRowId = parentRowId;
         newItem.dataset.rootIndex = rootIndex;
+        const parentPath =
+            getFlatTableChildParentPath(table, parentRow);
+
+        if (!parentPath) {
+            console.error("Flat TABLE parent row path is missing.");
+            return;
+        }
+
         newItem.dataset.rowPath =
-            `${parentRow.dataset.rowPath}_${childGroupCode}_${childIndex}`;
+            `${parentPath}_${childGroupCode}_${childIndex}`;
 
         newItem.querySelectorAll(
             ".df-repeatable-child-add"
@@ -2440,7 +2473,7 @@ document.addEventListener("click", (event) => {
         });
 
         const childPrefix =
-            `${parentRow.dataset.rowPath}_${childGroupCode}_${childIndex}_`;
+            `${parentPath}_${childGroupCode}_${childIndex}_`;
 
         newItem.querySelectorAll("input, textarea, select").forEach((field) => {
             const oldName = field.getAttribute("name");
