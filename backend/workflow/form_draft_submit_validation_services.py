@@ -60,7 +60,11 @@ class FormDraftSubmitValidationService:
             )
 
         if errors:
-            raise ValidationError(errors)
+            error = ValidationError(
+                "فرم برای ارسال نهایی کامل نیست."
+            )
+            error.validation_errors = errors
+            raise error
 
     @classmethod
     def _validate_normal_fields(cls, *, instance, form, submitted_values):
