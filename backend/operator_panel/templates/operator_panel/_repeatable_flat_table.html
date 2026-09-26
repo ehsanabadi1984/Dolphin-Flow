@@ -111,6 +111,18 @@
           {% endif %}
         {% endfor %}
 
+        {% if row.root_delete and edit_mode and not dynamic_form.is_submitted and row.root_delete.can_delete %}
+          <button
+            type="button"
+            class="df-button df-button-danger df-repeatable-root-delete"
+            data-delete-label="{{ row.root_delete.group_label }}"
+            data-group-code="{{ row.root_delete.group_code }}"
+            data-repeatable-root-row-id="{{ row.id_inputs.0.value }}"
+          >
+            حذف {{ row.root_delete.group_label }}
+          </button>
+        {% endif %}
+
         {% if edit_mode and not dynamic_form.is_submitted and row.can_delete %}
           <button
             type="button"
