@@ -201,6 +201,12 @@
       value=""
     />
     {% for child_template in group.flat_table.child_templates %}
+      <input
+        type="hidden"
+        name="{{ group.group.code }}_TEMPLATE_{{ child_template.group.code }}__present"
+        value="1"
+        data-repeatable-presence
+      />
       {% if edit_mode and not dynamic_form.is_submitted and child_template.can_add %}
         <button
           type="button"
