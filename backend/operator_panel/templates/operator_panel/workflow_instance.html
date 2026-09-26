@@ -500,6 +500,24 @@
                 {% endif %}
               {% endfor %}
 
+              <input
+
+
+                type="hidden"
+
+
+                name="{{ group.group.code }}__present"
+
+
+                value="1"
+
+
+                data-repeatable-presence
+
+
+              />
+
+
               <div class="df-table-wrapper">
                 <table class="df-normal-table">
                   <thead>
@@ -514,12 +532,6 @@
                     class="df-repeatable-items"
                     data-group-code="{{ group.group.code }}"
                   >
-                    <input
-                      type="hidden"
-                      name="{{ group.group.code }}__present"
-                      value="1"
-                      data-repeatable-presence
-                    />
                     {% include "operator_panel/_repeatable_flat_table.html" with group=group %}
                   </tbody>
                 </table>
