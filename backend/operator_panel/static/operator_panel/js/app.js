@@ -2903,7 +2903,9 @@ document.addEventListener("click", (event) => {
                 const parentRow = container.querySelector(
                     `[data-repeatable-item][data-row-id="${CSS.escape(parentRowId)}"]`
                 );
-                const parentPath = parentRow?.dataset.rowPath || "";
+                const parentPath =
+                    parentRow?.dataset.rowPath ||
+                    `${rootGroupCode}_${flatRow.dataset.rootIndex}`;
 
                 const removedIds = new Set([flatRow.dataset.rowId]);
                 let changed = true;
