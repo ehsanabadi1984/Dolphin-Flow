@@ -215,6 +215,10 @@ function preserveFlatTableRootOnChildDelete(container, childRow, rootGroupCode) 
         childRow.querySelectorAll(
             ".df-repeatable-child-add[data-parent-row-id]"
         ).forEach((button) => {
+            if (button.dataset.parentRowId !== rootRowId) {
+                return;
+            }
+
             const targetActionCell = targetRow.querySelector(
                 ".df-table-actions"
             );
