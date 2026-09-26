@@ -2824,6 +2824,66 @@ document.addEventListener("click", (event) => {
     }
 
     /* ---------------------------------------------------------
+     * Delete a flat-table logical root tree
+     * --------------------------------------------------------- */
+
+    const repeatableRootDeleteBtn = event.target.closest(
+        ".df-repeatable-root-delete"
+    );
+
+    if (repeatableRootDeleteBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const flatRow = repeatableRootDeleteBtn.closest(
+            ".df-repeatable-flat-row, [data-repeatable-item]"
+        );
+        const flatTable = flatRow?.closest(".df-table-group");
+
+        if (!flatTable || !flatRow || !isEditMode()) return;
+
+        const container = flatTable.querySelector(".df-repeatable-items");
+        const rootGroupCode = flatTable.dataset.repeatableGroup;
+        const rootRowId = repeatableRootDeleteBtn.dataset.repeatableRootRowId;
+        const label =
+            repeatableRootDeleteBtn.dataset.deleteLabel || "ردیف";
+
+        if (!container || !rootRowId) return;
+
+        if (!window.confirm(`آیا از حذف این ${label} و زیرردیف‌های آن مطمئن هستید؟`)) {
+            return;
+        }
+
+        const removedIds = new Set([rootRowId]);
+        let changed = true;
+
+        while (changed) {
+            changed = false;
+            Array.from(
+                container.querySelectorAll("[data-repeatable-item]")
+            ).forEach((candidate) => {
+                if (
+                    candidate.dataset.parentRowId &&
+                    removedIds.has(candidate.dataset.parentRowId) &&
+                    !removedIds.has(candidate.dataset.rowId)
+                ) {
+                    removedIds.add(candidate.dataset.rowId);
+                    changed = true;
+                }
+            });
+        }
+
+        Array.from(
+            container.querySelectorAll("[data-repeatable-item]")
+        )
+            .filter((candidate) => removedIds.has(candidate.dataset.rowId))
+            .forEach((candidate) => candidate.remove());
+
+        reindexFlatTableRootRows(container, rootGroupCode);
+        return;
+    }
+
+    /* ---------------------------------------------------------
      * Delete a normal repeatable row
      * --------------------------------------------------------- */
 
