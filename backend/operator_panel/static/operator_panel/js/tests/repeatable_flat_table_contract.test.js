@@ -1191,7 +1191,7 @@ test("flat TABLE root delete action transfers when first child is removed", () =
     );
     assert.match(
         appJs,
-        /targetActionCell\.querySelectorAll\(\s*"\.df-repeatable-root-delete"\s*\)[\s\S]*?targetActionCell\.prepend\(\s*rootDeleteButton\.cloneNode\(true\)\s*\)/s,
+        /targetActionCell\s*\.\s*querySelectorAll\(\s*"\.df-repeatable-root-delete"\s*\)[\s\S]*?targetActionCell\s*\.\s*prepend\(\s*rootDeleteButton\.cloneNode\(true\)\s*\)/s,
     );
 });
 
