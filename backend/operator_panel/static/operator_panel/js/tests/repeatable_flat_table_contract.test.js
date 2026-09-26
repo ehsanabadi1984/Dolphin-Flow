@@ -1043,3 +1043,95 @@ test("flat TABLE deleting the first child preserves the logical root", () => {
         /preserveFlatTableRootOnChildDelete\(\s*container,\s*flatRow,\s*rootGroupCode\s*\)/s,
     );
 });
+
+test("flat TABLE root reindex handles roots represented only by child rows", () => {
+    const extractFunction = (source, functionName) => {
+        const start = source.indexOf("function " + functionName + "(");
+        assert.notEqual(start, -1, functionName + " must exist");
+        let depth = 0;
+        let opened = false;
+        for (let index = source.indexOf("{", start); index < source.length; index += 1) {
+            if (source[index] === "{") {
+                depth += 1;
+                opened = true;
+            } else if (source[index] === "}") {
+                depth -= 1;
+                if (opened && depth === 0) return source.slice(start, index + 1);
+            }
+        }
+        throw new Error("Could not extract " + functionName);
+    };
+
+    const makeField = (name) => ({
+        name,
+        getAttribute(attribute) {
+            return attribute === "name" ? this.name : null;
+        },
+    });
+
+    const makeRow = (id, rootIndex, path, fields) => ({
+        dataset: {
+            rowId: id,
+            repeatableRowGroup: "child_parts",
+            rootIndex: String(rootIndex),
+            rowPath: path,
+        },
+        fields,
+        querySelectorAll(selector) {
+            return selector === "input, textarea, select" ? this.fields : [];
+        },
+    });
+
+    const rows = [
+        makeRow("child-a", 0, "parts_0_child_parts_0", [
+            makeField("parts_0_OwnerName"),
+            makeField("parts_0_OwnerAddress"),
+            makeField("parts_0_child_parts_0_Phone"),
+        ]),
+        makeRow("child-b", 1, "parts_1_child_parts_0", [
+            makeField("parts_1_OwnerName"),
+            makeField("parts_1_OwnerAddress"),
+            makeField("parts_1_child_parts_0_Phone"),
+        ]),
+    ];
+
+    const container = {
+        querySelectorAll(selector) {
+            return selector === "[data-repeatable-item]" ? rows : [];
+        },
+    };
+
+    const CSS = { escape: (value) => value };
+    const invoke = new Function(
+        "CSS",
+        extractFunction(appJs, "escapeRegExp") +
+            "\n" +
+            extractFunction(appJs, "reindexFlatTableRootRows") +
+            "\nreturn { reindexFlatTableRootRows };",
+    )(CSS);
+
+    invoke.reindexFlatTableRootRows(container, "parts");
+
+    assert.deepEqual(
+        rows.flatMap((row) => row.fields.map((field) => field.name)),
+        [
+            "parts_0_OwnerName",
+            "parts_0_OwnerAddress",
+            "parts_0_child_parts_0_Phone",
+            "parts_1_OwnerName",
+            "parts_1_OwnerAddress",
+            "parts_1_child_parts_0_Phone",
+        ],
+    );
+    assert.deepEqual(
+        rows.map((row) => row.dataset.rowPath),
+        [
+            "parts_0_child_parts_0",
+            "parts_1_child_parts_0",
+        ],
+    );
+    assert.equal(
+        new Set(rows.flatMap((row) => row.fields.map((field) => field.name))).size,
+        6,
+    );
+});
