@@ -190,11 +190,20 @@
 
                 {% endif %}
 
-                <div
-                    class="df-field-error"
-                    data-field-error="{{ item.field.code }}"
-                    hidden
-                ></div>
+                {% for validation_error in validation_errors %}
+                  {% if validation_error.type == "field" and validation_error.code == item.field.code %}
+                    <div
+                        class="df-field-error"
+                        data-field-error="{{ item.field.code }}"
+                    >{{ validation_error.message }}</div>
+                  {% endif %}
+                {% empty %}
+                  <div
+                      class="df-field-error"
+                      data-field-error="{{ item.field.code }}"
+                      hidden
+                  ></div>
+                {% endfor %}
 
               </div>
 
