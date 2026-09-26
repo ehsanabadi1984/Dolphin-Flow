@@ -1214,3 +1214,148 @@ test("flat TABLE empty-group deletion uses explicit presence markers", () => {
         /const isPresenceMarker =\s*oldName\.startsWith\("PARENT_PREFIX"\)[\s\S]*?oldName\.endsWith\("__present"\)/s,
     );
 });
+
+
+function extractProductionFunction(source, functionName) {
+    const start = source.indexOf("function " + functionName + "(");
+    assert.notEqual(start, -1, functionName + " must exist");
+
+    let depth = 0;
+    let opened = false;
+
+    for (
+        let index = source.indexOf("{", start);
+        index < source.length;
+        index += 1
+    ) {
+        if (source[index] === "{") {
+            depth += 1;
+            opened = true;
+        } else if (source[index] === "}") {
+            depth -= 1;
+            if (opened && depth === 0) {
+                return source.slice(start, index + 1);
+            }
+        }
+    }
+
+    throw new Error("Could not extract " + functionName);
+}
+
+function makeFlatTableTree(rows) {
+    const liveRows = rows.map((row) => ({
+        dataset: {
+            rowId: row.id,
+            parentRowId: row.parentId || "",
+        },
+        removed: false,
+        remove() {
+            this.removed = true;
+        },
+    }));
+
+    const container = {
+        querySelectorAll(selector) {
+            if (selector !== "[data-repeatable-item]") {
+                return [];
+            }
+
+            return liveRows.filter((row) => !row.removed);
+        },
+    };
+
+    return { container, liveRows };
+}
+
+function loadFlatTableSubtreeRemover() {
+    return new Function(
+        extractProductionFunction(
+            appJs,
+            "removeFlatTableSubtree",
+        ) +
+            "\nreturn { removeFlatTableSubtree };",
+    )().removeFlatTableSubtree;
+}
+
+test("flat TABLE root delete removes root, children, and grandchildren only", () => {
+    const removeFlatTableSubtree = loadFlatTableSubtreeRemover();
+    const { container, liveRows } = makeFlatTableTree([
+        { id: "root-1" },
+        { id: "child-1", parentId: "root-1" },
+        { id: "grandchild-1", parentId: "child-1" },
+        { id: "child-2", parentId: "root-1" },
+        { id: "root-2" },
+        { id: "child-3", parentId: "root-2" },
+    ]);
+
+    const removed = removeFlatTableSubtree(container, "root-1");
+
+    assert.deepEqual(
+        [...removed],
+        ["root-1", "child-1", "grandchild-1", "child-2"],
+    );
+    assert.deepEqual(
+        liveRows
+            .filter((row) => !row.removed)
+            .map((row) => row.dataset.rowId),
+        ["root-2", "child-3"],
+    );
+});
+
+test("flat TABLE deleting child 1 removes child 1 and its descendants but keeps sibling child 2 and root", () => {
+    const removeFlatTableSubtree = loadFlatTableSubtreeRemover();
+    const { container, liveRows } = makeFlatTableTree([
+        { id: "root-1" },
+        { id: "child-1", parentId: "root-1" },
+        { id: "grandchild-1", parentId: "child-1" },
+        { id: "child-2", parentId: "root-1" },
+    ]);
+
+    removeFlatTableSubtree(container, "child-1");
+
+    assert.deepEqual(
+        liveRows
+            .filter((row) => !row.removed)
+            .map((row) => row.dataset.rowId),
+        ["root-1", "child-2"],
+    );
+});
+
+test("flat TABLE deleting child 2 keeps root and child 1 subtree intact", () => {
+    const removeFlatTableSubtree = loadFlatTableSubtreeRemover();
+    const { container, liveRows } = makeFlatTableTree([
+        { id: "root-1" },
+        { id: "child-1", parentId: "root-1" },
+        { id: "grandchild-1", parentId: "child-1" },
+        { id: "child-2", parentId: "root-1" },
+    ]);
+
+    removeFlatTableSubtree(container, "child-2");
+
+    assert.deepEqual(
+        liveRows
+            .filter((row) => !row.removed)
+            .map((row) => row.dataset.rowId),
+        ["root-1", "child-1", "grandchild-1"],
+    );
+});
+
+test("flat TABLE deleting the last root leaves the repeatable container empty", () => {
+    const removeFlatTableSubtree = loadFlatTableSubtreeRemover();
+    const { container, liveRows } = makeFlatTableTree([
+        { id: "root-1" },
+        { id: "child-1", parentId: "root-1" },
+        { id: "grandchild-1", parentId: "child-1" },
+    ]);
+
+    const removed = removeFlatTableSubtree(container, "root-1");
+
+    assert.deepEqual(
+        [...removed],
+        ["root-1", "child-1", "grandchild-1"],
+    );
+    assert.equal(
+        liveRows.filter((row) => !row.removed).length,
+        0,
+    );
+});
