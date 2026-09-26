@@ -632,7 +632,7 @@ class DynamicFormServiceTests(TestCase):
 
         self.assertEqual(
             first_flat_row["id_inputs"][0]["value"],
-            parent_rows[0].pk,
+            str(parent_rows[0].pk),
         )
         self.assertTrue(first_flat_row["id_inputs"][0]["is_root"])
         self.assertEqual(
@@ -645,7 +645,7 @@ class DynamicFormServiceTests(TestCase):
         )
         self.assertEqual(
             third_flat_row["id_inputs"][0]["value"],
-            parent_rows[1].pk,
+            str(parent_rows[1].pk),
         )
         self.assertTrue(third_flat_row["id_inputs"][0]["is_root"])
         self.assertEqual(
