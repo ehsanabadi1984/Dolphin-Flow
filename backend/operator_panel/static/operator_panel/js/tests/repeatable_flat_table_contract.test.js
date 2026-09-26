@@ -271,9 +271,13 @@ test("flat TABLE submit names stay unique after root and child mutations", () =>
     const root1Field = makeField("parts_3_name");
     const child1Field = makeField("parts_3_child_parts_4_address");
     const root0 = makeRow({ id: "root-0", group: "parts", path: "parts_9", fields: [root0Field] });
+    root0.dataset.rootIndex = "9";
     const child0 = makeRow({ id: "child-0", group: "child_parts", parentId: "root-0", path: "parts_9_child_parts_7", fields: [child0Field] });
+    child0.dataset.rootIndex = "9";
     const root1 = makeRow({ id: "root-1", group: "parts", path: "parts_3", fields: [root1Field] });
+    root1.dataset.rootIndex = "3";
     const child1 = makeRow({ id: "child-1", group: "child_parts", parentId: "root-1", path: "parts_3_child_parts_4", fields: [child1Field] });
+    child1.dataset.rootIndex = "3";
     rows.push(root0, child0, root1, child1);
 
     const CSS = { escape: (value) => value };
@@ -309,18 +313,12 @@ test("flat TABLE submit names stay unique after root and child mutations", () =>
 });
 
 test("flat TABLE root reindex preserves child group segments", () => {
-    assert.match(
-        appJs,
-        /const rootPattern\s*=\s*new RegExp\(\`\^\$\{escapeRegExp\(oldPrefix\)\}_\`\);/s,
-    );
-    assert.match(
-        appJs,
-        /field\.name = name\.replace\(\s*rootPattern,\s*\`\$\{newPrefix\}_\`\s*\)/s,
-    );
-    assert.match(
-        appJs,
-        /logicalRoots\.forEach\(\(\{ oldIndex, newIndex \}\) => \{/s,
-    );
+    assert.match(appJs, /const oldPrefix\\s*=\\s*`\\$\\{rootGroupCode\\}_\\$\\{oldIndex\\}`;/s);
+    assert.match(appJs, /const newPrefix\\s*=\\s*`\\$\\{rootGroupCode\\}_\\$\\{newIndex\\}`;/s);
+    assert.match(appJs, /const rootPattern\\s*=\\s*new RegExp\\(/s);
+    assert.match(appJs, /field\\.name = name\\.replace\\(\\s*rootPattern,\\s*`\\$\\{newPrefix\\}_`\\s*\\)/s);
+    assert.match(appJs, /logicalRoots\\.forEach\\(\\(\\{ oldIndex, newIndex \\}\\) => \\{/s);
+    assert.match(appJs, /row\\.dataset\\.rootIndex = String\\(newIndex\\);/s);
 });
 test("flat TABLE child add resolves the logical parent row path", () => {
     const extractFunction = (source, functionName) => {
