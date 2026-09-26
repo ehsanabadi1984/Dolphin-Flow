@@ -25,6 +25,7 @@ from workflow.models import (
     WorkflowMembership,
     WorkflowStep,
     WorkflowStepExecution,
+    WorkflowTransition,
 )
 
 
@@ -109,6 +110,64 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                 can_edit=True,
             )
         self.client.force_login(self.user)
+
+    @patch(
+        "operator_panel.views.WorkflowExecutionService.execute_transition"
+    )
+    def test_transition_validation_errors_render_as_structured_edit_form(
+        self,
+        execute_transition,
+    ):
+        self.name_field.is_required = True
+        self.name_field.save(update_fields=["is_required"])
+
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            from_step=self.step,
+            to_step=None,
+            name="Finish",
+        )
+
+        execute_transition.side_effect = __import__(
+            "django.core.exceptions",
+            fromlist=["ValidationError"],
+        ).ValidationError(
+            [
+                {
+                    "type": "field",
+                    "code": self.name_field.code,
+                    "label": self.name_field.label,
+                    "message": f"فیلد «{self.name_field.label}» الزامی است.",
+                }
+            ]
+        )
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:execute_transition",
+                args=[self.instance.pk, transition.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(response.context["edit_mode"])
+        self.assertEqual(
+            response.context["validation_errors"],
+            [
+                {
+                    "type": "field",
+                    "code": self.name_field.code,
+                    "label": self.name_field.label,
+                    "message": f"فیلد «{self.name_field.label}» الزامی است.",
+                }
+            ],
+        )
+        self.assertEqual(response.context["error"], "")
+        self.assertContains(response, self.name_field.label)
+        self.assertContains(
+            response,
+            f"فیلد «{self.name_field.label}» الزامی است.",
+        )
 
     def _create_device_group(
         self,
