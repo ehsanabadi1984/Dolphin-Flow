@@ -99,6 +99,12 @@
         {% endfor %}
 
         {% for child_action in row.add_children %}
+          <input
+            type="hidden"
+            name="{{ row.path_key }}_{{ child_action.group_code }}__present"
+            value="1"
+            data-repeatable-presence
+          />
           {% if edit_mode and not dynamic_form.is_submitted and child_action.can_add %}
             <button
               type="button"
