@@ -188,9 +188,13 @@ test("flat TABLE root and child reindex keeps both root trees isolated", () => {
     const root1Field = makeField("parts_1_name");
     const child1Field = makeField("parts_1_child_parts_0_address");
     const root0 = makeRow({ id: "root-0", group: "parts", path: "parts_0", fields: [root0Field] });
+    root0.dataset.rootIndex = "0";
     const child0 = makeRow({ id: "child-0", group: "child_parts", parentId: "root-0", path: "parts_0_child_parts_0", fields: [child0Field] });
+    child0.dataset.rootIndex = "0";
     const root1 = makeRow({ id: "root-1", group: "parts", path: "parts_1", fields: [root1Field] });
+    root1.dataset.rootIndex = "1";
     const child1 = makeRow({ id: "child-1", group: "child_parts", parentId: "root-1", path: "parts_1_child_parts_0", fields: [child1Field] });
+    child1.dataset.rootIndex = "1";
     rows.push(root0, child0, root1, child1);
 
     const CSS = { escape: (value) => value };
@@ -307,11 +311,15 @@ test("flat TABLE submit names stay unique after root and child mutations", () =>
 test("flat TABLE root reindex preserves child group segments", () => {
     assert.match(
         appJs,
-        /const rootPattern\s*=\s*new RegExp\(\`\^\$\{escapeRegExp\(rootGroupCode\)\}_\\\\d\+_\`\);/s,
+        /const rootPattern\s*=\s*new RegExp\(\`\^\$\{escapeRegExp\(oldPrefix\)\}_\`\);/s,
     );
     assert.match(
         appJs,
-        /field\.name = name\.replace\(\s*rootPattern,\s*\`\$\{rootGroupCode\}_\$\{rootIndex\}_\`\s*\)/s,
+        /field\.name = name\.replace\(\s*rootPattern,\s*\`\$\{newPrefix\}_\`\s*\)/s,
+    );
+    assert.match(
+        appJs,
+        /logicalRoots\.forEach\(\(\{ oldIndex, newIndex \}\) => \{/s,
     );
 });
 test("flat TABLE child add resolves the logical parent row path", () => {
