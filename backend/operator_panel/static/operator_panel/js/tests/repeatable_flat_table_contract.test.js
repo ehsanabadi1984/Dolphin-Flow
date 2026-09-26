@@ -1165,3 +1165,30 @@ test("flat TABLE child-represented roots expose a dedicated root delete action",
         /const removedIds = new Set\(\[rootRowId\]\);[\s\S]*?reindexFlatTableRootRows\(\s*container,\s*rootGroupCode\s*\)/s,
     );
 });
+
+
+test("flat TABLE child promotion removes deleted descendants and keeps only root delete action", () => {
+    assert.match(
+        appJs,
+        /const removedDescendantIds = new Set\(\[childRow\.dataset\.rowId\]\);/,
+    );
+    assert.match(
+        appJs,
+        /removedDescendantIds\.has\(candidate\.dataset\.parentRowId\)[\s\S]*?candidate\.remove\(\)/s,
+    );
+    assert.match(
+        appJs,
+        /actionCell\.querySelectorAll\(\s*"\.df-repeatable-delete"\s*\)\s*\.forEach\(\(button\) => button\.remove\(\)\)/s,
+    );
+});
+
+test("flat TABLE root delete action transfers when first child is removed", () => {
+    assert.match(
+        appJs,
+        /const rootDeleteButton = childRow\.querySelector\(\s*"\.df-repeatable-root-delete"\s*\)/s,
+    );
+    assert.match(
+        appJs,
+        /targetActionCell\.querySelectorAll\("\.df-repeatable-root-delete"\)[\s\S]*?targetActionCell\.prepend\(\s*rootDeleteButton\.cloneNode\(true\)\s*\)/s,
+    );
+});
