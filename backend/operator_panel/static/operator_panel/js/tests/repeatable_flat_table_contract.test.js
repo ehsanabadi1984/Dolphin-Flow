@@ -313,13 +313,13 @@ test("flat TABLE submit names stay unique after root and child mutations", () =>
 });
 
 test("flat TABLE root reindex preserves child group segments", () => {
-    assert.match(appJs, /const oldPrefix\\s*=\\s*`\\$\\{rootGroupCode\\}_\\$\\{oldIndex\\}`;/s);
-    assert.match(appJs, /const newPrefix\\s*=\\s*`\\$\\{rootGroupCode\\}_\\$\\{newIndex\\}`;/s);
-    assert.match(appJs, /const rootPattern\\s*=\\s*new RegExp\\(/s);
-    assert.match(appJs, /field\\.name = name\\.replace\\(\\s*rootPattern,\\s*`\\$\\{newPrefix\\}_`\\s*\\)/s);
-    assert.match(appJs, /logicalRoots\\.forEach\\(\\(\\{ oldIndex, newIndex \\}\\) => \\{/s);
-    assert.match(appJs, /row\\.dataset\\.rootIndex = String\\(newIndex\\);/s);
-});
+    assert.match(appJs, /const oldPrefix\s*=\s*\`\$\{rootGroupCode\}_\$\{oldIndex\}\`;/s);
+    assert.match(appJs, /const newPrefix\s*=\s*\`\$\{rootGroupCode\}_\$\{newIndex\}\`;/s);
+    assert.match(appJs, /const rootPattern\s*=\s*new RegExp\(/s);
+    assert.match(appJs, /field\.name = name\.replace\(\s*rootPattern,\s*\`\$\{newPrefix\}_\`\s*\)/s);
+    assert.match(appJs, /logicalRoots\.forEach\(\(\{ oldIndex, newIndex \}\) => \{/s);
+    assert.match(appJs, /row\.dataset\.rootIndex = String\(newIndex\);/s);
+});;
 test("flat TABLE child add resolves the logical parent row path", () => {
     const extractFunction = (source, functionName) => {
         const start = source.indexOf("function " + functionName + "(");
