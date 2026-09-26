@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
@@ -128,10 +129,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             name="Finish",
         )
 
-        execute_transition.side_effect = __import__(
-            "django.core.exceptions",
-            fromlist=["ValidationError"],
-        ).ValidationError(
+        execute_transition.side_effect = ValidationError(
             [
                 {
                     "type": "field",
