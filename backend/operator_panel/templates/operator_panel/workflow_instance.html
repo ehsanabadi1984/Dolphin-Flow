@@ -1103,7 +1103,7 @@
     >
       {% csrf_token %}
 
-      <button type="submit" class="df-button df-button-secondary">{{ transition.name }}</button>
+      <button type="submit" class="df-button df-button-secondary"{% if edit_mode %} disabled{% endif %}>{{ transition.name }}</button>
 
       {% if transition.description %}
       <p>{{ transition.description }}</p>
