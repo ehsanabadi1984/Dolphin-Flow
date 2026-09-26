@@ -1141,3 +1141,27 @@ test("flat TABLE root reindex handles roots represented only by child rows", () 
         6,
     );
 });
+
+
+test("flat TABLE child-represented roots expose a dedicated root delete action", () => {
+    assert.match(
+        rootTemplate,
+        /row\.root_delete and edit_mode and not dynamic_form\.is_submitted and row\.root_delete\.can_delete/,
+    );
+    assert.match(
+        rootTemplate,
+        /class="df-button df-button-danger df-repeatable-root-delete"/,
+    );
+    assert.match(
+        rootTemplate,
+        /data-repeatable-root-row-id="{{ row\.id_inputs\.0\.value }}"/,
+    );
+    assert.match(
+        appJs,
+        /const repeatableRootDeleteBtn = event\.target\.closest\(\s*"\.df-repeatable-root-delete"\s*\)/s,
+    );
+    assert.match(
+        appJs,
+        /const removedIds = new Set\(\[rootRowId\]\);[\s\S]*?reindexFlatTableRootRows\(\s*container,\s*rootGroupCode\s*\)/s,
+    );
+});
