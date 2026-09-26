@@ -129,16 +129,18 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             name="Finish",
         )
 
-        execute_transition.side_effect = ValidationError(
-            [
-                {
-                    "type": "field",
-                    "code": self.name_field.code,
-                    "label": self.name_field.label,
-                    "message": f"فیلد «{self.name_field.label}» الزامی است.",
-                }
-            ]
+        validation_error = ValidationError(
+            "فرم برای ارسال نهایی کامل نیست."
         )
+        validation_error.validation_errors = [
+            {
+                "type": "field",
+                "code": self.name_field.code,
+                "label": self.name_field.label,
+                "message": f"فیلد «{self.name_field.label}» الزامی است.",
+            }
+        ]
+        execute_transition.side_effect = validation_error
 
         response = self.client.post(
             reverse(
