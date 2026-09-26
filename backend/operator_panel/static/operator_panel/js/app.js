@@ -2381,6 +2381,132 @@ function getFlatTableChildParentPath(table, parentRow, parentRowId) {
     return `${rootGroupCode}_${rootIndex}`;
 }
 
+/*
+ * Re-index flat TABLE roots after a root is removed.
+ *
+ * Row identity (data-row-id) is stable. Only the positional path and
+ * serialized field names change. Every descendant row belonging to the
+ * root must receive the same root-index replacement.
+ */
+function reindexFlatTableRootRows(container, rootGroupCode) {
+    const rootRows = Array.from(
+        container.querySelectorAll("[data-repeatable-item]")
+    )
+        .filter(
+            (row) =>
+                !row.hasAttribute("data-repeatable-template") &&
+                row.dataset.repeatableRowGroup === rootGroupCode &&
+                !row.dataset.parentRowId
+        );
+
+    rootRows.forEach((rootRow, newIndex) => {
+        const oldRootIndex = rootRow.dataset.rootIndex;
+        const oldRootPrefix = `${rootGroupCode}_${oldRootIndex}`;
+        const newRootPrefix = `${rootGroupCode}_${newIndex}`;
+
+        Array.from(
+            container.querySelectorAll("[data-repeatable-item]")
+        )
+            .filter(
+                (row) =>
+                    !row.hasAttribute("data-repeatable-template") &&
+                    row.dataset.rootIndex === oldRootIndex
+            )
+            .forEach((row) => {
+                row.dataset.rootIndex = String(newIndex);
+
+                if (row.dataset.rowPath) {
+                    row.dataset.rowPath = row.dataset.rowPath.startsWith(
+                        oldRootPrefix
+                    )
+                        ? newRootPrefix +
+                          row.dataset.rowPath.slice(oldRootPrefix.length)
+                        : row.dataset.rowPath;
+                }
+
+                row.querySelectorAll(
+                    "input, textarea, select"
+                ).forEach((field) => {
+                    const name = field.getAttribute("name");
+
+                    if (name && name.startsWith(oldRootPrefix)) {
+                        field.name =
+                            newRootPrefix +
+                            name.slice(oldRootPrefix.length);
+                    }
+                });
+            });
+    });
+}
+
+/*
+ * Re-index siblings of a flat TABLE child row after one child is removed.
+ *
+ * The parent row ID is stable. Only the child's positional segment and
+ * every descendant path/name under that child are changed.
+ */
+function reindexFlatTableChildRows(
+    container,
+    rowGroupCode,
+    parentRowId,
+    parentPath
+) {
+    const siblingRows = Array.from(
+        container.querySelectorAll("[data-repeatable-item]")
+    ).filter(
+        (row) =>
+            !row.hasAttribute("data-repeatable-template") &&
+            row.dataset.repeatableRowGroup === rowGroupCode &&
+            row.dataset.parentRowId === parentRowId
+    );
+
+    siblingRows.forEach((row, newIndex) => {
+        const oldPath = row.dataset.rowPath;
+        if (!oldPath) return;
+
+        const pathParts = oldPath.split("_");
+        const oldIndex = pathParts[pathParts.length - 1];
+        const newPath =
+            `${parentPath}_${rowGroupCode}_${newIndex}`;
+
+        if (oldPath === newPath) return;
+
+        Array.from(
+            container.querySelectorAll("[data-repeatable-item]")
+        )
+            .filter(
+                (candidate) =>
+                    !candidate.hasAttribute("data-repeatable-template") &&
+                    candidate.dataset.rowPath &&
+                    (
+                        candidate.dataset.rowPath === oldPath ||
+                        candidate.dataset.rowPath.startsWith(`${oldPath}_`)
+                    )
+            )
+            .forEach((candidate) => {
+                candidate.dataset.rowPath =
+                    newPath +
+                    candidate.dataset.rowPath.slice(oldPath.length);
+
+                candidate.querySelectorAll(
+                    "input, textarea, select"
+                ).forEach((field) => {
+                    const name = field.getAttribute("name");
+
+                    if (name && name.startsWith(oldPath)) {
+                        field.name =
+                            newPath +
+                            name.slice(oldPath.length);
+                    }
+                });
+            });
+
+        /* Keep the variable explicit: the old index is part of the path
+         * contract even though the replacement above is prefix-based. */
+        void oldIndex;
+    });
+}
+
 function updateRepeatableDeleteState(container) {
     const group = container.closest(".df-repeatable-group");
     if (!group) return;
