@@ -207,6 +207,44 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
         return template.render(context)
 
 
+    def test_transitions_are_disabled_in_edit_mode(self):
+        template = get_template(self.template_name)
+        context = self._context("LIST", "LIST")
+        context["instance"].status = "ACTIVE"
+        context["instance"].current_step = SimpleNamespace()
+        context["edit_mode"] = True
+        context["dynamic_form"].is_submitted = False
+        context["transitions"] = [
+            SimpleNamespace(
+                pk=7,
+                name="ارسال",
+                description="انتقال به مرحله بعد",
+            )
+        ]
+
+        request = RequestFactory().get("/operator/workflow/1/?edit=1")
+        request.user = AnonymousUser()
+        context["request"] = request
+
+        rendered = template.render(context)
+
+        self.assertIn(
+            'type="submit" class="df-button df-button-secondary" disabled',
+            rendered,
+        )
+
+        context["edit_mode"] = False
+        rendered = template.render(context)
+
+        self.assertIn(
+            'type="submit" class="df-button df-button-secondary">ارسال</button>',
+            rendered,
+        )
+        self.assertNotIn(
+            'type="submit" class="df-button df-button-secondary" disabled',
+            rendered,
+        )
+
     def test_repeatable_group_uses_label_not_internal_name(self):
         rendered = self._render("LIST", "LIST")
 
