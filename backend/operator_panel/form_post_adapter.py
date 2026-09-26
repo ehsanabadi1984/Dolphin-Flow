@@ -53,6 +53,8 @@ class OperatorPanelFormPostAdapter:
     @classmethod
     def _parse_group(cls, *, group, submitted_data, instance, prefix=None):
         group_prefix = prefix or f"{group.code}_"
+        presence_key = f"{group_prefix[:-1]}__present"
+        group_present = presence_key in submitted_data
         items = {}
 
         for key in submitted_data.keys():
@@ -148,7 +150,7 @@ class OperatorPanelFormPostAdapter:
                         item["row_id"] = row_id
 
         if not items:
-            return None
+            return [] if group_present else None
 
         rows = []
         child_groups = list(
