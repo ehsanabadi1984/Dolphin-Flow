@@ -1157,6 +1157,11 @@ class DynamicFormService:
                             "is_root": True,
                         },
                     )
+                    row["root_delete"] = {
+                        "can_delete": group_context["permissions"]["can_delete"],
+                        "group_code": group_context["group"].code,
+                        "group_label": group_context["group"].label,
+                    }
 
         first_ancestor_rows = set()
 
