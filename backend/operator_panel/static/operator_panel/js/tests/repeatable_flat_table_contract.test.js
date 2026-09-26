@@ -1192,3 +1192,23 @@ test("flat TABLE root delete action transfers when first child is removed", () =
         /targetActionCell\.querySelectorAll\("\.df-repeatable-root-delete"\)[\s\S]*?targetActionCell\.prepend\(\s*rootDeleteButton\.cloneNode\(true\)\s*\)/s,
     );
 });
+
+
+test("flat TABLE empty-group deletion uses explicit presence markers", () => {
+    assert.match(
+        rootTemplate,
+        /name="{{ row\.path_key }}_{{ child_action\.group_code }}__present"/,
+    );
+    assert.match(
+        rootTemplate,
+        /name="{{ group\.group\.code }}_TEMPLATE_{{ child_template\.group\.code }}__present"/,
+    );
+    assert.match(
+        nestedTemplate,
+        /name="PARENT_PREFIX{{ nested_template\.group\.code }}__present"/,
+    );
+    assert.match(
+        appJs,
+        /const isPresenceMarker =\s*oldName\.startsWith\("PARENT_PREFIX"\)[\s\S]*?oldName\.endsWith\("__present"\)/s,
+    );
+});
