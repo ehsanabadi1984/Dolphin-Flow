@@ -80,72 +80,68 @@ function generateRowId() {
 }
 
 function reindexFlatTableRootRows(container, rootGroupCode) {
-    const rootRows = Array.from(
-        container.querySelectorAll(
-            `[data-repeatable-item][data-repeatable-row-group="${CSS.escape(rootGroupCode)}"]`
-        )
+    /*
+     * A populated flat-table root may have no visual root <tr>.
+     * Its first child row carries the root fields and rootIndex.
+     * Therefore root rows must be discovered by logical rootIndex,
+     * not by row group.
+     */
+    const items = Array.from(
+        container.querySelectorAll("[data-repeatable-item]")
     );
 
-    rootRows.forEach((row, rootIndex) => {
-        row.dataset.rootIndex = rootIndex;
-        row.dataset.rowPath = `${rootGroupCode}_${rootIndex}`;
+    const logicalRoots = [];
+    const seenRootIndexes = new Set();
 
-        const rootPattern =
-            new RegExp(`^${escapeRegExp(rootGroupCode)}_\\d+_`);
+    items.forEach((row) => {
+        const rootIndex = row.dataset.rootIndex;
+        if (rootIndex === undefined || rootIndex === "") {
+            return;
+        }
 
-        row.querySelectorAll("input, textarea, select").forEach((field) => {
-            const name = field.getAttribute("name");
-            if (name && rootPattern.test(name)) {
+        if (!seenRootIndexes.has(rootIndex)) {
+            seenRootIndexes.add(rootIndex);
+            logicalRoots.push(rootIndex);
+        }
+    });
+
+    logicalRoots.forEach((oldIndex, rootIndex) => {
+        const oldPrefix =
+            `${rootGroupCode}_${oldIndex}`;
+        const newPrefix =
+            `${rootGroupCode}_${rootIndex}`;
+
+        const rootPattern = new RegExp(
+            `^${escapeRegExp(oldPrefix)}_`
+        );
+
+        items.forEach((row) => {
+            if (String(row.dataset.rootIndex) !== String(oldIndex)) {
+                return;
+            }
+
+            row.dataset.rootIndex = rootIndex;
+
+            const rowPath = row.dataset.rowPath;
+            if (rowPath && rowPath.startsWith(oldPrefix)) {
+                row.dataset.rowPath =
+                    newPrefix + rowPath.slice(oldPrefix.length);
+            }
+
+            row.querySelectorAll(
+                "input, textarea, select"
+            ).forEach((field) => {
+                const name = field.getAttribute("name");
+                if (!name || !rootPattern.test(name)) {
+                    return;
+                }
+
                 field.name = name.replace(
                     rootPattern,
-                    `${rootGroupCode}_${rootIndex}_`
+                    `${newPrefix}_`
                 );
-            }
-        });
-
-        let pending = [row.dataset.rowId];
-
-        while (pending.length) {
-            const parentId = pending.shift();
-
-            const children = Array.from(
-                container.querySelectorAll(
-                    `[data-repeatable-item][data-parent-row-id="${CSS.escape(parentId)}"]`
-                )
-            );
-
-            children.forEach((child) => {
-                const siblingIndex = children
-                    .filter(
-                        (sibling) =>
-                            sibling.dataset.repeatableRowGroup ===
-                            child.dataset.repeatableRowGroup
-                    )
-                    .indexOf(child);
-
-                child.dataset.rootIndex = rootIndex;
-                child.dataset.rowPath =
-                    `${container.querySelector(
-                        `[data-repeatable-item][data-row-id="${CSS.escape(parentId)}"]`
-                    )?.dataset.rowPath || `${rootGroupCode}_${rootIndex}`}_${child.dataset.repeatableRowGroup}_${siblingIndex}`;
-                pending.push(child.dataset.rowId);
-
-                child.querySelectorAll("input, textarea, select").forEach((field) => {
-                    const name = field.getAttribute("name");
-                    if (!name) return;
-
-                    const childRootPattern =
-                        new RegExp(`^${escapeRegExp(rootGroupCode)}_\\d+_`);
-
-                    if (childRootPattern.test(name)) {
-                        field.name = name.replace(
-                            childRootPattern,
-                            `${rootGroupCode}_${rootIndex}_`
-                        );
-                    }
-                });
             });
-        }
+        });
     });
 }
 
