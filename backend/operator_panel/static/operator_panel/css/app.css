@@ -2815,14 +2815,20 @@ body.df-modal-open {
    --------------------------------------------------------- */
 
 .workflow-instance .df-workflow-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 10px;
     margin-top: 14px;
+    padding: 12px 16px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--surface);
 }
 
 .workflow-instance .df-workflow-actions-header {
-    padding: 12px 16px;
+    flex: 1 1 100%;
+    padding: 0 0 8px;
     border-bottom: 1px solid var(--border);
 }
 
@@ -2836,6 +2842,39 @@ body.df-modal-open {
     margin: 0;
     color: var(--text-secondary);
     font-size: 11px;
+}
+
+.workflow-instance .df-workflow-actions > form {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+
+.workflow-instance .df-workflow-actions > form .df-button {
+    min-width: 120px;
+}
+
+.workflow-instance .df-workflow-actions > form > p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+@media (max-width: 767px) {
+    .workflow-instance .df-workflow-actions {
+        padding: 10px 12px;
+        gap: 8px;
+    }
+
+    .workflow-instance .df-workflow-actions > form {
+        flex: 1 1 100%;
+    }
+
+    .workflow-instance .df-workflow-actions > form .df-button {
+        width: 100%;
+    }
 }
 
 /* ---------------------------------------------------------
