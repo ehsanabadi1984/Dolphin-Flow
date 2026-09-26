@@ -128,6 +128,18 @@ class FormPostAdapterTests(TestCase):
 
         self.assertNotIn("items", payload)
 
+    def test_repeatable_group_presence_marker_allows_explicit_empty_delete(self):
+        post = QueryDict("", mutable=True)
+        post["name"] = "Ehsan"
+        post["items__present"] = "1"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(payload["items"], [])
+
 
     def test_adapts_nested_repeatable_rows_into_child_groups(self):
         child_group = FormRepeatableGroup.objects.create(
@@ -175,6 +187,47 @@ class FormPostAdapterTests(TestCase):
                             "row_id": 21,
                         },
                     ],
+                },
+            ],
+        )
+
+
+    def test_nested_presence_marker_allows_explicit_empty_child_group(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "Parent",
+            "items_0_child_items__present": "1",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {
+                    "title": "Parent",
+                    "child_items": [],
                 },
             ],
         )
