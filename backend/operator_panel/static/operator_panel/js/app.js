@@ -220,6 +220,20 @@ function preserveFlatTableRootOnChildDelete(container, childRow, rootGroupCode) 
                 targetActionCell.prepend(
                     rootIdInput.cloneNode(true)
                 );
+
+                const rootDeleteButton = childRow.querySelector(
+                    ".df-repeatable-root-delete"
+                );
+
+                if (rootDeleteButton) {
+                    targetActionCell
+                        .querySelectorAll(".df-repeatable-root-delete")
+                        .forEach((button) => button.remove());
+
+                    targetActionCell.prepend(
+                        rootDeleteButton.cloneNode(true)
+                    );
+                }
             }
         }
 
@@ -246,6 +260,38 @@ function preserveFlatTableRootOnChildDelete(container, childRow, rootGroupCode) 
      * The deleted child is the root's only visual row.
      * Convert that row into the root row instead of removing it.
      */
+    /*
+     * The deleted child is the root's only visual row.
+     * Its descendants belong to the deleted child subtree and must not
+     * become children of the promoted root.
+     */
+    const removedDescendantIds = new Set([childRow.dataset.rowId]);
+    let descendantsChanged = true;
+
+    while (descendantsChanged) {
+        descendantsChanged = false;
+
+        Array.from(
+            container.querySelectorAll("[data-repeatable-item]")
+        ).forEach((candidate) => {
+            if (
+                candidate === childRow ||
+                !candidate.dataset.parentRowId ||
+                !removedDescendantIds.has(candidate.dataset.parentRowId)
+            ) {
+                return;
+            }
+
+            removedDescendantIds.add(candidate.dataset.rowId);
+            candidate.remove();
+            descendantsChanged = true;
+        });
+    }
+
+    /*
+     * Convert the remaining child row into the root row instead of removing
+     * the only visual representation of the root.
+     */
     childRow.dataset.repeatableRowGroup = rootGroupCode;
     childRow.dataset.parentRowId = "";
     childRow.dataset.rowPath =
@@ -267,11 +313,13 @@ function preserveFlatTableRootOnChildDelete(container, childRow, rootGroupCode) 
             "input[data-repeatable-row-id]"
         ).forEach((input) => input.remove());
 
+        /*
+         * Keep only the dedicated root-delete action after promotion.
+         * The old child-delete action must not acquire root semantics.
+         */
         actionCell.querySelectorAll(
             ".df-repeatable-delete"
-        ).forEach((button) => {
-            button.dataset.groupCode = rootGroupCode;
-        });
+        ).forEach((button) => button.remove());
 
         if (rootIdInput) {
             rootIdInput.name =
