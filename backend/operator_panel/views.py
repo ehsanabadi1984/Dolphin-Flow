@@ -742,24 +742,37 @@ def execute_transition(request, instance_id, transition_id):
         # used by the normal form validation flow.
         validation_errors = []
 
-        def collect_validation_errors(error):
+        def extract_message(error):
             message = getattr(error, "message", None)
+            if isinstance(message, str):
+                return message
 
-            if isinstance(message, dict):
-                validation_errors.append(message)
-                return
+            error_list = getattr(error, "error_list", [])
+            if error_list and all(item is not error for item in error_list):
+                return extract_message(error_list[0])
 
+            return str(error)
+
+        for error in getattr(exc, "error_list", []):
             error_dict = getattr(error, "error_dict", None)
-            if error_dict:
-                for nested_errors in error_dict.values():
-                    for nested_error in nested_errors:
-                        collect_validation_errors(nested_error)
-                return
 
-            for nested_error in getattr(error, "error_list", []):
-                collect_validation_errors(nested_error)
+            if not error_dict:
+                continue
 
-        collect_validation_errors(exc)
+            structured_error = {}
+            for key, nested_errors in error_dict.items():
+                if not nested_errors:
+                    continue
+                structured_error[key] = extract_message(
+                    nested_errors[0]
+                )
+
+            if structured_error.get("type") in {
+                "field",
+                "group",
+                "device_group",
+            }:
+                validation_errors.append(structured_error)
 
         form_context = DynamicFormService.get_form_for_step(
             instance=instance,
