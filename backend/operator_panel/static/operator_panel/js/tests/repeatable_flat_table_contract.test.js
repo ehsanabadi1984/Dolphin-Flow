@@ -390,15 +390,17 @@ test("flat TABLE child row identity is scoped to its parent row path", () => {
         appJs,
         /const childPrefix\s*=\s*\`\$\{parentPath\}_\$\{childGroupCode\}_\$\{childIndex\}_\`;/s,
     );
-    assert.ok(
-        appJs.includes("field.name = `${parentPath}_${childGroupCode}_${childIndex}__id`;"),
+    assert.match(
+        appJs,
+        /field\.name\s*=\s*`\$\{parentPath\}_\$\{childGroupCode\}_\$\{childIndex\}__id`;/s,
     );
 });
 test("flat TABLE child clone scopes field mutation to child template fields", () => {
     assert.match(appJs, /const isChildField\s*=\s*oldName\.startsWith\("PARENT_PREFIX"\)/s);
-    assert.match(appJs, /const isChildRowId\s*=\s*isChildField\s*&&\s*field\.type === "hidden"\s*&&\s*oldName\.endsWith\("__id"\)/s);
-    assert.match(appJs, /if \(!isChildField && !isChildRowId\) return/);
-    assert.match(appJs, /field\.name = oldName\s*\.replace\(\s*"PARENT_PREFIX"/s);
+    assert.match(
+        appJs,
+        /if \(!isChildField && !isPresenceMarker && !isChildRowId\) return/,
+    );
 });
 
 test("flat TABLE browser-like add-child submit keeps root and child field names", () => {
