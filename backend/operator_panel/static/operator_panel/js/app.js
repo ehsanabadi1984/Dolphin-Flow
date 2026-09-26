@@ -85,6 +85,10 @@ function reindexFlatTableRootRows(container, rootGroupCode) {
      * Its first child row carries the root fields and rootIndex.
      * Therefore root rows must be discovered by logical rootIndex,
      * not by row group.
+     *
+     * Reindex in two phases. Do not mutate rootIndex while discovering
+     * or matching the remaining roots, otherwise a move such as 1 -> 0
+     * can collide with an existing root 0.
      */
     const items = Array.from(
         container.querySelectorAll("[data-repeatable-item]")
@@ -94,33 +98,34 @@ function reindexFlatTableRootRows(container, rootGroupCode) {
     const seenRootIndexes = new Set();
 
     items.forEach((row) => {
-        const rootIndex = row.dataset.rootIndex;
-        if (rootIndex === undefined || rootIndex === "") {
+        const oldIndex = row.dataset.rootIndex;
+        if (oldIndex === undefined || oldIndex === "") {
             return;
         }
 
-        if (!seenRootIndexes.has(rootIndex)) {
-            seenRootIndexes.add(rootIndex);
-            logicalRoots.push(rootIndex);
+        if (!seenRootIndexes.has(oldIndex)) {
+            seenRootIndexes.add(oldIndex);
+            logicalRoots.push({
+                oldIndex: String(oldIndex),
+                newIndex: logicalRoots.length,
+            });
         }
     });
 
-    logicalRoots.forEach((oldIndex, rootIndex) => {
+    logicalRoots.forEach(({ oldIndex, newIndex }) => {
         const oldPrefix =
             `${rootGroupCode}_${oldIndex}`;
         const newPrefix =
-            `${rootGroupCode}_${rootIndex}`;
+            `${rootGroupCode}_${newIndex}`;
 
         const rootPattern = new RegExp(
             `^${escapeRegExp(oldPrefix)}_`
         );
 
         items.forEach((row) => {
-            if (String(row.dataset.rootIndex) !== String(oldIndex)) {
+            if (String(row.dataset.rootIndex) !== oldIndex) {
                 return;
             }
-
-            row.dataset.rootIndex = rootIndex;
 
             const rowPath = row.dataset.rowPath;
             if (rowPath && rowPath.startsWith(oldPrefix)) {
@@ -141,6 +146,16 @@ function reindexFlatTableRootRows(container, rootGroupCode) {
                     `${newPrefix}_`
                 );
             });
+        });
+    });
+
+    logicalRoots.forEach(({ oldIndex, newIndex }) => {
+        items.forEach((row) => {
+            if (String(row.dataset.rootIndex) !== oldIndex) {
+                return;
+            }
+
+            row.dataset.rootIndex = String(newIndex);
         });
     });
 }
