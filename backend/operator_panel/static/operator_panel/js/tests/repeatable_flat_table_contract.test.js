@@ -770,3 +770,248 @@ test("flat TABLE add-child lifecycle preserves root value through reindex and su
         submittedNames.length,
     );
 });
+
+
+test("flat TABLE four independent root trees keep unique root and child names after adding a child", () => {
+    const extractFunction = (source, functionName) => {
+        const start = source.indexOf("function " + functionName + "(");
+        assert.notEqual(start, -1, functionName + " must exist");
+        let depth = 0;
+        let opened = false;
+
+        for (
+            let index = source.indexOf("{", start);
+            index < source.length;
+            index += 1
+        ) {
+            if (source[index] === "{") {
+                depth += 1;
+                opened = true;
+            } else if (source[index] === "}") {
+                depth -= 1;
+                if (opened && depth === 0) {
+                    return source.slice(start, index + 1);
+                }
+            }
+        }
+
+        throw new Error("Could not extract " + functionName);
+    };
+
+    const makeField = (name, value = "") => ({
+        name,
+        value,
+        type: "text",
+        tagName: "INPUT",
+        getAttribute(attribute) {
+            return attribute === "name" ? this.name : null;
+        },
+    });
+
+    const makeRow = ({
+        id,
+        group,
+        parentId,
+        path,
+        fields,
+    }) => ({
+        dataset: {
+            rowId: id,
+            repeatableRowGroup: group,
+            parentRowId: parentId,
+            rowPath: path,
+            rootIndex: path.split("_")[1],
+        },
+        fields,
+        querySelectorAll(selector) {
+            return selector === "input, textarea, select"
+                ? this.fields
+                : [];
+        },
+    });
+
+    const rootGroupCode = "parts";
+    const childGroupCode = "child_parts";
+
+    /*
+     * A populated root is rendered as child visual rows in a flat TABLE.
+     * Each of the four roots therefore owns its own child row, and the
+     * ancestor fields are rendered only on that root's first child row.
+     */
+    const roots = [
+        ["root-0", "child-0", "علی", "تهران"],
+        ["root-1", "child-1", "سعید", "تهران نیست"],
+        ["root-2", "child-2", "رضا", "اصفهان"],
+        ["root-3", "child-3", "مریم", "شیراز"],
+    ];
+
+    const rows = roots.flatMap(
+        ([rootId, childId, name, address], rootIndex) => [
+            makeRow({
+                id: childId,
+                group: childGroupCode,
+                parentId: rootId,
+                path: `${rootGroupCode}_${rootIndex}_${childGroupCode}_0`,
+                fields: [
+                    makeField(
+                        `${rootGroupCode}_${rootIndex}_OwnerName`,
+                        name,
+                    ),
+                    makeField(
+                        `${rootGroupCode}_${rootIndex}_OwnerAddress`,
+                        address,
+                    ),
+                    makeField(
+                        `${rootGroupCode}_${rootIndex}_${childGroupCode}_0_Phone`,
+                        `09${rootIndex}0000000`,
+                    ),
+                ],
+            }),
+        ],
+    );
+
+    /*
+     * Add a second child to root 0. The new child has no ancestor fields;
+     * those remain owned by root 0's first visual child row.
+     */
+    rows.push(
+        makeRow({
+            id: "child-0-new",
+            group: childGroupCode,
+            parentId: "root-0",
+            path: `${rootGroupCode}_0_${childGroupCode}_1`,
+            fields: [
+                makeField(
+                    `${rootGroupCode}_0_${childGroupCode}_1_Phone`,
+                    "09120000000",
+                ),
+            ],
+        }),
+    );
+
+    const container = {
+        querySelector(selector) {
+            const rowIdMatch = selector.match(
+                /data-row-id="([^"]+)"/,
+            );
+            if (!rowIdMatch) {
+                return null;
+            }
+
+            return rows.find(
+                (row) => row.dataset.rowId === rowIdMatch[1],
+            ) || null;
+        },
+
+        querySelectorAll(selector) {
+            if (!selector.includes("[data-repeatable-item]")) {
+                return [];
+            }
+
+            const groupMatch = selector.match(
+                /data-repeatable-row-group="([^"]+)"/,
+            );
+            const parentMatch = selector.match(
+                /data-parent-row-id="([^"]+)"/,
+            );
+
+            return rows.filter((row) => {
+                if (
+                    groupMatch &&
+                    row.dataset.repeatableRowGroup !== groupMatch[1]
+                ) {
+                    return false;
+                }
+
+                if (
+                    parentMatch &&
+                    row.dataset.parentRowId !== parentMatch[1]
+                ) {
+                    return false;
+                }
+
+                return true;
+            });
+        },
+    };
+
+    const CSS = {
+        escape: (value) => value,
+    };
+
+    const invoke = new Function(
+        "CSS",
+        extractFunction(appJs, "escapeRegExp") +
+            "\n" +
+            extractFunction(appJs, "reindexFlatTableRootRows") +
+            "\n" +
+            extractFunction(appJs, "reindexFlatTableChildRows") +
+            "\nreturn { reindexFlatTableRootRows, reindexFlatTableChildRows };",
+    )(CSS);
+
+    /*
+     * Re-run the same reindex lifecycle used after flat-table mutations.
+     * Root rows are represented by child visual rows here, so the child
+     * trees must remain isolated by their logical parent path.
+     */
+    invoke.reindexFlatTableRootRows(
+        container,
+        rootGroupCode,
+    );
+
+    for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
+        invoke.reindexFlatTableChildRows(
+            container,
+            childGroupCode,
+            `root-${rootIndex}`,
+            `${rootGroupCode}_${rootIndex}`,
+        );
+    }
+
+    const submittedFields = rows.flatMap((row) => row.fields);
+    const submittedNames = submittedFields.map(
+        (field) => field.getAttribute("name"),
+    );
+
+    /*
+     * Every root must have exactly one OwnerName and OwnerAddress key.
+     * If two roots collapse onto the same key, Django QueryDict would
+     * receive values such as ['علی', 'سعید'] instead of independent rows.
+     */
+    assert.deepEqual(
+        submittedNames.filter((name) => name.endsWith("_OwnerName")),
+        [
+            "parts_0_OwnerName",
+            "parts_1_OwnerName",
+            "parts_2_OwnerName",
+            "parts_3_OwnerName",
+        ],
+    );
+
+    assert.deepEqual(
+        submittedNames.filter((name) => name.endsWith("_OwnerAddress")),
+        [
+            "parts_0_OwnerAddress",
+            "parts_1_OwnerAddress",
+            "parts_2_OwnerAddress",
+            "parts_3_OwnerAddress",
+        ],
+    );
+
+    assert.deepEqual(
+        submittedNames.filter((name) => name.includes("_child_parts_")),
+        [
+            "parts_0_child_parts_0_Phone",
+            "parts_1_child_parts_0_Phone",
+            "parts_2_child_parts_0_Phone",
+            "parts_3_child_parts_0_Phone",
+            "parts_0_child_parts_1_Phone",
+        ],
+    );
+
+    assert.equal(
+        new Set(submittedNames).size,
+        submittedNames.length,
+        "flat TABLE submit names must remain globally unique",
+    );
+});
