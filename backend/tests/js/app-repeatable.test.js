@@ -62,7 +62,14 @@ test("adds a nested child row under the second parent with isolated names", asyn
 
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
-    globalThis.CSS = dom.window.CSS;
+    globalThis.CSS = dom.window.CSS || {};
+    if (typeof globalThis.CSS.escape !== "function") {
+        globalThis.CSS.escape = (value) =>
+            String(value).replace(/[^a-zA-Z0-9_-]/g, (character) =>
+                "\\" + character.codePointAt(0).toString(16) + " "
+            );
+    }
+    dom.window.CSS = globalThis.CSS;
     globalThis.confirm = () => true;
     dom.window.confirm = () => true;
     dom.window.confirm = () => true;
