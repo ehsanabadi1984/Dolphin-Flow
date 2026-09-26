@@ -270,36 +270,23 @@ function preserveFlatTableRootOnChildDelete(container, childRow, rootGroupCode) 
     childRow.querySelectorAll(
         "input, textarea, select"
     ).forEach((field) => {
-        const name = field.getAttribute("name");
-        if (!name) return;
-
-        const prefix = `${rootGroupCode}_${rootIndex}_`;
-        const match = name.match(
-            /^[^_]+_\\d+_(.+)$/
-        );
-
         if (
-            match &&
-            name.startsWith(
-                childRow.dataset.rowPath
-            ) === false
+            field.closest(
+                `[data-column-group="${CSS.escape(rootGroupCode)}"]`
+            )
         ) {
-            return;
-        }
-
-        if (
-            name.startsWith(prefix)
-        ) {
-            return;
-        }
-
-        if (field.closest(
-            `[data-column-group="${CSS.escape(rootGroupCode)}"]`
-        )) {
             return;
         }
 
         field.remove();
+    });
+
+    childRow.querySelectorAll(
+        ".df-repeatable-child-add[data-parent-row-id]"
+    ).forEach((button) => {
+        if (button.dataset.parentRowId !== rootRowId) {
+            button.remove();
+        }
     });
 
     return true;
