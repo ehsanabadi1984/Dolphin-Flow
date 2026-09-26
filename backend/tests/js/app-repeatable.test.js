@@ -697,7 +697,7 @@ test("deletes a flat TABLE child row without affecting its parent or sibling row
 });
 
 
-test("flat TABLE save after adding a child preserves four independent root payloads", async () => {
+test("flat TABLE save after adding a child to every root preserves four independent root payloads", async () => {
     const dom = new JSDOM(
         `
         <button id="df-notification-toggle" type="button" aria-expanded="false"></button>
@@ -715,209 +715,64 @@ test("flat TABLE save after adding a child preserves four independent root paylo
                 <div class="df-table-wrapper">
                     <table>
                         <tbody class="df-repeatable-items" data-group-code="parts">
-                            <tr
-                                class="df-repeatable-flat-template"
-                                data-repeatable-item
-                                data-repeatable-template
-                                data-repeatable-root-template
-                                style="display:none;"
-                            >
+                            <tr class="df-repeatable-flat-template" data-repeatable-item data-repeatable-template data-repeatable-root-template style="display:none;">
                                 <td>
                                     <input name="parts_TEMPLATE_OwnerName" value="">
                                     <input name="parts_TEMPLATE_OwnerAddress" value="">
                                 </td>
                                 <td class="df-table-actions">
-                                    <button
-                                        type="button"
-                                        class="df-repeatable-child-add"
-                                        data-group-code="child_parts"
-                                        data-parent-row-id=""
-                                    >+ افزودن</button>
+                                    <button type="button" class="df-repeatable-child-add" data-group-code="child_parts" data-parent-row-id="">+ افزودن</button>
                                 </td>
                             </tr>
 
-                            <tr
-                                class="df-repeatable-flat-template"
-                                data-repeatable-item
-                                data-repeatable-template
-                                data-repeatable-child-template
-                                data-child-group-code="child_parts"
-                                style="display:none;"
-                            >
+                            <tr class="df-repeatable-flat-template" data-repeatable-item data-repeatable-template data-repeatable-child-template data-child-group-code="child_parts" style="display:none;">
                                 <td></td>
                                 <td>
-                                    <input
-                                        name="PARENT_PREFIXchild_parts_TEMPLATE_Phone"
-                                        value=""
-                                    >
+                                    <input name="PARENT_PREFIXchild_parts_TEMPLATE_Phone" value="">
                                 </td>
                                 <td class="df-table-actions">
-                                    <input
-                                        type="hidden"
-                                        name="PARENT_PREFIXchild_parts_TEMPLATE__id"
-                                        value=""
-                                    >
+                                    <input type="hidden" name="PARENT_PREFIXchild_parts_TEMPLATE__id" value="">
                                 </td>
                             </tr>
 
-                            <tr
-                                class="df-repeatable-item df-repeatable-flat-row"
-                                data-repeatable-item
-                                data-repeatable-row-group="child_parts"
-                                data-root-index="0"
-                                data-row-path="parts_0_child_parts_0"
-                                data-row-id="child-0"
-                                data-parent-row-id="root-0"
-                            >
+                            <tr class="df-repeatable-item df-repeatable-flat-row" data-repeatable-item data-repeatable-row-group="child_parts" data-root-index="0" data-row-path="parts_0_child_parts_0" data-row-id="child-0" data-parent-row-id="root-0">
                                 <td>
-                                    <input
-                                        name="parts_0_OwnerName"
-                                        value="علی"
-                                    >
-                                    <input
-                                        name="parts_0_OwnerAddress"
-                                        value="تهران"
-                                    >
-                                    <input
-                                        type="hidden"
-                                        name="parts_0__id"
-                                        value="root-0"
-                                    >
+                                    <input name="parts_0_OwnerName" value="علی">
+                                    <input name="parts_0_OwnerAddress" value="تهران">
+                                    <input type="hidden" name="parts_0__id" value="root-0">
                                 </td>
-                                <td>
-                                    <input
-                                        name="parts_0_child_parts_0_Phone"
-                                        value="09110000000"
-                                    >
-                                </td>
-                                <td class="df-table-actions">
-                                    <button
-                                        type="button"
-                                        class="df-repeatable-child-add"
-                                        data-group-code="child_parts"
-                                        data-parent-row-id="root-0"
-                                    >+ افزودن</button>
-                                </td>
+                                <td><input name="parts_0_child_parts_0_Phone" value="09110000000"></td>
+                                <td class="df-table-actions"><button type="button" class="df-repeatable-child-add" data-group-code="child_parts" data-parent-row-id="root-0">+ افزودن</button></td>
                             </tr>
 
-                            <tr
-                                class="df-repeatable-item df-repeatable-flat-row"
-                                data-repeatable-item
-                                data-repeatable-row-group="child_parts"
-                                data-root-index="1"
-                                data-row-path="parts_1_child_parts_0"
-                                data-row-id="child-1"
-                                data-parent-row-id="root-1"
-                            >
+                            <tr class="df-repeatable-item df-repeatable-flat-row" data-repeatable-item data-repeatable-row-group="child_parts" data-root-index="1" data-row-path="parts_1_child_parts_0" data-row-id="child-1" data-parent-row-id="root-1">
                                 <td>
-                                    <input
-                                        name="parts_1_OwnerName"
-                                        value="سعید"
-                                    >
-                                    <input
-                                        name="parts_1_OwnerAddress"
-                                        value="تهران نیست"
-                                    >
-                                    <input
-                                        type="hidden"
-                                        name="parts_1__id"
-                                        value="root-1"
-                                    >
+                                    <input name="parts_1_OwnerName" value="سعید">
+                                    <input name="parts_1_OwnerAddress" value="تهران نیست">
+                                    <input type="hidden" name="parts_1__id" value="root-1">
                                 </td>
-                                <td>
-                                    <input
-                                        name="parts_1_child_parts_0_Phone"
-                                        value="09120000000"
-                                    >
-                                </td>
-                                <td class="df-table-actions">
-                                    <button
-                                        type="button"
-                                        class="df-repeatable-child-add"
-                                        data-group-code="child_parts"
-                                        data-parent-row-id="root-1"
-                                    >+ افزودن</button>
-                                </td>
+                                <td><input name="parts_1_child_parts_0_Phone" value="09120000000"></td>
+                                <td class="df-table-actions"><button type="button" class="df-repeatable-child-add" data-group-code="child_parts" data-parent-row-id="root-1">+ افزودن</button></td>
                             </tr>
 
-                            <tr
-                                class="df-repeatable-item df-repeatable-flat-row"
-                                data-repeatable-item
-                                data-repeatable-row-group="child_parts"
-                                data-root-index="2"
-                                data-row-path="parts_2_child_parts_0"
-                                data-row-id="child-2"
-                                data-parent-row-id="root-2"
-                            >
+                            <tr class="df-repeatable-item df-repeatable-flat-row" data-repeatable-item data-repeatable-row-group="child_parts" data-root-index="2" data-row-path="parts_2_child_parts_0" data-row-id="child-2" data-parent-row-id="root-2">
                                 <td>
-                                    <input
-                                        name="parts_2_OwnerName"
-                                        value="رضا"
-                                    >
-                                    <input
-                                        name="parts_2_OwnerAddress"
-                                        value="اصفهان"
-                                    >
-                                    <input
-                                        type="hidden"
-                                        name="parts_2__id"
-                                        value="root-2"
-                                    >
+                                    <input name="parts_2_OwnerName" value="رضا">
+                                    <input name="parts_2_OwnerAddress" value="اصفهان">
+                                    <input type="hidden" name="parts_2__id" value="root-2">
                                 </td>
-                                <td>
-                                    <input
-                                        name="parts_2_child_parts_0_Phone"
-                                        value="09130000000"
-                                    >
-                                </td>
-                                <td class="df-table-actions">
-                                    <button
-                                        type="button"
-                                        class="df-repeatable-child-add"
-                                        data-group-code="child_parts"
-                                        data-parent-row-id="root-2"
-                                    >+ افزودن</button>
-                                </td>
+                                <td><input name="parts_2_child_parts_0_Phone" value="09130000000"></td>
+                                <td class="df-table-actions"><button type="button" class="df-repeatable-child-add" data-group-code="child_parts" data-parent-row-id="root-2">+ افزودن</button></td>
                             </tr>
 
-                            <tr
-                                class="df-repeatable-item df-repeatable-flat-row"
-                                data-repeatable-item
-                                data-repeatable-row-group="child_parts"
-                                data-root-index="3"
-                                data-row-path="parts_3_child_parts_0"
-                                data-row-id="child-3"
-                                data-parent-row-id="root-3"
-                            >
+                            <tr class="df-repeatable-item df-repeatable-flat-row" data-repeatable-item data-repeatable-row-group="child_parts" data-root-index="3" data-row-path="parts_3_child_parts_0" data-row-id="child-3" data-parent-row-id="root-3">
                                 <td>
-                                    <input
-                                        name="parts_3_OwnerName"
-                                        value="مریم"
-                                    >
-                                    <input
-                                        name="parts_3_OwnerAddress"
-                                        value="شیراز"
-                                    >
-                                    <input
-                                        type="hidden"
-                                        name="parts_3__id"
-                                        value="root-3"
-                                    >
+                                    <input name="parts_3_OwnerName" value="مریم">
+                                    <input name="parts_3_OwnerAddress" value="شیراز">
+                                    <input type="hidden" name="parts_3__id" value="root-3">
                                 </td>
-                                <td>
-                                    <input
-                                        name="parts_3_child_parts_0_Phone"
-                                        value="09140000000"
-                                    >
-                                </td>
-                                <td class="df-table-actions">
-                                    <button
-                                        type="button"
-                                        class="df-repeatable-child-add"
-                                        data-group-code="child_parts"
-                                        data-parent-row-id="root-3"
-                                    >+ افزودن</button>
-                                </td>
+                                <td><input name="parts_3_child_parts_0_Phone" value="09140000000"></td>
+                                <td class="df-table-actions"><button type="button" class="df-repeatable-child-add" data-group-code="child_parts" data-parent-row-id="root-3">+ افزودن</button></td>
                             </tr>
                         </tbody>
                     </table>
@@ -925,10 +780,7 @@ test("flat TABLE save after adding a child preserves four independent root paylo
             </section>
         </form>
         `,
-        {
-            url: "http://localhost/workflow/1/",
-            runScripts: "outside-only",
-        }
+        { url: "http://localhost/workflow/1/", runScripts: "outside-only" }
     );
 
     globalThis.window = dom.window;
@@ -948,11 +800,7 @@ test("flat TABLE save after adding a child preserves four independent root paylo
     class WebSocketStub {
         static OPEN = 1;
         static CONNECTING = 0;
-
-        constructor() {
-            this.readyState = WebSocketStub.OPEN;
-        }
-
+        constructor() { this.readyState = WebSocketStub.OPEN; }
         addEventListener() {}
     }
 
@@ -970,8 +818,7 @@ test("flat TABLE save after adding a child preserves four independent root paylo
     globalThis.buildRepeatableGroupPrefix =
         dom.window.DolphinFlowRepeatableNaming.buildRepeatableGroupPrefix;
 
-    await import(`${appPath.href}?flat-table-save-four-roots-test`);
-
+    await import(`${appPath.href}?flat-table-save-four-roots-all-add-child-test`);
     document.dispatchEvent(
         new dom.window.Event("DOMContentLoaded", { bubbles: true })
     );
@@ -981,88 +828,61 @@ test("flat TABLE save after adding a child preserves four independent root paylo
             '.df-table-group [data-repeatable-item][data-repeatable-row-group="child_parts"]'
         )
     );
-
     assert.equal(rootRows.length, 4);
 
-    /*
-     * This is the exact production interaction:
-     * click Add Child on the first root's visual child row.
-     */
-    rootRows[0].querySelector(
-        '.df-repeatable-child-add[data-parent-row-id="root-0"]'
-    ).dispatchEvent(
-        new dom.window.MouseEvent("click", { bubbles: true })
-    );
+    // Exercise the real production Add Child handler on every root.
+    for (const [index, rootRow] of rootRows.entries()) {
+        rootRow.querySelector(
+            `.df-repeatable-child-add[data-parent-row-id="root-${index}"]`
+        ).dispatchEvent(
+            new dom.window.MouseEvent("click", { bubbles: true })
+        );
+    }
 
-    /*
-     * The problem is observed only when Save serializes the form.
-     * Build the same native FormData payload that a browser submits.
-     */
-    const form = document.querySelector("form");
-    const formData = new dom.window.FormData(form);
-    const entries = Array.from(formData.entries());
-
+    const formData = new dom.window.FormData(document.querySelector("form"));
     const valuesByName = new Map();
-    for (const [name, value] of entries) {
+    for (const [name, value] of formData.entries()) {
         const values = valuesByName.get(name) || [];
         values.push(value);
         valuesByName.set(name, values);
     }
 
-    assert.deepEqual(valuesByName.get("parts_0_OwnerName"), ["علی"]);
-    assert.deepEqual(valuesByName.get("parts_1_OwnerName"), ["سعید"]);
-    assert.deepEqual(valuesByName.get("parts_2_OwnerName"), ["رضا"]);
-    assert.deepEqual(valuesByName.get("parts_3_OwnerName"), ["مریم"]);
+    const expectedRoots = [
+        ["علی", "تهران", "root-0", "09110000000"],
+        ["سعید", "تهران نیست", "root-1", "09120000000"],
+        ["رضا", "اصفهان", "root-2", "09130000000"],
+        ["مریم", "شیراز", "root-3", "09140000000"],
+    ];
 
-    assert.deepEqual(valuesByName.get("parts_0_OwnerAddress"), ["تهران"]);
-    assert.deepEqual(valuesByName.get("parts_1_OwnerAddress"), ["تهران نیست"]);
-    assert.deepEqual(valuesByName.get("parts_2_OwnerAddress"), ["اصفهان"]);
-    assert.deepEqual(valuesByName.get("parts_3_OwnerAddress"), ["شیراز"]);
-
-    assert.deepEqual(valuesByName.get("parts_0__id"), ["root-0"]);
-    assert.deepEqual(valuesByName.get("parts_1__id"), ["root-1"]);
-    assert.deepEqual(valuesByName.get("parts_2__id"), ["root-2"]);
-    assert.deepEqual(valuesByName.get("parts_3__id"), ["root-3"]);
-
-    assert.deepEqual(valuesByName.get("parts_0_child_parts_0_Phone"), ["09110000000"]);
-    assert.deepEqual(valuesByName.get("parts_1_child_parts_0_Phone"), ["09120000000"]);
-    assert.deepEqual(valuesByName.get("parts_2_child_parts_0_Phone"), ["09130000000"]);
-    assert.deepEqual(valuesByName.get("parts_3_child_parts_0_Phone"), ["09140000000"]);
-
-    assert.ok(
-        valuesByName.has("parts_0_child_parts_1_Phone"),
-        "the newly added child must be present in the saved FormData"
-    );
-
-    assert.equal(
-        valuesByName.get("parts_0_child_parts_1_Phone")[0],
-        "",
-    );
-
-    /*
-     * The root fields must occur exactly once in the serialized payload.
-     * Duplicate names here are what Django QueryDict turns into arrays
-     * such as ['علی', 'سعید'].
-     */
-    for (const name of [
-        "parts_0_OwnerName",
-        "parts_1_OwnerName",
-        "parts_2_OwnerName",
-        "parts_3_OwnerName",
-        "parts_0_OwnerAddress",
-        "parts_1_OwnerAddress",
-        "parts_2_OwnerAddress",
-        "parts_3_OwnerAddress",
-        "parts_0__id",
-        "parts_1__id",
-        "parts_2__id",
-        "parts_3__id",
-    ]) {
-        assert.equal(
-            valuesByName.get(name).length,
-            1,
-            `saved FormData must contain exactly one value for ${name}`,
+    for (const [index, [name, address, rootId, phone]] of expectedRoots.entries()) {
+        assert.deepEqual(valuesByName.get(`parts_${index}_OwnerName`), [name]);
+        assert.deepEqual(valuesByName.get(`parts_${index}_OwnerAddress`), [address]);
+        assert.deepEqual(valuesByName.get(`parts_${index}__id`), [rootId]);
+        assert.deepEqual(
+            valuesByName.get(`parts_${index}_child_parts_0_Phone`),
+            [phone],
         );
+        assert.deepEqual(
+            valuesByName.get(`parts_${index}_child_parts_1_Phone`),
+            [""],
+        );
+    }
+
+    // Every root now has a newly-created child; every serialized name must stay unique.
+    for (const index of [0, 1, 2, 3]) {
+        for (const name of [
+            `parts_${index}_OwnerName`,
+            `parts_${index}_OwnerAddress`,
+            `parts_${index}__id`,
+            `parts_${index}_child_parts_0_Phone`,
+            `parts_${index}_child_parts_1_Phone`,
+        ]) {
+            assert.equal(
+                valuesByName.get(name).length,
+                1,
+                `saved FormData must contain exactly one value for ${name}`,
+            );
+        }
     }
 
     dom.window.close();
