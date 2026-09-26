@@ -1020,26 +1020,26 @@ test("flat TABLE four independent root trees keep unique root and child names af
 test("flat TABLE deleting the first child preserves the logical root", () => {
     assert.match(
         appJs,
-        /function preserveFlatTableRootOnChildDelete\\(container, childRow, rootGroupCode\\)/,
+        /function preserveFlatTableRootOnChildDelete\(container, childRow, rootGroupCode\)/,
     );
     assert.match(
         appJs,
-        /const rootRowId = childRow\\.dataset\\.parentRowId;/,
+        /const rootRowId = childRow\.dataset\.parentRowId;/,
     );
     assert.match(
         appJs,
-        /if \\(siblingChildren\\.length\\) \\{[\\s\\S]*?rootCells\\.forEach\\(\\(sourceCell, index\\) =>/s,
+        /if \(siblingChildren\.length\) \{[\s\S]*?rootCells\.forEach\(\(sourceCell, index\) =>/,
     );
     assert.match(
         appJs,
-        /childRow\\.dataset\\.repeatableRowGroup = rootGroupCode;[\\s\\S]*?childRow\\.dataset\\.rowId = rootRowId;/s,
+        /childRow\.dataset\.repeatableRowGroup = rootGroupCode;[\s\S]*?childRow\.dataset\.rowId = rootRowId;/s,
     );
     assert.match(
         appJs,
-        /rootIdInput\\.name =\\s*`\\$\\{rootGroupCode\\}_\\$\\{rootIndex\\}__id`;/s,
+        /rootIdInput\.name =\s*\`\$\{rootGroupCode\}_\$\{rootIndex\}__id\`;/s,
     );
     assert.match(
         appJs,
-        /preserveFlatTableRootOnChildDelete\\(\\s*container,\\s*flatRow,\\s*rootGroupCode\\s*\\)/s,
+        /preserveFlatTableRootOnChildDelete\(\s*container,\s*flatRow,\s*rootGroupCode\s*\)/s,
     );
 });
