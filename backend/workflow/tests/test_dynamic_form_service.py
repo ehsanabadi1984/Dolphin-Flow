@@ -626,6 +626,33 @@ class DynamicFormServiceTests(TestCase):
             "Child 2",
         )
 
+        first_flat_row = customers["flat_table"]["rows"][0]
+        second_flat_row = customers["flat_table"]["rows"][1]
+        third_flat_row = customers["flat_table"]["rows"][2]
+
+        self.assertEqual(
+            first_flat_row["id_inputs"][0]["value"],
+            parent_rows[0].pk,
+        )
+        self.assertTrue(first_flat_row["id_inputs"][0]["is_root"])
+        self.assertEqual(
+            first_flat_row["root_delete"]["group_code"],
+            "customers",
+        )
+        self.assertTrue(first_flat_row["root_delete"]["can_delete"])
+        self.assertFalse(
+            "root_delete" in second_flat_row,
+        )
+        self.assertEqual(
+            third_flat_row["id_inputs"][0]["value"],
+            parent_rows[1].pk,
+        )
+        self.assertTrue(third_flat_row["id_inputs"][0]["is_root"])
+        self.assertEqual(
+            third_flat_row["root_delete"]["group_code"],
+            "customers",
+        )
+
     def test_get_form_for_step_applies_nested_group_and_field_permissions(self):
         parent_group = FormRepeatableGroup.objects.create(
             section=self.section,
