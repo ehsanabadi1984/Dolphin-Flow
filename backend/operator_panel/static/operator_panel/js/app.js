@@ -2843,7 +2843,7 @@ document.addEventListener("click", (event) => {
             const isChildField =
                 oldName.startsWith("PARENT_PREFIX") &&
                 oldName.includes(
-                    `\${childGroupCode}_TEMPLATE_`
+                    `${childGroupCode}_TEMPLATE_`
                 );
             const isPresenceMarker =
                 oldName.startsWith("PARENT_PREFIX") &&
@@ -2864,13 +2864,13 @@ document.addEventListener("click", (event) => {
             if (isPresenceMarker) {
                 field.name = oldName.replace(
                     "PARENT_PREFIX",
-                    `\${parentPath}_\${childGroupCode}_\${childIndex}_`
+                    `${parentPath}_${childGroupCode}_${childIndex}_`
                 );
                 return;
             }
 
             if (isChildRowId) {
-                field.name = `\${parentPath}_\${childGroupCode}_\${childIndex}__id`;
+                field.name = `${parentPath}_${childGroupCode}_${childIndex}__id`;
                 field.value = newRowId;
                 return;
             }
