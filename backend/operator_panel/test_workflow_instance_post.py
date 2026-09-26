@@ -163,10 +163,15 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             ],
         )
         self.assertEqual(response.context["error"], "")
-        self.assertContains(response, self.name_field.label)
+        self.assertContains(
+            response,
+            self.name_field.label,
+            status_code=400,
+        )
         self.assertContains(
             response,
             f"فیلد «{self.name_field.label}» الزامی است.",
+            status_code=400,
         )
 
     def _create_device_group(
