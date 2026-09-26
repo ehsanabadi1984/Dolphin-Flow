@@ -253,6 +253,28 @@ function preserveFlatTableRootOnChildDelete(container, childRow, rootGroupCode) 
             targetActionCell.prepend(button.cloneNode(true));
         });
 
+        childRow.querySelectorAll(
+            "input[data-repeatable-presence]"
+        ).forEach((marker) => {
+            const targetActionCell = targetRow.querySelector(
+                ".df-table-actions"
+            );
+
+            if (!targetActionCell) return;
+
+            const existingMarker = Array.from(
+                targetActionCell.querySelectorAll(
+                    "input[data-repeatable-presence]"
+                )
+            ).find((input) => input.name === marker.name);
+
+            if (existingMarker) {
+                existingMarker.remove();
+            }
+
+            targetActionCell.prepend(marker.cloneNode(true));
+        });
+
         return false;
     }
 
@@ -2821,8 +2843,11 @@ document.addEventListener("click", (event) => {
             const isChildField =
                 oldName.startsWith("PARENT_PREFIX") &&
                 oldName.includes(
-                    `${childGroupCode}_TEMPLATE_`
+                    \`\${childGroupCode}_TEMPLATE_\`
                 );
+            const isPresenceMarker =
+                oldName.startsWith("PARENT_PREFIX") &&
+                oldName.endsWith("__present");
             const isChildRowId =
                 isChildField &&
                 field.type === "hidden" &&
@@ -2834,10 +2859,18 @@ document.addEventListener("click", (event) => {
              * belonging to the child template so ancestor/root inputs can
              * never be cleared or renamed accidentally.
              */
-            if (!isChildField && !isChildRowId) return;
+            if (!isChildField && !isPresenceMarker && !isChildRowId) return;
+
+            if (isPresenceMarker) {
+                field.name = oldName.replace(
+                    "PARENT_PREFIX",
+                    \`\${parentPath}_\${childGroupCode}_\${childIndex}_\`
+                );
+                return;
+            }
 
             if (isChildRowId) {
-                field.name = `${parentPath}_${childGroupCode}_${childIndex}__id`;
+                field.name = \`\${parentPath}_\${childGroupCode}_\${childIndex}__id\`;
                 field.value = newRowId;
                 return;
             }
