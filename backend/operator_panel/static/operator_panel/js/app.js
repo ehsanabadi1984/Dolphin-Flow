@@ -2987,8 +2987,31 @@ document.addEventListener("click", (event) => {
      * ---------------------------------------------------------
      */
 
-    const newIndex =
-        rootItems.length;
+    let newIndex;
+
+    if (flatTable) {
+        /*
+         * In a flat TABLE a root that has children may have no visual
+         * root <tr>; its identity is carried by the child row through
+         * data-root-index. Therefore rootItems.length is not a reliable
+         * root count after a saved form is reloaded.
+         */
+        const rootIndexes = items
+            .map((item) => item.dataset.rootIndex)
+            .filter(
+                (value) =>
+                    value !== undefined &&
+                    value !== ""
+            )
+            .map(Number)
+            .filter(Number.isInteger);
+
+        newIndex = rootIndexes.length
+            ? Math.max(...rootIndexes) + 1
+            : 0;
+    } else {
+        newIndex = rootItems.length;
+    }
 
     /*
      * ---------------------------------------------------------
