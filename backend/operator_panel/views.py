@@ -735,23 +735,54 @@ def execute_transition(request, instance_id, transition_id):
         raise
 
     except ValidationError as exc:
+        # Submit validation returns structured dictionaries. Rendering the
+        # exception with str(exc) flattens those dictionaries into an
+        # unreadable Python-list representation. Rebuild the editable form
+        # and pass the structured errors to the same field/group error UI
+        # used by the normal form validation flow.
+        validation_errors = []
+
+        for error in getattr(exc, "error_list", []):
+            message = getattr(error, "message", None)
+            if isinstance(message, dict):
+                validation_errors.append(message)
+
+        form_context = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=request.user,
+            edit_mode=True,
+        )
+
+        can_view_device_history = WorkflowAuthorizationService.has_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=HISTORY_ACTION,
+        )
+
+        transitions = (
+            WorkflowAuthorizationService
+            .get_allowed_transitions(
+                user=request.user,
+                workflow=instance.workflow,
+                from_step=instance.current_step,
+            )
+        )
+
         return render(
             request,
             "operator_panel/workflow_instance.html",
             {
                 "instance": instance,
-                "transitions": (
-                    WorkflowTransition.objects.filter(
-                        workflow=instance.workflow,
-                        from_step=instance.current_step,
-                        is_active=True,
-                    )
-                    .select_related(
-                        "from_step",
-                        "to_step",
-                    )
+                "transitions": transitions,
+                "dynamic_form": form_context,
+                "error": (
+                    ""
+                    if validation_errors
+                    else str(exc)
                 ),
-                "error": str(exc),
+                "edit_mode": True,
+                "can_view_device_history": can_view_device_history,
+                "validation_errors": validation_errors,
                 "page_title": instance.workflow.name,
                 "page_breadcrumb": instance.workflow.name,
             },
