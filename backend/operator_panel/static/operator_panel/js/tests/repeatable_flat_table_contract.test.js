@@ -1164,7 +1164,7 @@ test("flat TABLE child-represented roots expose a dedicated root delete action",
     );
     assert.match(
         appJs,
-        /const removedIds = new Set\(\[rootRowId\]\);[\s\S]*?reindexFlatTableRootRows\(\s*container,\s*rootGroupCode\s*\)/s,
+        /removeFlatTableSubtree\(\s*container,\s*rootRowId\s*\);[\s\S]*?reindexFlatTableRootRows\(\s*container,\s*rootGroupCode\s*\)/s,
     );
 });
 
