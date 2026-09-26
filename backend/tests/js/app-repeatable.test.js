@@ -672,7 +672,7 @@ test("deletes a flat TABLE child row without affecting its parent or sibling row
     );
 
     const remaining = document.querySelectorAll(
-        ".df-table-group .df-repeatable-items tbody > [data-repeatable-item]"
+        ".df-table-group .df-repeatable-items > [data-repeatable-item]"
     );
 
     assert.equal(remaining.length, 2);
