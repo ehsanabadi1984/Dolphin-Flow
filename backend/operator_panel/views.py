@@ -740,39 +740,9 @@ def execute_transition(request, instance_id, transition_id):
         # unreadable Python-list representation. Rebuild the editable form
         # and pass the structured errors to the same field/group error UI
         # used by the normal form validation flow.
-        validation_errors = []
-
-        def extract_message(error):
-            message = getattr(error, "message", None)
-            if isinstance(message, str):
-                return message
-
-            error_list = getattr(error, "error_list", [])
-            if error_list and all(item is not error for item in error_list):
-                return extract_message(error_list[0])
-
-            return str(error)
-
-        for error in getattr(exc, "error_list", []):
-            error_dict = getattr(error, "error_dict", None)
-
-            if not error_dict:
-                continue
-
-            structured_error = {}
-            for key, nested_errors in error_dict.items():
-                if not nested_errors:
-                    continue
-                structured_error[key] = extract_message(
-                    nested_errors[0]
-                )
-
-            if structured_error.get("type") in {
-                "field",
-                "group",
-                "device_group",
-            }:
-                validation_errors.append(structured_error)
+        validation_errors = list(
+            getattr(exc, "validation_errors", [])
+        )
 
         form_context = DynamicFormService.get_form_for_step(
             instance=instance,
