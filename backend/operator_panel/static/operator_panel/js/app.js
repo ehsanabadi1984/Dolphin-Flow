@@ -149,6 +149,162 @@ function reindexFlatTableRootRows(container, rootGroupCode) {
     });
 }
 
+function preserveFlatTableRootOnChildDelete(container, childRow, rootGroupCode) {
+    const rootRowId = childRow.dataset.parentRowId;
+    const rootIndex = childRow.dataset.rootIndex;
+
+    if (!rootRowId || rootIndex === undefined || rootIndex === "") {
+        return false;
+    }
+
+    const siblingChildren = Array.from(
+        container.querySelectorAll(
+            `[data-repeatable-item][data-parent-row-id="${CSS.escape(rootRowId)}"]`
+        )
+    ).filter((row) => row !== childRow);
+
+    const rootCells = Array.from(
+        childRow.querySelectorAll("[data-column-group]")
+    ).filter(
+        (cell) => cell.dataset.columnGroup === rootGroupCode
+    );
+
+    const rootIdInput = childRow.querySelector(
+        "input[data-repeatable-root-row-id]"
+    );
+
+    if (siblingChildren.length) {
+        const targetRow = siblingChildren[0];
+
+        const targetCells = Array.from(
+            targetRow.querySelectorAll("[data-column-group]")
+        ).filter(
+            (cell) => cell.dataset.columnGroup === rootGroupCode
+        );
+
+        rootCells.forEach((sourceCell, index) => {
+            const targetCell = targetCells[index];
+            if (!targetCell) return;
+
+            targetCell.innerHTML = "";
+            Array.from(sourceCell.childNodes).forEach((node) => {
+                targetCell.appendChild(node.cloneNode(true));
+            });
+        });
+
+        if (rootIdInput) {
+            const targetActionCell = targetRow.querySelector(
+                ".df-table-actions"
+            );
+
+            if (targetActionCell) {
+                const existingRootIdInput = targetActionCell.querySelector(
+                    "input[data-repeatable-root-row-id]"
+                );
+
+                if (existingRootIdInput) {
+                    existingRootIdInput.remove();
+                }
+
+                targetActionCell.prepend(
+                    rootIdInput.cloneNode(true)
+                );
+            }
+        }
+
+        childRow.querySelectorAll(
+            ".df-repeatable-child-add[data-parent-row-id]"
+        ).forEach((button) => {
+            const targetActionCell = targetRow.querySelector(
+                ".df-table-actions"
+            );
+
+            if (!targetActionCell) return;
+
+            targetActionCell.prepend(button.cloneNode(true));
+        });
+
+        return false;
+    }
+
+    /*
+     * The deleted child is the root's only visual row.
+     * Convert that row into the root row instead of removing it.
+     */
+    childRow.dataset.repeatableRowGroup = rootGroupCode;
+    childRow.dataset.parentRowId = "";
+    childRow.dataset.rowPath =
+        `${rootGroupCode}_${rootIndex}`;
+    childRow.dataset.rowId = rootRowId;
+
+    childRow.querySelectorAll(
+        "[data-column-group]"
+    ).forEach((cell) => {
+        if (cell.dataset.columnGroup !== rootGroupCode) {
+            cell.innerHTML = "";
+        }
+    });
+
+    const actionCell = childRow.querySelector(".df-table-actions");
+
+    if (actionCell) {
+        actionCell.querySelectorAll(
+            "input[data-repeatable-row-id]"
+        ).forEach((input) => input.remove());
+
+        actionCell.querySelectorAll(
+            ".df-repeatable-delete"
+        ).forEach((button) => {
+            button.dataset.groupCode = rootGroupCode;
+        });
+
+        if (rootIdInput) {
+            rootIdInput.name =
+                `${rootGroupCode}_${rootIndex}__id`;
+            rootIdInput.value = rootRowId;
+            rootIdInput.dataset.repeatableRootRowId = "";
+            rootIdInput.removeAttribute("data-repeatable-row-id");
+        }
+    }
+
+    childRow.querySelectorAll(
+        "input, textarea, select"
+    ).forEach((field) => {
+        const name = field.getAttribute("name");
+        if (!name) return;
+
+        const prefix = `${rootGroupCode}_${rootIndex}_`;
+        const match = name.match(
+            /^[^_]+_\\d+_(.+)$/
+        );
+
+        if (
+            match &&
+            name.startsWith(
+                childRow.dataset.rowPath
+            ) === false
+        ) {
+            return;
+        }
+
+        if (
+            name.startsWith(prefix)
+        ) {
+            return;
+        }
+
+        if (field.closest(
+            `[data-column-group="${CSS.escape(rootGroupCode)}"]`
+        )) {
+            return;
+        }
+
+        field.remove();
+    });
+
+    return true;
+}
+
 function reindexFlatTableChildRows(
     container,
     childGroupCode,
@@ -2735,6 +2891,27 @@ document.addEventListener("click", (event) => {
                     rootGroupCode
                 );
             } else {
+                /*
+                 * A flat-table root with children may have no visual root
+                 * row. The first child row carries the root fields and root
+                 * identity. Preserve that root representation before removing
+                 * the child, otherwise the root ID disappears from POST.
+                 */
+                const rootWasMaterialized =
+                    preserveFlatTableRootOnChildDelete(
+                        container,
+                        flatRow,
+                        rootGroupCode
+                    );
+
+                if (rootWasMaterialized) {
+                    reindexFlatTableRootRows(
+                        container,
+                        rootGroupCode
+                    );
+                    return;
+                }
+
                 const parentRowId = flatRow.dataset.parentRowId;
                 const parentRow = container.querySelector(
                     `[data-repeatable-item][data-row-id="${CSS.escape(parentRowId)}"]`
