@@ -412,6 +412,35 @@ function reindexFlatTableChildRows(
     });
 }
 
+function removeFlatTableSubtree(container, rootRowId) {
+    const removedIds = new Set([rootRowId]);
+    let changed = true;
+
+    while (changed) {
+        changed = false;
+        Array.from(
+            container.querySelectorAll("[data-repeatable-item]")
+        ).forEach((candidate) => {
+            if (
+                candidate.dataset.parentRowId &&
+                removedIds.has(candidate.dataset.parentRowId) &&
+                !removedIds.has(candidate.dataset.rowId)
+            ) {
+                removedIds.add(candidate.dataset.rowId);
+                changed = true;
+            }
+        });
+    }
+
+    Array.from(
+        container.querySelectorAll("[data-repeatable-item]")
+    )
+        .filter((candidate) => removedIds.has(candidate.dataset.rowId))
+        .forEach((candidate) => candidate.remove());
+
+    return removedIds;
+}
+
 document.addEventListener("click", (event) => {
             if (
                 !workflowTrigger.contains(event.target) &&
@@ -2935,30 +2964,7 @@ document.addEventListener("click", (event) => {
             return;
         }
 
-        const removedIds = new Set([rootRowId]);
-        let changed = true;
-
-        while (changed) {
-            changed = false;
-            Array.from(
-                container.querySelectorAll("[data-repeatable-item]")
-            ).forEach((candidate) => {
-                if (
-                    candidate.dataset.parentRowId &&
-                    removedIds.has(candidate.dataset.parentRowId) &&
-                    !removedIds.has(candidate.dataset.rowId)
-                ) {
-                    removedIds.add(candidate.dataset.rowId);
-                    changed = true;
-                }
-            });
-        }
-
-        Array.from(
-            container.querySelectorAll("[data-repeatable-item]")
-        )
-            .filter((candidate) => removedIds.has(candidate.dataset.rowId))
-            .forEach((candidate) => candidate.remove());
+        removeFlatTableSubtree(container, rootRowId);
 
         reindexFlatTableRootRows(container, rootGroupCode);
         return;
@@ -3063,32 +3069,10 @@ document.addEventListener("click", (event) => {
                     parentRow?.dataset.rowPath ||
                     `${rootGroupCode}_${flatRow.dataset.rootIndex}`;
 
-                const removedIds = new Set([flatRow.dataset.rowId]);
-                let changed = true;
-
-                while (changed) {
-                    changed = false;
-                    Array.from(
-                        container.querySelectorAll("[data-repeatable-item]")
-                    ).forEach((candidate) => {
-                        if (
-                            candidate.dataset.parentRowId &&
-                            removedIds.has(candidate.dataset.parentRowId) &&
-                            !removedIds.has(candidate.dataset.rowId)
-                        ) {
-                            removedIds.add(candidate.dataset.rowId);
-                            changed = true;
-                        }
-                    });
-                }
-
-                Array.from(
-                    container.querySelectorAll("[data-repeatable-item]")
-                )
-                    .filter((candidate) =>
-                        removedIds.has(candidate.dataset.rowId)
-                    )
-                    .forEach((candidate) => candidate.remove());
+                removeFlatTableSubtree(
+                    container,
+                    flatRow.dataset.rowId
+                );
 
                 reindexFlatTableChildRows(
                     container,
