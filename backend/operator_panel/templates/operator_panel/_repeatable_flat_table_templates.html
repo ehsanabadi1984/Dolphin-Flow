@@ -74,6 +74,12 @@
         value=""
       />
       {% for nested_template in child_template.child_groups %}
+        <input
+          type="hidden"
+          name="PARENT_PREFIX{{ nested_template.group.code }}__present"
+          value="1"
+          data-repeatable-presence
+        />
         {% if edit_mode and not dynamic_form.is_submitted and nested_template.can_add %}
           <button
             type="button"
