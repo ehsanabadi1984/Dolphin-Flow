@@ -217,7 +217,13 @@ test("deletes a nested child row under the second parent without affecting the f
 
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
-    globalThis.CSS = dom.window.CSS;
+    globalThis.CSS = dom.window.CSS || {};
+    if (typeof globalThis.CSS.escape !== "function") {
+        globalThis.CSS.escape = (value) =>
+            String(value).replace(/[^a-zA-Z0-9_-]/g, (character) =>
+                "\\" + character.codePointAt(0).toString(16) + " "
+            );
+    }
     globalThis.confirm = () => true;
     dom.window.confirm = () => true;
     globalThis.setTimeout = () => 0;
@@ -348,7 +354,13 @@ test("adding a root row does not clone its nested child rows", async () => {
 
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
-    globalThis.CSS = dom.window.CSS;
+    globalThis.CSS = dom.window.CSS || {};
+    if (typeof globalThis.CSS.escape !== "function") {
+        globalThis.CSS.escape = (value) =>
+            String(value).replace(/[^a-zA-Z0-9_-]/g, (character) =>
+                "\\" + character.codePointAt(0).toString(16) + " "
+            );
+    }
     globalThis.confirm = () => true;
     dom.window.confirm = () => true;
     globalThis.setTimeout = () => 0;
@@ -449,7 +461,13 @@ test("adding a child row does not clone its nested grandchild rows", async () =>
 
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
-    globalThis.CSS = dom.window.CSS;
+    globalThis.CSS = dom.window.CSS || {};
+    if (typeof globalThis.CSS.escape !== "function") {
+        globalThis.CSS.escape = (value) =>
+            String(value).replace(/[^a-zA-Z0-9_-]/g, (character) =>
+                "\\" + character.codePointAt(0).toString(16) + " "
+            );
+    }
     globalThis.confirm = () => true;
     dom.window.confirm = () => true;
     globalThis.setTimeout = () => 0;
@@ -601,7 +619,13 @@ test("deletes a flat TABLE child row without affecting its parent or sibling row
 
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
-    globalThis.CSS = dom.window.CSS;
+    globalThis.CSS = dom.window.CSS || {};
+    if (typeof globalThis.CSS.escape !== "function") {
+        globalThis.CSS.escape = (value) =>
+            String(value).replace(/[^a-zA-Z0-9_-]/g, (character) =>
+                "\\" + character.codePointAt(0).toString(16) + " "
+            );
+    }
     globalThis.confirm = () => true;
     dom.window.confirm = () => true;
     globalThis.setTimeout = () => 0;
@@ -909,7 +933,13 @@ test("flat TABLE save after adding a child preserves four independent root paylo
 
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
-    globalThis.CSS = dom.window.CSS;
+    globalThis.CSS = dom.window.CSS || {};
+    if (typeof globalThis.CSS.escape !== "function") {
+        globalThis.CSS.escape = (value) =>
+            String(value).replace(/[^a-zA-Z0-9_-]/g, (character) =>
+                "\\" + character.codePointAt(0).toString(16) + " "
+            );
+    }
     globalThis.confirm = () => true;
     dom.window.confirm = () => true;
     globalThis.setTimeout = () => 0;
