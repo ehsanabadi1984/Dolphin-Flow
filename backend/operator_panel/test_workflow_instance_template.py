@@ -207,6 +207,33 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
         return template.render(context)
 
 
+    def test_edit_action_section_is_not_rendered_in_edit_mode(self):
+        template = get_template(self.template_name)
+        context = self._context("LIST", "LIST")
+        context["dynamic_form"].is_submitted = False
+        context["dynamic_form"].has_saved_data = True
+        context["dynamic_form"].can_reenter_edit_mode = True
+        context["edit_mode"] = True
+
+        request = RequestFactory().get("/operator/workflow/1/?edit=1")
+        request.user = AnonymousUser()
+        context["request"] = request
+
+        rendered = template.render(context)
+
+        self.assertNotIn(
+            'href="?edit=1"',
+            rendered,
+        )
+
+        context["edit_mode"] = False
+        rendered = template.render(context)
+
+        self.assertIn(
+            'href="?edit=1"',
+            rendered,
+        )
+
     def test_transitions_are_disabled_in_edit_mode(self):
         template = get_template(self.template_name)
         context = self._context("LIST", "LIST")
