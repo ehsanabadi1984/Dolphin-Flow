@@ -84,7 +84,7 @@
                                                 />
                                               {% elif child_field.field.field_type == "DATE" %}
                                                 <input
-                                                  type="{% if child_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if child_field.field.calendar == 'JALALI' %} data-jdp{% endif %} {% if child_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                                                  type="{% if child_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if child_field.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if child_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
                                                   id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                                   value="{{ child_field.value|default:'' }}"
@@ -197,7 +197,7 @@
                                             />
                                           {% elif template_field.field.field_type == "DATE" %}
                                             <input
-                                              type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp{% endif %} {% if template_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                                              type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if template_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
                                               id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                               class="df-table-input"
