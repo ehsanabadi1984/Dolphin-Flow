@@ -77,7 +77,7 @@ class FormDraftSubmitValidationService:
         fields = cls._normal_fields(form=form)
 
         for field in fields:
-            if not field.is_required:
+            if not field.is_required or cls._is_server_derived_field(field):
                 continue
 
             value = (
@@ -193,6 +193,9 @@ class FormDraftSubmitValidationService:
             is_active=True,
             is_required=True,
         ).order_by("order", "id"):
+            if cls._is_server_derived_field(field):
+                continue
+
             if field.code in row.fields:
                 value = row.fields[field.code]
             else:
@@ -319,6 +322,10 @@ class FormDraftSubmitValidationService:
                 parent_group__isnull=True,
             ).order_by("order", "id")
         )
+
+    @staticmethod
+    def _is_server_derived_field(field):
+        return field.field_type == FormField.FieldType.FORMULA
 
     @staticmethod
     def _field_error(*, field, message, group=None, row=None):
