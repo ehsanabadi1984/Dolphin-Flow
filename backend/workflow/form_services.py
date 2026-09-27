@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from .permission_context import PermissionContext
 from .operator_form_serializer import OperatorFormSerializer
 from .repeatable_row_read_services import RepeatableRowReadService
+from .date_field_services import DateFieldService
 
 from .instance_device_services import InstanceDeviceService
 from .device_services import DeviceService
@@ -128,6 +129,42 @@ class DynamicFormService:
         ]
 
      
+    @staticmethod
+    def _get_input_value(*, field, value, submitted_data=None):
+        """Return the value presented to the operator for form input.
+
+        Persisted DATE/DATETIME values are stored canonically as Gregorian
+        values. When no submitted POST value is available, convert them to
+        the calendar configured on the field. During validation-error
+        re-render, the submitted value is already in presentation format and
+        must be preserved verbatim.
+        """
+        if submitted_data is not None and field.code in submitted_data:
+            return submitted_data.get(field.code, "")
+
+        if value in ("", None):
+            return ""
+
+        if field.field_type == FormField.FieldType.DATE:
+            try:
+                return DateFieldService.to_display_date(
+                    value,
+                    calendar=field.calendar,
+                )
+            except ValueError:
+                return str(value)
+
+        if field.field_type == FormField.FieldType.DATETIME:
+            try:
+                return DateFieldService.to_display_datetime(
+                    value,
+                    calendar=field.calendar,
+                )
+            except ValueError:
+                return str(value)
+
+        return value
+
     @staticmethod
     def _get_display_value(
         *,
@@ -1415,9 +1452,14 @@ class DynamicFormService:
                     and not is_submitted
                 )
 
-                value = data.get(
+                persisted_value = data.get(
                     field.code,
                     "",
+                )
+                value = DynamicFormService._get_input_value(
+                    field=field,
+                    value=persisted_value,
+                    submitted_data=submitted_data,
                 )
 
                 choices = []
