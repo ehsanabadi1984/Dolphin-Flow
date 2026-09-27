@@ -2524,11 +2524,11 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             if "df-device-row" not in attrs:
                 continue
             row_id_match = re.search(
-                r'data-row-id="(\\d+)"',
+                r'data-row-id="(\d+)"',
                 attrs,
             )
             index_match = re.search(
-                r'data-device-index="(\\d+)"',
+                r'data-device-index="(\d+)"',
                 attrs,
             )
             if not row_id_match or not index_match:
@@ -2548,16 +2548,16 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         second_row_id, (second_index, second_device_match) = ordered[1]
 
         first_child_match = re.search(
-            rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'(?=[\\s\\S]*?data-device-parent-row-id="{first_row_id}")'
-            rf'(?=[\\s\\S]*?data-device-parent-index="{first_index}")'
+            rf'<tr\s+class="df-repeatable-child-row df-device-child-row"'
+            rf'(?=[\s\S]*?data-device-parent-row-id="{first_row_id}")'
+            rf'(?=[\s\S]*?data-device-parent-index="{first_index}")'
             rf'[^>]*>',
             html,
         )
         second_child_match = re.search(
             rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'(?=[\\s\\S]*?data-device-parent-row-id="{second_row_id}")'
-            rf'(?=[\\s\\S]*?data-device-parent-index="{second_index}")'
+            rf'(?=[\s\S]*?data-device-parent-row-id="{second_row_id}")'
+            rf'(?=[\s\S]*?data-device-parent-index="{second_index}")'
             rf'[^>]*>',
             html,
         )
