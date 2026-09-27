@@ -1477,6 +1477,12 @@ test("DEVICE nested child naming includes the device path and supports grandchil
                 return null;
             },
         },
+        matches(selector) {
+            return selector === "[data-repeatable-item]";
+        },
+        hasAttribute(selector) {
+            return false;
+        },
         closest(selector) {
             if (selector === ".df-repeatable-group") return childGroup;
             return null;
