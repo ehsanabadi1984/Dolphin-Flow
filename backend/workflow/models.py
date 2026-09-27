@@ -1331,6 +1331,11 @@ class FormField(models.Model):
         default=SystemKey.NONE,
     )
 
+    @property
+    def number_step(self):
+        if self.field_type != self.FieldType.NUMBER:
+            return None
+        return 1 / (10 ** self.decimal_places)
 
     def clean(self):
         super().clean()
