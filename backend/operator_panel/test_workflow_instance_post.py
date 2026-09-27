@@ -2550,6 +2550,19 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             html,
         )
 
+        print("\n===== DEVICE HTML =====")
+        print(
+            "\n".join(
+                line
+                for line in html.splitlines()
+                if "df-device" in line
+                or "df-repeatable-child-row" in line
+                or "Child A" in line
+                or "Child B" in line
+            )
+        )
+        print("===== END DEVICE HTML =====\n")
+
         self.assertIsNotNone(first_child_match)
         self.assertIsNotNone(second_child_match)
 
