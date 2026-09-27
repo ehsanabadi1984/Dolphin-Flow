@@ -1,3 +1,4 @@
+import re
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -993,41 +994,42 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         edit_html = response.content.decode()
 
+        device_indexes = {}
+        for device_row_id in (device_a.pk, device_b.pk, device_c.pk):
+            match = re.search(
+                rf'name="system_devices_(\\d+)__id"\\s+value="{device_row_id}"',
+                edit_html,
+            )
+            self.assertIsNotNone(match)
+            device_indexes[device_row_id] = match.group(1)
+
+        a_index = device_indexes[device_a.pk]
+        b_index = device_indexes[device_b.pk]
+        c_index = device_indexes[device_c.pk]
+
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_0__id"\\s+value="{device_a.pk}"',
+            rf'name="system_devices_{a_index}_device_details_reconcile_post_0__id"\\s+value="{a_child2.pk}"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_1__id"\\s+value="{device_b.pk}"',
+            rf'name="system_devices_{a_index}_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{a_part2.pk}"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_2__id"\\s+value="{device_c.pk}"',
+            rf'name="system_devices_{b_index}_device_details_reconcile_post_0__id"\\s+value="{b_child1.pk}"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_0_device_details_reconcile_post_0__id"\\s+value="{a_child2.pk}"',
+            rf'name="system_devices_{b_index}_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{b_part1.pk}"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_0_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{a_part2.pk}"',
+            rf'name="system_devices_{c_index}_device_details_reconcile_post_0__id"\\s+value="{child_c.pk}"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_1_device_details_reconcile_post_0__id"\\s+value="{b_child1.pk}"',
-        )
-        self.assertRegex(
-            edit_html,
-            rf'name="system_devices_1_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{b_part1.pk}"',
-        )
-        self.assertRegex(
-            edit_html,
-            rf'name="system_devices_2_device_details_reconcile_post_0__id"\\s+value="{child_c.pk}"',
-        )
-        self.assertRegex(
-            edit_html,
-            rf'name="system_devices_2_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{part_c.pk}"',
+            rf'name="system_devices_{c_index}_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{part_c.pk}"',
         )
         self.assertIn("Child A2 updated", edit_html)
         self.assertIn("Part A2 updated", edit_html)
