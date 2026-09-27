@@ -268,6 +268,7 @@
                         >
 
                             {% for item in group.items %}
+                                {% with item_index=forloop.counter0 %}
 
                                 <tr
                                     class="df-device-row"
@@ -454,12 +455,18 @@
 
                                 </tr>
 
-                                <tr class="df-repeatable-child-row">
+                                <tr
+                                    class="df-repeatable-child-row"
+                                    data-device-parent-row-id="{{ item.row_id }}"
+                                    data-device-parent-index="{{ item_index }}"
+                                    data-device-group-code="{{ group.group.code }}"
+                                >
                                     <td colspan="{{ group.fields|length|add:1 }}">
                                         {% include "operator_panel/_repeatable_child_groups.html" with group=group item=item item_index=forloop.counter0 %}
                                     </td>
                                 </tr>
 
+                                {% endwith %}
                             {% empty %}
 
                                 <tr class="df-device-empty">
