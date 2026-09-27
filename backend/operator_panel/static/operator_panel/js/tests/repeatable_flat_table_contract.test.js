@@ -1359,3 +1359,164 @@ test("flat TABLE deleting the last root leaves the repeatable container empty", 
         0,
     );
 });
+
+
+test("DEVICE nested child naming includes the device path and supports grandchild ancestry", () => {
+    assert.match(
+        appJs,
+        /currentGroup\.parentElement\?\.closest\(\s*"\.df-repeatable-group"\s*\)/s,
+    );
+    assert.ok(appJs.includes('currentGroup.closest("[data-device-row]")'));
+    assert.ok(appJs.includes('currentGroup.closest(".df-repeatable-child-row")'));
+    assert.ok(appJs.includes("data-device-parent-index"));
+
+    const extractFunction = (source, functionName) => {
+        const start = source.indexOf("function " + functionName + "(");
+        assert.notEqual(start, -1, functionName + " must exist");
+        let depth = 0;
+        let opened = false;
+        for (let index = source.indexOf("{", start); index < source.length; index += 1) {
+            if (source[index] === "{") {
+                depth += 1;
+                opened = true;
+            } else if (source[index] === "}") {
+                depth -= 1;
+                if (opened && depth === 0) {
+                    return source.slice(start, index + 1);
+                }
+            }
+        }
+        throw new Error("Could not extract " + functionName);
+    };
+
+    const makeNode = ({ closestMap = {}, parentElement = null, dataset = {} } = {}) => ({
+        dataset,
+        parentElement,
+        closest(selector) {
+            return closestMap[selector] ?? null;
+        },
+    });
+
+    const deviceGroup = {
+        dataset: { repeatableGroup: "devices" },
+    };
+
+    const deviceChildRow = {
+        dataset: {
+            deviceGroupCode: "devices",
+            deviceParentIndex: "1",
+        },
+        closest(selector) {
+            if (selector === ".df-device-group") return deviceGroup;
+            return null;
+        },
+    };
+
+    const childGroup = {
+        dataset: { repeatableGroup: "device_details" },
+        parentElement: {
+            closest(selector) {
+                if (selector === ".df-repeatable-group") return deviceGroup;
+                return null;
+            },
+        },
+        closest(selector) {
+            if (selector === "[data-repeatable-item]") return null;
+            if (selector === ".df-repeatable-child-row") return deviceChildRow;
+            return null;
+        },
+    };
+
+    const contextSource = extractFunction(appJs, "getRepeatableGroupContext");
+    const buildPrefixSource = readFileSync(
+        resolve(operatorPanel, "js/repeatable-naming.js"),
+        "utf8",
+    );
+
+    const invoke = new Function(
+        "CSS",
+        "document",
+        contextSource +
+            "\n" +
+            buildPrefixSource +
+            "\nreturn { getRepeatableGroupContext, buildRepeatableGroupPrefix };",
+    )(
+        { escape: (value) => value },
+        {
+            querySelector(selector) {
+                if (
+                    selector.includes(
+                        '.df-device-group[data-repeatable-group="devices"]',
+                    )
+                ) {
+                    return deviceGroup;
+                }
+                return null;
+            },
+        },
+    );
+
+    assert.deepEqual(
+        invoke.getRepeatableGroupContext(childGroup),
+        [{ groupCode: "devices", index: 1 }],
+    );
+
+    const grandchildGroup = {
+        dataset: { repeatableGroup: "grandchildren" },
+        parentElement: {
+            closest(selector) {
+                if (selector === ".df-repeatable-group") return childGroup;
+                return null;
+            },
+        },
+        closest(selector) {
+            if (selector === "[data-repeatable-item]") {
+                return {
+                    dataset: {},
+                    parentElement: {
+                        closest() {
+                            return childGroup;
+                        },
+                    },
+                };
+            }
+            return null;
+        },
+    };
+
+    assert.deepEqual(
+        invoke.getRepeatableGroupContext(grandchildGroup),
+        [{ groupCode: "devices", index: 1 }],
+    );
+});
+test("DEVICE child templates carry explicit presence markers for empty-delete semantics", () => {
+    assert.match(
+        nestedTemplate,
+        /name="{{ group\.group\.code }}_{{ item_index }}_{{ child_group\.group\.code }}__present"/,
+    );
+    assert.ok(nestedTemplate.includes("data-repeatable-presence"));
+    assert.ok(appJs.includes("data-device-parent-index"));
+    assert.ok(appJs.includes("childRow.classList.contains"));
+});
+test("DEVICE modal validates required child fields and scopes dependent selects", () => {
+    const workflowTemplate = readFileSync(
+        resolve(templates, "workflow_instance.html"),
+        "utf8",
+    );
+
+    assert.ok(
+        workflowTemplate.includes(
+            'data-device-modal-child-field="{{ field_info.field.code }}"',
+        ),
+    );
+    assert.ok(
+        appJs.includes(
+            '"[data-device-modal-field], [data-device-modal-child-field]"',
+        ),
+    );
+    assert.ok(
+        appJs.includes('changedSelect.closest(
+            ".df-device-modal"
+        )'),
+    );
+});
