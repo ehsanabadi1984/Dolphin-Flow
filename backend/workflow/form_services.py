@@ -155,6 +155,21 @@ class DynamicFormService:
                 for item in value
             ]
 
+        if field.field_type == FormField.FieldType.NUMBER:
+            try:
+                from decimal import Decimal
+
+                decimal_value = Decimal(str(value))
+                places = field.decimal_places
+                formatted = f"{decimal_value:.{places}f}"
+
+                if "." in formatted:
+                    formatted = formatted.rstrip("0").rstrip(".")
+
+                return formatted
+            except (ArithmeticError, ValueError, TypeError):
+                return str(value)
+
         if field.field_type != FormField.FieldType.SELECT:
             return str(value)
 
