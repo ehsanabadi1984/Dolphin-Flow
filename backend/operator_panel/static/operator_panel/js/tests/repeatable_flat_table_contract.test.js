@@ -1574,6 +1574,17 @@ test("DEVICE modal validates required child fields and scopes dependent selects"
 });
 
 
+test("DEVICE add flow allocates a new root index from nested logical roots", () => {
+    assert.match(
+        appJs,
+        /itemsContainer\.querySelectorAll\("\[data-repeatable-item\]"\)[\s\S]*?\.map\(\(row\) => Number\(row\.dataset\.rootIndex\)\)/,
+    );
+    assert.doesNotMatch(
+        appJs,
+        /const rootRows = Array\.from\(\s*itemsContainer\.querySelectorAll\([\s\S]*?\)\.filter\(\(row\) => !row\.dataset\.parentRowId\)/,
+    );
+});
+
 test("DEVICE add flow attaches the materialized rows to the live table body", () => {
     assert.match(
         appJs,
