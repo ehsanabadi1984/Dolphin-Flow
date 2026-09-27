@@ -2919,3 +2919,136 @@ class DynamicFormServiceTests(TestCase):
             ).count(),
             2,
         )
+
+    def test_normal_date_and_datetime_are_converted_to_field_calendar_on_read(self):
+        date_field = FormField.objects.create(
+            section=self.section,
+            name="Repair Date",
+            code="repair_date",
+            field_type=FormField.FieldType.DATE,
+            label="تاریخ تعمیر",
+            order=20,
+            calendar=FormField.Calendar.JALALI,
+            is_active=True,
+        )
+        datetime_field = FormField.objects.create(
+            section=self.section,
+            name="Repair DateTime",
+            code="repair_datetime",
+            field_type=FormField.FieldType.DATETIME,
+            label="زمان تعمیر",
+            order=21,
+            calendar=FormField.Calendar.JALALI,
+            is_active=True,
+        )
+        FieldAccess.objects.create(
+            field=date_field,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+        FieldAccess.objects.create(
+            field=datetime_field,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+
+        instance = self.create_instance()
+        FormData.objects.create(
+            instance=instance,
+            data={
+                "repair_date": "2026-09-27",
+                "repair_datetime": "2026-09-27T14:30:00",
+            },
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+            edit_mode=True,
+        )
+
+        fields = {
+            item["field"].code: item
+            for section in result["sections"]
+            for item in section["fields"]
+        }
+
+        self.assertEqual(fields["repair_date"]["value"], "۱۴۰۵/۰۷/۰۵")
+        self.assertEqual(fields["repair_date"]["display_value"], "۱۴۰۵/۰۷/۰۵")
+        self.assertEqual(
+            fields["repair_datetime"]["value"],
+            "۱۴۰۵/۰۷/۰۵ 14:30:00",
+        )
+        self.assertEqual(
+            fields["repair_datetime"]["display_value"],
+            "۱۴۰۵/۰۷/۰۵ 14:30:00",
+        )
+
+    def test_normal_date_and_datetime_preserve_submitted_values_on_rerender(self):
+        date_field = FormField.objects.create(
+            section=self.section,
+            name="Repair Date Submitted",
+            code="repair_date_submitted",
+            field_type=FormField.FieldType.DATE,
+            label="تاریخ تعمیر",
+            order=22,
+            calendar=FormField.Calendar.JALALI,
+            is_active=True,
+        )
+        datetime_field = FormField.objects.create(
+            section=self.section,
+            name="Repair DateTime Submitted",
+            code="repair_datetime_submitted",
+            field_type=FormField.FieldType.DATETIME,
+            label="زمان تعمیر",
+            order=23,
+            calendar=FormField.Calendar.JALALI,
+            is_active=True,
+        )
+        FieldAccess.objects.create(
+            field=date_field,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+        FieldAccess.objects.create(
+            field=datetime_field,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+
+        instance = self.create_instance()
+        submitted_data = {
+            "repair_date_submitted": "۱۴۰۵/۰۷/۳۲",
+            "repair_datetime_submitted": "۱۴۰۵/۰۷/۳۲ 14:30:00",
+        }
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data=submitted_data,
+            edit_mode=True,
+        )
+
+        fields = {
+            item["field"].code: item
+            for section in result["sections"]
+            for item in section["fields"]
+        }
+
+        self.assertEqual(
+            fields["repair_date_submitted"]["value"],
+            submitted_data["repair_date_submitted"],
+        )
+        self.assertEqual(
+            fields["repair_datetime_submitted"]["value"],
+            submitted_data["repair_datetime_submitted"],
+        )
+
