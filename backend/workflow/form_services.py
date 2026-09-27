@@ -1787,6 +1787,11 @@ class DynamicFormService:
                         child_group,
                         raw_rows,
                     ):
+                        nested_groups = list(
+                            child_group.child_groups.filter(
+                                is_active=True,
+                            ).order_by("order", "id")
+                        )
                         rows = []
                         for row_index, raw_row in enumerate(raw_rows or []):
                             if not isinstance(raw_row, dict):
