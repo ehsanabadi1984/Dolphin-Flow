@@ -1237,31 +1237,29 @@ document.addEventListener(
 
         const typeField =
             event.target.closest(
-                '[data-device-modal-field][data-system-key="DEVICE_TYPE"]'
+                '[data-device-modal-field][data-system-key="DEVICE_TYPE"], .df-device-group [data-system-key="DEVICE_TYPE"]'
             );
 
         if (!typeField) {
             return;
         }
 
-        const modal =
-            typeField.closest(".df-device-modal");
+        const modal = typeField.closest(".df-device-modal");
+        const row = typeField.closest("[data-repeatable-item]");
 
-        if (!modal) {
-            return;
-        }
-
-        const modelField =
-            modal.querySelector(
+        const modelField = modal
+            ? modal.querySelector(
                 '[data-device-modal-field][data-system-key="DEVICE_MODEL"]'
+            )
+            : row?.querySelector(
+                '[data-system-key="DEVICE_MODEL"]'
             );
 
         if (!modelField) {
             return;
         }
 
-        const modelsUrl =
-            modelField.dataset.deviceModelsUrl;
+        const modelsUrl = modelField.dataset.deviceModelsUrl;
 
         if (!modelsUrl) {
             console.warn(
@@ -1270,35 +1268,20 @@ document.addEventListener(
             return;
         }
 
-        const deviceTypeId =
-            typeField.value;
+        const deviceTypeId = typeField.value;
 
-        /*
-         * No device type selected:
-         * clear and disable the model field.
-         */
         if (!deviceTypeId) {
-
             modelField.innerHTML =
                 '<option value="">---------</option>';
-
             modelField.value = "";
             modelField.disabled = true;
-
             return;
         }
 
-        /*
-         * Keep the currently selected model only if it
-         * is still valid for the selected device type.
-         */
-        const previousModelId =
-            modelField.value;
-
+        const previousModelId = modelField.value;
         modelField.disabled = true;
 
         try {
-
             const response =
                 await fetch(
                     `${modelsUrl}?device_type_id=${encodeURIComponent(deviceTypeId)}`,
@@ -1316,9 +1299,7 @@ document.addEventListener(
                 );
             }
 
-            const data =
-                await response.json();
-
+            const data = await response.json();
             const options =
                 Array.isArray(data.options)
                     ? data.options
@@ -1328,25 +1309,13 @@ document.addEventListener(
                 '<option value="">---------</option>';
 
             options.forEach((option) => {
-
                 const element =
                     document.createElement("option");
-
-                element.value =
-                    String(option.value);
-
-                element.textContent =
-                    option.label;
-
-                modelField.appendChild(
-                    element
-                );
+                element.value = String(option.value);
+                element.textContent = option.label;
+                modelField.appendChild(element);
             });
 
-            /*
-             * Restore the old model only when it is valid
-             * for the newly selected type.
-             */
             const stillValid =
                 previousModelId &&
                 options.some(
@@ -1361,17 +1330,13 @@ document.addEventListener(
                     : "";
 
             modelField.disabled = false;
-
         } catch (error) {
-
             console.error(
                 "Unable to load device models:",
                 error
             );
-
             modelField.innerHTML =
                 '<option value="">---------</option>';
-
             modelField.value = "";
             modelField.disabled = true;
         }
