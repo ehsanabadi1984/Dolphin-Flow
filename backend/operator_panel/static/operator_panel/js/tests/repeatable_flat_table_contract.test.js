@@ -1461,32 +1461,51 @@ test("DEVICE nested child naming includes the device path and supports grandchil
         [{ groupCode: "devices", index: 1 }],
     );
 
+    const childItem = {
+        dataset: {},
+        parentElement: {
+            closest(selector) {
+                if (selector === ".df-repeatable-group") {
+                    return childGroup;
+                }
+                return null;
+            },
+        },
+        closest(selector) {
+            if (selector === ".df-repeatable-group") return childGroup;
+            return null;
+        },
+    };
+
     const grandchildGroup = {
         dataset: { repeatableGroup: "grandchildren" },
         parentElement: {
             closest(selector) {
-                if (selector === ".df-repeatable-group") return childGroup;
+                if (selector === ".df-repeatable-group") {
+                    return childGroup;
+                }
                 return null;
             },
         },
         closest(selector) {
             if (selector === "[data-repeatable-item]") {
-                return {
-                    dataset: {},
-                    parentElement: {
-                        closest() {
-                            return childGroup;
-                        },
-                    },
-                };
+                return childItem;
             }
             return null;
         },
     };
 
+    /*
+     * The grandchild first contributes its NORMAL child path. On the next
+     * walk the child group reaches the DEVICE container and contributes the
+     * device path as the outer ancestor.
+     */
     assert.deepEqual(
         invoke.getRepeatableGroupContext(grandchildGroup),
-        [{ groupCode: "devices", index: 1 }],
+        [
+            { groupCode: "devices", index: 1 },
+            { groupCode: "device_details", index: 0 },
+        ],
     );
 });
 test("DEVICE child templates carry explicit presence markers for empty-delete semantics", () => {
