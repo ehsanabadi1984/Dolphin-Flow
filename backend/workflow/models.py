@@ -1184,6 +1184,10 @@ class FormField(models.Model):
         FORMULA = "FORMULA", "فرمول"
         FILE = "FILE", "بارگذاری فایل"
 
+    class Calendar(models.TextChoices):
+        GREGORIAN = "GREGORIAN", "میلادی"
+        JALALI = "JALALI", "شمسی"
+
     class SystemKey(models.TextChoices):
         NONE = "NONE", "بدون اتصال سیستمی"
 
@@ -1227,6 +1231,12 @@ class FormField(models.Model):
         max_length=20,
         choices=FieldType.choices,
         default=FieldType.TEXT,
+    )
+
+    calendar = models.CharField(
+        max_length=10,
+        choices=Calendar.choices,
+        default=Calendar.GREGORIAN,
     )
 
     choice_source = models.CharField(
