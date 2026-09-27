@@ -2517,7 +2517,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         html = response.content.decode()
         device_matches = {}
         for match in re.finditer(
-            r'<tr\\b(?P<attrs>[^>]*)>',
+            r'<tr\b(?P<attrs>[^>]*)>',
             html,
         ):
             attrs = match.group("attrs")
