@@ -85,9 +85,6 @@ class DateFieldService:
         if not isinstance(value, datetime):
             raise ValueError("Expected a datetime.")
 
-        if timezone.is_aware(value):
-            value = timezone.localtime(value)
-
         if calendar == cls.GREGORIAN:
             return value.isoformat()
 
@@ -121,6 +118,9 @@ class DateFieldService:
 
         if not isinstance(value, datetime):
             raise ValueError("Expected a datetime.")
+
+        if timezone.is_aware(value):
+            value = timezone.localtime(value)
 
         if calendar == cls.GREGORIAN:
             return value.isoformat(sep=" ")
