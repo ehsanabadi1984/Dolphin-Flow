@@ -2429,7 +2429,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertContains(response, "Child 1")
 
     def test_device_table_renders_children_under_their_parent_rows(self):
-        group, label_field = self._create_device_group()
+        group, fields = self._create_device_system_fields()
 
         child_group = FormRepeatableGroup.objects.create(
             section=self.section,
@@ -2465,16 +2465,33 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             can_edit=True,
         )
 
+        device_type = DeviceType.objects.create(
+            name="Table Child Device Type",
+            code="TABLE_CHILD_DEVICE_TYPE",
+            is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Table Child Device Model",
+            code="TABLE_CHILD_DEVICE_MODEL",
+            is_active=True,
+        )
+
         response = self.client.post(
             reverse(
                 "operator_panel:workflow_instance",
                 args=[self.instance.pk],
             ),
             {
-                "devices_0_label": "Device A",
-                "devices_0_device_details_0_child_name": "Child A",
-                "devices_1_label": "Device B",
-                "devices_1_device_details_0_child_name": "Child B",
+                "system_devices_0_system_imei": "895000000000101",
+                "system_devices_0_system_type": str(device_type.pk),
+                "system_devices_0_system_model": str(device_model.pk),
+                "system_devices_0_device_details_0_child_name": "Child A",
+                "system_devices_1_system_imei": "895000000000102",
+                "system_devices_1_system_type": str(device_type.pk),
+                "system_devices_1_system_model": str(device_model.pk),
+                "system_devices_1_device_details_0_child_name": "Child B",
             },
         )
 
