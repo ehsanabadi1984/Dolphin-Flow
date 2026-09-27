@@ -1037,6 +1037,74 @@
 
                     </div>
 
+                    {% for child_group in group.child_groups %}
+                      {% if child_group.can_view %}
+                        <div
+                          class="df-device-modal-child-group"
+                          data-device-child-group="{{ child_group.group.code }}"
+                        >
+                          <div class="df-device-modal-child-group-title">
+                            {{ child_group.group.label }}
+                          </div>
+
+                          {% for field_info in child_group.fields %}
+                            {% if field_info.can_edit %}
+                              <div
+                                class="df-device-modal-field"
+                                data-device-child-field
+                                data-child-group-code="{{ child_group.group.code }}"
+                              >
+                                <label>
+                                  {{ field_info.field.label }}
+                                  {% if field_info.field.is_required %}<span>*</span>{% endif %}
+                                </label>
+
+                                {% if field_info.field.field_type == "TEXTAREA" %}
+                                  <textarea
+                                    data-device-modal-child-field="{{ field_info.field.code }}"
+                                    data-field-code="{{ field_info.field.code }}"
+                                    data-field-type="{{ field_info.field.field_type }}"
+                                  ></textarea>
+                                {% elif field_info.field.field_type == "SELECT" %}
+                                  <select
+                                    data-device-modal-child-field="{{ field_info.field.code }}"
+                                    data-field-code="{{ field_info.field.code }}"
+                                    data-field-type="{{ field_info.field.field_type }}"
+                                    {% if field_info.parent_code %}
+                                    data-depends-on="{{ field_info.parent_code }}"
+                                    data-field-id="{{ field_info.field.pk }}"
+                                    data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                                    {% endif %}
+                                  >
+                                    <option value="">---------</option>
+                                    {% for choice in field_info.choices %}
+                                      <option value="{{ choice.value }}">{{ choice.label }}</option>
+                                    {% endfor %}
+                                  </select>
+                                {% elif field_info.field.field_type == "BOOLEAN" %}
+                                  <input
+                                    type="checkbox"
+                                    data-device-modal-child-field="{{ field_info.field.code }}"
+                                    data-field-code="{{ field_info.field.code }}"
+                                    data-field-type="{{ field_info.field.field_type }}"
+                                  >
+                                {% else %}
+                                  <input
+                                    type="{% if field_info.field.field_type == 'NUMBER' %}number{% elif field_info.field.field_type == 'DATE' %}date{% elif field_info.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
+                                    data-device-modal-child-field="{{ field_info.field.code }}"
+                                    data-field-code="{{ field_info.field.code }}"
+                                    data-field-type="{{ field_info.field.field_type }}"
+                                  >
+                                {% endif %}
+
+                                <div class="df-device-modal-error"></div>
+                              </div>
+                            {% endif %}
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                    {% endfor %}
+
                     <div class="df-device-modal-footer">
 
                         <button
