@@ -2547,20 +2547,41 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         first_row_id, (first_index, first_device_match) = ordered[0]
         second_row_id, (second_index, second_device_match) = ordered[1]
 
-        first_child_match = re.search(
-            rf'<tr\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'(?=[\s\S]*?data-device-parent-row-id="{first_row_id}")'
-            rf'(?=[\s\S]*?data-device-parent-index="{first_index}")'
-            rf'[^>]*>',
+        child_matches = {}
+        for match in re.finditer(
+            r'<tr\b(?P<attrs>[^>]*)>',
             html,
+        ):
+            attrs = match.group("attrs")
+            if "df-device-child-row" not in attrs:
+                continue
+            parent_id_match = re.search(
+                r'data-device-parent-row-id="(\d+)"',
+                attrs,
+            )
+            parent_index_match = re.search(
+                r'data-device-parent-index="(\d+)"',
+                attrs,
+            )
+            if not parent_id_match or not parent_index_match:
+                continue
+            child_matches[int(parent_id_match.group(1))] = (
+                parent_index_match.group(1),
+                match,
+            )
+
+        self.assertEqual(set(child_matches), {first_row_id, second_row_id})
+        self.assertEqual(
+            child_matches[first_row_id][0],
+            first_index,
         )
-        second_child_match = re.search(
-            rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'(?=[\s\S]*?data-device-parent-row-id="{second_row_id}")'
-            rf'(?=[\s\S]*?data-device-parent-index="{second_index}")'
-            rf'[^>]*>',
-            html,
+        self.assertEqual(
+            child_matches[second_row_id][0],
+            second_index,
         )
+
+        first_child_match = child_matches[first_row_id][1]
+        second_child_match = child_matches[second_row_id][1]
 
         self.assertIsNotNone(first_child_match)
         self.assertIsNotNone(second_child_match)
