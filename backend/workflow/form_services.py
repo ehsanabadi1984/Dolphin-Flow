@@ -2765,7 +2765,10 @@ class DynamicFormService:
                     # contract as NORMAL TABLE groups.  RepeatableRow remains
                     # the persistence source of truth; this only derives the
                     # tabular presentation from the already reconstructed tree.
-                    if group.display_type == FormRepeatableGroup.DisplayType.TABLE:
+                    if (
+                        group.group_type == FormRepeatableGroup.GroupType.DEVICE
+                        or group.display_type == FormRepeatableGroup.DisplayType.TABLE
+                    ):
                         group_context["flat_table"] = (
                             DynamicFormService._build_flat_table_context(
                                 group_context,
