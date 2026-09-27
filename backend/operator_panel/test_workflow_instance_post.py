@@ -399,6 +399,143 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             "New device",
         )
 
+    def test_workflow_instance_post_persists_nested_device_children_from_real_flat_post(self):
+        group, fields = self._create_device_system_fields()
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=group,
+            name="Device Details",
+            code="device_details_post",
+            order=5,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Name",
+            code="child_name_post",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Parts",
+            code="parts_post",
+            order=6,
+        )
+        grandchild_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Part Name",
+            code="part_name_post",
+            label="Part Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        self.grant_nested_post_permissions = None
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=grandchild_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        for field in (child_field, grandchild_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+            )
+
+        device_type = DeviceType.objects.create(
+            name="Operator Nested POST Phone",
+            code="OPERATOR_NESTED_POST_PHONE",
+            is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Operator Nested POST Model",
+            code="OPERATOR_NESTED_POST_MODEL",
+            is_active=True,
+        )
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "system_devices_0_system_imei": "894000000000001",
+                "system_devices_0_system_type": str(device_type.pk),
+                "system_devices_0_system_model": str(device_model.pk),
+                "system_devices_0_device_details_post_0_child_name_post": "Child A",
+                "system_devices_0_device_details_post_0_parts_post_0_part_name_post": "Part A",
+                "system_devices_0_device_details_post_1_child_name_post": "Child B",
+                "system_devices_0_device_details_post_1_parts_post_0_part_name_post": "Part B",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        device_row = RepeatableRow.objects.get(
+            instance=self.instance,
+            group=group,
+        )
+        child_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=child_group,
+            ).order_by("row_order", "pk")
+        )
+        grandchild_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=grandchild_group,
+            ).order_by("row_order", "pk")
+        )
+
+        self.assertEqual(len(child_rows), 2)
+        self.assertEqual(len(grandchild_rows), 2)
+        self.assertEqual(device_row.instance_device.draft_imei, "894000000000001")
+
+        child_values = [
+            row.values.get(field=child_field).text_value
+            for row in child_rows
+        ]
+        part_values = [
+            row.values.get(field=grandchild_field).text_value
+            for row in grandchild_rows
+        ]
+        self.assertEqual(child_values, ["Child A", "Child B"])
+        self.assertEqual(part_values, ["Part A", "Part B"])
+
+        for child_row, expected_part in zip(child_rows, ["Part A", "Part B"]):
+            self.assertEqual(child_row.parent_row_id, device_row.pk)
+            part_row = RepeatableRow.objects.get(
+                instance=self.instance,
+                group=grandchild_group,
+                parent_row=child_row,
+            )
+            self.assertEqual(
+                part_row.values.get(field=grandchild_field).text_value,
+                expected_part,
+            )
+
     def test_workflow_instance_post_updates_existing_device_row(self):
         group, label_field = self._create_device_group()
         instance_device = InstanceDevice.objects.create(
