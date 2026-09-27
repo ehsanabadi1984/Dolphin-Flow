@@ -1508,6 +1508,30 @@ test("DEVICE nested child naming includes the device path and supports grandchil
         ],
     );
 });
+test("DEVICE main table renders one dedicated child row per device", () => {
+    const workflowTemplate = readFileSync(
+        resolve(templates, "workflow_instance.html"),
+        "utf8",
+    );
+
+    assert.match(
+        workflowTemplate,
+        /class="df-repeatable-child-row df-device-child-row"/,
+    );
+    assert.match(
+        workflowTemplate,
+        /data-device-parent-row-id="{{ item\.row_id }}"/,
+    );
+    assert.match(
+        workflowTemplate,
+        /data-device-parent-index="{{ item_index }}"/,
+    );
+    assert.match(
+        workflowTemplate,
+        /{% include "operator_panel\/_repeatable_child_groups\.html" with group=group item=item item_index=forloop\.counter0 %}/,
+    );
+});
+
 test("DEVICE child templates carry explicit presence markers for empty-delete semantics", () => {
     assert.match(
         nestedTemplate,
