@@ -1429,6 +1429,196 @@ class FormDraftSaveServiceContractTests(TestCase):
         self.assertEqual(grandchild_a.values.get(field=grandchild_field).text_value, "Part A")
         self.assertEqual(grandchild_b.values.get(field=grandchild_field).text_value, "Part B")
 
+    def test_save_deletes_one_child_inside_device_without_deleting_device(self):
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Devices",
+            code="devices_child_delete_isolation",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=50,
+        )
+        device_fields = {}
+        definitions = (
+            (FormField.SystemKey.IMEI, "child_delete_device_imei", FormField.FieldType.TEXT),
+            (FormField.SystemKey.DEVICE_TYPE, "child_delete_device_type", FormField.FieldType.SELECT),
+            (FormField.SystemKey.DEVICE_MODEL, "child_delete_device_model", FormField.FieldType.SELECT),
+        )
+        for field_order, (system_key, code, field_type) in enumerate(definitions):
+            device_fields[system_key] = FormField.objects.create(
+                section=self.section, repeatable_group=device_group,
+                name=code, code=code, label=code, field_type=field_type,
+                system_key=system_key, order=field_order,
+            )
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section, parent_group=device_group,
+            name="Device Details", code="device_details_child_delete_isolation", order=51,
+        )
+        child_field = FormField.objects.create(
+            section=self.section, repeatable_group=child_group,
+            name="Child Name", code="child_delete_name", label="Child Name",
+            field_type=FormField.FieldType.TEXT, order=0,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section, parent_group=child_group,
+            name="Parts", code="device_parts_child_delete_isolation", order=52,
+        )
+        grandchild_field = FormField.objects.create(
+            section=self.section, repeatable_group=grandchild_group,
+            name="Part Name", code="child_delete_part_name", label="Part Name",
+            field_type=FormField.FieldType.TEXT, order=0,
+        )
+
+        device_type = DeviceType.objects.create(
+            name="Child Delete Isolation Phone", code="CHILD_DELETE_ISOLATION_PHONE", is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type, brand="Test",
+            name="Child Delete Isolation Model", code="CHILD_DELETE_ISOLATION_MODEL", is_active=True,
+        )
+
+        for field in device_fields.values():
+            self.grant_repeatable_write_permissions(device_group, field)
+        self.grant_repeatable_write_permissions(child_group, child_field)
+        self.grant_repeatable_write_permissions(grandchild_group, grandchild_field)
+
+        first_save = self.call(
+            submitted_data={
+                "devices_child_delete_isolation": [
+                    {
+                        "child_delete_device_imei": "891000000000001",
+                        "child_delete_device_type": device_type.pk,
+                        "child_delete_device_model": device_model.pk,
+                        "device_details_child_delete_isolation": [
+                            {
+                                "child_delete_name": "Child A1",
+                                "device_parts_child_delete_isolation": [
+                                    {"child_delete_part_name": "Part A1"},
+                                ],
+                            },
+                            {
+                                "child_delete_name": "Child A2",
+                                "device_parts_child_delete_isolation": [
+                                    {"child_delete_part_name": "Part A2"},
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "child_delete_device_imei": "891000000000002",
+                        "child_delete_device_type": device_type.pk,
+                        "child_delete_device_model": device_model.pk,
+                        "device_details_child_delete_isolation": [
+                            {
+                                "child_delete_name": "Child B1",
+                                "device_parts_child_delete_isolation": [
+                                    {"child_delete_part_name": "Part B1"},
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(first_save.saved)
+
+        device_rows = {
+            row.instance_device.draft_imei: row
+            for row in RepeatableRow.objects.filter(instance=self.instance, group=device_group)
+        }
+        child_rows = {
+            row.values.get(field=child_field).text_value: row
+            for row in RepeatableRow.objects.filter(instance=self.instance, group=child_group)
+        }
+        grandchild_rows = {
+            row.values.get(field=grandchild_field).text_value: row
+            for row in RepeatableRow.objects.filter(instance=self.instance, group=grandchild_group)
+        }
+
+        device_a = device_rows["891000000000001"]
+        device_b = device_rows["891000000000002"]
+        child_a1 = child_rows["Child A1"]
+        child_a2 = child_rows["Child A2"]
+        child_b1 = child_rows["Child B1"]
+        grandchild_a1 = grandchild_rows["Part A1"]
+        grandchild_a2 = grandchild_rows["Part A2"]
+        grandchild_b1 = grandchild_rows["Part B1"]
+
+        instance_device_a = device_a.instance_device
+        instance_device_b = device_b.instance_device
+
+        second_save = self.call(
+            submitted_data={
+                "devices_child_delete_isolation": [
+                    {
+                        "row_id": device_a.pk,
+                        "child_delete_device_imei": "891000000000001",
+                        "child_delete_device_type": device_type.pk,
+                        "child_delete_device_model": device_model.pk,
+                        "device_details_child_delete_isolation": [
+                            {
+                                "row_id": child_a2.pk,
+                                "child_delete_name": "Child A2",
+                                "device_parts_child_delete_isolation": [
+                                    {
+                                        "row_id": grandchild_a2.pk,
+                                        "child_delete_part_name": "Part A2",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "row_id": device_b.pk,
+                        "child_delete_device_imei": "891000000000002",
+                        "child_delete_device_type": device_type.pk,
+                        "child_delete_device_model": device_model.pk,
+                        "device_details_child_delete_isolation": [
+                            {
+                                "row_id": child_b1.pk,
+                                "child_delete_name": "Child B1",
+                                "device_parts_child_delete_isolation": [
+                                    {
+                                        "row_id": grandchild_b1.pk,
+                                        "child_delete_part_name": "Part B1",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(second_save.saved)
+
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=device_group).count(), 2
+        )
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=child_group).count(), 2
+        )
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=grandchild_group).count(), 2
+        )
+
+        self.assertFalse(RepeatableRow.objects.filter(pk=child_a1.pk).exists())
+        self.assertFalse(RepeatableRow.objects.filter(pk=grandchild_a1.pk).exists())
+        self.assertTrue(RepeatableRow.objects.filter(pk=device_a.pk).exists())
+        self.assertTrue(RepeatableRow.objects.filter(pk=child_a2.pk).exists())
+        self.assertTrue(RepeatableRow.objects.filter(pk=grandchild_a2.pk).exists())
+        self.assertTrue(RepeatableRow.objects.filter(pk=device_b.pk).exists())
+        self.assertTrue(RepeatableRow.objects.filter(pk=child_b1.pk).exists())
+        self.assertTrue(RepeatableRow.objects.filter(pk=grandchild_b1.pk).exists())
+
+        instance_device_a.refresh_from_db()
+        instance_device_b.refresh_from_db()
+        self.assertTrue(instance_device_a.is_active)
+        self.assertTrue(instance_device_b.is_active)
+        self.assertEqual(child_a2.parent_row_id, device_a.pk)
+        self.assertEqual(grandchild_a2.parent_row_id, child_a2.pk)
+        self.assertEqual(child_b1.parent_row_id, device_b.pk)
+        self.assertEqual(grandchild_b1.parent_row_id, child_b1.pk)
+
     def test_save_applies_device_update(self):
         device_group = FormRepeatableGroup.objects.create(
             section=self.section,
