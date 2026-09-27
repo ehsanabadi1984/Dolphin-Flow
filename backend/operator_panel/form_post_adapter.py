@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 
+from workflow.date_field_services import DateFieldService
 from workflow.models import FormField, FormRepeatableGroup, RepeatableRow
 
 
@@ -187,7 +188,22 @@ class OperatorPanelFormPostAdapter:
                 str(value).strip().lower() in {"1", "true", "on", "yes"}
                 for value in values
             )
-        return OperatorPanelFormPostAdapter._value(submitted_data, key)
+
+        value = OperatorPanelFormPostAdapter._value(submitted_data, key)
+
+        if field.field_type == FormField.FieldType.DATE:
+            return DateFieldService.to_canonical_date(
+                value,
+                calendar=field.calendar,
+            )
+
+        if field.field_type == FormField.FieldType.DATETIME:
+            return DateFieldService.to_canonical_datetime(
+                value,
+                calendar=field.calendar,
+            )
+
+        return value
 
     @staticmethod
     def _value(submitted_data, key):
