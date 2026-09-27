@@ -20,6 +20,13 @@
                             {% endif %}
                           </div>
 
+                          <input
+                            type="hidden"
+                            name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}__present"
+                            value="1"
+                            data-repeatable-presence
+                          />
+
                           <div class="df-table-wrapper">
                             <table class="df-normal-table">
                               <thead>
@@ -264,6 +271,13 @@
                             </button>
                           {% endif %}
                         </div>
+
+                        <input
+                          type="hidden"
+                          name="{{ group.group.code }}_{{ item_index }}_{{ child_group.group.code }}__present"
+                          value="1"
+                          data-repeatable-presence
+                        />
 
                         <div
                           class="df-repeatable-items"
