@@ -939,7 +939,7 @@ notificationToggle.addEventListener("click", async (event) => {
         ).forEach((wrapper) => {
 
             const field = wrapper.querySelector(
-                "[data-device-modal-field]"
+                "[data-device-modal-field], [data-device-modal-child-field]"
             );
 
             if (!field) return;
@@ -949,7 +949,12 @@ notificationToggle.addEventListener("click", async (event) => {
 
             if (!required) return;
 
-            if (!field.value.trim()) {
+            const empty =
+                field.type === "checkbox"
+                    ? !field.checked
+                    : !String(field.value || "").trim();
+
+            if (empty) {
 
                 wrapper.classList.add("has-error");
 
@@ -1000,11 +1005,19 @@ const submitNewDevice = (modal, groupCode) => {
         return;
     }
 
-    const existingRows = tbody.querySelectorAll(
-        "[data-device-row]"
+    const existingRows = Array.from(
+        tbody.querySelectorAll("[data-device-row]")
     );
 
-    const newIndex = existingRows.length;
+    const newIndex = existingRows.reduce(
+        (maxIndex, existingRow) => {
+            const index = Number(existingRow.dataset.deviceIndex);
+            return Number.isInteger(index)
+                ? Math.max(maxIndex, index + 1)
+                : maxIndex;
+        },
+        0
+    );
 
     const row = document.createElement("tr");
 
@@ -1523,7 +1536,69 @@ const submitNewDevice = (modal, groupCode) => {
                         "آیا از حذف این دستگاه مطمئن هستید؟"
                     )
                 ) {
+                    const childRow = row.nextElementSibling;
+                    if (
+                        childRow &&
+                        childRow.classList.contains(
+                            "df-repeatable-child-row"
+                        )
+                    ) {
+                        childRow.remove();
+                    }
+
                     row.remove();
+
+                    const tbody = row.closest(".df-device-table-body");
+                    const groupCode = tbody?.dataset.groupCode;
+                    if (tbody && groupCode) {
+                        const deviceRows = Array.from(
+                            tbody.querySelectorAll("[data-device-row]")
+                        );
+
+                        deviceRows.forEach((deviceRow, newIndex) => {
+                            const oldIndex =
+                                deviceRow.dataset.deviceIndex;
+
+                            if (oldIndex === undefined) return;
+
+                            deviceRow.dataset.deviceIndex =
+                                String(newIndex);
+
+                            const oldPrefix =
+                                groupCode + "_" + oldIndex + "_";
+                            const newPrefix =
+                                groupCode + "_" + newIndex + "_";
+
+                            let sibling = deviceRow.nextElementSibling;
+                            if (
+                                !sibling ||
+                                !sibling.classList.contains(
+                                    "df-repeatable-child-row"
+                                )
+                            ) {
+                                sibling = null;
+                            }
+
+                            [deviceRow, sibling]
+                                .filter(Boolean)
+                                .forEach((scope) => {
+                                    scope.querySelectorAll(
+                                        "input, textarea, select"
+                                    ).forEach((field) => {
+                                        const name =
+                                            field.getAttribute("name");
+                                        if (
+                                            name &&
+                                            name.startsWith(oldPrefix)
+                                        ) {
+                                            field.name =
+                                                newPrefix +
+                                                name.slice(oldPrefix.length);
+                                        }
+                                    });
+                                });
+                        });
+                    }
                 }
 
                 return;
@@ -1984,6 +2059,9 @@ document.addEventListener("change", (event) => {
     const scope =
         changedSelect.closest(
             "[data-repeatable-item]"
+        ) ||
+        changedSelect.closest(
+            ".df-device-modal"
         ) ||
         changedSelect.closest(
             "section.df-form-section"
@@ -2683,18 +2761,34 @@ function getRepeatableGroupContext(group) {
         const deviceRow =
             currentGroup.closest("[data-device-row]");
 
-        if (!deviceRow) break;
+        const deviceChildContainer =
+            currentGroup.closest(".df-repeatable-child-row");
 
         const deviceGroup =
-            deviceRow.closest(".df-device-group");
-
-        if (!deviceGroup) break;
+            deviceRow?.closest(".df-device-group") ||
+            (
+                deviceChildContainer
+                    ? document.querySelector(
+                        ".df-device-group[data-repeatable-group=\"" +
+                        CSS.escape(
+                            deviceChildContainer.dataset.deviceGroupCode || ""
+                        ) +
+                        "\"]"
+                    )
+                    : null
+            );
 
         const deviceIndex = Number(
-            deviceRow.dataset.deviceIndex
+            deviceRow?.dataset.deviceIndex ??
+            deviceChildContainer?.dataset.deviceParentIndex
         );
 
-        if (!Number.isInteger(deviceIndex)) break;
+        if (
+            !deviceGroup ||
+            !Number.isInteger(deviceIndex)
+        ) {
+            break;
+        }
 
         context.unshift({
             groupCode: deviceGroup.dataset.repeatableGroup,
@@ -3601,6 +3695,26 @@ document.addEventListener("click", (event) => {
 
             field.value = "";
         }
+    });
+
+    /*
+     * Nested groups live inside the cloned row but are not owned by the
+     * root row according to getRowOwnedElements(). Rebase all descendant
+     * names (including __present markers and grandchild templates) to the
+     * new parent index before the clone is inserted.
+     */
+    newItem.querySelectorAll(
+        ".df-repeatable-group input, .df-repeatable-group textarea, .df-repeatable-group select"
+    ).forEach((field) => {
+        const oldName = field.getAttribute("name");
+        if (!oldName) return;
+
+        field.name = reindexRepeatableFieldName(
+            oldName,
+            groupPrefix,
+            newIndex,
+            groupCode
+        );
     });
 
     /*
