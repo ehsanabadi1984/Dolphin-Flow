@@ -99,6 +99,18 @@ class FormDraftValueValidationServiceTests(TestCase):
             )
         )
 
+    def test_formula_value_is_accepted_as_server_derived_value(self):
+        self.field(
+            code="total",
+            field_type=FormField.FieldType.FORMULA,
+        )
+
+        self.validate(
+            self.payload(
+                normal_fields={"total": "123.4500"},
+            )
+        )
+
     def test_validates_normal_field_value_families(self):
         self.field(code="text", field_type=FormField.FieldType.TEXT)
         self.field(code="number", field_type=FormField.FieldType.NUMBER)
