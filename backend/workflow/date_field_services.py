@@ -108,7 +108,12 @@ class DateFieldService:
             return value
 
         if isinstance(value, str):
-            value = cls._parse_datetime(value, calendar=calendar)
+            # Display values originate from canonical Gregorian persistence.
+            # The requested calendar controls only the presentation output.
+            value = cls._parse_datetime(
+                value,
+                calendar=cls.GREGORIAN,
+            )
 
         if not isinstance(value, datetime):
             raise ValueError("Expected a datetime.")
