@@ -984,363 +984,189 @@ notificationToggle.addEventListener("click", async (event) => {
     };
 
 const submitNewDevice = (modal, groupCode) => {
+    if (!validateModal(modal)) return;
 
-    if (!validateModal(modal)) {
+    const form = document.querySelector(".workflow-instance form");
+    if (!form) return;
+
+    const group = form.querySelector(
+        `.df-device-group[data-repeatable-group="${CSS.escape(groupCode)}"]`
+    );
+    const itemsContainer = group?.querySelector(".df-repeatable-items");
+    const rootTemplate = itemsContainer?.querySelector(
+        "[data-repeatable-root-template]"
+    );
+
+    if (!group || !itemsContainer || !rootTemplate) {
+        console.error("DEVICE flat-table root template not found:", groupCode);
         return;
     }
 
-    const form = document.querySelector(
-        ".workflow-instance form"
-    );
+    const rootRows = Array.from(
+        itemsContainer.querySelectorAll(
+            `[data-repeatable-item][data-repeatable-row-group="${CSS.escape(groupCode)}"]`
+        )
+    ).filter((row) => !row.dataset.parentRowId);
 
-    if (!form) {
-        return;
-    }
+    const rootIndexes = rootRows
+        .map((row) => Number(row.dataset.rootIndex))
+        .filter(Number.isInteger);
 
-    const tbody = form.querySelector(
-        `.df-device-table-body[data-group-code="${groupCode}"]`
-    );
+    const newIndex = rootIndexes.length
+        ? Math.max(...rootIndexes) + 1
+        : 0;
 
-    if (!tbody) {
-        return;
-    }
+    const rootRowId = generateRowId();
+    const rootRow = rootTemplate.cloneNode(true);
 
-    const existingRows = Array.from(
-        tbody.querySelectorAll("[data-device-row]")
-    );
+    rootRow.removeAttribute("data-repeatable-template");
+    rootRow.removeAttribute("data-repeatable-root-template");
+    rootRow.style.display = "";
+    rootRow.dataset.repeatableItem = "";
+    rootRow.dataset.repeatableRowGroup = groupCode;
+    rootRow.dataset.rootIndex = String(newIndex);
+    rootRow.dataset.rowPath = `${groupCode}_${newIndex}`;
+    rootRow.dataset.rowId = rootRowId;
+    rootRow.dataset.parentRowId = "";
 
-    const newIndex = existingRows.reduce(
-        (maxIndex, existingRow) => {
-            const index = Number(existingRow.dataset.deviceIndex);
-            return Number.isInteger(index)
-                ? Math.max(maxIndex, index + 1)
-                : maxIndex;
-        },
-        0
-    );
+    rootRow.querySelectorAll("input, textarea, select").forEach((field) => {
+        const oldName = field.getAttribute("name") || "";
 
-    const row = document.createElement("tr");
-
-    row.className = "df-device-row";
-    row.dataset.deviceRow = "";
-    row.dataset.deviceIndex = newIndex;
-
-    /*
-     * Hidden InstanceDevice ID
-     */
-    const instanceDeviceId =
-        document.createElement("input");
-
-    instanceDeviceId.type = "hidden";
-    instanceDeviceId.name =
-        `${groupCode}_${newIndex}_instance_device_id`;
-    instanceDeviceId.value = "";
-
-    /*
-     * Device fields
-     */
-    const fields = modal.querySelectorAll(
-        "[data-device-modal-field]"
-    );
-
-    fields.forEach((field) => {
-
-        const fieldCode =
-            field.dataset.fieldCode;
-
-        if (!fieldCode) {
+        if (oldName.endsWith("__id")) {
+            field.name = `${groupCode}_${newIndex}__id`;
+            field.value = rootRowId;
             return;
         }
 
-        const cell = document.createElement("td");
-
-        /*
-         * Display value
-         */
-        const display =
-            document.createElement("span");
-
-        display.className =
-            "df-device-display";
-
-        if (field.tagName === "SELECT") {
-
-            const selected =
-                field.options[field.selectedIndex];
-
-            display.textContent =
-                selected
-                    ? selected.textContent
-                    : "—";
-
-        } else {
-
-            display.textContent =
-                field.value || "—";
-
+        if (oldName.endsWith("_instance_device_id")) {
+            field.name = `${groupCode}_${newIndex}_instance_device_id`;
+            field.value = "";
+            return;
         }
 
-        cell.appendChild(display);
+        const marker = `${groupCode}_TEMPLATE_`;
+        if (!oldName.startsWith(marker)) return;
 
-        /*
-         * Editor
-         */
-        const editor =
-            document.createElement("span");
+        const fieldCode = oldName.slice(marker.length);
+        field.name = `${groupCode}_${newIndex}_${fieldCode}`;
 
-        editor.className =
-            "df-device-editor";
-
-        editor.hidden = true;
-
-        const input =
-            field.cloneNode(true);
-
-        input.disabled = false;
-
-        input.removeAttribute(
-            "data-device-modal-field"
+        const modalField = modal.querySelector(
+            `[data-device-modal-field][data-field-code="${CSS.escape(fieldCode)}"]`
         );
+        if (!modalField) {
+            if (field.type === "checkbox") field.checked = false;
+            else field.value = "";
+            return;
+        }
 
-        input.name =
-            `${groupCode}_${newIndex}_${fieldCode}`;
-
-        /*
-        * Preserve the value selected/entered
-        * in the modal.
-        */
-        if (field.tagName === "SELECT") {
-
-            input.value = field.value;
-
-        } else if (field.type === "checkbox") {
-
-            input.checked = field.checked;
-
+        if (field.type === "checkbox") {
+            field.checked = modalField.checked;
         } else {
-
-            input.value = field.value;
-
+            field.value = modalField.value;
         }
+    });
 
-
-        input.classList.add(
-            "df-device-generated-field"
-        );
-
-        if (input.type === "checkbox") {
-            const uncheckedValue =
-                document.createElement("input");
-
-            uncheckedValue.type = "hidden";
-            uncheckedValue.name = input.name;
-            uncheckedValue.value = "false";
-            editor.appendChild(uncheckedValue);
-        }
-
-        editor.appendChild(input);
-
-        cell.appendChild(editor);
-
-        row.appendChild(cell);
+    rootRow.querySelectorAll(
+        ".df-repeatable-child-add[data-parent-row-id]"
+    ).forEach((button) => {
+        button.dataset.parentRowId = rootRowId;
     });
 
     /*
-     * Actions
+     * A DEVICE is inserted into the same flat-table DOM as NORMAL rows.
+     * Direct child groups get their initial row here because the DEVICE
+     * modal already collected those optional child values. No per-row
+     * save/edit/cancel lifecycle is created.
      */
-    const actionsCell =
-        document.createElement("td");
+    const childTemplates = Array.from(
+        itemsContainer.querySelectorAll(
+            "[data-repeatable-child-template][data-child-group-code]"
+        )
+    );
 
-    actionsCell.className =
-        "df-device-actions";
+    const directChildCodes = new Set(
+        Array.from(
+            modal.querySelectorAll("[data-device-child-group]")
+        ).map((element) => element.dataset.deviceChildGroup)
+    );
 
-    /*
-     * Nested child groups
-     *
-     * The device row is the parent RepeatableRow. The modal creates one
-     * initial child row for each configured direct child group and serializes
-     * it using the canonical nested POST naming contract.
-     */
-    modal.querySelectorAll(
-        "[data-device-child-group]"
-    ).forEach((childGroup) => {
-        const childGroupCode =
-            childGroup.dataset.deviceChildGroup;
+    const childRows = [];
 
-        if (!childGroupCode) {
-            return;
-        }
+    childTemplates.forEach((childTemplate) => {
+        const childGroupCode = childTemplate.dataset.childGroupCode;
+        if (!directChildCodes.has(childGroupCode)) return;
 
-        const presence =
-            document.createElement("input");
+        const childRowId = generateRowId();
+        const childRow = childTemplate.cloneNode(true);
 
-        presence.type = "hidden";
-        presence.name =
-            groupCode + "_" +
-            newIndex + "_" +
-            childGroupCode +
-            "__present";
-        presence.value = "1";
-        presence.dataset.repeatablePresence = "";
+        childRow.removeAttribute("data-repeatable-template");
+        childRow.removeAttribute("data-repeatable-child-template");
+        childRow.style.display = "";
+        childRow.dataset.repeatableItem = "";
+        childRow.dataset.repeatableRowGroup = childGroupCode;
+        childRow.dataset.rootIndex = String(newIndex);
+        childRow.dataset.rowPath =
+            `${groupCode}_${newIndex}_${childGroupCode}_0`;
+        childRow.dataset.rowId = childRowId;
+        childRow.dataset.parentRowId = rootRowId;
 
-        actionsCell.appendChild(presence);
+        const modalChildGroup = modal.querySelector(
+            `[data-device-child-group="${CSS.escape(childGroupCode)}"]`
+        );
 
-        childGroup.querySelectorAll(
-            "[data-device-modal-child-field]"
-        ).forEach((field) => {
-            const fieldCode =
-                field.dataset.fieldCode;
+        childRow.querySelectorAll("input, textarea, select").forEach((field) => {
+            const oldName = field.getAttribute("name") || "";
 
-            if (!fieldCode) {
+            if (oldName.endsWith("__id")) {
+                field.name =
+                    `${groupCode}_${newIndex}_${childGroupCode}_0__id`;
+                field.value = childRowId;
                 return;
             }
 
-            const input =
-                document.createElement("input");
+            if (!oldName.startsWith("PARENT_PREFIX")) return;
 
-            input.type = "hidden";
-            input.name =
-                groupCode + "_" +
-                newIndex + "_" +
-                childGroupCode +
-                "_0_" +
-                fieldCode;
+            const marker =
+                `PARENT_PREFIX${childGroupCode}_TEMPLATE_`;
+            if (!oldName.startsWith(marker)) return;
 
-            if (field.type === "checkbox") {
-                input.value =
-                    field.checked ? "true" : "false";
+            const fieldCode = oldName.slice(marker.length);
+            field.name =
+                `${groupCode}_${newIndex}_${childGroupCode}_0_${fieldCode}`;
+
+            const modalField = modalChildGroup?.querySelector(
+                `[data-device-modal-child-field][data-field-code="${CSS.escape(fieldCode)}"]`
+            );
+
+            if (modalField) {
+                if (field.type === "checkbox") {
+                    field.checked = modalField.checked;
+                } else {
+                    field.value = modalField.value;
+                }
+            } else if (field.type === "checkbox") {
+                field.checked = false;
             } else {
-                input.value =
-                    field.value || "";
+                field.value = "";
             }
-
-            input.dataset.deviceChildField = "";
-            actionsCell.appendChild(input);
         });
+
+        childRow.querySelectorAll(
+            ".df-repeatable-child-add[data-parent-row-id]"
+        ).forEach((button) => {
+            button.dataset.parentRowId = childRowId;
+        });
+
+        childRows.push(childRow);
     });
 
     /*
-     * Hidden instance_device_id
+     * Insert the root first and its direct child rows immediately after it.
+     * The generic flat-table handlers can now reindex/delete the complete
+     * subtree using the same RepeatableRow identity contract as NORMAL.
      */
-    actionsCell.appendChild(
-        instanceDeviceId
-    );
+    rootRow.after(...childRows);
 
-    /*
-     * Edit button
-     */
-    const editButton =
-        document.createElement("button");
-
-    editButton.type = "button";
-    editButton.className =
-        "df-button df-button-secondary df-device-edit";
-
-    editButton.textContent = "ویرایش";
-
-    actionsCell.appendChild(
-        editButton
-    );
-
-    /*
-     * Cancel button
-     */
-    const cancelButton =
-        document.createElement("button");
-
-    cancelButton.type = "button";
-    cancelButton.className =
-        "df-button df-button-secondary df-device-cancel";
-
-    cancelButton.hidden = true;
-    cancelButton.textContent = "انصراف";
-
-    actionsCell.appendChild(
-        cancelButton
-    );
-
-    /*
-     * Save button
-     */
-    const saveButton =
-        document.createElement("button");
-
-    saveButton.type = "submit";
-    saveButton.className =
-        "df-button df-device-save";
-
-    saveButton.hidden = true;
-    saveButton.textContent = "ذخیره";
-
-    actionsCell.appendChild(
-        saveButton
-    );
-
-    /*
-     * Delete button
-     */
-    const deleteButton =
-        document.createElement("button");
-
-    deleteButton.type = "button";
-    deleteButton.className =
-        "df-button df-button-danger df-device-delete";
-
-    deleteButton.textContent = "حذف دستگاه";
-
-    actionsCell.appendChild(
-        deleteButton
-    );
-
-    /*
-     * ---------------------------------------------------------
-     * History button for existing (previously registered) devices
-     * ---------------------------------------------------------
-     */
-    const existingDeviceId =
-        modal.dataset.deviceId || "";
-
-    if (existingDeviceId) {
-
-        /*
-         * Mark the row as an existing device.
-         */
-        row.dataset.deviceId =
-            existingDeviceId;
-
-        row.classList.add(
-            "df-device-row-existing"
-        );
-
-        /*
-         * Add a hidden input so the backend can
-         * identify the device reference.
-         */
-        const deviceRefInput =
-            document.createElement("input");
-
-        deviceRefInput.type = "hidden";
-        deviceRefInput.name =
-            `${groupCode}_${newIndex}_device_id`;
-        deviceRefInput.value =
-            existingDeviceId;
-
-        actionsCell.appendChild(
-            deviceRefInput
-        );
-    }
-
-    row.appendChild(actionsCell);
-
-    /*
-     * Add row in NORMAL display mode.
-     */
-    tbody.appendChild(row);
-
-    /*
-     * Modal is closed only.
-     * The form is NOT submitted here.
-     */
     closeModal(modal);
 };
     const setDeviceRowEditing = (row, editing) => {
