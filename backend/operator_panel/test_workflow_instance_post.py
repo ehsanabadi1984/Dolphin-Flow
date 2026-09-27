@@ -2428,6 +2428,121 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertContains(response, "Tehran")
         self.assertContains(response, "Child 1")
 
+    def test_device_table_renders_children_under_their_parent_rows(self):
+        group, label_field = self._create_device_group()
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Device Details",
+            code="device_details",
+            order=5,
+            parent_group=group,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Name",
+            code="child_name",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=child_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "devices_0_label": "Device A",
+                "devices_0_device_details_0_child_name": "Child A",
+                "devices_1_label": "Device B",
+                "devices_1_device_details_0_child_name": "Child B",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(len(rows), 2)
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"edit": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        html = response.content.decode()
+        first_device_marker = (
+            f'<tr class="df-device-row" data-device-row '
+            f'data-device-index="0" data-row-id="{rows[0].pk}"'
+        )
+        first_child_marker = (
+            f'<tr class="df-repeatable-child-row df-device-child-row" '
+            f'data-device-parent-row-id="{rows[0].pk}" '
+            f'data-device-parent-index="0"'
+        )
+        second_device_marker = (
+            f'<tr class="df-device-row" data-device-row '
+            f'data-device-index="1" data-row-id="{rows[1].pk}"'
+        )
+        second_child_marker = (
+            f'<tr class="df-repeatable-child-row df-device-child-row" '
+            f'data-device-parent-row-id="{rows[1].pk}" '
+            f'data-device-parent-index="1"'
+        )
+
+        first_device_index = html.index(first_device_marker)
+        first_child_index = html.index(first_child_marker)
+        second_device_index = html.index(second_device_marker)
+        second_child_index = html.index(second_child_marker)
+
+        self.assertLess(first_device_index, first_child_index)
+        self.assertLess(first_child_index, second_device_index)
+        self.assertLess(second_device_index, second_child_index)
+
+        first_child_html = html[first_child_index:second_device_index]
+        second_child_html = html[second_child_index:]
+
+        self.assertIn("Child A", first_child_html)
+        self.assertNotIn("Child B", first_child_html)
+        self.assertIn("Child B", second_child_html)
+        self.assertNotIn("Child A", second_child_html)
+
+        self.assertIn(
+            'name="devices_0_device_details_0_child_name"',
+            first_child_html,
+        )
+        self.assertIn(
+            'name="devices_1_device_details_0_child_name"',
+            second_child_html,
+        )
+
     def test_workflow_instance_renders_nested_repeatable_children(self):
         parent_group = FormRepeatableGroup.objects.create(
             section=self.section,
