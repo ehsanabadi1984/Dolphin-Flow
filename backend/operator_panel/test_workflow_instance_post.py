@@ -2498,29 +2498,40 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
         html = response.content.decode()
-        first_device_marker = (
-            f'<tr class="df-device-row" data-device-row '
-            f'data-device-index="0" data-row-id="{rows[0].pk}"'
+        first_device_match = re.search(
+            rf'<tr\\s+class="df-device-row"'
+            rf'[\\s\\S]*?data-device-index="0"'
+            rf'[\\s\\S]*?data-row-id="{rows[0].pk}"',
+            html,
         )
-        first_child_marker = (
-            f'<tr class="df-repeatable-child-row df-device-child-row" '
-            f'data-device-parent-row-id="{rows[0].pk}" '
-            f'data-device-parent-index="0"'
+        first_child_match = re.search(
+            rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
+            rf'[\\s\\S]*?data-device-parent-row-id="{rows[0].pk}"'
+            rf'[\\s\\S]*?data-device-parent-index="0"',
+            html,
         )
-        second_device_marker = (
-            f'<tr class="df-device-row" data-device-row '
-            f'data-device-index="1" data-row-id="{rows[1].pk}"'
+        second_device_match = re.search(
+            rf'<tr\\s+class="df-device-row"'
+            rf'[\\s\\S]*?data-device-index="1"'
+            rf'[\\s\\S]*?data-row-id="{rows[1].pk}"',
+            html,
         )
-        second_child_marker = (
-            f'<tr class="df-repeatable-child-row df-device-child-row" '
-            f'data-device-parent-row-id="{rows[1].pk}" '
-            f'data-device-parent-index="1"'
+        second_child_match = re.search(
+            rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
+            rf'[\\s\\S]*?data-device-parent-row-id="{rows[1].pk}"'
+            rf'[\\s\\S]*?data-device-parent-index="1"',
+            html,
         )
 
-        first_device_index = html.index(first_device_marker)
-        first_child_index = html.index(first_child_marker)
-        second_device_index = html.index(second_device_marker)
-        second_child_index = html.index(second_child_marker)
+        self.assertIsNotNone(first_device_match)
+        self.assertIsNotNone(first_child_match)
+        self.assertIsNotNone(second_device_match)
+        self.assertIsNotNone(second_child_match)
+
+        first_device_index = first_device_match.start()
+        first_child_index = first_child_match.start()
+        second_device_index = second_device_match.start()
+        second_child_index = second_child_match.start()
 
         self.assertLess(first_device_index, first_child_index)
         self.assertLess(first_child_index, second_device_index)
