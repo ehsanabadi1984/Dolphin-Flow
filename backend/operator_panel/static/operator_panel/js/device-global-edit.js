@@ -113,55 +113,6 @@
     activateExistingRows();
 
     /*
-     * The legacy app.js also listens for .df-device-modal-submit.
-     * Capture this event before its bubbling listener so it cannot create
-     * the old per-row edit/save/cancel controls.
-     */
-    document.addEventListener(
-        "click",
-        (event) => {
-            const submitButton = event.target.closest(
-                ".df-device-modal-submit"
-            );
-            if (!submitButton) return;
-
-            if (!isEditMode()) return;
-
-            const modal = submitButton.closest(".df-device-modal");
-            if (!modal) return;
-
-            event.preventDefault();
-            event.stopImmediatePropagation();
-
-            const fields = modal.querySelectorAll("[data-device-modal-field]");
-            let firstInvalid = null;
-
-            fields.forEach((field) => {
-                const wrapper = field.closest(".df-device-modal-field");
-                const required = wrapper && wrapper.querySelector("label span");
-                if (!required) return;
-
-                if (!String(field.value || "").trim()) {
-                    wrapper.classList.add("has-error");
-                    const error = wrapper.querySelector(".df-device-modal-error");
-                    if (error) error.textContent = "این فیلد الزامی است.";
-                    if (!firstInvalid) firstInvalid = field;
-                }
-            });
-
-            if (firstInvalid) {
-                firstInvalid.focus();
-                return;
-            }
-
-            addDeviceRow(modal, submitButton.dataset.groupCode);
-            modal.hidden = true;
-            document.body.classList.remove("df-modal-open");
-        },
-        true
-    );
-
-    /*
      * Keep deletion inside the global edit session.
      *
      * The legacy delete button submits directly to delete_device. That
