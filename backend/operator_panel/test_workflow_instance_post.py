@@ -1009,27 +1009,27 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
 
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_{a_index}_device_details_reconcile_post_0__id"\\s+value="{a_child2.pk}"',
+            rf'name="system_devices_{a_index}_device_details_reconcile_post_0__id"\s+value="{a_child2.pk}"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_{a_index}_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{a_part2.pk}"',
+            rf'name="system_devices_{a_index}_device_details_reconcile_post_0_parts_reconcile_post_0__id"\s+value="{a_part2.pk}"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_{b_index}_device_details_reconcile_post_0__id"\\s+value="{b_child1.pk}"',
+            rf'name="system_devices_{b_index}_device_details_reconcile_post_0__id"\s+value="{b_child1.pk}"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_{b_index}_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{b_part1.pk}"',
+            rf'name="system_devices_{b_index}_device_details_reconcile_post_0_parts_reconcile_post_0__id"\s+value="{b_part1.pk}"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_{c_index}_device_details_reconcile_post_0__id"\\s+value="{child_c.pk}"',
+            rf'name="system_devices_{c_index}_device_details_reconcile_post_0__id"\s+value="{child_c.pk}"',
         )
         self.assertRegex(
             edit_html,
-            rf'name="system_devices_{c_index}_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{part_c.pk}"',
+            rf'name="system_devices_{c_index}_device_details_reconcile_post_0_parts_reconcile_post_0__id"\s+value="{part_c.pk}"',
         )
         self.assertIn("Child A2 updated", edit_html)
         self.assertIn("Part A2 updated", edit_html)
