@@ -2973,6 +2973,7 @@ class FormFieldAdmin(admin.ModelAdmin):
                     "system_key",
                     "help_text",
                     "is_required",
+                    "decimal_places",
                     "order",
                     "is_active",
                 ),
