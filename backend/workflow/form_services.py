@@ -1150,6 +1150,13 @@ class DynamicFormService:
             root_index: item["row_id"]
             for root_index, item in enumerate(group_context["items"])
         }
+        root_instance_device_ids = {
+            root_index: item.get(
+                "instance_device_id",
+                item.get("device", {}).get("instance_device_id", ""),
+            )
+            for root_index, item in enumerate(group_context["items"])
+        }
 
         for row in rows:
             root_index = row["path"][0][1]
@@ -1169,22 +1176,26 @@ class DynamicFormService:
                     }
                 )
 
-            if (
-                group_context["group"].group_type
-                == FormRepeatableGroup.GroupType.DEVICE
-                and row["row_group_code"] == group_context["group"].code
-                and row.get("instance_device_id")
-            ):
-                row["device_instance_id_input"] = {
-                    "name": (
-                        f"{group_context['group'].code}_"
-                        f"{row['path'][0][1]}_instance_device_id"
-                    ),
-                    "value": row["instance_device_id"],
-                }
-
             if root_index not in first_row_for_root:
                 first_row_for_root.add(root_index)
+
+                # DEVICE identity belongs to the canonical root row. A
+                # populated root subtree may suppress the visual root <tr>
+                # in the flat-table projection, so preserve the identity on
+                # the first rendered row of that root subtree instead.
+                if (
+                    group_context["group"].group_type
+                    == FormRepeatableGroup.GroupType.DEVICE
+                    and root_instance_device_ids.get(root_index)
+                ):
+                    row["device_instance_id_input"] = {
+                        "name": (
+                            f"{group_context['group'].code}_"
+                            f"{root_index}_instance_device_id"
+                        ),
+                        "value": root_instance_device_ids[root_index],
+                    }
+
                 if row["row_group_code"] != group_context["group"].code:
                     row["root_delete"] = {
                         "can_delete": group_context["permissions"]["can_delete"],
