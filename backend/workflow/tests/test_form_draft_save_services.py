@@ -649,8 +649,8 @@ class FormDraftSaveServiceContractTests(TestCase):
                 "devices_nested_isolation": [
                     {
                         "nested_device_imei": "860000000000001",
-                        "nested_device_type": device_type.pk,
-                        "nested_device_model": device_model.pk,
+                        "delete_nested_device_type": device_type.pk,
+                        "delete_nested_device_model": device_model.pk,
                         "device_details_nested_isolation": [
                             {
                                 "nested_child_name": "Child A",
@@ -664,8 +664,8 @@ class FormDraftSaveServiceContractTests(TestCase):
                     },
                     {
                         "nested_device_imei": "860000000000002",
-                        "nested_device_type": device_type.pk,
-                        "nested_device_model": device_model.pk,
+                        "delete_nested_device_type": device_type.pk,
+                        "delete_nested_device_model": device_model.pk,
                         "device_details_nested_isolation": [
                             {
                                 "nested_child_name": "Child B",
@@ -865,9 +865,9 @@ class FormDraftSaveServiceContractTests(TestCase):
             submitted_data={
                 "devices_nested_delete_isolation": [
                     {
-                        "nested_device_imei": "870000000000001",
-                        "nested_device_type": device_type.pk,
-                        "nested_device_model": device_model.pk,
+                        "delete_nested_device_imei": "870000000000001",
+                        "delete_nested_device_type": device_type.pk,
+                        "delete_nested_device_model": device_model.pk,
                         "device_details_nested_delete_isolation": [
                             {
                                 "delete_nested_child_name": "Child A",
@@ -880,9 +880,9 @@ class FormDraftSaveServiceContractTests(TestCase):
                         ],
                     },
                     {
-                        "nested_device_imei": "870000000000002",
-                        "nested_device_type": device_type.pk,
-                        "nested_device_model": device_model.pk,
+                        "delete_nested_device_imei": "870000000000002",
+                        "delete_nested_device_type": device_type.pk,
+                        "delete_nested_device_model": device_model.pk,
                         "device_details_nested_delete_isolation": [
                             {
                                 "delete_nested_child_name": "Child B",
@@ -940,9 +940,9 @@ class FormDraftSaveServiceContractTests(TestCase):
                 "devices_nested_delete_isolation": [
                     {
                         "row_id": device_b.pk,
-                        "nested_device_imei": "870000000000002",
-                        "nested_device_type": device_type.pk,
-                        "nested_device_model": device_model.pk,
+                        "delete_nested_device_imei": "870000000000002",
+                        "delete_nested_device_type": device_type.pk,
+                        "delete_nested_device_model": device_model.pk,
                         "device_details_nested_delete_isolation": [
                             {
                                 "row_id": child_b.pk,
