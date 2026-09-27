@@ -641,3 +641,84 @@ class FormPostAdapterTests(TestCase):
             payload["items"][1]["child_items"],
             [{"child_title": "Child of root 1"}],
         )
+    def test_normal_jalali_date_is_converted_to_canonical_gregorian(self):
+        field = FormField.objects.create(
+            section=self.section,
+            name="Date",
+            code="date",
+            label="Date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.JALALI,
+            order=3,
+        )
+        post = QueryDict("", mutable=True)
+        post["date"] = "۱۴۰۵/۰۷/۰۵"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(payload["date"], "2026-09-27")
+
+    def test_normal_jalali_datetime_is_converted_to_canonical_gregorian(self):
+        FormField.objects.create(
+            section=self.section,
+            name="Date Time",
+            code="date_time",
+            label="Date Time",
+            field_type=FormField.FieldType.DATETIME,
+            calendar=FormField.Calendar.JALALI,
+            order=4,
+        )
+        post = QueryDict("", mutable=True)
+        post["date_time"] = "۱۴۰۵/۰۷/۰۵ 14:30:00"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(payload["date_time"], "2026-09-27T14:30:00")
+
+    def test_repeatable_jalali_date_is_converted_to_canonical_gregorian(self):
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="Date",
+            code="date",
+            label="Date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.JALALI,
+            order=2,
+        )
+        post = QueryDict("", mutable=True)
+        post["items_0_date"] = "۱۴۰۵/۰۷/۰۵"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(payload["items"], [{"date": "2026-09-27"}])
+
+    def test_gregorian_date_remains_canonical(self):
+        FormField.objects.create(
+            section=self.section,
+            name="Date",
+            code="date",
+            label="Date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.GREGORIAN,
+            order=3,
+        )
+        post = QueryDict("", mutable=True)
+        post["date"] = "2026-09-27"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(payload["date"], "2026-09-27")
+
