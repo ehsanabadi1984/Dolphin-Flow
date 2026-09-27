@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from django.core.exceptions import ValidationError
 
+from .date_field_services import DateFieldService
 from .models import (
     DeviceIdentifier,
     FormField,
@@ -349,11 +350,23 @@ class RepeatableRowReadService:
 
         if field.field_type == FormField.FieldType.DATE:
             value = value_object.date_value
-            return value, "" if value is None else value.isoformat()
+            if value is None:
+                return None, ""
+            display_value = DateFieldService.to_display_date(
+                value,
+                calendar=field.calendar,
+            )
+            return display_value, display_value
 
         if field.field_type == FormField.FieldType.DATETIME:
             value = value_object.datetime_value
-            return value, "" if value is None else value.isoformat()
+            if value is None:
+                return None, ""
+            display_value = DateFieldService.to_display_datetime(
+                value,
+                calendar=field.calendar,
+            )
+            return display_value, display_value
 
         if field.field_type == FormField.FieldType.BOOLEAN:
             value = value_object.boolean_value
