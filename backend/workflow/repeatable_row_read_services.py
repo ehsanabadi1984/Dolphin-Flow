@@ -330,7 +330,22 @@ class RepeatableRowReadService:
 
         if field.field_type == FormField.FieldType.NUMBER:
             value = value_object.decimal_value
-            return value, "" if value is None else str(value)
+            if value is None:
+                return None, ""
+
+            # RepeatableRowValue stores NUMBER values with six database
+            # decimal places. Presentation must follow the FormField
+            # configuration instead of exposing the storage precision.
+            from decimal import Decimal
+
+            try:
+                places = field.decimal_places
+                formatted = f"{Decimal(str(value)):.{places}f}"
+                if "." in formatted:
+                    formatted = formatted.rstrip("0").rstrip(".")
+                return value, formatted
+            except (ArithmeticError, ValueError, TypeError):
+                return value, str(value)
 
         if field.field_type == FormField.FieldType.DATE:
             value = value_object.date_value
