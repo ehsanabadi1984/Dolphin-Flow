@@ -2499,27 +2499,27 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
 
         html = response.content.decode()
         first_device_match = re.search(
-            rf'<tr\\s+class="df-device-row"'
-            rf'[\\s\\S]*?data-device-index="0"'
-            rf'[\\s\\S]*?data-row-id="{rows[0].pk}"',
+            rf'<tr\s+class="df-device-row"'
+            rf'[\s\S]*?data-device-index="0"'
+            rf'[\s\S]*?data-row-id="{rows[0].pk}"',
             html,
         )
         first_child_match = re.search(
-            rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'[\\s\\S]*?data-device-parent-row-id="{rows[0].pk}"'
-            rf'[\\s\\S]*?data-device-parent-index="0"',
+            rf'<tr\s+class="df-repeatable-child-row df-device-child-row"'
+            rf'[\s\S]*?data-device-parent-row-id="{rows[0].pk}"'
+            rf'[\s\S]*?data-device-parent-index="0"',
             html,
         )
         second_device_match = re.search(
-            rf'<tr\\s+class="df-device-row"'
-            rf'[\\s\\S]*?data-device-index="1"'
-            rf'[\\s\\S]*?data-row-id="{rows[1].pk}"',
+            rf'<tr\s+class="df-device-row"'
+            rf'[\s\S]*?data-device-index="1"'
+            rf'[\s\S]*?data-row-id="{rows[1].pk}"',
             html,
         )
         second_child_match = re.search(
-            rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'[\\s\\S]*?data-device-parent-row-id="{rows[1].pk}"'
-            rf'[\\s\\S]*?data-device-parent-index="1"',
+            rf'<tr\s+class="df-repeatable-child-row df-device-child-row"'
+            rf'[\s\S]*?data-device-parent-row-id="{rows[1].pk}"'
+            rf'[\s\S]*?data-device-parent-index="1"',
             html,
         )
 
