@@ -1169,284 +1169,58 @@ const submitNewDevice = (modal, groupCode) => {
 
     closeModal(modal);
 };
-    const setDeviceRowEditing = (row, editing) => {
-
-        row.classList.toggle(
-            "is-editing",
-            editing
-        );
-
-        row.querySelectorAll(
-            ".df-device-display"
-        ).forEach((element) => {
-            element.hidden = editing;
-        });
-
-        row.querySelectorAll(
-            ".df-device-editor"
-        ).forEach((element) => {
-            element.hidden = !editing;
-        });
-
-        row.querySelectorAll(
-            ".df-device-edit, .df-device-delete"
-        ).forEach((element) => {
-            element.hidden = editing;
-        });
-
-        row.querySelectorAll(
-            ".df-device-cancel, .df-device-save"
-        ).forEach((element) => {
-            element.hidden = !editing;
-        });
-    };    document.addEventListener("click", (event) => {
-
-        /*
-         * ADD
-         */
-        const addButton =
-            event.target.closest(
-                ".df-device-add"
-            );
+    /*
+     * DEVICE rows now use the same flat-table lifecycle as NORMAL rows.
+     * The modal only collects initial DEVICE-specific values; once submitted
+     * its values are materialized into the canonical flat-table row tree.
+     */
+    document.addEventListener("click", (event) => {
+        const addButton = event.target.closest(".df-device-add");
 
         if (addButton) {
-
-            /* Do not allow adding in read-only mode. */
             if (!isEditMode()) return;
 
-            const groupCode =
-                addButton.dataset.groupCode;
-
-            const modal =
-                getModal(groupCode);
-
+            const groupCode = addButton.dataset.groupCode;
+            const modal = getModal(groupCode);
             if (!modal) return;
 
             resetModal(modal);
             openModal(modal);
-
             return;
         }
 
-        /*
-         * MODAL CLOSE
-         */
-        const closeButton =
-            event.target.closest(
-                ".df-device-modal-close, .df-device-modal-cancel"
-            );
+        const closeButton = event.target.closest(
+            ".df-device-modal-close, .df-device-modal-cancel"
+        );
 
         if (closeButton) {
-
-            const modal =
-                event.target.closest(".df-device-modal");
-
-            closeModal(modal);
-
+            closeModal(closeButton.closest(".df-device-modal"));
             return;
         }
 
-        /*
-         * MODAL BACKDROP
-         */
         if (
             event.target.classList.contains(
                 "df-device-modal-backdrop"
             )
         ) {
-
-            const modal =
-                event.target.closest(".df-device-modal");
-
-            closeModal(modal);
-
+            closeModal(
+                event.target.closest(".df-device-modal")
+            );
             return;
         }
 
-        /*
-         * MODAL SUBMIT
-         */
-
-        console.log(
-            "DEVICE MODAL CLICK:",
-            event.target,
-            event.target.closest(".df-device-modal-submit")
+        const modalSubmit = event.target.closest(
+            ".df-device-modal-submit"
         );
-        const modalSubmit =
-            event.target.closest(
-                ".df-device-modal-submit"
-            );
 
-        if (modalSubmit) {
+        if (!modalSubmit) return;
 
-            const groupCode =
-                modalSubmit.dataset.groupCode;
+        const groupCode = modalSubmit.dataset.groupCode;
+        const modal = getModal(groupCode);
+        if (!modal) return;
 
-            const modal =
-                getModal(groupCode);
-
-            if (!modal) return;
-
-            submitNewDevice(
-                modal,
-                groupCode
-            );
-
-            return;
-        }
-
-        /*
-         * EXISTING DEVICE ROW
-         */
-        const row =
-            event.target.closest(
-                "[data-device-row]"
-            );
-
-        if (!row) return;
-
-        if (
-            event.target.closest(
-                ".df-device-edit"
-            )
-        ) {
-
-            /* Do not allow editing in read-only mode. */
-            if (!isEditMode()) return;
-
-            setDeviceRowEditing(
-                row,
-                true
-            );
-
-            return;
-        }
-
-        if (
-            event.target.closest(
-                ".df-device-cancel"
-            )
-        ) {
-
-                setDeviceRowEditing(
-                    row,
-                    false
-                );
-
-            return;
-        }
-
-        if (
-            event.target.closest(
-                ".df-device-delete"
-            )
-        ) {
-
-            /* Do not allow deleting in read-only mode. */
-            if (!isEditMode()) return;
-
-            const id =
-                row.querySelector(
-                    'input[name$="__id"]'
-                )?.value;
-
-            /*
-            * Unsaved device:
-            * The row does not have an InstanceDevice yet.
-            * Remove it only from the UI.
-            */
-            if (!id) {
-
-                if (
-                    window.confirm(
-                        "آیا از حذف این دستگاه مطمئن هستید؟"
-                    )
-                ) {
-                    const childRow = row.nextElementSibling;
-                    if (
-                        childRow &&
-                        childRow.classList.contains(
-                            "df-repeatable-child-row"
-                        )
-                    ) {
-                        childRow.remove();
-                    }
-
-                    row.remove();
-
-                    const tbody = row.closest(".df-device-table-body");
-                    const groupCode = tbody?.dataset.groupCode;
-                    if (tbody && groupCode) {
-                        const deviceRows = Array.from(
-                            tbody.querySelectorAll("[data-device-row]")
-                        );
-
-                        deviceRows.forEach((deviceRow, newIndex) => {
-                            const oldIndex =
-                                deviceRow.dataset.deviceIndex;
-
-                            if (oldIndex === undefined) return;
-
-                            deviceRow.dataset.deviceIndex =
-                                String(newIndex);
-
-                            const oldPrefix =
-                                groupCode + "_" + oldIndex + "_";
-                            const newPrefix =
-                                groupCode + "_" + newIndex + "_";
-
-                            let sibling = deviceRow.nextElementSibling;
-                            if (
-                                !sibling ||
-                                !sibling.classList.contains(
-                                    "df-repeatable-child-row"
-                                )
-                            ) {
-                                sibling = null;
-                            }
-
-                            [deviceRow, sibling]
-                                .filter(Boolean)
-                                .forEach((scope) => {
-                                    scope.querySelectorAll(
-                                        "input, textarea, select"
-                                    ).forEach((field) => {
-                                        const name =
-                                            field.getAttribute("name");
-                                        if (
-                                            name &&
-                                            name.startsWith(oldPrefix)
-                                        ) {
-                                            field.name =
-                                                newPrefix +
-                                                name.slice(oldPrefix.length);
-                                        }
-                                    });
-                                });
-                        });
-                    }
-                }
-
-                return;
-            }
-
-            /*
-            * Existing device:
-            * Allow the normal form submission to continue.
-            * The button's formaction points to delete_device.
-            */
-            if (
-                !window.confirm(
-                    "آیا از حذف این دستگاه از فرآیند مطمئن هستید؟"
-                )
-            ) {
-                event.preventDefault();
-            }
-
-            return;
-        }
-
-        });
+        submitNewDevice(modal, groupCode);
+    });
 
 })();
 
