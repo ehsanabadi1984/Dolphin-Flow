@@ -434,6 +434,113 @@ class DynamicFormServiceTests(TestCase):
         self.assertEqual(item["row_id"], str(row.pk))
         self.assertNotEqual(item["row_id"], str(instance_device.pk))
 
+    def test_device_group_exposes_nested_normal_child_rows(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.device_group,
+            name="Device Details",
+            code="device_details",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=6,
+            is_active=True,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Installation Note",
+            code="installation_note",
+            field_type=FormField.FieldType.TEXT,
+            label="Installation Note",
+            order=1,
+            is_active=True,
+        )
+
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=child_field,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+
+        instance = self.create_instance()
+
+        self.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data={
+                "Phone": "09120000000",
+                "customer_address": "آدرس تست",
+                "devices": [
+                    {
+                        "imei": "123123123123123",
+                        "device_model_id": self.device_model.pk,
+                        "reported_problem": "مشکل دستگاه",
+                        "warranty_status": "UNKNOWN",
+                        "status": "RECEIVED",
+                        "device_details": [
+                            {
+                                "installation_note": "نصب در اتاق سرور",
+                            },
+                        ],
+                    },
+                ],
+            },
+            edit_mode=True,
+        )
+
+        device_row = RepeatableRow.objects.get(
+            instance=instance,
+            group=self.device_group,
+        )
+        child_row = RepeatableRow.objects.get(
+            instance=instance,
+            group=child_group,
+            parent_row=device_row,
+        )
+
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=child_row,
+                field=child_field,
+            ).text_value,
+            "نصب در اتاق سرور",
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+        )
+
+        device_group = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].pk == self.device_group.pk
+        )
+        item = device_group["items"][0]
+
+        child_context = next(
+            child
+            for child in item["child_groups"]
+            if child["group"].pk == child_group.pk
+        )
+
+        self.assertEqual(
+            child_context["items"][0]["fields"][0]["value"],
+            "نصب در اتاق سرور",
+        )
+
     def test_get_form_for_step_builds_nested_repeatable_context_per_parent_row(self):
         parent_group = FormRepeatableGroup.objects.create(
             section=self.section,
