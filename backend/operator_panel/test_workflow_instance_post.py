@@ -2519,7 +2519,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         for row in rows:
             match = re.search(
                 rf'<tr\s+class="df-device-row"'
-                rf'[\s\S]*?data-device-index="(\\d+)"'
+                rf'[\s\S]*?data-device-index="(\d+)"'
                 rf'[\s\S]*?data-row-id="{row.pk}"',
                 html,
             )
