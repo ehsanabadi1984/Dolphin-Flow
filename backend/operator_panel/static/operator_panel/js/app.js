@@ -2630,36 +2630,78 @@ function getRepeatableGroupContext(group) {
     let currentGroup = group;
 
     while (currentGroup) {
+        /*
+         * The current group is rendered inside its logical parent row.
+         * For NORMAL -> NORMAL nesting that parent is a repeatable item.
+         * A DEVICE row is intentionally not a generic repeatable item, so
+         * it has a dedicated fallback below.
+         */
         const parentItem =
             currentGroup.closest("[data-repeatable-item]");
 
-        if (!parentItem) break;
+        if (parentItem) {
+            /*
+             * Exclude the current group itself when walking upward.
+             * Otherwise a nested group would resolve its own group again
+             * and never reach its grandparent.
+             */
+            const parentGroup =
+                currentGroup.parentElement?.closest(
+                    ".df-repeatable-group"
+                );
 
-        const parentGroup =
-            parentItem.closest(".df-repeatable-group");
+            if (!parentGroup) break;
 
-        if (!parentGroup) break;
+            const parentItems =
+                parentGroup.querySelector(".df-repeatable-items");
 
-        const parentItems =
-            parentGroup.querySelector(".df-repeatable-items");
+            if (!parentItems) break;
 
-        if (!parentItems) break;
+            const parentRows = Array.from(parentItems.children).filter(
+                (item) =>
+                    item.matches("[data-repeatable-item]") &&
+                    !item.hasAttribute("data-repeatable-template")
+            );
 
-        const parentRows = Array.from(parentItems.children).filter(
-            (item) =>
-                item.matches("[data-repeatable-item]") &&
-                !item.hasAttribute("data-repeatable-template")
+            const parentIndex = parentRows.indexOf(parentItem);
+            if (parentIndex === -1) break;
+
+            context.unshift({
+                groupCode: parentGroup.dataset.repeatableGroup,
+                index: parentIndex,
+            });
+
+            currentGroup = parentGroup;
+            continue;
+        }
+
+        /*
+         * DEVICE rows use data-device-row rather than
+         * data-repeatable-item. Nested NORMAL groups under a DEVICE must
+         * therefore contribute the DEVICE path to their POST names.
+         */
+        const deviceRow =
+            currentGroup.closest("[data-device-row]");
+
+        if (!deviceRow) break;
+
+        const deviceGroup =
+            deviceRow.closest(".df-device-group");
+
+        if (!deviceGroup) break;
+
+        const deviceIndex = Number(
+            deviceRow.dataset.deviceIndex
         );
 
-        const parentIndex = parentRows.indexOf(parentItem);
-        if (parentIndex === -1) break;
+        if (!Number.isInteger(deviceIndex)) break;
 
         context.unshift({
-            groupCode: parentGroup.dataset.repeatableGroup,
-            index: parentIndex,
+            groupCode: deviceGroup.dataset.repeatableGroup,
+            index: deviceIndex,
         });
 
-        currentGroup = parentGroup;
+        break;
     }
 
     return context;
