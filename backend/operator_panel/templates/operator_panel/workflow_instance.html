@@ -218,275 +218,42 @@
             {% if group.group.group_type == "DEVICE" %}
 
             <section
-                class="df-repeatable-group df-device-group"
-                data-repeatable-group="{{ group.group.code }}"
+              class="df-repeatable-group df-table-group df-device-group"
+              data-repeatable-group="{{ group.group.code }}"
+              data-repeatable-device-group="{{ group.group.code }}"
             >
+              <div class="df-form-section-header">
+                <div><h3>{{ group.group.label }}</h3></div>
+                {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
+                  <button type="button" class="df-button df-button-secondary df-device-add" data-group-code="{{ group.group.code }}">
+                    + افزودن دستگاه
+                  </button>
+                {% endif %}
+              </div>
 
-                <div class="df-form-section-header">
-                    <div>
-                        <h3>{{ group.group.label }}</h3>
-                    </div>
+              {% for validation_error in validation_errors %}
+                {% if validation_error.type == "device_group" and validation_error.group_code == group.group.code %}
+                  <div class="df-device-group-error">{{ validation_error.message }}</div>
+                {% endif %}
+              {% endfor %}
 
+              <input type="hidden" name="{{ group.group.code }}__present" value="1" data-repeatable-presence />
 
-                    {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
-                        <button
-                            type="button"
-                            class="df-button df-button-secondary df-device-add"
-                            data-group-code="{{ group.group.code }}"
-                        >
-                            + افزودن دستگاه
-                        </button>
-                    {% endif %}
-                </div>
-
-                
-
-                  {% for validation_error in validation_errors %}
-                      {% if validation_error.type == "device_group" and validation_error.group_code == group.group.code %}
-                          <div class="df-device-group-error">
-                              {{ validation_error.message }}
-                          </div>
-                      {% endif %}
-                  {% endfor %}
-
-                <div class="df-device-table-wrapper">
-
-                    <table class="df-device-table">
-
-                        <thead>
-                            <tr>
-                                {% for field_info in group.fields %}
-                                    <th scope="col">{{ field_info.field.label }}</th>
-                                {% endfor %}
-                                <th scope="col">عملیات</th>
-                            </tr>
-                        </thead>
-
-                        <tbody
-                            class="df-device-table-body"
-                            data-group-code="{{ group.group.code }}"
-                        >
-
-                            {% for item in group.items %}
-                                {% with item_index=forloop.counter0 %}
-
-                                <tr
-                                    class="df-device-row"
-                                    data-device-row
-                                    data-device-index="{{ forloop.counter0 }}"
-                                    {% if item.row_id %}data-row-id="{{ item.row_id }}"{% endif %}
-                                >
-
-                                    {% for item_field in item.fields %}
-
-                                        <td>
-
-                                            <span class="df-device-display">
-                                                {{ item_field.display_value|default:item_field.value|default:"—" }}
-                                            </span>
-
-                                            {% if edit_mode and not dynamic_form.is_submitted and item_field.can_edit %}
-
-                                                <span class="df-device-editor" hidden>
-
-                                                    {% if item_field.field.system_key == "DEVICE_TYPE" %}
-
-                                                        <select
-                                                            id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
-                                                            {% if item_field.field.system_key == "DEVICE_TYPE" %}disabled{% endif %}
-                                                        >
-                                                            <option value="">---------</option>
-
-                                                            {% for choice in item_field.device_types %}
-                                                                <option
-                                                                    value="{{ choice.id }}"
-                                                                    {% if item_field.value|stringformat:"s" == choice.id|stringformat:"s" %}
-                                                                        selected
-                                                                    {% endif %}
-                                                                >
-                                                                    {{ choice.name }}
-                                                                </option>
-                                                            {% endfor %}
-                                                        </select>
-
-                                                    {% elif item_field.field.system_key == "DEVICE_MODEL" %}
-
-                                                        <select
-                                                            id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
-                                                            disabled
-                                                        >
-                                                            <option value="">---------</option>
-
-                                                            {% for choice in item_field.device_models %}
-                                                                <option
-                                                                    value="{{ choice.id }}"
-                                                                    {% if item_field.value|stringformat:"s" == choice.id|stringformat:"s" %}
-                                                                        selected
-                                                                    {% endif %}
-                                                                >
-                                                                    {{ choice.name }}
-                                                                </option>
-                                                            {% endfor %}
-                                                        </select>
-
-                                                    {% elif item_field.field.system_key == "IMEI" %}
-
-                                                        <input
-                                                            type="text"
-                                                            value="{{ item_field.value|default:'' }}"
-                                                            disabled
-                                                        >
-
-                                                    {% elif item_field.field.field_type == "TEXTAREA" %}
-
-                                                        <textarea
-                                                            id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
-                                                        >{{ item_field.value|default:"" }}</textarea>
-
-                                                    {% elif item_field.field.field_type == "SELECT" %}
-
-                                                        <select
-                                                            id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
-                                                        >
-                                                            <option value="">---------</option>
-
-                                                            {% for choice in item_field.choices %}
-                                                                <option
-                                                                    value="{{ choice.value }}"
-                                                                    {% if item_field.value|stringformat:"s" == choice.value|stringformat:"s" %}
-                                                                        selected
-                                                                    {% endif %}
-                                                                >
-                                                                    {{ choice.label }}
-                                                                </option>
-                                                            {% endfor %}
-                                                        </select>
-
-                                                    {% else %}
-
-                                                        <input
-                                                            type="{% if item_field.field.field_type == 'NUMBER' %}number{% elif item_field.field.field_type == 'DATE' %}date{% elif item_field.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
-                                                            id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
-                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
-                                                            value="{{ item_field.value|default:'' }}"
-                                                        >
-
-                                                    {% endif %}
-
-                                                </span>
-
-                                            {% endif %}
-
-                                        </td>
-
-                                    {% endfor %}
-
-                                    <td class="df-device-actions">
-
-                                        <input
-                                            type="hidden"
-                                            name="{{ group.group.code }}_{{ forloop.counter0 }}__id"
-                                            value="{{ item.row_id }}"
-                                        >
-
-                                        <input
-                                            type="hidden"
-                                            name="{{ group.group.code }}_{{ forloop.counter0 }}_instance_device_id"
-                                            value="{{ item.instance_device_id }}"
-                                        >
-
-                                        {% if item.device_id and can_view_device_history %}
-                                            <a
-                                                class="df-button df-button-secondary"
-                                                href="{% url 'operator_panel:device_history' instance.pk item.device_id %}"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                            >
-                                                سوابق
-                                            </a>
-                                        {% endif %}
-
-                                        {% if edit_mode and not dynamic_form.is_submitted %}
-
-                                          {% if group.can_edit %}
-
-                                            <button
-                                                type="button"
-                                                class="df-button df-button-secondary df-device-edit"
-                                            >
-                                                ویرایش
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                class="df-button df-button-secondary df-device-cancel"
-                                                hidden
-                                            >
-                                                انصراف
-                                            </button>
-
-                                            <button
-                                                type="submit"
-                                                class="df-button df-device-save"
-                                                hidden
-                                            >
-                                                ذخیره
-                                            </button>
-                                          {% endif %}
-
-                                            {% if item.instance_device_id and group.can_delete %}
-                                                <button
-                                                    type="submit"
-                                                    class="df-button df-button-danger df-device-delete"
-                                                    formaction="{% url 'operator_panel:delete_device' instance.pk group.group.code item.row_id %}{% if edit_mode %}?edit=1{% endif %}"
-                                                    formmethod="post"
-                                                >
-                                                    حذف
-                                                </button>
-                                            {% endif %}
-
-                                        {% endif %}
-
-                                    </td>
-
-                                </tr>
-
-                                <tr
-                                    class="df-repeatable-child-row df-device-child-row"
-                                    data-device-parent-row-id="{{ item.row_id }}"
-                                    data-device-parent-index="{{ item_index }}"
-                                    data-device-group-code="{{ group.group.code }}"
-                                >
-                                    <td colspan="{{ group.fields|length|add:1 }}">
-                                        {% with root_index=forloop.counter0|stringformat:"s" %}
-                                        {% with root_name_prefix=group.group.code|add:"_"|add:root_index %}
-                                          {% include "operator_panel/_repeatable_child_groups.html" with group=group item=item item_index=forloop.counter0 name_prefix=root_name_prefix %}
-                                        {% endwith %}
-                                      {% endwith %}
-                                    </td>
-                                </tr>
-
-                                {% endwith %}
-                            {% empty %}
-
-                                <tr class="df-device-empty">
-                                    <td colspan="{{ group.fields|length|add:1 }}">
-                                        هنوز دستگاهی به این فرم اضافه نشده است.
-                                    </td>
-                                </tr>
-
-                            {% endfor %}
-
-                        </tbody>
-
-                    </table>
-
-                </div>
-
+              <div class="df-table-wrapper">
+                <table class="df-normal-table df-device-table">
+                  <thead>
+                    <tr>
+                      {% for column in group.flat_table.columns %}
+                        <th>{{ column.field_context.field.label }}</th>
+                      {% endfor %}
+                      <th>عملیات</th>
+                    </tr>
+                  </thead>
+                  <tbody class="df-repeatable-items df-device-table-body" data-group-code="{{ group.group.code }}">
+                    {% include "operator_panel/_repeatable_flat_table.html" with group=group %}
+                  </tbody>
+                </table>
+              </div>
             </section>
 
             {% elif group.group.display_type == "TABLE" %}
