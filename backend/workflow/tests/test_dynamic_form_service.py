@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.template.loader import render_to_string
 from django.core.exceptions import ValidationError
 from workflow.instance_device_services import InstanceDeviceService
 from workflow.device_services import DeviceService
@@ -539,6 +540,172 @@ class DynamicFormServiceTests(TestCase):
         self.assertEqual(
             child_context["items"][0]["fields"][0]["value"],
             "نصب در اتاق سرور",
+        )
+
+    def test_device_nested_child_grandchild_is_reconstructed_and_rendered_in_workflow_template(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.device_group,
+            name="Device Details",
+            code="device_details",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=6,
+            is_active=True,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Installation Parts",
+            code="installation_parts",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=7,
+            is_active=True,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Installation Note",
+            code="installation_note",
+            field_type=FormField.FieldType.TEXT,
+            label="Installation Note",
+            order=1,
+            is_active=True,
+        )
+        grandchild_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Part Serial",
+            code="part_serial",
+            field_type=FormField.FieldType.TEXT,
+            label="Part Serial",
+            order=1,
+            is_active=True,
+        )
+
+        for group in (child_group, grandchild_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step_one,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+
+        for field in (child_field, grandchild_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step_one,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=True,
+            )
+
+        instance = self.create_instance()
+
+        self.save_form_for_step(
+            instance=instance,
+            user=self.user,
+            submitted_data={
+                "Phone": "09120000000",
+                "customer_address": "آدرس تست",
+                "devices": [
+                    {
+                        "imei": "123123123123123",
+                        "device_model_id": self.device_model.pk,
+                        "reported_problem": "مشکل دستگاه",
+                        "warranty_status": "UNKNOWN",
+                        "status": "RECEIVED",
+                        "device_details": [
+                            {
+                                "installation_note": "نصب در اتاق سرور",
+                                "installation_parts": [
+                                    {
+                                        "part_serial": "PART-001",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+            edit_mode=True,
+        )
+
+        device_row = RepeatableRow.objects.get(
+            instance=instance,
+            group=self.device_group,
+        )
+        child_row = RepeatableRow.objects.get(
+            instance=instance,
+            group=child_group,
+            parent_row=device_row,
+        )
+        grandchild_row = RepeatableRow.objects.get(
+            instance=instance,
+            group=grandchild_group,
+            parent_row=child_row,
+        )
+
+        self.assertEqual(
+            RepeatableRowValue.objects.get(
+                row=grandchild_row,
+                field=grandchild_field,
+            ).text_value,
+            "PART-001",
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+        )
+        device_group_context = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].pk == self.device_group.pk
+        )
+        device_item = device_group_context["items"][0]
+        child_context = next(
+            child
+            for child in device_item["child_groups"]
+            if child["group"].pk == child_group.pk
+        )
+        grandchild_context = next(
+            child
+            for child in child_context["items"][0]["child_groups"]
+            if child["group"].pk == grandchild_group.pk
+        )
+
+        self.assertEqual(
+            grandchild_context["items"][0]["fields"][0]["value"],
+            "PART-001",
+        )
+
+        html = render_to_string(
+            "operator_panel/workflow_instance.html",
+            {
+                "instance": instance,
+                "transitions": [],
+                "dynamic_form": result,
+                "edit_mode": True,
+                "can_view_device_history": False,
+                "validation_errors": [],
+                "page_title": self.workflow.name,
+                "page_breadcrumb": self.workflow.name,
+            },
+        )
+
+        self.assertIn("Device Details", html)
+        self.assertIn("Installation Note", html)
+        self.assertIn("Installation Parts", html)
+        self.assertIn("PART-001", html)
+        self.assertIn(
+            'class="df-repeatable-child-row"',
+            html,
         )
 
     def test_get_form_for_step_builds_nested_repeatable_context_per_parent_row(self):
