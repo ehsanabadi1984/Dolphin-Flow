@@ -1558,8 +1558,8 @@ test("DEVICE modal validates required child fields and scopes dependent selects"
         ),
     );
     assert.ok(
-        appJs.includes('changedSelect.closest(
-            ".df-device-modal"
-        )'),
+        appJs.includes(`changedSelect.closest(
+                ".df-device-modal"
+            )`),
     );
 });

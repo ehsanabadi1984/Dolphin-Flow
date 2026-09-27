@@ -685,6 +685,11 @@ class DynamicFormServiceTests(TestCase):
             "PART-001",
         )
 
+        request = self.client.get(
+            "/",
+        ).wsgi_request
+        request.user = self.user
+
         html = render_to_string(
             "operator_panel/workflow_instance.html",
             {
@@ -697,14 +702,43 @@ class DynamicFormServiceTests(TestCase):
                 "page_title": self.workflow.name,
                 "page_breadcrumb": self.workflow.name,
             },
+            request=request,
         )
 
-        self.assertIn("Device Details", html)
-        self.assertIn("Installation Note", html)
-        self.assertIn("Installation Parts", html)
-        self.assertIn("PART-001", html)
         self.assertIn(
-            'class="df-repeatable-child-row"',
+            'class="df-repeatable-child-row df-device-child-row"',
+            html,
+        )
+        self.assertIn(
+            'data-device-parent-row-id="1"',
+            html,
+        )
+        self.assertIn(
+            'data-device-parent-index="0"',
+            html,
+        )
+        self.assertIn(
+            'data-repeatable-group="device_details"',
+            html,
+        )
+        self.assertIn(
+            'data-repeatable-group="installation_parts"',
+            html,
+        )
+        self.assertIn(
+            "Installation Note",
+            html,
+        )
+        self.assertIn(
+            "Part Serial",
+            html,
+        )
+        self.assertIn(
+            "PART-001",
+            html,
+        )
+        self.assertIn(
+            'class="df-repeatable-child-row df-device-child-row"',
             html,
         )
 
