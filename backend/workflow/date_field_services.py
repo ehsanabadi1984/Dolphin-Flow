@@ -79,9 +79,7 @@ class DateFieldService:
             return value
 
         if isinstance(value, str):
-            value = datetime.fromisoformat(
-                cls._normalize_digits(value.strip())
-            )
+            value = cls._parse_datetime(value, calendar=calendar)
 
         if not isinstance(value, datetime):
             raise ValueError("Expected a datetime.")
@@ -110,9 +108,7 @@ class DateFieldService:
             return value
 
         if isinstance(value, str):
-            value = datetime.fromisoformat(
-                cls._normalize_digits(value.strip())
-            )
+            value = cls._parse_datetime(value, calendar=calendar)
 
         if not isinstance(value, datetime):
             raise ValueError("Expected a datetime.")
@@ -128,6 +124,31 @@ class DateFieldService:
             f"{jalali.year:04d}/{jalali.month:02d}/{jalali.day:02d}"
         )
         return f"{date_part} {value.strftime('%H:%M:%S')}"
+
+    @classmethod
+    def _parse_datetime(cls, value, *, calendar):
+        text = cls._normalize_digits(str(value).strip())
+
+        if calendar == cls.GREGORIAN:
+            return datetime.fromisoformat(text)
+
+        if calendar != cls.JALALI:
+            raise ValueError(f"Unsupported calendar: {calendar!r}")
+
+        if "T" in text:
+            date_text, time_text = text.split("T", 1)
+        elif " " in text:
+            date_text, time_text = text.split(" ", 1)
+        else:
+            raise ValueError("Invalid datetime.")
+
+        gregorian_date = cls.to_canonical_date(
+            date_text,
+            calendar=cls.JALALI,
+        )
+        return datetime.fromisoformat(
+            f"{gregorian_date}T{time_text}"
+        )
 
     @classmethod
     def _parse_calendar_date(cls, value):
