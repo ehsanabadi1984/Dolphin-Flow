@@ -203,6 +203,14 @@ class OperatorFormSerializer:
         if "flat_table" in group_context:
             data["flat_table"] = group_context["flat_table"]
 
+        if "child_groups" in group_context:
+            data["child_groups"] = [
+                OperatorFormSerializer.group_context(
+                    group_context=child_group,
+                )
+                for child_group in group_context.get("child_groups", [])
+            ]
+
         return data
 
     @staticmethod
