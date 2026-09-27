@@ -2518,9 +2518,9 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         device_matches = {}
         for row in rows:
             match = re.search(
-                rf'<tr\\s+class="df-device-row"'
-                rf'[\\s\\S]*?data-device-index="(\\d+)"'
-                rf'[\\s\\S]*?data-row-id="{row.pk}"',
+                rf'<tr\s+class="df-device-row"'
+                rf'[\s\S]*?data-device-index="(\\d+)"'
+                rf'[\s\S]*?data-row-id="{row.pk}"',
                 html,
             )
             self.assertIsNotNone(match)
@@ -2538,15 +2538,15 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         second_index = second_device_match.group(1)
 
         first_child_match = re.search(
-            rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'[\\s\\S]*?data-device-parent-row-id="{first_row_id}"'
-            rf'[\\s\\S]*?data-device-parent-index="{first_index}"',
+            rf'<tr\s+class="df-repeatable-child-row df-device-child-row"'
+            rf'[\s\S]*?data-device-parent-row-id="{first_row_id}"'
+            rf'[\s\S]*?data-device-parent-index="{first_index}"',
             html,
         )
         second_child_match = re.search(
-            rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'[\\s\\S]*?data-device-parent-row-id="{second_row_id}"'
-            rf'[\\s\\S]*?data-device-parent-index="{second_index}"',
+            rf'<tr\s+class="df-repeatable-child-row df-device-child-row"'
+            rf'[\s\S]*?data-device-parent-row-id="{second_row_id}"'
+            rf'[\s\S]*?data-device-parent-index="{second_index}"',
             html,
         )
 
