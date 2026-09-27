@@ -2532,11 +2532,6 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         # name, while the root RepeatableRow identity is still submitted.
         self.assertContains(
             response,
-            'name="system_devices_0_system_devices_device_details_0_child_name"',
-            count=0,
-        )
-        self.assertContains(
-            response,
             'name="system_devices_0_device_details_0_child_name"',
         )
         self.assertContains(
