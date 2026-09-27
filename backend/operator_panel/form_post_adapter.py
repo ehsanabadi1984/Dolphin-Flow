@@ -192,16 +192,26 @@ class OperatorPanelFormPostAdapter:
         value = OperatorPanelFormPostAdapter._value(submitted_data, key)
 
         if field.field_type == FormField.FieldType.DATE:
-            return DateFieldService.to_canonical_date(
-                value,
-                calendar=field.calendar,
-            )
+            try:
+                return DateFieldService.to_canonical_date(
+                    value,
+                    calendar=field.calendar,
+                )
+            except ValueError as exc:
+                raise ValidationError(
+                    f"مقدار فیلد «{field.label}» باید تاریخ معتبر باشد."
+                ) from exc
 
         if field.field_type == FormField.FieldType.DATETIME:
-            return DateFieldService.to_canonical_datetime(
-                value,
-                calendar=field.calendar,
-            )
+            try:
+                return DateFieldService.to_canonical_datetime(
+                    value,
+                    calendar=field.calendar,
+                )
+            except ValueError as exc:
+                raise ValidationError(
+                    f"مقدار فیلد «{field.label}» باید تاریخ و زمان معتبر باشد."
+                ) from exc
 
         return value
 
