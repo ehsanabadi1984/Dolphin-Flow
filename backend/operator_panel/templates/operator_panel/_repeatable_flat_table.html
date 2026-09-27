@@ -49,7 +49,8 @@
                 <input
                   type="number"
                   name="{{ cell.input_prefix }}{{ cell.field.code }}"
-                  value="{{ cell.value|default:'' }}"
+                  value="{{ cell.display_value|default:cell.value|default:'' }}"
+                  step="{{ cell.field.number_step }}"
                   class="df-table-input"
                 />
               {% elif cell.field.field_type == "DATE" %}
