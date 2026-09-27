@@ -1124,6 +1124,14 @@ const submitNewDevice = (modal, groupCode) => {
                 return;
             }
 
+            if (field.dataset.repeatablePresence) {
+                field.name = oldName.replace(
+                    "PARENT_PREFIX",
+                    `${groupCode}_${newIndex}_${childGroupCode}_0_`
+                );
+                return;
+            }
+
             if (!oldName.startsWith("PARENT_PREFIX")) return;
 
             const marker =
