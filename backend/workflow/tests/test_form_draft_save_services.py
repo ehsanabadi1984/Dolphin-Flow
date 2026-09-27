@@ -550,6 +550,225 @@ class FormDraftSaveServiceContractTests(TestCase):
         self.assertEqual(instance_device.draft_device_type_id, device_type.pk)
         self.assertTrue(result.saved)
 
+    def test_save_preserves_independent_nested_children_for_multiple_devices(self):
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Devices",
+            code="devices_nested_isolation",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=20,
+        )
+
+        device_fields = {}
+        definitions = (
+            (
+                FormField.SystemKey.IMEI,
+                "nested_device_imei",
+                FormField.FieldType.TEXT,
+            ),
+            (
+                FormField.SystemKey.DEVICE_TYPE,
+                "nested_device_type",
+                FormField.FieldType.SELECT,
+            ),
+            (
+                FormField.SystemKey.DEVICE_MODEL,
+                "nested_device_model",
+                FormField.FieldType.SELECT,
+            ),
+        )
+        for field_order, (system_key, code, field_type) in enumerate(definitions):
+            device_fields[system_key] = FormField.objects.create(
+                section=self.section,
+                repeatable_group=device_group,
+                name=code,
+                code=code,
+                label=code,
+                field_type=field_type,
+                system_key=system_key,
+                order=field_order,
+            )
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=device_group,
+            name="Device Details",
+            code="device_details_nested_isolation",
+            order=21,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Name",
+            code="nested_child_name",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Parts",
+            code="device_parts_nested_isolation",
+            order=22,
+        )
+        grandchild_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Part Name",
+            code="nested_part_name",
+            label="Part Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        device_type = DeviceType.objects.create(
+            name="Nested Isolation Phone",
+            code="NESTED_ISOLATION_PHONE",
+            is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Nested Isolation Model",
+            code="NESTED_ISOLATION_MODEL",
+            is_active=True,
+        )
+
+        for field in device_fields.values():
+            self.grant_repeatable_write_permissions(device_group, field)
+        self.grant_repeatable_write_permissions(child_group, child_field)
+        self.grant_repeatable_write_permissions(
+            grandchild_group,
+            grandchild_field,
+        )
+
+        result = self.call(
+            submitted_data={
+                "devices_nested_isolation": [
+                    {
+                        "nested_device_imei": "860000000000001",
+                        "nested_device_type": device_type.pk,
+                        "nested_device_model": device_model.pk,
+                        "device_details_nested_isolation": [
+                            {
+                                "nested_child_name": "Child A",
+                                "device_parts_nested_isolation": [
+                                    {
+                                        "nested_part_name": "Part A",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "nested_device_imei": "860000000000002",
+                        "nested_device_type": device_type.pk,
+                        "nested_device_model": device_model.pk,
+                        "device_details_nested_isolation": [
+                            {
+                                "nested_child_name": "Child B",
+                                "device_parts_nested_isolation": [
+                                    {
+                                        "nested_part_name": "Part B",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+
+        self.assertTrue(result.saved)
+
+        device_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=device_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(len(device_rows), 2)
+
+        child_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=child_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(len(child_rows), 2)
+
+        grandchild_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=grandchild_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(len(grandchild_rows), 2)
+
+        device_by_imei = {
+            row.instance_device.draft_imei: row
+            for row in device_rows
+        }
+        self.assertEqual(
+            set(device_by_imei),
+            {"860000000000001", "860000000000002"},
+        )
+
+        child_by_name = {
+            row.values.get(field=child_field).text_value: row
+            for row in child_rows
+        }
+        grandchild_by_name = {
+            row.values.get(field=grandchild_field).text_value: row
+            for row in grandchild_rows
+        }
+
+        self.assertEqual(
+            child_by_name["Child A"].parent_row_id,
+            device_by_imei["860000000000001"].pk,
+        )
+        self.assertEqual(
+            child_by_name["Child B"].parent_row_id,
+            device_by_imei["860000000000002"].pk,
+        )
+        self.assertEqual(
+            grandchild_by_name["Part A"].parent_row_id,
+            child_by_name["Child A"].pk,
+        )
+        self.assertEqual(
+            grandchild_by_name["Part B"].parent_row_id,
+            child_by_name["Child B"].pk,
+        )
+
+        self.assertNotEqual(
+            child_by_name["Child A"].parent_row_id,
+            child_by_name["Child B"].parent_row_id,
+        )
+        self.assertNotEqual(
+            grandchild_by_name["Part A"].parent_row_id,
+            grandchild_by_name["Part B"].parent_row_id,
+        )
+
+        device_instances = list(
+            InstanceDevice.objects.filter(
+                instance=self.instance,
+            ).order_by("pk")
+        )
+        self.assertEqual(len(device_instances), 2)
+        self.assertEqual(
+            {row.instance_device_id for row in device_rows},
+            {device.pk for device in device_instances},
+        )
+        self.assertTrue(
+            all(
+                device.draft_device_type_id == device_type.pk
+                and device.draft_device_model_id == device_model.pk
+                for device in device_instances
+            )
+        )
+
     def test_save_applies_device_update(self):
         device_group = FormRepeatableGroup.objects.create(
             section=self.section,
