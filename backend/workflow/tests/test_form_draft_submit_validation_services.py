@@ -80,6 +80,41 @@ class FormDraftSubmitValidationServiceTests(TestCase):
             repeatable_groups=groups or {},
         )
 
+    def test_required_formula_is_not_checked_as_user_input(self):
+        field = self.create_field(code="total", required=True)
+        field.field_type = FormField.FieldType.FORMULA
+        field.save(update_fields=["field_type"])
+
+        FormDraftSubmitValidationService.validate_payload(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=self.payload(),
+        )
+
+    def test_required_repeatable_formula_is_not_checked_as_user_input(self):
+        group = self.create_group(code="items")
+        field = self.create_field(
+            code="total",
+            group=group,
+            required=True,
+        )
+        field.field_type = FormField.FieldType.FORMULA
+        field.save(update_fields=["field_type"])
+
+        row = NormalizedRow(
+            row_id=None,
+            fields={},
+            child_groups={},
+        )
+
+        FormDraftSubmitValidationService.validate_payload(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=self.payload(
+                groups={group.code: (row,)},
+            ),
+        )
+
     def test_required_normal_field_rejects_empty_value(self):
         field = self.create_field(code="name", required=True)
 
