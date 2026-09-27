@@ -1,3 +1,5 @@
+from datetime import date, datetime
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.template.loader import render_to_string
@@ -6,6 +8,7 @@ from workflow.instance_device_services import InstanceDeviceService
 from workflow.device_services import DeviceService
 
 from workflow.form_services import DynamicFormService
+from workflow.repeatable_row_read_services import RepeatableRowReadService
 from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.models import (
     Device,
@@ -540,6 +543,113 @@ class DynamicFormServiceTests(TestCase):
         self.assertEqual(
             child_context["items"][0]["fields"][0]["value"],
             "نصب در اتاق سرور",
+        )
+
+    def test_repeatable_date_and_datetime_are_converted_to_field_calendar_on_read(self):
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Calendar Rows",
+            code="calendar_rows",
+            order=20,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            is_active=True,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=group,
+            name="Calendar Children",
+            code="calendar_children",
+            order=21,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            is_active=True,
+        )
+        jalali_date = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Jalali Date",
+            code="jalali_date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.JALALI,
+            label="Jalali Date",
+            order=1,
+            is_active=True,
+        )
+        gregorian_date = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Gregorian Date",
+            code="gregorian_date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.GREGORIAN,
+            label="Gregorian Date",
+            order=2,
+            is_active=True,
+        )
+        jalali_datetime = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Jalali Datetime",
+            code="jalali_datetime",
+            field_type=FormField.FieldType.DATETIME,
+            calendar=FormField.Calendar.JALALI,
+            label="Jalali Datetime",
+            order=1,
+            is_active=True,
+        )
+
+        instance = self.create_instance()
+        row = RepeatableRow.objects.create(
+            instance=instance,
+            group=group,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=jalali_date,
+            date_value=date(2026, 9, 27),
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=gregorian_date,
+            date_value=date(2026, 9, 27),
+        )
+
+        child_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=child_group,
+            parent_row=row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=jalali_datetime,
+            datetime_value=datetime(2026, 9, 27, 14, 30, 0),
+        )
+
+        result = RepeatableRowReadService.reconstruct_group(
+            instance=instance,
+            group=group,
+        )
+        fields = {
+            item["code"]: item
+            for item in result["items"][0]["fields"]
+        }
+        child_fields = {
+            item["code"]: item
+            for item in result["items"][0]["child_groups"][0]["items"][0]["fields"]
+        }
+
+        self.assertEqual(fields["jalali_date"]["value"], "۱۴۰۵/۰۷/۰۵")
+        self.assertEqual(fields["jalali_date"]["display_value"], "۱۴۰۵/۰۷/۰۵")
+        self.assertEqual(fields["gregorian_date"]["value"], "2026-09-27")
+        self.assertEqual(fields["gregorian_date"]["display_value"], "2026-09-27")
+        self.assertEqual(
+            child_fields["jalali_datetime"]["value"],
+            "۱۴۰۵/۰۷/۰۵ 14:30:00",
+        )
+        self.assertEqual(
+            child_fields["jalali_datetime"]["display_value"],
+            "۱۴۰۵/۰۷/۰۵ 14:30:00",
         )
 
     def test_device_nested_child_grandchild_is_reconstructed_and_rendered_in_workflow_template(self):
