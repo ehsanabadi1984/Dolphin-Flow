@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.http import QueryDict
 from django.test import TestCase
 
@@ -701,6 +702,50 @@ class FormPostAdapterTests(TestCase):
         )
 
         self.assertEqual(payload["items"], [{"date": "2026-09-27"}])
+
+    def test_invalid_jalali_date_raises_validation_error(self):
+        FormField.objects.create(
+            section=self.section,
+            name="Date",
+            code="date",
+            label="Date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.JALALI,
+            order=3,
+        )
+        post = QueryDict("", mutable=True)
+        post["date"] = "۱۴۰۵/۰۷/۳۲"
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "مقدار فیلد «Date» باید تاریخ معتبر باشد.",
+        ):
+            OperatorPanelFormPostAdapter.adapt(
+                form=self.form,
+                submitted_data=post,
+            )
+
+    def test_invalid_jalali_datetime_raises_validation_error(self):
+        FormField.objects.create(
+            section=self.section,
+            name="Date Time",
+            code="date_time",
+            label="Date Time",
+            field_type=FormField.FieldType.DATETIME,
+            calendar=FormField.Calendar.JALALI,
+            order=4,
+        )
+        post = QueryDict("", mutable=True)
+        post["date_time"] = "۱۴۰۵/۰۷/۳۲ 14:30:00"
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "مقدار فیلد «Date Time» باید تاریخ و زمان معتبر باشد.",
+        ):
+            OperatorPanelFormPostAdapter.adapt(
+                form=self.form,
+                submitted_data=post,
+            )
 
     def test_gregorian_date_remains_canonical(self):
         FormField.objects.create(
