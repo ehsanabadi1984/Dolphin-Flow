@@ -2520,6 +2520,9 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         # contract. The legacy device-specific row wrappers are gone.
         self.assertNotIn("df-device-row", html)
         self.assertNotIn("df-device-child-row", html)
+        self.assertNotIn("df-device-edit", html)
+        self.assertNotIn("df-device-save", html)
+        self.assertNotIn("df-device-cancel", html)
         self.assertGreaterEqual(
             html.count("df-repeatable-flat-row"),
             2,
