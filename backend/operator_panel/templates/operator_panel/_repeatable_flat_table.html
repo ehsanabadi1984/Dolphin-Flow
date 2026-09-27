@@ -223,6 +223,13 @@
       name="{{ group.group.code }}_TEMPLATE__id"
       value=""
     />
+    {% if group.group.group_type == "DEVICE" %}
+      <input
+        type="hidden"
+        name="{{ group.group.code }}_TEMPLATE_instance_device_id"
+        value=""
+      />
+    {% endif %}
     {% for child_template in group.flat_table.child_templates %}
       <input
         type="hidden"
