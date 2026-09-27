@@ -672,6 +672,264 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertEqual(grandchild_rows[0].parent_row_id, child_rows[0].pk)
         self.assertEqual(grandchild_rows[1].parent_row_id, child_rows[1].pk)
 
+    def test_workflow_instance_post_reconciles_create_update_delete_across_multiple_devices(self):
+        group, fields = self._create_device_system_fields()
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=group,
+            name="Device Details",
+            code="device_details_reconcile_post",
+            order=5,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Name",
+            code="child_name_reconcile_post",
+            label="Child Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Parts",
+            code="parts_reconcile_post",
+            order=6,
+        )
+        grandchild_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Part Name",
+            code="part_name_reconcile_post",
+            label="Part Name",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        for nested_group in (child_group, grandchild_group):
+            RepeatableGroupAccess.objects.create(
+                group=nested_group,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+        for field in (child_field, grandchild_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=self.user,
+                can_view=True,
+                can_edit=True,
+            )
+
+        device_type = DeviceType.objects.create(
+            name="Reconcile POST Phone",
+            code="RECONCILE_POST_PHONE",
+            is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Reconcile POST Model",
+            code="RECONCILE_POST_MODEL",
+            is_active=True,
+        )
+
+        def create_device_tree(imei, row_order, child_specs):
+            instance_device = InstanceDevice.objects.create(
+                instance=self.instance,
+                device=None,
+                draft_imei=imei,
+                draft_device_type=device_type,
+                draft_device_model=device_model,
+            )
+            device_row = RepeatableRow.objects.create(
+                instance=self.instance,
+                group=group,
+                instance_device=instance_device,
+                row_order=row_order,
+            )
+            created = []
+            for child_order, child_name, part_name in child_specs:
+                child_row = RepeatableRow.objects.create(
+                    instance=self.instance,
+                    group=child_group,
+                    parent_row=device_row,
+                    row_order=child_order,
+                )
+                RepeatableRowValue.objects.create(
+                    row=child_row,
+                    field=child_field,
+                    text_value=child_name,
+                )
+                part_row = RepeatableRow.objects.create(
+                    instance=self.instance,
+                    group=grandchild_group,
+                    parent_row=child_row,
+                    row_order=0,
+                )
+                RepeatableRowValue.objects.create(
+                    row=part_row,
+                    field=grandchild_field,
+                    text_value=part_name,
+                )
+                created.append((child_row, part_row))
+            return device_row, created
+
+        device_a, a_children = create_device_tree(
+            "896000000000001",
+            0,
+            (
+                (0, "Child A1", "Part A1"),
+                (1, "Child A2", "Part A2"),
+            ),
+        )
+        device_b, b_children = create_device_tree(
+            "896000000000002",
+            1,
+            (
+                (0, "Child B1", "Part B1"),
+                (1, "Child B2", "Part B2"),
+            ),
+        )
+
+        a_child2, a_part2 = a_children[1]
+        b_child1, b_part1 = b_children[0]
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ) + "?edit=1",
+            {
+                # DEVICE A: keep child A2, update both A2 and its part.
+                "system_devices_0_system_imei": "896000000000001",
+                "system_devices_0_system_type": str(device_type.pk),
+                "system_devices_0_system_model": str(device_model.pk),
+                "system_devices_0__id": str(device_a.pk),
+                "system_devices_0_instance_device_id": str(device_a.instance_device_id),
+                "system_devices_0_device_details_reconcile_post__present": "1",
+                "system_devices_0_device_details_reconcile_post_0_child_name_reconcile_post": "Child A2 updated",
+                "system_devices_0_device_details_reconcile_post_0__id": str(a_child2.pk),
+                "system_devices_0_device_details_reconcile_post_0_parts_reconcile_post__present": "1",
+                "system_devices_0_device_details_reconcile_post_0_parts_reconcile_post_0_part_name_reconcile_post": "Part A2 updated",
+                "system_devices_0_device_details_reconcile_post_0_parts_reconcile_post_0__id": str(a_part2.pk),
+
+                # DEVICE B: keep only child B1; child B2 is intentionally omitted.
+                "system_devices_1_system_imei": "896000000000002",
+                "system_devices_1_system_type": str(device_type.pk),
+                "system_devices_1_system_model": str(device_model.pk),
+                "system_devices_1__id": str(device_b.pk),
+                "system_devices_1_instance_device_id": str(device_b.instance_device_id),
+                "system_devices_1_device_details_reconcile_post__present": "1",
+                "system_devices_1_device_details_reconcile_post_0_child_name_reconcile_post": "Child B1",
+                "system_devices_1_device_details_reconcile_post_0__id": str(b_child1.pk),
+                "system_devices_1_device_details_reconcile_post_0_parts_reconcile_post__present": "1",
+                "system_devices_1_device_details_reconcile_post_0_parts_reconcile_post_0_part_name_reconcile_post": "Part B1",
+                "system_devices_1_device_details_reconcile_post_0_parts_reconcile_post_0__id": str(b_part1.pk),
+
+                # DEVICE C: create a completely new root and nested subtree.
+                "system_devices_2_system_imei": "896000000000003",
+                "system_devices_2_system_type": str(device_type.pk),
+                "system_devices_2_system_model": str(device_model.pk),
+                "system_devices_2_device_details_reconcile_post_0_child_name_reconcile_post": "Child C",
+                "system_devices_2_device_details_reconcile_post_0_parts_reconcile_post_0_part_name_reconcile_post": "Part C",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        device_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=group,
+            ).select_related("instance_device").order_by("row_order", "pk")
+        )
+        self.assertEqual(len(device_rows), 3)
+        self.assertEqual(
+            [row.instance_device.draft_imei for row in device_rows],
+            ["896000000000001", "896000000000002", "896000000000003"],
+        )
+
+        child_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=child_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(len(child_rows), 3)
+        self.assertEqual(
+            [
+                row.values.get(field=child_field).text_value
+                for row in child_rows
+            ],
+            ["Child A2 updated", "Child B1", "Child C"],
+        )
+
+        grandchild_rows = list(
+            RepeatableRow.objects.filter(
+                instance=self.instance,
+                group=grandchild_group,
+            ).order_by("row_order", "pk")
+        )
+        self.assertEqual(len(grandchild_rows), 3)
+        self.assertEqual(
+            [
+                row.values.get(field=grandchild_field).text_value
+                for row in grandchild_rows
+            ],
+            ["Part A2 updated", "Part B1", "Part C"],
+        )
+
+        device_a.refresh_from_db()
+        device_b.refresh_from_db()
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                pk=a_children[0][0].pk,
+            ).exists()
+        )
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                pk=a_children[0][1].pk,
+            ).exists()
+        )
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                pk=b_children[1][0].pk,
+            ).exists()
+        )
+        self.assertFalse(
+            RepeatableRow.objects.filter(
+                pk=b_children[1][1].pk,
+            ).exists()
+        )
+
+        a_child2.refresh_from_db()
+        a_part2.refresh_from_db()
+        self.assertEqual(a_child2.parent_row_id, device_a.pk)
+        self.assertEqual(a_part2.parent_row_id, a_child2.pk)
+
+        b_child1.refresh_from_db()
+        b_part1.refresh_from_db()
+        self.assertEqual(b_child1.parent_row_id, device_b.pk)
+        self.assertEqual(b_part1.parent_row_id, b_child1.pk)
+
+        device_c = device_rows[2]
+        child_c = next(
+            row for row in child_rows
+            if row.values.get(field=child_field).text_value == "Child C"
+        )
+        part_c = next(
+            row for row in grandchild_rows
+            if row.values.get(field=grandchild_field).text_value == "Part C"
+        )
+        self.assertEqual(child_c.parent_row_id, device_c.pk)
+        self.assertEqual(part_c.parent_row_id, child_c.pk)
+
     def test_workflow_instance_post_updates_existing_device_row(self):
         group, label_field = self._create_device_group()
         instance_device = InstanceDevice.objects.create(
