@@ -34,6 +34,12 @@ class FormDraftCreateApplyService:
                 if change.action != RowChangeAction.CREATE:
                     continue
 
+                if (
+                    change.group.group_type
+                    != FormRepeatableGroup.GroupType.NORMAL
+                ):
+                    continue
+
                 row = cls._create_row(
                     instance=instance,
                     change=change,
