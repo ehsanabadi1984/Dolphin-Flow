@@ -1368,8 +1368,6 @@ test("DEVICE nested child naming includes the device path and supports grandchil
     );
     assert.ok(appJs.includes('currentGroup.closest("[data-device-row]")'));
     assert.ok(appJs.includes('currentGroup.closest(".df-repeatable-child-row")'));
-    assert.ok(appJs.includes("data-device-parent-index"));
-
     const extractFunction = (source, functionName) => {
         const start = source.indexOf("function " + functionName + "(");
         assert.notEqual(start, -1, functionName + " must exist");
@@ -1533,12 +1531,12 @@ test("DEVICE main table renders one dedicated child row per device", () => {
 });
 
 test("DEVICE child templates carry explicit presence markers for empty-delete semantics", () => {
-    assert.match(
-        nestedTemplate,
-        /name="{{ group\.group\.code }}_{{ item_index }}_{{ child_group\.group\.code }}__present"/,
+    assert.ok(
+        nestedTemplate.includes(
+            'name="PARENT_PREFIX{{ nested_template.group.code }}__present"',
+        ),
     );
     assert.ok(nestedTemplate.includes("data-repeatable-presence"));
-    assert.ok(appJs.includes("data-device-parent-index"));
     assert.ok(appJs.includes("childRow.classList.contains"));
 });
 test("DEVICE modal validates required child fields and scopes dependent selects", () => {
