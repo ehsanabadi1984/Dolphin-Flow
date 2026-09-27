@@ -1999,6 +1999,7 @@ class FormFieldInline(admin.TabularInline):
         "name",
         "code",
         "field_type",
+        "calendar",
         "label",
         "is_required",
         "order",
