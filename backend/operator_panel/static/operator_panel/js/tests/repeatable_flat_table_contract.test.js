@@ -1520,7 +1520,7 @@ test("DEVICE nested child naming includes the device path and supports grandchil
         ],
     );
 });
-test("DEVICE main table renders one dedicated child row per device", () => {
+test("DEVICE main table uses the shared flat-table renderer", () => {
     const workflowTemplate = readFileSync(
         resolve(templates, "workflow_instance.html"),
         "utf8",
@@ -1528,30 +1528,30 @@ test("DEVICE main table renders one dedicated child row per device", () => {
 
     assert.match(
         workflowTemplate,
-        /class="df-repeatable-child-row df-device-child-row"/,
+        /df-repeatable-group df-table-group df-device-group/,
     );
     assert.match(
         workflowTemplate,
-        /data-device-parent-row-id="{{ item\.row_id }}"/,
+        /df-repeatable-items df-device-table-body/,
     );
     assert.match(
         workflowTemplate,
-        /data-device-parent-index="{{ item_index }}"/,
+        /{% include "operator_panel\/_repeatable_flat_table\.html" with group=group %}/,
     );
-    assert.match(
+    assert.doesNotMatch(
         workflowTemplate,
-        /{% include "operator_panel\/_repeatable_child_groups\.html" with group=group item=item item_index=forloop\.counter0 %}/,
+        /df-device-child-row/,
     );
 });
 
-test("DEVICE child templates carry explicit presence markers for empty-delete semantics", () => {
+test("DEVICE child templates keep the canonical presence marker contract", () => {
     assert.ok(
         nestedTemplate.includes(
             'name="PARENT_PREFIX{{ nested_template.group.code }}__present"',
         ),
     );
     assert.ok(nestedTemplate.includes("data-repeatable-presence"));
-    assert.ok(appJs.includes("childRow.classList.contains"));
+    assert.ok(appJs.includes("data-repeatable-child-template"));
 });
 test("DEVICE modal validates required child fields and scopes dependent selects", () => {
     const workflowTemplate = readFileSync(
