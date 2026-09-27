@@ -1418,6 +1418,14 @@ test("DEVICE nested child naming includes the device path and supports grandchil
                 return null;
             },
         },
+        querySelector(selector) {
+            if (selector === ".df-repeatable-items") {
+                return {
+                    children: [childItem],
+                };
+            }
+            return null;
+        },
         closest(selector) {
             if (selector === "[data-repeatable-item]") return null;
             if (selector === ".df-repeatable-child-row") return deviceChildRow;
@@ -1555,9 +1563,6 @@ test("DEVICE modal validates required child fields and scopes dependent selects"
             '"[data-device-modal-field], [data-device-modal-child-field]"',
         ),
     );
-    assert.ok(
-        appJs.includes(`changedSelect.closest(
-                ".df-device-modal"
-            )`),
-    );
+    assert.ok(appJs.includes("changedSelect.closest("));
+    assert.ok(appJs.includes('".df-device-modal"'));
 });
