@@ -17,7 +17,23 @@
         >
           {% if cell.show %}
             {% if edit_mode and not dynamic_form.is_submitted and cell.can_edit %}
-              {% if cell.field.field_type == "TEXT" %}
+              {% if cell.field.system_key == "IMEI" and cell.field_context.is_imei_immutable %}
+                <input type="text" name="{{ cell.input_prefix }}{{ cell.field.code }}" value="{{ cell.value|default:'' }}" class="df-table-input" readonly />
+              {% elif cell.field.system_key == "DEVICE_TYPE" %}
+                <select name="{{ cell.input_prefix }}{{ cell.field.code }}" class="df-table-input" data-system-key="DEVICE_TYPE">
+                  <option value="">---------</option>
+                  {% for choice in cell.field_context.device_types %}
+                    <option value="{{ choice.id }}" {% if cell.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.name }}</option>
+                  {% endfor %}
+                </select>
+              {% elif cell.field.system_key == "DEVICE_MODEL" %}
+                <select name="{{ cell.input_prefix }}{{ cell.field.code }}" class="df-table-input" data-system-key="DEVICE_MODEL">
+                  <option value="">---------</option>
+                  {% for choice in cell.field_context.device_models %}
+                    <option value="{{ choice.id }}" {% if cell.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.name }}</option>
+                  {% endfor %}
+                </select>
+              {% elif cell.field.field_type == "TEXT" %}
                 <input
                   type="text"
                   name="{{ cell.input_prefix }}{{ cell.field.code }}"
@@ -97,6 +113,13 @@
             {% if id_input.is_root %}data-repeatable-root-row-id{% else %}data-repeatable-row-id{% endif %}
           />
         {% endfor %}
+        {% if row.device_instance_id_input %}
+          <input
+            type="hidden"
+            name="{{ row.device_instance_id_input.name }}"
+            value="{{ row.device_instance_id_input.value }}"
+          />
+        {% endif %}
 
         {% for child_action in row.add_children %}
           <input
