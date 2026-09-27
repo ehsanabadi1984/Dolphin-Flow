@@ -1737,6 +1737,152 @@ class DynamicFormService:
                         )
                     )
 
+                    # ---------------------------------------------------------
+                    # Nested child groups of a DEVICE row use the same
+                    # canonical RepeatableRow tree as NORMAL groups.
+                    #
+                    # The device itself is the parent row.  Build child
+                    # presentation contexts here so both the device table and
+                    # the add-device modal can expose the configured child
+                    # fields without introducing a second persistence model.
+                    # ---------------------------------------------------------
+
+                    device_child_group_contexts = []
+
+                    for child_group in group.child_groups.filter(
+                        is_active=True,
+                    ).order_by("order", "id"):
+                        child_context = DynamicFormService._build_nested_group_context(
+                            group=child_group,
+                            reconstructed_group={"items": []},
+                            permission_context=permission_context,
+                            group_can_edit=group_can_edit,
+                            edit_mode=edit_mode,
+                            is_submitted=is_submitted,
+                        )
+                        if child_context is not None:
+                            device_child_group_contexts.append(child_context)
+
+                    # Persisted DEVICE rows are reconstructed once so their
+                    # canonical child rows can be attached to each item.
+                    persisted_device_children = {}
+                    if submitted_data is None:
+                        reconstructed_device_group = (
+                            RepeatableRowReadService.reconstruct_group(
+                                instance=instance,
+                                group=group,
+                            )
+                        )
+                        persisted_device_children = {
+                            item.get("instance_device_id"): item
+                            for item in reconstructed_device_group.get(
+                                "items",
+                                [],
+                            )
+                            if item.get("instance_device_id")
+                        }
+
+                    def submitted_child_reconstruction(
+                        *,
+                        child_group,
+                        raw_rows,
+                    ):
+                        rows = []
+                        for row_index, raw_row in enumerate(raw_rows or []):
+                            if not isinstance(raw_row, dict):
+                                continue
+
+                            fields = []
+                            for field in child_group.fields.filter(
+                                is_active=True,
+                            ):
+                                if field.code not in raw_row:
+                                    continue
+                                fields.append({
+                                    "code": field.code,
+                                    "value": raw_row.get(field.code, ""),
+                                    "display_value": (
+                                        DynamicFormService._get_display_value(
+                                            field=field,
+                                            value=raw_row.get(field.code, ""),
+                                        )
+                                    ),
+                                })
+
+                            rows.append({
+                                "row_id": raw_row.get("row_id", ""),
+                                "row_order": row_index,
+                                "parent_row_id": None,
+                                "fields": fields,
+                                "child_groups": [
+                                    submitted_child_reconstruction(
+                                        child_group=nested_group,
+                                        raw_rows=raw_row.get(
+                                            nested_group.code,
+                                            [],
+                                        ),
+                                    )
+                                    for nested_group in nested_groups
+                                    if nested_group.code in raw_row
+                                ],
+                            })
+
+                        return {
+                            "items": rows,
+                        }
+
+                    def build_device_child_contexts(
+                        *,
+                        submitted_item=None,
+                        persisted_item=None,
+                    ):
+                        contexts = []
+                        submitted_children = (
+                            submitted_item
+                            if isinstance(submitted_item, dict)
+                            else {}
+                        )
+                        persisted_children = (
+                            persisted_item or {}
+                        )
+
+                        for child_group in group.child_groups.filter(
+                            is_active=True,
+                        ).order_by("order", "id"):
+                            raw_rows = submitted_children.get(
+                                child_group.code
+                            )
+                            if raw_rows is not None:
+                                reconstructed = submitted_child_reconstruction(
+                                    child_group=child_group,
+                                    raw_rows=raw_rows,
+                                )
+                            else:
+                                reconstructed = next(
+                                    (
+                                        child
+                                        for child in persisted_children.get(
+                                            "child_groups",
+                                            [],
+                                        )
+                                        if child.get("code") == child_group.code
+                                    ),
+                                    {"items": []},
+                                )
+
+                            child_context = DynamicFormService._build_nested_group_context(
+                                group=child_group,
+                                reconstructed_group=reconstructed,
+                                permission_context=permission_context,
+                                group_can_edit=group_can_edit,
+                                edit_mode=edit_mode,
+                                is_submitted=is_submitted,
+                            )
+                            if child_context is not None:
+                                contexts.append(child_context)
+
+                        return contexts
+
                     # =========================================================
                     # CASE 1
                     # =========================================================
@@ -2170,6 +2316,9 @@ class DynamicFormService:
                             item["has_history"] = (
                                 is_existing_device
                             )
+                            item["child_groups"] = build_device_child_contexts(
+                                submitted_item=submitted_item,
+                            )
 
                             items.append(item)
 
@@ -2507,6 +2656,12 @@ class DynamicFormService:
                                     "row_order": len(items),
                                     "parent_row_id": None,
                                     "fields": item_fields,
+                                    "child_groups": build_device_child_contexts(
+                                        persisted_item=persisted_device_children.get(
+                                            instance_device.pk,
+                                            {},
+                                        ),
+                                    ),
                                     "device": {
                                         "instance_device": instance_device,
                                         "device": instance_device.device,
@@ -2562,6 +2717,7 @@ class DynamicFormService:
                         "has_editable_fields": group_has_editable_fields,
                         "display_type": group.display_type,
                         "group_type": group.group_type,
+                        "child_groups": device_child_group_contexts,
                     }
                     group_context = OperatorFormSerializer.group_context(
                         group_context=group_context,
