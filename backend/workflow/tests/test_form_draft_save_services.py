@@ -1254,6 +1254,181 @@ class FormDraftSaveServiceContractTests(TestCase):
             "Part B Updated",
         )
 
+    def test_save_adds_new_child_to_existing_device_without_cross_linking(self):
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Devices",
+            code="devices_existing_parent_child_add",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=50,
+        )
+        device_fields = {}
+        definitions = (
+            (FormField.SystemKey.IMEI, "existing_parent_device_imei", FormField.FieldType.TEXT),
+            (FormField.SystemKey.DEVICE_TYPE, "existing_parent_device_type", FormField.FieldType.SELECT),
+            (FormField.SystemKey.DEVICE_MODEL, "existing_parent_device_model", FormField.FieldType.SELECT),
+        )
+        for field_order, (system_key, code, field_type) in enumerate(definitions):
+            device_fields[system_key] = FormField.objects.create(
+                section=self.section, repeatable_group=device_group,
+                name=code, code=code, label=code, field_type=field_type,
+                system_key=system_key, order=field_order,
+            )
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section, parent_group=device_group,
+            name="Device Details", code="device_details_existing_parent_child_add", order=51,
+        )
+        child_field = FormField.objects.create(
+            section=self.section, repeatable_group=child_group,
+            name="Child Name", code="existing_parent_child_name", label="Child Name",
+            field_type=FormField.FieldType.TEXT, order=0,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section, parent_group=child_group,
+            name="Parts", code="device_parts_existing_parent_child_add", order=52,
+        )
+        grandchild_field = FormField.objects.create(
+            section=self.section, repeatable_group=grandchild_group,
+            name="Part Name", code="existing_parent_part_name", label="Part Name",
+            field_type=FormField.FieldType.TEXT, order=0,
+        )
+
+        device_type = DeviceType.objects.create(
+            name="Existing Parent Child Add Phone", code="EXISTING_PARENT_CHILD_ADD_PHONE", is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type, brand="Test",
+            name="Existing Parent Child Add Model", code="EXISTING_PARENT_CHILD_ADD_MODEL", is_active=True,
+        )
+
+        for field in device_fields.values():
+            self.grant_repeatable_write_permissions(device_group, field)
+        self.grant_repeatable_write_permissions(child_group, child_field)
+        self.grant_repeatable_write_permissions(grandchild_group, grandchild_field)
+
+        first_save = self.call(
+            submitted_data={
+                "devices_existing_parent_child_add": [
+                    {
+                        "existing_parent_device_imei": "890000000000001",
+                        "existing_parent_device_type": device_type.pk,
+                        "existing_parent_device_model": device_model.pk,
+                        "device_details_existing_parent_child_add": [
+                            {"existing_parent_child_name": "Child A",
+                             "device_parts_existing_parent_child_add": [
+                                 {"existing_parent_part_name": "Part A"}]},
+                        ],
+                    },
+                    {
+                        "existing_parent_device_imei": "890000000000002",
+                        "existing_parent_device_type": device_type.pk,
+                        "existing_parent_device_model": device_model.pk,
+                        "device_details_existing_parent_child_add": [
+                            {"existing_parent_child_name": "Child B",
+                             "device_parts_existing_parent_child_add": [
+                                 {"existing_parent_part_name": "Part B"}]},
+                        ],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(first_save.saved)
+
+        device_rows = {
+            row.instance_device.draft_imei: row
+            for row in RepeatableRow.objects.filter(instance=self.instance, group=device_group)
+        }
+        child_rows = {
+            row.values.get(field=child_field).text_value: row
+            for row in RepeatableRow.objects.filter(instance=self.instance, group=child_group)
+        }
+        grandchild_rows = {
+            row.values.get(field=grandchild_field).text_value: row
+            for row in RepeatableRow.objects.filter(instance=self.instance, group=grandchild_group)
+        }
+        device_a, device_b = device_rows["890000000000001"], device_rows["890000000000002"]
+        child_a, child_b = child_rows["Child A"], child_rows["Child B"]
+        grandchild_a, grandchild_b = grandchild_rows["Part A"], grandchild_rows["Part B"]
+
+        second_save = self.call(
+            submitted_data={
+                "devices_existing_parent_child_add": [
+                    {
+                        "row_id": device_a.pk,
+                        "existing_parent_device_imei": "890000000000001",
+                        "existing_parent_device_type": device_type.pk,
+                        "existing_parent_device_model": device_model.pk,
+                        "device_details_existing_parent_child_add": [
+                            {
+                                "row_id": child_a.pk,
+                                "existing_parent_child_name": "Child A",
+                                "device_parts_existing_parent_child_add": [
+                                    {"row_id": grandchild_a.pk, "existing_parent_part_name": "Part A"},
+                                ],
+                            },
+                            {
+                                "existing_parent_child_name": "Child A2",
+                                "device_parts_existing_parent_child_add": [
+                                    {"existing_parent_part_name": "Part A2"},
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "row_id": device_b.pk,
+                        "existing_parent_device_imei": "890000000000002",
+                        "existing_parent_device_type": device_type.pk,
+                        "existing_parent_device_model": device_model.pk,
+                        "device_details_existing_parent_child_add": [
+                            {
+                                "row_id": child_b.pk,
+                                "existing_parent_child_name": "Child B",
+                                "device_parts_existing_parent_child_add": [
+                                    {"row_id": grandchild_b.pk, "existing_parent_part_name": "Part B"},
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(second_save.saved)
+
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=device_group).count(), 2
+        )
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=child_group).count(), 3
+        )
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=grandchild_group).count(), 3
+        )
+
+        child_a.refresh_from_db()
+        child_b.refresh_from_db()
+        grandchild_a.refresh_from_db()
+        grandchild_b.refresh_from_db()
+        child_a2 = RepeatableRow.objects.get(
+            instance=self.instance, group=child_group,
+            values__field=child_field, values__text_value="Child A2",
+        )
+        grandchild_a2 = RepeatableRow.objects.get(
+            instance=self.instance, group=grandchild_group,
+            values__field=grandchild_field, values__text_value="Part A2",
+        )
+
+        self.assertNotEqual(child_a2.pk, child_a.pk)
+        self.assertNotEqual(grandchild_a2.pk, grandchild_a.pk)
+        self.assertEqual(child_a2.parent_row_id, device_a.pk)
+        self.assertEqual(grandchild_a2.parent_row_id, child_a2.pk)
+        self.assertEqual(child_b.parent_row_id, device_b.pk)
+        self.assertEqual(grandchild_b.parent_row_id, child_b.pk)
+        self.assertEqual(child_a.values.get(field=child_field).text_value, "Child A")
+        self.assertEqual(child_b.values.get(field=child_field).text_value, "Child B")
+        self.assertEqual(grandchild_a.values.get(field=grandchild_field).text_value, "Part A")
+        self.assertEqual(grandchild_b.values.get(field=grandchild_field).text_value, "Part B")
+
     def test_save_applies_device_update(self):
         device_group = FormRepeatableGroup.objects.create(
             section=self.section,
