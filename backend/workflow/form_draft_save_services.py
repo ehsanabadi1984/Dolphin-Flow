@@ -221,12 +221,15 @@ class FormDraftSaveService:
             instance=instance,
             diff=diff,
         )
-        FormDraftCreateApplyService.apply(
+        # DEVICE rows may own NORMAL child rows. Create the device
+        # parent first so its CREATE RowReference is available when the
+        # nested normal row is applied.
+        FormDraftDeviceCreateApplyService.apply(
             instance=instance,
             diff=diff,
             created_rows=created_rows,
         )
-        FormDraftDeviceCreateApplyService.apply(
+        FormDraftCreateApplyService.apply(
             instance=instance,
             diff=diff,
             created_rows=created_rows,
