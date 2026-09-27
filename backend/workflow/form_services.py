@@ -1040,6 +1040,7 @@ class DynamicFormService:
             context,
             path,
             ancestor_cells,
+            path_row_ids,
         ):
             own_cells = field_cells(item, context, path)
             child_contexts = list(item["child_groups"])
@@ -1065,6 +1066,7 @@ class DynamicFormService:
                         item.get("device", {}).get("device_id", ""),
                     ),
                     "path": path,
+                    "path_row_ids": path_row_ids,
                     "id_input_name": (
                         "".join(
                             f"{group_code}_{index}_"
@@ -1117,6 +1119,7 @@ class DynamicFormService:
                             path,
                             own_cells,
                         )],
+                        path_row_ids + [child_item["row_id"]],
                     )
 
             if first_row_index < len(rows):
@@ -1135,6 +1138,7 @@ class DynamicFormService:
                 group_context,
                 [(group_context["group"].code, root_index)],
                 [],
+                [item["row_id"]],
             )
 
         # A flat table may suppress the visual root <tr> when the root
@@ -1149,13 +1153,21 @@ class DynamicFormService:
 
         for row in rows:
             root_index = row["path"][0][1]
-            row["id_inputs"] = [
-                {
-                    "name": row["id_input_name"],
-                    "value": row["row_id"],
-                    "is_root": False,
-                }
-            ]
+            row["id_inputs"] = []
+            for path_position, (path_entry, row_id) in enumerate(
+                zip(row["path"], row["path_row_ids"])
+            ):
+                path_name = "".join(
+                    f"{group_code}_{index}_"
+                    for group_code, index in row["path"][: path_position + 1]
+                ).rstrip("_")
+                row["id_inputs"].append(
+                    {
+                        "name": f"{path_name}__id",
+                        "value": row_id,
+                        "is_root": path_position == 0,
+                    }
+                )
 
             if (
                 group_context["group"].group_type
@@ -1174,17 +1186,6 @@ class DynamicFormService:
             if root_index not in first_row_for_root:
                 first_row_for_root.add(root_index)
                 if row["row_group_code"] != group_context["group"].code:
-                    row["id_inputs"].insert(
-                        0,
-                        {
-                            "name": (
-                                f"{group_context['group'].code}_"
-                                f"{root_index}__id"
-                            ),
-                            "value": root_row_ids[root_index],
-                            "is_root": True,
-                        },
-                    )
                     row["root_delete"] = {
                         "can_delete": group_context["permissions"]["can_delete"],
                         "group_code": group_context["group"].code,
