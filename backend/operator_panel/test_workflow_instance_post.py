@@ -862,12 +862,26 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             ).order_by("row_order", "pk")
         )
         self.assertEqual(len(child_rows), 3)
+
+        children_by_parent = {
+            row.parent_row_id: row
+            for row in child_rows
+        }
+        child_a2 = children_by_parent[device_a.pk]
+        child_b1 = children_by_parent[device_b.pk]
+        child_c = children_by_parent[device_rows[2].pk]
+
         self.assertEqual(
-            [
-                row.values.get(field=child_field).text_value
-                for row in child_rows
-            ],
-            ["Child A2 updated", "Child B1", "Child C"],
+            child_a2.values.get(field=child_field).text_value,
+            "Child A2 updated",
+        )
+        self.assertEqual(
+            child_b1.values.get(field=child_field).text_value,
+            "Child B1",
+        )
+        self.assertEqual(
+            child_c.values.get(field=child_field).text_value,
+            "Child C",
         )
 
         grandchild_rows = list(
@@ -877,12 +891,28 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             ).order_by("row_order", "pk")
         )
         self.assertEqual(len(grandchild_rows), 3)
+
+        parts_by_parent = {
+            row.parent_row_id: row
+            for row in grandchild_rows
+        }
         self.assertEqual(
-            [
-                row.values.get(field=grandchild_field).text_value
-                for row in grandchild_rows
-            ],
-            ["Part A2 updated", "Part B1", "Part C"],
+            parts_by_parent[child_a2.pk].values.get(
+                field=grandchild_field
+            ).text_value,
+            "Part A2 updated",
+        )
+        self.assertEqual(
+            parts_by_parent[child_b1.pk].values.get(
+                field=grandchild_field
+            ).text_value,
+            "Part B1",
+        )
+        self.assertEqual(
+            parts_by_parent[child_c.pk].values.get(
+                field=grandchild_field
+            ).text_value,
+            "Part C",
         )
 
         device_a.refresh_from_db()
