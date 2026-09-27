@@ -904,7 +904,7 @@ notificationToggle.addEventListener("click", async (event) => {
     const resetModal = (modal) => {
 
         modal.querySelectorAll(
-            "[data-device-modal-field]"
+            "[data-device-modal-field], [data-device-modal-child-field]"
         ).forEach((field) => {
 
             if (
