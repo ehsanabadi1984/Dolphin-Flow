@@ -3500,23 +3500,7 @@ if (form) {
         "submit",
         (event) => {
 
-            /*
-             * Device row save/delete buttons must
-             * keep their existing behavior.
-             */
-            if (
-                event.submitter &&
-                (
-                    event.submitter.classList.contains(
-                        "df-device-save"
-                    ) ||
-                    event.submitter.classList.contains(
-                        "df-device-delete"
-                    )
-                )
-            ) {
-                return;
-            }
+            /* DEVICE rows are submitted only with the main workflow form. */
         }
     );
 }
