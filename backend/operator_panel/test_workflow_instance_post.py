@@ -960,6 +960,82 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertEqual(child_c.parent_row_id, device_c.pk)
         self.assertEqual(part_c.parent_row_id, child_c.pk)
 
+        # The real operator lifecycle continues after persistence: the POST
+        # redirects to the read-only form, then Edit must reconstruct the same
+        # independent DEVICE -> child -> grandchild trees with row identity.
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        read_html = response.content.decode()
+        for value in (
+            "Child A2 updated",
+            "Part A2 updated",
+            "Child B1",
+            "Part B1",
+            "Child C",
+            "Part C",
+        ):
+            self.assertIn(value, read_html)
+        for deleted_value in ("Child A1", "Part A1", "Child B2", "Part B2"):
+            self.assertNotIn(deleted_value, read_html)
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"edit": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        edit_html = response.content.decode()
+
+        self.assertRegex(
+            edit_html,
+            rf'name="system_devices_0__id"\\s+value="{device_a.pk}"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="system_devices_1__id"\\s+value="{device_b.pk}"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="system_devices_2__id"\\s+value="{device_c.pk}"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="system_devices_0_device_details_reconcile_post_0__id"\\s+value="{a_child2.pk}"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="system_devices_0_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{a_part2.pk}"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="system_devices_1_device_details_reconcile_post_0__id"\\s+value="{b_child1.pk}"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="system_devices_1_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{b_part1.pk}"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="system_devices_2_device_details_reconcile_post_0__id"\\s+value="{child_c.pk}"',
+        )
+        self.assertRegex(
+            edit_html,
+            rf'name="system_devices_2_device_details_reconcile_post_0_parts_reconcile_post_0__id"\\s+value="{part_c.pk}"',
+        )
+        self.assertIn("Child A2 updated", edit_html)
+        self.assertIn("Part A2 updated", edit_html)
+        self.assertIn("Child B1", edit_html)
+        self.assertIn("Part B1", edit_html)
+        self.assertIn("Child C", edit_html)
+        self.assertIn("Part C", edit_html)
+
     def test_workflow_instance_post_updates_existing_device_row(self):
         group, label_field = self._create_device_group()
         instance_device = InstanceDevice.objects.create(
