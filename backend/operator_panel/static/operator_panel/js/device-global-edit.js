@@ -66,6 +66,99 @@
         return button;
     };
 
+    const appendModalChildGroups = (tbody, row, modal, groupCode, index) => {
+        const childGroups = modal.querySelectorAll("[data-device-child-group]");
+        if (!childGroups.length) return;
+
+        const childRow = document.createElement("tr");
+        childRow.className = "df-repeatable-child-row df-device-child-row";
+        childRow.dataset.deviceParentIndex = String(index);
+        childRow.dataset.deviceGroupCode = groupCode;
+
+        const cell = document.createElement("td");
+        const table = tbody.closest("table");
+        cell.colSpan = table?.tHead?.rows[0]?.cells.length || 1;
+
+        childGroups.forEach((modalGroup) => {
+            const childGroupCode = modalGroup.dataset.deviceChildGroup;
+            if (!childGroupCode) return;
+
+            const section = document.createElement("section");
+            section.className = "df-repeatable-group df-repeatable-child-group";
+            section.dataset.repeatableGroup = childGroupCode;
+
+            const header = document.createElement("div");
+            header.className = "df-form-section-header";
+            const title = document.createElement("div");
+            const heading = document.createElement("h4");
+            heading.textContent =
+                modalGroup.querySelector(".df-device-modal-child-group-title")?.textContent?.trim() ||
+                childGroupCode;
+            title.appendChild(heading);
+            header.appendChild(title);
+            section.appendChild(header);
+
+            const presence = document.createElement("input");
+            presence.type = "hidden";
+            presence.name = `${groupCode}_${index}_${childGroupCode}__present`;
+            presence.value = "1";
+            presence.dataset.repeatablePresence = "";
+            section.appendChild(presence);
+
+            const items = document.createElement("div");
+            items.className = "df-repeatable-items";
+            items.dataset.groupCode = childGroupCode;
+
+            const item = document.createElement("div");
+            item.className = "df-repeatable-item";
+            item.dataset.repeatableItem = "";
+            item.dataset.deviceChildItem = "";
+
+            modalGroup.querySelectorAll("[data-device-modal-child-field]").forEach((sourceField) => {
+                const fieldCode = sourceField.dataset.fieldCode;
+                if (!fieldCode) return;
+
+                const wrapper = document.createElement("div");
+                wrapper.className = "df-form-field";
+                wrapper.dataset.fieldCode = fieldCode;
+
+                const label = sourceField.querySelector("label")?.cloneNode(true);
+                if (label) wrapper.appendChild(label);
+
+                const field = sourceField.querySelector("[data-device-modal-child-field]");
+                if (!field) return;
+
+                const input = field.cloneNode(true);
+                input.removeAttribute("data-device-modal-child-field");
+                input.disabled = false;
+                input.name = `${groupCode}_${index}_${childGroupCode}_0_${fieldCode}`;
+
+                if (input.type === "checkbox") {
+                    const unchecked = document.createElement("input");
+                    unchecked.type = "hidden";
+                    unchecked.name = input.name;
+                    unchecked.value = "false";
+                    wrapper.appendChild(unchecked);
+                    input.value = "true";
+                    input.checked = field.checked;
+                } else {
+                    input.value = field.value || "";
+                }
+
+                wrapper.appendChild(input);
+                item.appendChild(wrapper);
+            });
+
+            items.appendChild(item);
+            section.appendChild(items);
+            cell.appendChild(section);
+        });
+
+        childRow.appendChild(cell);
+        tbody.appendChild(childRow);
+    };
+
+
     const addDeviceRow = (modal, groupCode) => {
         const form = document.querySelector(".workflow-instance form");
         if (!form || !isEditMode()) return;
@@ -106,6 +199,7 @@
         if (emptyRow) emptyRow.remove();
 
         tbody.appendChild(row);
+        appendModalChildGroups(tbody, row, modal, groupCode, index);
     };
 
     // app.js has not reached DOMContentLoaded yet, so apply the global
