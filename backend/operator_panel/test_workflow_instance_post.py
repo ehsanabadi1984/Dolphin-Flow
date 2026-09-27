@@ -2561,6 +2561,18 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                 or "Child B" in line
             )
         )
+        print("===== END DEVICE HTML =====")
+        print("ROW IDS:", [row.pk for row in rows])
+        print("DEVICE MATCHES:", {k: v.group(0) for k, v in device_matches.items()})
+        print("FIRST ROW ID:", first_row_id, "INDEX:", first_index)
+        print("SECOND ROW ID:", second_row_id, "INDEX:", second_index)
+        child_rows = re.findall(
+            r'<tr[\\s\\S]*?class="df-repeatable-child-row df-device-child-row"[\\s\\S]*?</tr>',
+            html,
+        )
+        print("CHILD ROWS:")
+        for child_row in child_rows:
+            print(repr(child_row))
         print("===== END DEVICE HTML =====\n")
 
         self.assertIsNotNone(first_child_match)
