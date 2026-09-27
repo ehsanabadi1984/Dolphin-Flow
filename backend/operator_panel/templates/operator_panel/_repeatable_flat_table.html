@@ -55,7 +55,7 @@
                 />
               {% elif cell.field.field_type == "DATE" %}
                 <input
-                  type="{% if cell.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if cell.field.calendar == 'JALALI' %} data-jdp{% endif %} {% if cell.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                  type="{% if cell.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if cell.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if cell.field.calendar == 'JALALI' %}data-jdp{% endif %}
                   name="{{ cell.input_prefix }}{{ cell.field.code }}"
                   value="{{ cell.value|default:'' }}"
                   class="df-table-input"
