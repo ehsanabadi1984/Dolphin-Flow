@@ -1142,6 +1142,71 @@ const submitNewDevice = (modal, groupCode) => {
         "df-device-actions";
 
     /*
+     * Nested child groups
+     *
+     * The device row is the parent RepeatableRow. The modal creates one
+     * initial child row for each configured direct child group and serializes
+     * it using the canonical nested POST naming contract.
+     */
+    modal.querySelectorAll(
+        "[data-device-child-group]"
+    ).forEach((childGroup) => {
+        const childGroupCode =
+            childGroup.dataset.deviceChildGroup;
+
+        if (!childGroupCode) {
+            return;
+        }
+
+        const presence =
+            document.createElement("input");
+
+        presence.type = "hidden";
+        presence.name =
+            groupCode + "_" +
+            newIndex + "_" +
+            childGroupCode +
+            "__present";
+        presence.value = "1";
+        presence.dataset.repeatablePresence = "";
+
+        actionsCell.appendChild(presence);
+
+        childGroup.querySelectorAll(
+            "[data-device-modal-child-field]"
+        ).forEach((field) => {
+            const fieldCode =
+                field.dataset.fieldCode;
+
+            if (!fieldCode) {
+                return;
+            }
+
+            const input =
+                document.createElement("input");
+
+            input.type = "hidden";
+            input.name =
+                groupCode + "_" +
+                newIndex + "_" +
+                childGroupCode +
+                "_0_" +
+                fieldCode;
+
+            if (field.type === "checkbox") {
+                input.value =
+                    field.checked ? "true" : "false";
+            } else {
+                input.value =
+                    field.value || "";
+            }
+
+            input.dataset.deviceChildField = "";
+            actionsCell.appendChild(input);
+        });
+    });
+
+    /*
      * Hidden instance_device_id
      */
     actionsCell.appendChild(
