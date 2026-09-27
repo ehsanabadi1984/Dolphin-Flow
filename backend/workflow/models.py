@@ -1294,6 +1294,14 @@ class FormField(models.Model):
         default=False,
     )
 
+    # Number fields store up to six decimal places, while each form field
+    # controls how many decimal places are presented/accepted in the UI.
+    # Two places is the default so ordinary numeric fields do not render
+    # artificial trailing zeros.
+    decimal_places = models.PositiveSmallIntegerField(
+        default=2,
+    )
+
     order = models.PositiveIntegerField(
         default=0,
     )
@@ -1336,6 +1344,20 @@ class FormField(models.Model):
                 raise ValidationError(
                     "گروه تکرارشونده باید متعلق به همان Section فیلد باشد."
                 )
+
+        # --------------------------------------------------
+        # Number Precision Validation
+        # --------------------------------------------------
+
+        if self.field_type == self.FieldType.NUMBER:
+            if not 0 <= self.decimal_places <= 6:
+                raise ValidationError({
+                    "decimal_places": (
+                        "تعداد ارقام اعشار باید بین ۰ تا ۶ باشد."
+                    )
+                })
+        elif self.decimal_places != 2:
+            self.decimal_places = 2
 
         # --------------------------------------------------
         # Choice Source Validation
