@@ -1002,13 +1002,17 @@ const submitNewDevice = (modal, groupCode) => {
         return;
     }
 
-    const rootRows = Array.from(
-        itemsContainer.querySelectorAll(
-            `[data-repeatable-item][data-repeatable-row-group="${CSS.escape(groupCode)}"]`
-        )
-    ).filter((row) => !row.dataset.parentRowId);
-
-    const rootIndexes = rootRows
+    /*
+     * A populated root may have no visual root <tr>; its first child row
+     * carries the rootIndex instead. Therefore root-index allocation must
+     * inspect every real row in the logical DEVICE tree, not only rows
+     * without a parentRowId. Otherwise adding a new DEVICE after an
+     * existing nested DEVICE reuses root index 0 and corrupts the POST
+     * hierarchy of the existing rows.
+     */
+    const rootIndexes = Array.from(
+        itemsContainer.querySelectorAll("[data-repeatable-item]")
+    )
         .map((row) => Number(row.dataset.rootIndex))
         .filter(Number.isInteger);
 
