@@ -119,7 +119,8 @@
                       id="field-{{ item.field.code }}"
                       type="number"
                       name="{{ item.field.code }}"
-                      value="{{ item.value|default:'' }}"
+                      value="{{ item.display_value|default:item.value|default:'' }}"
+                      step="{{ item.field.number_step }}"
                     />
 
                   {% elif item.field.field_type == "DATE" %}
@@ -410,7 +411,8 @@
                               type="number"
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
                               name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
-                              value="{{ item_field.value|default:'' }}"
+                              value="{{ item_field.display_value|default:item_field.value|default:'' }}"
+                              step="{{ item_field.field.number_step }}"
                             />
 
                           {% elif item_field.field.field_type == "DATE" %}
