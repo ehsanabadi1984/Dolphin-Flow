@@ -2291,6 +2291,11 @@ class DynamicFormService:
                             # -------------------------------------------------
 
                             item = {
+                                "row_id": str(
+                                    submitted_item.get("_id", "")
+                                ),
+                                "row_order": len(items),
+                                "parent_row_id": None,
                                 "instance_device_id": (
                                     instance_device_id or ""
                                 ),
