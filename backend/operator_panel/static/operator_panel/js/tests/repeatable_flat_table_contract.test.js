@@ -1595,6 +1595,10 @@ test("DEVICE add flow materializes into the flat-table lifecycle", () => {
         appJs,
         /childRow\.dataset\.parentRowId = rootRowId/
     );
+    assert.match(
+        appJs,
+        /field\.dataset\.repeatablePresence/
+    );
 });
 
 test("DEVICE no longer exposes per-row edit/save/cancel lifecycle", () => {
