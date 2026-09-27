@@ -367,6 +367,57 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         )
         self.assertEqual(amount_item["value"], "not-a-number")
 
+    def test_workflow_instance_post_invalid_jalali_date_returns_400_and_preserves_posted_value(self):
+        date_field = FormField.objects.create(
+            section=self.section,
+            name="Service Date",
+            code="service_date",
+            label="Service Date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.JALALI,
+            order=3,
+        )
+        FieldAccess.objects.create(
+            field=date_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        posted_value = "۱۴۰۵/۰۷/۳۲"
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "customer_name": "Ehsan",
+                "enabled": "on",
+                "service_date": posted_value,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            FormData.objects.filter(instance=self.instance).count(),
+            0,
+        )
+
+        dynamic_form = response.context["dynamic_form"]
+        date_item = next(
+            item
+            for section in dynamic_form["sections"]
+            for item in section["fields"]
+            if item["field"].code == "service_date"
+        )
+        self.assertEqual(date_item["value"], posted_value)
+        self.assertContains(
+            response,
+            "مقدار فیلد «Service Date» باید تاریخ معتبر باشد.",
+            status_code=400,
+        )
+
     def test_workflow_instance_post_creates_new_device_row(self):
         group, label_field = self._create_device_group()
 
