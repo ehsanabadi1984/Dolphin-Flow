@@ -1572,3 +1572,34 @@ test("DEVICE modal validates required child fields and scopes dependent selects"
     assert.ok(appJs.includes("changedSelect.closest("));
     assert.ok(appJs.includes('".df-device-modal"'));
 });
+
+
+test("DEVICE add flow materializes into the flat-table lifecycle", () => {
+    assert.match(
+        appJs,
+        /df-device-group\[data-repeatable-group=/
+    );
+    assert.match(
+        appJs,
+        /\[data-repeatable-root-template\]/
+    );
+    assert.match(
+        appJs,
+        /\[data-repeatable-child-template\]\[data-child-group-code\]/
+    );
+    assert.match(
+        appJs,
+        /data\.repeatableRowGroup = groupCode/
+    );
+    assert.match(
+        appJs,
+        /childRow\.dataset\.parentRowId = rootRowId/
+    );
+});
+
+test("DEVICE no longer exposes per-row edit/save/cancel lifecycle", () => {
+    assert.doesNotMatch(appJs, /className = "df-button df-button-secondary df-device-edit"/);
+    assert.doesNotMatch(appJs, /className = "df-button df-device-save"/);
+    assert.doesNotMatch(appJs, /className = "df-button df-button-secondary df-device-cancel"/);
+    assert.doesNotMatch(appJs, /function setDeviceRowEditing/);
+});
