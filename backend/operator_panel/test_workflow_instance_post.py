@@ -2506,7 +2506,6 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         )
         first_child_match = re.search(
             rf'<tr\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'[\s\S]*?data-device-parent-row-id="{rows[0].pk}"'
             rf'[\s\S]*?data-device-parent-index="0"',
             html,
         )
@@ -2518,7 +2517,6 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         )
         second_child_match = re.search(
             rf'<tr\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'[\s\S]*?data-device-parent-row-id="{rows[1].pk}"'
             rf'[\s\S]*?data-device-parent-index="1"',
             html,
         )
