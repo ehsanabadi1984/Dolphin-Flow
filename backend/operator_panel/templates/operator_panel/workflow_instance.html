@@ -127,7 +127,7 @@
 
                     <input
                       id="field-{{ item.field.code }}"
-                      type="{% if item.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if item.field.calendar == 'JALALI' %} data-jdp{% endif %} {% if item.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                      type="{% if item.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if item.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if item.field.calendar == 'JALALI' %}data-jdp{% endif %}
                       name="{{ item.field.code }}"
                       value="{{ item.value|default:'' }}"
                     />
@@ -570,7 +570,7 @@
 
                         {% elif template_field.field.field_type == "DATE" %}
                           <input
-                            type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp{% endif %} {% if template_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                            type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if template_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
                             id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                             name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                           />
