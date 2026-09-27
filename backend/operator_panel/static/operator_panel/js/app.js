@@ -1177,11 +1177,16 @@ const submitNewDevice = (modal, groupCode) => {
     });
 
     /*
-     * Insert the root first and its direct child rows immediately after it.
-     * The generic flat-table handlers can now reindex/delete the complete
-     * subtree using the same RepeatableRow identity contract as NORMAL.
+     * The template row is a detached clone, so calling .after() on rootRow
+     * cannot attach it to the live tbody. Append the materialized subtree
+     * to the actual repeatable container instead.
+     *
+     * The empty-state row is only a presentation placeholder and must be
+     * removed once the first real DEVICE row is materialized.
      */
-    rootRow.after(...childRows);
+    itemsContainer.querySelectorAll(".df-table-empty").forEach((row) => row.remove());
+
+    itemsContainer.append(rootRow, ...childRows);
 
     closeModal(modal);
 };
