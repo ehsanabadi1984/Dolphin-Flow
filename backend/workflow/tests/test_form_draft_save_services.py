@@ -1806,6 +1806,233 @@ class FormDraftSaveServiceContractTests(TestCase):
         self.assertEqual(child_b.parent_row_id, device_b.pk)
         self.assertEqual(grandchild_b1.parent_row_id, child_b.pk)
 
+    def test_save_combines_nested_device_create_update_delete_without_cross_linking(self):
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section, name="Devices",
+            code="devices_combined_nested_reconciliation",
+            group_type=FormRepeatableGroup.GroupType.DEVICE, order=50,
+        )
+        device_fields = {}
+        definitions = (
+            (FormField.SystemKey.IMEI, "combined_device_imei", FormField.FieldType.TEXT),
+            (FormField.SystemKey.DEVICE_TYPE, "combined_device_type", FormField.FieldType.SELECT),
+            (FormField.SystemKey.DEVICE_MODEL, "combined_device_model", FormField.FieldType.SELECT),
+        )
+        for field_order, (system_key, code, field_type) in enumerate(definitions):
+            device_fields[system_key] = FormField.objects.create(
+                section=self.section, repeatable_group=device_group,
+                name=code, code=code, label=code, field_type=field_type,
+                system_key=system_key, order=field_order,
+            )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section, parent_group=device_group,
+            name="Device Details", code="device_details_combined_nested_reconciliation", order=51,
+        )
+        child_field = FormField.objects.create(
+            section=self.section, repeatable_group=child_group,
+            name="Child Name", code="combined_child_name", label="Child Name",
+            field_type=FormField.FieldType.TEXT, order=0,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section, parent_group=child_group,
+            name="Parts", code="device_parts_combined_nested_reconciliation", order=52,
+        )
+        grandchild_field = FormField.objects.create(
+            section=self.section, repeatable_group=grandchild_group,
+            name="Part Name", code="combined_part_name", label="Part Name",
+            field_type=FormField.FieldType.TEXT, order=0,
+        )
+
+        device_type = DeviceType.objects.create(
+            name="Combined Nested Reconciliation Phone",
+            code="COMBINED_NESTED_RECONCILIATION_PHONE", is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type, brand="Test",
+            name="Combined Nested Reconciliation Model",
+            code="COMBINED_NESTED_RECONCILIATION_MODEL", is_active=True,
+        )
+        for field in device_fields.values():
+            self.grant_repeatable_write_permissions(device_group, field)
+        self.grant_repeatable_write_permissions(child_group, child_field)
+        self.grant_repeatable_write_permissions(grandchild_group, grandchild_field)
+
+        first_save = self.call(
+            submitted_data={
+                "devices_combined_nested_reconciliation": [
+                    {
+                        "combined_device_imei": "893000000000001",
+                        "combined_device_type": device_type.pk,
+                        "combined_device_model": device_model.pk,
+                        "device_details_combined_nested_reconciliation": [
+                            {
+                                "combined_child_name": "Child A1",
+                                "device_parts_combined_nested_reconciliation": [
+                                    {"combined_part_name": "Part A1"},
+                                ],
+                            },
+                            {
+                                "combined_child_name": "Child A2",
+                                "device_parts_combined_nested_reconciliation": [
+                                    {"combined_part_name": "Part A2"},
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "combined_device_imei": "893000000000002",
+                        "combined_device_type": device_type.pk,
+                        "combined_device_model": device_model.pk,
+                        "device_details_combined_nested_reconciliation": [
+                            {
+                                "combined_child_name": "Child B1",
+                                "device_parts_combined_nested_reconciliation": [
+                                    {"combined_part_name": "Part B1"},
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(first_save.saved)
+
+        device_rows = {
+            row.instance_device.draft_imei: row
+            for row in RepeatableRow.objects.filter(instance=self.instance, group=device_group)
+        }
+        child_rows = {
+            row.values.get(field=child_field).text_value: row
+            for row in RepeatableRow.objects.filter(instance=self.instance, group=child_group)
+        }
+        grandchild_rows = {
+            row.values.get(field=grandchild_field).text_value: row
+            for row in RepeatableRow.objects.filter(instance=self.instance, group=grandchild_group)
+        }
+        device_a = device_rows["893000000000001"]
+        device_b = device_rows["893000000000002"]
+        child_a1 = child_rows["Child A1"]
+        child_a2 = child_rows["Child A2"]
+        child_b1 = child_rows["Child B1"]
+        part_a1 = grandchild_rows["Part A1"]
+        part_a2 = grandchild_rows["Part A2"]
+        part_b1 = grandchild_rows["Part B1"]
+
+        second_save = self.call(
+            submitted_data={
+                "devices_combined_nested_reconciliation": [
+                    {
+                        "row_id": device_a.pk,
+                        "combined_device_imei": "893000000000001",
+                        "combined_device_type": device_type.pk,
+                        "combined_device_model": device_model.pk,
+                        "device_details_combined_nested_reconciliation": [
+                            {
+                                "row_id": child_a2.pk,
+                                "combined_child_name": "Child A2 updated",
+                                "device_parts_combined_nested_reconciliation": [
+                                    {
+                                        "row_id": part_a2.pk,
+                                        "combined_part_name": "Part A2 updated",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "row_id": device_b.pk,
+                        "combined_device_imei": "893000000000002",
+                        "combined_device_type": device_type.pk,
+                        "combined_device_model": device_model.pk,
+                        "device_details_combined_nested_reconciliation": [
+                            {
+                                "row_id": child_b1.pk,
+                                "combined_child_name": "Child B1",
+                                "device_parts_combined_nested_reconciliation": [
+                                    {
+                                        "row_id": part_b1.pk,
+                                        "combined_part_name": "Part B1",
+                                    },
+                                ],
+                            },
+                            {
+                                "combined_child_name": "Child B2",
+                                "device_parts_combined_nested_reconciliation": [
+                                    {"combined_part_name": "Part B2"},
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "combined_device_imei": "893000000000003",
+                        "combined_device_type": device_type.pk,
+                        "combined_device_model": device_model.pk,
+                        "device_details_combined_nested_reconciliation": [
+                            {
+                                "combined_child_name": "Child C1",
+                                "device_parts_combined_nested_reconciliation": [
+                                    {"combined_part_name": "Part C1"},
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+        self.assertTrue(second_save.saved)
+
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=device_group).count(), 3
+        )
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=child_group).count(), 4
+        )
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=grandchild_group).count(), 4
+        )
+
+        self.assertFalse(RepeatableRow.objects.filter(pk=child_a1.pk).exists())
+        self.assertFalse(RepeatableRow.objects.filter(pk=part_a1.pk).exists())
+
+        updated_a2 = RepeatableRow.objects.get(pk=child_a2.pk)
+        updated_part_a2 = RepeatableRow.objects.get(pk=part_a2.pk)
+        self.assertEqual(
+            updated_a2.values.get(field=child_field).text_value, "Child A2 updated"
+        )
+        self.assertEqual(
+            updated_part_a2.values.get(field=grandchild_field).text_value, "Part A2 updated"
+        )
+
+        child_b2 = RepeatableRow.objects.get(
+            instance=self.instance, group=child_group,
+            values__field=child_field, values__text_value="Child B2",
+        )
+        part_b2 = RepeatableRow.objects.get(
+            instance=self.instance, group=grandchild_group,
+            values__field=grandchild_field, values__text_value="Part B2",
+        )
+        device_c = RepeatableRow.objects.get(
+            instance=self.instance, group=device_group,
+            instance_device__draft_imei="893000000000003",
+        )
+        child_c1 = RepeatableRow.objects.get(
+            instance=self.instance, group=child_group,
+            values__field=child_field, values__text_value="Child C1",
+        )
+        part_c1 = RepeatableRow.objects.get(
+            instance=self.instance, group=grandchild_group,
+            values__field=grandchild_field, values__text_value="Part C1",
+        )
+
+        self.assertEqual(updated_a2.parent_row_id, device_a.pk)
+        self.assertEqual(updated_part_a2.parent_row_id, updated_a2.pk)
+        self.assertEqual(child_b1.parent_row_id, device_b.pk)
+        self.assertEqual(part_b1.parent_row_id, child_b1.pk)
+        self.assertEqual(child_b2.parent_row_id, device_b.pk)
+        self.assertEqual(part_b2.parent_row_id, child_b2.pk)
+        self.assertEqual(child_c1.parent_row_id, device_c.pk)
+        self.assertEqual(part_c1.parent_row_id, child_c1.pk)
+
     def test_save_applies_device_update(self):
         device_group = FormRepeatableGroup.objects.create(
             section=self.section,
