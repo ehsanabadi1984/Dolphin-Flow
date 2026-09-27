@@ -997,7 +997,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         device_indexes = {}
         for device_row_id in (device_a.pk, device_b.pk, device_c.pk):
             match = re.search(
-                rf'name="system_devices_(\\d+)__id"\\s+value="{device_row_id}"',
+                rf'name="system_devices_(\d+)__id"\s+value="{device_row_id}"',
                 edit_html,
             )
             self.assertIsNotNone(match)
