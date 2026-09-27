@@ -221,6 +221,18 @@ class FormDraftSaveService:
             instance=instance,
             diff=diff,
         )
+        # TEMP DEBUG: inspect whether nested DEVICE -> NORMAL changes reach apply.
+        print("\n=== REPEATABLE DIFF DEBUG ===")
+        for group_diff in diff.groups:
+            print("GROUP:", group_diff.group.code, group_diff.group.group_type)
+            for change in group_diff.changes:
+                print(
+                    " CHANGE:", change.action, change.group.code,
+                    change.group.group_type, "row_ref=", change.row_reference,
+                    "parent_ref=", change.parent_reference,
+                    "fields=", change.desired_row.fields if change.desired_row else None,
+                )
+        print("=== END DIFF DEBUG ===\n")
         # DEVICE rows may own NORMAL child rows. Create the device
         # parent first so its CREATE RowReference is available when the
         # nested normal row is applied.
