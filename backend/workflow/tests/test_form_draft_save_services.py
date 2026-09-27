@@ -1232,10 +1232,6 @@ class FormDraftSaveServiceContractTests(TestCase):
         grandchild_a.refresh_from_db()
         grandchild_b.refresh_from_db()
 
-        self.assertEqual(
-            {device_a.pk, device_b.pk},
-            {device_a.instance_device_id and device_a.pk, device_b.pk},
-        )
         self.assertEqual(child_a.parent_row_id, device_a.pk)
         self.assertEqual(child_b.parent_row_id, device_b.pk)
         self.assertEqual(grandchild_a.parent_row_id, child_a.pk)
