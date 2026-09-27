@@ -1601,6 +1601,30 @@ a {
 }
 
 .df-device-table tr:last-child td { border-bottom: 0; }
+
+/*
+ * DEVICE child groups occupy a dedicated full-width row directly below
+ * their parent device. The child table is rendered inside the spanning
+ * cell, so it must remain a normal table row and the nested content must
+ * have room to render.
+ */
+.df-device-child-row {
+    display: table-row;
+}
+
+.df-device-child-row > td {
+    padding: 0;
+    background: var(--surface-2);
+}
+
+.df-device-child-row .df-repeatable-child-group {
+    margin: 0;
+    padding: 12px;
+}
+
+.df-device-child-row .df-table-wrapper {
+    width: 100%;
+}
 .df-device-row.is-editing { background: rgba(59, 130, 246, .06); }
 .df-device-editor input,
 .df-device-editor select,
