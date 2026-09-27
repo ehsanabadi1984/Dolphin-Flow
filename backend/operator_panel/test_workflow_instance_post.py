@@ -2428,7 +2428,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertContains(response, "Tehran")
         self.assertContains(response, "Child 1")
 
-    def test_device_table_renders_children_under_their_parent_rows(self):
+    def test_device_table_uses_flat_table_renderer_for_nested_children(self):
         group, fields = self._create_device_system_fields()
 
         child_group = FormRepeatableGroup.objects.create(
@@ -2515,105 +2515,46 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
         html = response.content.decode()
-        device_matches = {}
-        for match in re.finditer(
-            r'<tr\b(?P<attrs>[^>]*)>',
-            html,
-        ):
-            attrs = match.group("attrs")
-            if "df-device-row" not in attrs:
-                continue
-            row_id_match = re.search(
-                r'data-row-id="(\d+)"',
-                attrs,
-            )
-            index_match = re.search(
-                r'data-device-index="(\d+)"',
-                attrs,
-            )
-            if not row_id_match or not index_match:
-                continue
-            device_matches[int(row_id_match.group(1))] = (
-                index_match.group(1),
-                match,
-            )
 
-        self.assertEqual(set(device_matches), {row.pk for row in rows})
-
-        ordered = sorted(
-            device_matches.items(),
-            key=lambda item: int(item[1][0]),
-        )
-        first_row_id, (first_index, first_device_match) = ordered[0]
-        second_row_id, (second_index, second_device_match) = ordered[1]
-
-        child_matches = {}
-        for match in re.finditer(
-            r'<tr\b(?P<attrs>[^>]*)>',
-            html,
-        ):
-            attrs = match.group("attrs")
-            if "df-device-child-row" not in attrs:
-                continue
-            parent_id_match = re.search(
-                r'data-device-parent-row-id="(\d+)"',
-                attrs,
-            )
-            parent_index_match = re.search(
-                r'data-device-parent-index="(\d+)"',
-                attrs,
-            )
-            if not parent_id_match or not parent_index_match:
-                continue
-            child_matches[int(parent_id_match.group(1))] = (
-                parent_index_match.group(1),
-                match,
-            )
-
-        self.assertEqual(set(child_matches), {first_row_id, second_row_id})
-        self.assertEqual(
-            child_matches[first_row_id][0],
-            first_index,
-        )
-        self.assertEqual(
-            child_matches[second_row_id][0],
-            second_index,
+        # DEVICE and NORMAL nested rows now share the same flat-table DOM
+        # contract. The legacy device-specific row wrappers are gone.
+        self.assertNotIn("df-device-row", html)
+        self.assertNotIn("df-device-child-row", html)
+        self.assertGreaterEqual(
+            html.count("df-repeatable-flat-row"),
+            2,
         )
 
-        first_child_match = child_matches[first_row_id][1]
-        second_child_match = child_matches[second_row_id][1]
-
-        self.assertIsNotNone(first_child_match)
-        self.assertIsNotNone(second_child_match)
-
-        first_device_index = first_device_match.start()
-        first_child_index = first_child_match.start()
-        second_device_index = second_device_match.start()
-        second_child_index = second_child_match.start()
-
-        self.assertLess(first_device_index, first_child_index)
-        self.assertLess(first_child_index, second_device_index)
-        self.assertLess(second_device_index, second_child_index)
-
-        first_child_html = html[first_child_index:second_device_index]
-        second_child_html = html[second_child_index:]
-
-        first_expected_child = (
-            "Child B" if first_row_id == rows[1].pk else "Child A"
+        # Each nested child row carries the canonical parent path and field
+        # name, while the root RepeatableRow identity is still submitted.
+        self.assertContains(
+            response,
+            'name="system_devices_0_system_devices_device_details_0_child_name"',
+            count=0,
         )
-        second_expected_child = (
-            "Child B" if second_row_id == rows[1].pk else "Child A"
+        self.assertContains(
+            response,
+            'name="system_devices_0_device_details_0_child_name"',
         )
-
-        self.assertIn(first_expected_child, first_child_html)
-        self.assertNotIn(
-            "Child A" if first_expected_child == "Child B" else "Child B",
-            first_child_html,
+        self.assertContains(
+            response,
+            'name="system_devices_1_device_details_0_child_name"',
         )
-        self.assertIn(second_expected_child, second_child_html)
-        self.assertNotIn(
-            "Child A" if second_expected_child == "Child B" else "Child B",
-            second_child_html,
+        self.assertContains(
+            response,
+            'name="system_devices_0__id"',
+        )
+        self.assertContains(
+            response,
+            'name="system_devices_1__id"',
+        )
+        self.assertContains(
+            response,
+            'name="system_devices_0_instance_device_id"',
+        )
+        self.assertContains(
+            response,
+            'name="system_devices_1_instance_device_id"',
         )
 
     def test_workflow_instance_renders_nested_repeatable_children(self):
