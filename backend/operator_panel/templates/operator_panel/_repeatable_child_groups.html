@@ -78,7 +78,8 @@
                                                   type="number"
                                                   id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
-                                                  value="{{ child_field.value|default:'' }}"
+                                                  value="{{ child_field.display_value|default:child_field.value|default:'' }}"
+                                                  step="{{ child_field.field.number_step }}"
                                                   class="df-table-input"
                                                 />
                                               {% elif child_field.field.field_type == "DATE" %}
