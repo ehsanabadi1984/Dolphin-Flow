@@ -152,6 +152,11 @@ class FormDraftValueValidationService:
 
         field_type = field.field_type
 
+        if field_type == FormField.FieldType.FORMULA:
+            # Formula values are derived server-side and are not operator input.
+            # They must not be rejected by submitted-value validation.
+            return
+
         if field_type in (
             FormField.FieldType.TEXT,
             FormField.FieldType.TEXTAREA,
