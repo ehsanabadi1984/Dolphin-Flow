@@ -2516,64 +2516,51 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
 
         html = response.content.decode()
         device_matches = {}
-        for row in rows:
-            match = re.search(
-                rf'<tr\s+class="df-device-row"'
-                rf'[\s\S]*?data-device-index="(\d+)"'
-                rf'[\s\S]*?data-row-id="{row.pk}"',
-                html,
+        for match in re.finditer(
+            r'<tr\\b(?P<attrs>[^>]*)>',
+            html,
+        ):
+            attrs = match.group("attrs")
+            if "df-device-row" not in attrs:
+                continue
+            row_id_match = re.search(
+                r'data-row-id="(\\d+)"',
+                attrs,
             )
-            self.assertIsNotNone(match)
-            device_matches[row.pk] = match
+            index_match = re.search(
+                r'data-device-index="(\\d+)"',
+                attrs,
+            )
+            if not row_id_match or not index_match:
+                continue
+            device_matches[int(row_id_match.group(1))] = (
+                index_match.group(1),
+                match,
+            )
 
-        self.assertEqual(len(device_matches), 2)
+        self.assertEqual(set(device_matches), {row.pk for row in rows})
 
         ordered = sorted(
             device_matches.items(),
-            key=lambda item: int(item[1].group(1)),
+            key=lambda item: int(item[1][0]),
         )
-        first_row_id, first_device_match = ordered[0]
-        second_row_id, second_device_match = ordered[1]
-        first_index = first_device_match.group(1)
-        second_index = second_device_match.group(1)
+        first_row_id, (first_index, first_device_match) = ordered[0]
+        second_row_id, (second_index, second_device_match) = ordered[1]
 
         first_child_match = re.search(
-            rf'<tr\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'[\s\S]*?data-device-parent-row-id="{first_row_id}"'
-            rf'[\s\S]*?data-device-parent-index="{first_index}"',
+            rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
+            rf'(?=[\\s\\S]*?data-device-parent-row-id="{first_row_id}")'
+            rf'(?=[\\s\\S]*?data-device-parent-index="{first_index}")'
+            rf'[^>]*>',
             html,
         )
         second_child_match = re.search(
-            rf'<tr\s+class="df-repeatable-child-row df-device-child-row"'
-            rf'[\s\S]*?data-device-parent-row-id="{second_row_id}"'
-            rf'[\s\S]*?data-device-parent-index="{second_index}"',
+            rf'<tr\\s+class="df-repeatable-child-row df-device-child-row"'
+            rf'(?=[\\s\\S]*?data-device-parent-row-id="{second_row_id}")'
+            rf'(?=[\\s\\S]*?data-device-parent-index="{second_index}")'
+            rf'[^>]*>',
             html,
         )
-
-        print("\n===== DEVICE HTML =====")
-        print(
-            "\n".join(
-                line
-                for line in html.splitlines()
-                if "df-device" in line
-                or "df-repeatable-child-row" in line
-                or "Child A" in line
-                or "Child B" in line
-            )
-        )
-        print("===== END DEVICE HTML =====")
-        print("ROW IDS:", [row.pk for row in rows])
-        print("DEVICE MATCHES:", {k: v.group(0) for k, v in device_matches.items()})
-        print("FIRST ROW ID:", first_row_id, "INDEX:", first_index)
-        print("SECOND ROW ID:", second_row_id, "INDEX:", second_index)
-        child_rows = re.findall(
-            r'<tr[\\s\\S]*?class="df-repeatable-child-row df-device-child-row"[\\s\\S]*?</tr>',
-            html,
-        )
-        print("CHILD ROWS:")
-        for child_row in child_rows:
-            print(repr(child_row))
-        print("===== END DEVICE HTML =====\n")
 
         self.assertIsNotNone(first_child_match)
         self.assertIsNotNone(second_child_match)
@@ -2590,16 +2577,23 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         first_child_html = html[first_child_index:second_device_index]
         second_child_html = html[second_child_index:]
 
-        self.assertIn("Child A", first_child_html)
-        self.assertIn("Child B", first_child_html) if first_row_id == rows[1].pk else self.assertNotIn("Child B", first_child_html)
-        self.assertIn("Child B", second_child_html)
-        self.assertIn("Child A", second_child_html) if second_row_id == rows[0].pk else self.assertNotIn("Child A", second_child_html)
-
-        self.assertIn(
-            'data-device-parent-row-id="',
-            first_child_html,
+        first_expected_child = (
+            "Child B" if first_row_id == rows[1].pk else "Child A"
+        )
+        second_expected_child = (
+            "Child B" if second_row_id == rows[1].pk else "Child A"
         )
 
+        self.assertIn(first_expected_child, first_child_html)
+        self.assertNotIn(
+            "Child A" if first_expected_child == "Child B" else "Child B",
+            first_child_html,
+        )
+        self.assertIn(second_expected_child, second_child_html)
+        self.assertNotIn(
+            "Child A" if second_expected_child == "Child B" else "Child B",
+            second_child_html,
+        )
 
     def test_workflow_instance_renders_nested_repeatable_children(self):
         parent_group = FormRepeatableGroup.objects.create(
