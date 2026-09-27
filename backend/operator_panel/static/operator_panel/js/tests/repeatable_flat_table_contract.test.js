@@ -1589,7 +1589,7 @@ test("DEVICE add flow materializes into the flat-table lifecycle", () => {
     );
     assert.match(
         appJs,
-        /\/rootRow\\.dataset\\.repeatableRowGroup = groupCode\//
+        /rootRow\.dataset\.repeatableRowGroup = groupCode/
     );
     assert.match(
         appJs,
