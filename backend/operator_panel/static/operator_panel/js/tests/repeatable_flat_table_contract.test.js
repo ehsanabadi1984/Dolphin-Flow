@@ -1574,6 +1574,21 @@ test("DEVICE modal validates required child fields and scopes dependent selects"
 });
 
 
+test("DEVICE add flow attaches the materialized rows to the live table body", () => {
+    assert.match(
+        appJs,
+        /itemsContainer\.querySelectorAll\("\.df-table-empty"\)\.forEach\(\(row\) => row\.remove\(\)\);/,
+    );
+    assert.match(
+        appJs,
+        /itemsContainer\.append\(rootRow, \.\.\.childRows\);/,
+    );
+    assert.doesNotMatch(
+        appJs,
+        /rootRow\.after\(\.\.\.childRows\);/,
+    );
+});
+
 test("DEVICE add flow materializes into the flat-table lifecycle", () => {
     assert.match(
         appJs,
