@@ -127,7 +127,7 @@
 
                     <input
                       id="field-{{ item.field.code }}"
-                      type="date"
+                      type="{% if item.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"
                       name="{{ item.field.code }}"
                       value="{{ item.value|default:'' }}"
                     />
@@ -136,7 +136,7 @@
 
                     <input
                       id="field-{{ item.field.code }}"
-                      type="datetime-local"
+                      type="{% if item.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"
                       name="{{ item.field.code }}"
                       value="{{ item.value|default:'' }}"
                     />
@@ -418,7 +418,7 @@
                           {% elif item_field.field.field_type == "DATE" %}
 
                             <input
-                              type="date"
+                              type="{% if item_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
                               name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                               value="{{ item_field.value|default:'' }}"
@@ -427,7 +427,7 @@
                           {% elif item_field.field.field_type == "DATETIME" %}
 
                             <input
-                              type="datetime-local"
+                              type="{% if item_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
                               name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
                               value="{{ item_field.value|default:'' }}"
@@ -570,14 +570,14 @@
 
                         {% elif template_field.field.field_type == "DATE" %}
                           <input
-                            type="date"
+                            type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"
                             id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                             name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                           />
 
                         {% elif template_field.field.field_type == "DATETIME" %}
                           <input
-                            type="datetime-local"
+                            type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"
                             id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                             name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                           />
@@ -804,7 +804,7 @@
             {% else %}
 
                 <input
-                    type="{% if field_info.field.field_type == 'NUMBER' %}number{% elif field_info.field.field_type == 'DATE' %}date{% elif field_info.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
+                    type="{% if field_info.field.field_type == 'NUMBER' %}number{% elif field_info.field.field_type == 'DATE' and field_info.field.calendar == 'JALALI' %}text{% elif field_info.field.field_type == 'DATE' %}date{% elif field_info.field.field_type == 'DATETIME' and field_info.field.calendar == 'JALALI' %}text{% elif field_info.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
                     data-device-modal-field="{{ field_info.field.code }}"
                     data-field-code="{{ field_info.field.code }}"
                 >
