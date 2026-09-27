@@ -1026,7 +1026,13 @@ class DynamicFormService:
                     "field": field,
                     "value": value.get("value", ""),
                     "display_value": value.get("display_value", ""),
-                    "can_edit": field_context["can_edit"],
+                    # Per-row access matters for DEVICE identity fields:
+                    # an existing device keeps IMEI/type/model immutable even
+                    # when the group-level field itself is editable.
+                    "can_edit": value.get(
+                        "can_edit",
+                        field_context["can_edit"],
+                    ),
                     "input_prefix": prefix,
                 })
 
@@ -1050,6 +1056,17 @@ class DynamicFormService:
                     "row_id": item["row_id"],
                     "row_group_code": context["group"].code,
                     "parent_row_id": item["parent_row_id"],
+                    "instance_device_id": item.get(
+                        "instance_device_id",
+                        item.get("device", {}).get(
+                            "instance_device_id",
+                            "",
+                        ),
+                    ),
+                    "device_id": item.get(
+                        "device_id",
+                        item.get("device", {}).get("device_id", ""),
+                    ),
                     "path": path,
                     "id_input_name": (
                         "".join(
@@ -1142,6 +1159,20 @@ class DynamicFormService:
                     "is_root": False,
                 }
             ]
+
+            if (
+                group_context["group"].group_type
+                == FormRepeatableGroup.GroupType.DEVICE
+                and row["row_group_code"] == group_context["group"].code
+                and row.get("instance_device_id")
+            ):
+                row["device_instance_id_input"] = {
+                    "name": (
+                        f"{group_context['group'].code}_"
+                        f"{row['path'][0][1]}_instance_device_id"
+                    ),
+                    "value": row["instance_device_id"],
+                }
 
             if root_index not in first_row_for_root:
                 first_row_for_root.add(root_index)
@@ -2724,6 +2755,21 @@ class DynamicFormService:
                         "group_type": group.group_type,
                         "child_groups": device_child_group_contexts,
                     }
+
+                    # DEVICE groups use the same flat-table presentation
+                    # contract as NORMAL TABLE groups.  RepeatableRow remains
+                    # the persistence source of truth; this only derives the
+                    # tabular presentation from the already reconstructed tree.
+                    if group.display_type == FormRepeatableGroup.DisplayType.TABLE:
+                        group_context["flat_table"] = (
+                            DynamicFormService._build_flat_table_context(
+                                group_context,
+                                permission_context,
+                                edit_mode,
+                                is_submitted,
+                            )
+                        )
+
                     group_context = OperatorFormSerializer.group_context(
                         group_context=group_context,
                     )
