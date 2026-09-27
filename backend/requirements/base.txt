@@ -9,3 +9,4 @@ daphne==4.2.3
 paramiko==4.0.0
 smbprotocol==1.15.0
 cryptography==46.0.1
+jdatetime==5.2.0
