@@ -142,6 +142,12 @@ class PermissionContext:
             if rule.user_id is None and rule.role in roles
         ]
 
+        if not access_rules:
+            return FieldPermission(
+                can_view=True,
+                can_edit=True,
+            )
+
         return FieldPermission(
             can_view=any(rule.can_view for rule in role_rules),
             can_edit=any(rule.can_edit for rule in role_rules),
@@ -174,6 +180,14 @@ class PermissionContext:
             if rule.user_id is None and rule.role in roles
         ]
 
+        if not access_rules:
+            return GroupPermission(
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+
         return GroupPermission(
             can_view=any(rule.can_view for rule in role_rules),
             can_edit=any(rule.can_edit for rule in role_rules),
@@ -185,12 +199,12 @@ class PermissionContext:
         if field.repeatable_group_id is None:
             return self.normal_fields.get(
                 field.pk,
-                FieldPermission(False, False),
+                FieldPermission(True, True),
             )
 
         return self.repeatable_fields.get(
             field.pk,
-            FieldPermission(False, False),
+            FieldPermission(True, True),
         )
 
     def is_field_hidden(self, field):
@@ -202,7 +216,7 @@ class PermissionContext:
     def group(self, group):
         return self.groups.get(
             group.pk,
-            GroupPermission(False, False, False, False),
+            GroupPermission(True, True, True, True),
         )
 
     def is_group_hidden(self, group):
