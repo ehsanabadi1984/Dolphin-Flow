@@ -32,15 +32,15 @@ class PermissionContext:
         normal_fields: dict[int, FieldPermission],
         repeatable_fields: dict[int, FieldPermission],
         groups: dict[int, GroupPermission],
+        configured_fields: FrozenSet[int] = frozenset(),
+        configured_groups: FrozenSet[int] = frozenset(),
     ):
         self.roles = roles
         self.normal_fields = normal_fields
         self.repeatable_fields = repeatable_fields
         self.groups = groups
-        self.configured_fields = frozenset(
-            set(normal_fields) | set(repeatable_fields)
-        )
-        self.configured_groups = frozenset(groups)
+        self.configured_fields = configured_fields
+        self.configured_groups = configured_groups
 
     @classmethod
     def build(
@@ -64,6 +64,8 @@ class PermissionContext:
         normal_fields = {}
         repeatable_fields = {}
         groups = {}
+        configured_fields = set()
+        configured_groups = set()
 
         sections = form.sections.filter(
             is_active=True,
@@ -85,6 +87,9 @@ class PermissionContext:
                     roles=roles,
                 )
 
+                if any(rule.step_id == step.pk for rule in field.access_rules.all()):
+                    configured_fields.add(field.pk)
+
                 if field.repeatable_group_id is None:
                     normal_fields[field.pk] = permission
                 else:
@@ -100,12 +105,16 @@ class PermissionContext:
                     user=user,
                     roles=roles,
                 )
+                if any(rule.step_id == step.pk for rule in group.access_rules.all()):
+                    configured_groups.add(group.pk)
 
         return cls(
             roles=roles,
             normal_fields=normal_fields,
             repeatable_fields=repeatable_fields,
             groups=groups,
+            configured_fields=frozenset(configured_fields),
+            configured_groups=frozenset(configured_groups),
         )
 
     @staticmethod
