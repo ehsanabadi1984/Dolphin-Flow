@@ -2127,6 +2127,11 @@ class FieldAccess(models.Model):
     def clean(self):
         super().clean()
 
+        if self.can_edit and not self.can_view:
+            raise ValidationError(
+                "برای ویرایش فیلد، دسترسی مشاهده نیز باید فعال باشد."
+            )
+
         if not self.field_id or not self.step_id:
             return
 
@@ -2141,6 +2146,12 @@ class FieldAccess(models.Model):
 
     class Meta:
         ordering = ["field"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(can_edit=False) | models.Q(can_view=True),
+                name="field_access_edit_requires_view",
+            ),
+        ]
 
     def __str__(self):
         subject = self.user or self.role or "GLOBAL"
@@ -2196,6 +2207,11 @@ class RepeatableGroupAccess(models.Model):
     def clean(self):
         super().clean()
 
+        if self.can_edit and not self.can_view:
+            raise ValidationError(
+                "برای ویرایش گروه، دسترسی مشاهده نیز باید فعال باشد."
+            )
+
         if not self.group_id or not self.step_id:
             return
 
@@ -2210,6 +2226,12 @@ class RepeatableGroupAccess(models.Model):
 
     class Meta:
         ordering = ["group"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(can_edit=False) | models.Q(can_view=True),
+                name="repeatable_group_access_edit_requires_view",
+            ),
+        ]
 
     def __str__(self):
         subject = self.user or self.role or "GLOBAL"
