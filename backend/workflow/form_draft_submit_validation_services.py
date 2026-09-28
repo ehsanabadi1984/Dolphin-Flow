@@ -83,7 +83,10 @@ class FormDraftSubmitValidationService:
         fields = cls._normal_fields(form=form)
 
         for field in fields:
-            if permission_context is not None and permission_context.is_field_hidden(field):
+            if (
+                permission_context is not None
+                and not permission_context.field(field).can_edit
+            ):
                 continue
             if not field.is_required or cls._is_server_derived_field(field):
                 continue
@@ -113,7 +116,10 @@ class FormDraftSubmitValidationService:
         normalized_payload,
         permission_context=None,
     ):
-        if permission_context is not None and permission_context.is_group_hidden(group):
+        if (
+            permission_context is not None
+            and not permission_context.group(group).can_add
+        ):
             return []
 
         if group.code in normalized_payload.repeatable_groups:
@@ -210,7 +216,10 @@ class FormDraftSubmitValidationService:
             is_active=True,
             is_required=True,
         ).order_by("order", "id"):
-            if permission_context is not None and permission_context.is_field_hidden(field):
+            if (
+                permission_context is not None
+                and not permission_context.field(field).can_edit
+            ):
                 continue
             if cls._is_server_derived_field(field):
                 continue
@@ -246,7 +255,10 @@ class FormDraftSubmitValidationService:
                     )
                 )
 
-            if permission_context is not None and not permission_context.group(child_group).can_view:
+            if (
+                permission_context is not None
+                and not permission_context.group(child_group).can_add
+            ):
                 continue
 
             if child_group.group_type == FormRepeatableGroup.GroupType.DEVICE:
