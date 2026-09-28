@@ -349,7 +349,7 @@ class WorkflowExecutionTests(TestCase):
             "Parent",
         )
         self.assertEqual(
-            history_by_code["children"]["items"][0]["fields"][0]["value"],
+            history_by_code["items"]["items"][0]["child_groups"][0]["items"][0]["fields"][0]["value"],
             "Child",
         )
 
