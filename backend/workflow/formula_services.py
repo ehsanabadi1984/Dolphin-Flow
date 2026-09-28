@@ -443,6 +443,18 @@ class FormulaService:
             if isinstance(direct_rows, list):
                 rows.extend(row for row in direct_rows if isinstance(row, dict))
 
+            def visit_rows(parent_rows):
+                if not isinstance(parent_rows, list):
+                    return
+                for row in parent_rows:
+                    if not isinstance(row, dict):
+                        continue
+                    child_groups = row.get("child_groups", [])
+                    if not isinstance(child_groups, list):
+                        continue
+                    for child_group in child_groups:
+                        visit_group(child_group)
+
             def visit_group(group_payload):
                 if not isinstance(group_payload, dict):
                     return
@@ -450,19 +462,15 @@ class FormulaService:
                     items = group_payload.get("items", [])
                     if isinstance(items, list):
                         rows.extend(row for row in items if isinstance(row, dict))
-                    return
-                items = group_payload.get("items", [])
-                if not isinstance(items, list):
-                    return
-                for row in items:
-                    if not isinstance(row, dict):
-                        continue
-                    for child_group in row.get("child_groups", []):
-                        visit_group(child_group)
+                else:
+                    visit_rows(group_payload.get("items", []))
 
             for payload in result.values():
-                if isinstance(payload, dict) and payload.get("code"):
+                if isinstance(payload, list):
+                    visit_rows(payload)
+                elif isinstance(payload, dict) and payload.get("code"):
                     visit_group(payload)
+
             return rows
 
         def resolve_group_aggregate(field_id: int, function_name: str) -> Decimal:
