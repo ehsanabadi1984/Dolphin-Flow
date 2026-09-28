@@ -37,6 +37,10 @@ class PermissionContext:
         self.normal_fields = normal_fields
         self.repeatable_fields = repeatable_fields
         self.groups = groups
+        self.configured_fields = frozenset(
+            set(normal_fields) | set(repeatable_fields)
+        )
+        self.configured_groups = frozenset(groups)
 
     @classmethod
     def build(
@@ -180,8 +184,20 @@ class PermissionContext:
             FieldPermission(False, False),
         )
 
+    def is_field_hidden(self, field):
+        return (
+            field.pk in self.configured_fields
+            and not self.field(field).can_view
+        )
+
     def group(self, group):
         return self.groups.get(
             group.pk,
             GroupPermission(False, False, False, False),
+        )
+
+    def is_group_hidden(self, group):
+        return (
+            group.pk in self.configured_groups
+            and not self.group(group).can_view
         )
