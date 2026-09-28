@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from workflow.models import (
@@ -242,7 +243,7 @@ class PermissionContextTests(TestCase):
             group=self.group,
             step=self.step,
             role=WorkflowMembership.Role.EXECUTOR,
-            can_view=False,
+            can_view=True,
             can_edit=True,
             can_add=True,
             can_delete=False,
@@ -351,3 +352,56 @@ class PermissionContextTests(TestCase):
             context.field(self.normal_field),
             FieldPermission(False, False),
         )
+
+
+    def test_field_access_rejects_edit_without_view(self):
+        access = FieldAccess(
+            field=self.normal_field,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=True,
+        )
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "برای ویرایش فیلد، دسترسی مشاهده نیز باید فعال باشد.",
+        ):
+            access.full_clean()
+
+    def test_repeatable_group_access_rejects_edit_without_view(self):
+        access = RepeatableGroupAccess(
+            group=self.group,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=True,
+        )
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "برای ویرایش گروه، دسترسی مشاهده نیز باید فعال باشد.",
+        ):
+            access.full_clean()
+
+    def test_field_access_allows_view_and_edit(self):
+        access = FieldAccess(
+            field=self.normal_field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        access.full_clean()
+
+    def test_repeatable_group_access_allows_view_and_edit(self):
+        access = RepeatableGroupAccess(
+            group=self.group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        access.full_clean()
