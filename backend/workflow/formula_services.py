@@ -433,14 +433,44 @@ class FormulaService:
                 return value
             return cls._to_decimal(result.get(field.code))
 
+        def _find_group_rows(group_code: str) -> list[dict]:
+            """
+            Return all row payloads for a repeatable group anywhere in the
+            reconstructed hierarchy.
+            """
+            rows = []
+            direct_rows = result.get(group_code)
+            if isinstance(direct_rows, list):
+                rows.extend(row for row in direct_rows if isinstance(row, dict))
+
+            def visit_group(group_payload):
+                if not isinstance(group_payload, dict):
+                    return
+                if group_payload.get("code") == group_code:
+                    items = group_payload.get("items", [])
+                    if isinstance(items, list):
+                        rows.extend(row for row in items if isinstance(row, dict))
+                    return
+                items = group_payload.get("items", [])
+                if not isinstance(items, list):
+                    return
+                for row in items:
+                    if not isinstance(row, dict):
+                        continue
+                    for child_group in row.get("child_groups", []):
+                        visit_group(child_group)
+
+            for payload in result.values():
+                if isinstance(payload, dict) and payload.get("code"):
+                    visit_group(payload)
+            return rows
+
         def resolve_group_aggregate(field_id: int, function_name: str) -> Decimal:
             field = by_id.get(field_id)
             if field is None or field.repeatable_group_id is None:
                 return resolve_normal(field_id)
             group = field.repeatable_group
-            rows = result.get(group.code, [])
-            if not isinstance(rows, list):
-                rows = []
+            rows = _find_group_rows(group.code)
             values: list[Decimal] = []
             group_fields = {
                 item.pk: item for item in all_fields if item.repeatable_group_id == group.pk
