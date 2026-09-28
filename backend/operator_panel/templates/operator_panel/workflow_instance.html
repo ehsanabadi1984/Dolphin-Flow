@@ -554,6 +554,7 @@
                             type="text"
                             id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                             name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                            step="{{ template_field.field.number_step }}"
                           />
 
                         {% elif template_field.field.field_type == "TEXTAREA" %}
