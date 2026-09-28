@@ -61,6 +61,7 @@ class FormDraftSubmitValidationService:
                     instance=instance,
                     group=group,
                     normalized_payload=normalized_payload,
+                    permission_context=permission_context,
                 )
             )
 
@@ -82,7 +83,7 @@ class FormDraftSubmitValidationService:
         fields = cls._normal_fields(form=form)
 
         for field in fields:
-            if permission_context is not None and not permission_context.field(field).can_view:
+            if permission_context is not None and permission_context.is_field_hidden(field):
                 continue
             if not field.is_required or cls._is_server_derived_field(field):
                 continue
@@ -112,7 +113,7 @@ class FormDraftSubmitValidationService:
         normalized_payload,
         permission_context=None,
     ):
-        if permission_context is not None and not permission_context.group(group).can_view:
+        if permission_context is not None and permission_context.is_group_hidden(group):
             return []
 
         if group.code in normalized_payload.repeatable_groups:
@@ -159,7 +160,7 @@ class FormDraftSubmitValidationService:
                 "_validate_normal_group expects a root group."
             )
 
-        if permission_context is not None and not permission_context.group(group).can_view:
+        if permission_context is not None and permission_context.is_group_hidden(group):
             return []
 
         if group.code in normalized_payload.repeatable_groups:
@@ -209,7 +210,7 @@ class FormDraftSubmitValidationService:
             is_active=True,
             is_required=True,
         ).order_by("order", "id"):
-            if permission_context is not None and not permission_context.field(field).can_view:
+            if permission_context is not None and permission_context.is_field_hidden(field):
                 continue
             if cls._is_server_derived_field(field):
                 continue
