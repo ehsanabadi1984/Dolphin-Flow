@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workflow.form_draft_payloads import NormalizedFormPayload, NormalizedRow
@@ -6,6 +7,7 @@ from workflow.form_draft_submit_validation_services import (
     FormDraftSubmitValidationService,
 )
 from workflow.models import (
+    FieldAccess,
     FormData,
     FormDefinition,
     FormField,
@@ -16,6 +18,8 @@ from workflow.models import (
     RepeatableRowValue,
     Workflow,
     WorkflowInstance,
+    WorkflowMembership,
+    WorkflowStep,
 )
 
 
@@ -38,6 +42,24 @@ class FormDraftSubmitValidationServiceTests(TestCase):
         self.instance = WorkflowInstance.objects.create(
             workflow=self.workflow,
         )
+        self.user = get_user_model().objects.create_user(
+            username="submit_validation_user",
+            password="test-password",
+        )
+        self.step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Submit Step",
+            code="SUBMIT_STEP",
+            order=1,
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        self.instance.current_step = self.step
+        self.instance.save(update_fields=["current_step"])
 
     def create_field(
         self,
@@ -78,6 +100,106 @@ class FormDraftSubmitValidationServiceTests(TestCase):
         return NormalizedFormPayload(
             normal_fields=normal or {},
             repeatable_groups=groups or {},
+        )
+
+    def permission_context(self):
+        from workflow.permission_context import PermissionContext
+
+        return PermissionContext.build(
+            workflow=self.workflow,
+            form=self.form,
+            step=self.step,
+            user=self.user,
+        )
+
+    def test_hidden_required_normal_field_does_not_block_submit(self):
+        field = self.create_field(code="hidden_name", required=True)
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=False,
+        )
+
+        FormDraftSubmitValidationService.validate_payload(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=self.payload(
+                normal={field.code: ""},
+            ),
+            permission_context=self.permission_context(),
+        )
+
+    def test_visible_read_only_required_normal_field_still_blocks_submit(self):
+        field = self.create_field(code="readonly_name", required=True)
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+
+        with self.assertRaises(ValidationError):
+            FormDraftSubmitValidationService.validate_payload(
+                instance=self.instance,
+                form=self.form,
+                normalized_payload=self.payload(
+                    normal={field.code: ""},
+                ),
+                permission_context=self.permission_context(),
+            )
+
+    def test_visible_editable_required_normal_field_blocks_submit(self):
+        field = self.create_field(code="editable_name", required=True)
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
+        with self.assertRaises(ValidationError):
+            FormDraftSubmitValidationService.validate_payload(
+                instance=self.instance,
+                form=self.form,
+                normalized_payload=self.payload(
+                    normal={field.code: ""},
+                ),
+                permission_context=self.permission_context(),
+            )
+
+    def test_hidden_required_repeatable_field_does_not_block_submit(self):
+        group = self.create_group(code="items")
+        field = self.create_field(code="name", group=group, required=True)
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=False,
+            can_edit=False,
+        )
+        from workflow.models import RepeatableGroupAccess
+        RepeatableGroupAccess.objects.create(
+            group=group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        row = NormalizedRow(row_id=None, fields={}, child_groups={})
+
+        FormDraftSubmitValidationService.validate_payload(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=self.payload(
+                groups={group.code: (row,)},
+            ),
+            permission_context=self.permission_context(),
         )
 
     def test_required_formula_is_not_checked_as_user_input(self):
