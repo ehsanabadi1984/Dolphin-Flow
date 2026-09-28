@@ -166,7 +166,10 @@ class FormDraftSubmitValidationService:
                 "_validate_normal_group expects a root group."
             )
 
-        if permission_context is not None and permission_context.is_group_hidden(group):
+        if (
+            permission_context is not None
+            and not permission_context.group(group).can_add
+        ):
             return []
 
         if group.code in normalized_payload.repeatable_groups:
