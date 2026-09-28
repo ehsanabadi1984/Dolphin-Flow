@@ -4,6 +4,7 @@ from .form_draft_current_state_payload_services import (
 from .form_draft_submit_validation_services import (
     FormDraftSubmitValidationService,
 )
+from .permission_context import PermissionContext
 from .form_draft_value_validation_services import (
     FormDraftValueValidationService,
 )
@@ -22,7 +23,14 @@ class FormDraftSubmitService:
     """
 
     @classmethod
-    def validate(cls, *, instance, form):
+    def validate(cls, *, instance, form, user):
+        permission_context = PermissionContext.build(
+            workflow=instance.workflow,
+            form=form,
+            step=instance.current_step,
+            user=user,
+        )
+
         normalized_payload = FormDraftCurrentStatePayloadService.build(
             instance=instance,
             form=form,
@@ -38,6 +46,7 @@ class FormDraftSubmitService:
             instance=instance,
             form=form,
             normalized_payload=normalized_payload,
+            permission_context=permission_context,
         )
 
         return normalized_payload
