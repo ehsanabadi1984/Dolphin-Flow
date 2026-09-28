@@ -13,6 +13,17 @@ document.addEventListener("DOMContentLoaded", () => {
         loading: false,
     };
 
+    function toNumber(value) {
+        if (value === null || value === undefined || value === "") return NaN;
+        if (typeof value === "number") return value;
+        const normalized = String(value)
+            .trim()
+            .replace(/,/g, "")
+            .replace(/[۰-۹]/g, digit => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)));
+        const number = Number(normalized);
+        return Number.isFinite(number) ? number : NaN;
+    }
+
     function formatNumber(value, decimalPlaces) {
         const places = Math.max(0, Math.min(Number(decimalPlaces) || 0, 6));
         if (!Number.isFinite(value)) return "";
