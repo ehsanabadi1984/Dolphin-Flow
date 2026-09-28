@@ -11,8 +11,9 @@ class FormDraftSubmitValidationService:
     Stage 12.5: validate completeness for final Submit.
 
     This validator is read-only and accepts the canonical normalized payload.
-    It does not persist data, check permissions, or perform domain/device
-    validation.
+    It does not persist data or perform domain/device validation. When a
+    PermissionContext is supplied, hidden fields/groups are outside the
+    operator's completeness contract and are skipped.
 
     Omitted top-level fields/groups mean "unchanged" and therefore fall back
     to persisted canonical state. An explicitly supplied empty value/group is
