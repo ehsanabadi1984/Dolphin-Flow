@@ -131,7 +131,7 @@ class FormDraftSubmitValidationServiceTests(TestCase):
             permission_context=self.permission_context(),
         )
 
-    def test_visible_read_only_required_normal_field_still_blocks_submit(self):
+    def test_visible_read_only_required_normal_field_does_not_block_submit(self):
         field = self.create_field(code="readonly_name", required=True)
         FieldAccess.objects.create(
             field=field,
@@ -141,15 +141,14 @@ class FormDraftSubmitValidationServiceTests(TestCase):
             can_edit=False,
         )
 
-        with self.assertRaises(ValidationError):
-            FormDraftSubmitValidationService.validate_payload(
-                instance=self.instance,
-                form=self.form,
-                normalized_payload=self.payload(
-                    normal={field.code: ""},
-                ),
-                permission_context=self.permission_context(),
-            )
+        FormDraftSubmitValidationService.validate_payload(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=self.payload(
+                normal={field.code: ""},
+            ),
+            permission_context=self.permission_context(),
+        )
 
     def test_visible_editable_required_normal_field_blocks_submit(self):
         field = self.create_field(code="editable_name", required=True)
@@ -198,6 +197,60 @@ class FormDraftSubmitValidationServiceTests(TestCase):
             form=self.form,
             normalized_payload=self.payload(
                 groups={group.code: (row,)},
+            ),
+            permission_context=self.permission_context(),
+        )
+
+    def test_visible_read_only_required_repeatable_field_does_not_block_submit(self):
+        group = self.create_group(code="readonly_items")
+        field = self.create_field(code="name", group=group, required=True)
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+        )
+        from workflow.models import RepeatableGroupAccess
+        RepeatableGroupAccess.objects.create(
+            group=group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+            can_add=True,
+            can_delete=True,
+        )
+        row = NormalizedRow(row_id=None, fields={}, child_groups={})
+
+        FormDraftSubmitValidationService.validate_payload(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=self.payload(
+                groups={group.code: (row,)},
+            ),
+            permission_context=self.permission_context(),
+        )
+
+    def test_required_group_does_not_block_when_user_cannot_add_rows(self):
+        group = self.create_group(code="readonly_group", required=True)
+        self.create_field(code="name", group=group, required=True)
+        from workflow.models import RepeatableGroupAccess
+        RepeatableGroupAccess.objects.create(
+            group=group,
+            step=self.step,
+            user=self.user,
+            can_view=True,
+            can_edit=False,
+            can_add=False,
+            can_delete=False,
+        )
+
+        FormDraftSubmitValidationService.validate_payload(
+            instance=self.instance,
+            form=self.form,
+            normalized_payload=self.payload(
+                groups={group.code: ()},
             ),
             permission_context=self.permission_context(),
         )
