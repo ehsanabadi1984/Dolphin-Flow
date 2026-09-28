@@ -429,6 +429,76 @@ class FormulaPersistenceTestCase(TestCase):
             Decimal("125"),
         )
 
+    def test_top_level_aggregate_traverses_nested_repeatable_group(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="nestedTable",
+            code="nestedTable",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=1,
+            is_active=True,
+        )
+        child_value = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="nestedValue",
+            code="nestedValue",
+            field_type=FormField.FieldType.NUMBER,
+            label="Nested value",
+            order=0,
+            is_active=True,
+        )
+        nested_total = FormField.objects.create(
+            section=self.final_section,
+            name="NestedTotal",
+            code="NestedTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Nested total",
+            order=2,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": child_value.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=2),
+        )
+
+        data = {
+            self.group.code: [
+                {
+                    "child_groups": [
+                        {
+                            "code": child_group.code,
+                            "items": [
+                                {"nestedValue": "1"},
+                                {"nestedValue": "1"},
+                            ],
+                        }
+                    ]
+                },
+                {
+                    "child_groups": [
+                        {
+                            "code": child_group.code,
+                            "items": [
+                                {"nestedValue": "1"},
+                            ],
+                        }
+                    ]
+                },
+            ]
+        }
+
+        result = FormulaService.calculate_context_data(
+            form=self.form,
+            data=data,
+        )
+
+        self.assertEqual(result[nested_total.code], "3.00")
+
     # --------------------------------------------------------------
     # Second save / edit semantics (previous_item matters)
     # --------------------------------------------------------------
