@@ -447,6 +447,14 @@ class WorkflowExecutionTests(TestCase):
             is_active=True,
         )
 
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step_one,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
+        )
+
         history_configuration = HistoryConfiguration.objects.create(
             form=form,
             name="Execution History",
@@ -571,6 +579,14 @@ class WorkflowExecutionTests(TestCase):
             is_required=True,
             order=1,
             is_active=True,
+        )
+
+        FieldAccess.objects.create(
+            field=field,
+            step=self.step_one,
+            user=self.user,
+            can_view=True,
+            can_edit=True,
         )
 
         instance = self.start_instance()
