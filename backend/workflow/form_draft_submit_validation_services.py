@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 
 from .form_draft_payloads import NormalizedFormPayload, NormalizedRow
 from .models import FormData, FormField, FormRepeatableGroup, RepeatableRow
+from .permission_context import PermissionContext
 from .repeatable_row_read_services import RepeatableRowReadService
 
 
@@ -29,6 +30,7 @@ class FormDraftSubmitValidationService:
         instance,
         form,
         normalized_payload: NormalizedFormPayload,
+        permission_context: PermissionContext | None = None,
     ):
         errors = []
 
@@ -37,6 +39,7 @@ class FormDraftSubmitValidationService:
                 instance=instance,
                 form=form,
                 submitted_values=normalized_payload.normal_fields,
+                permission_context=permission_context,
             )
         )
 
@@ -47,6 +50,7 @@ class FormDraftSubmitValidationService:
                         instance=instance,
                         group=group,
                         normalized_payload=normalized_payload,
+                        permission_context=permission_context,
                     )
                 )
                 continue
@@ -67,7 +71,7 @@ class FormDraftSubmitValidationService:
             raise error
 
     @classmethod
-    def _validate_normal_fields(cls, *, instance, form, submitted_values):
+    def _validate_normal_fields(cls, *, instance, form, submitted_values, permission_context=None):
         errors = []
         form_data = (
             FormData.objects.filter(instance=instance).first()
@@ -77,6 +81,8 @@ class FormDraftSubmitValidationService:
         fields = cls._normal_fields(form=form)
 
         for field in fields:
+            if permission_context is not None and not permission_context.field(field).can_view:
+                continue
             if not field.is_required or cls._is_server_derived_field(field):
                 continue
 
@@ -103,7 +109,11 @@ class FormDraftSubmitValidationService:
         instance,
         group,
         normalized_payload,
+        permission_context=None,
     ):
+        if permission_context is not None and not permission_context.group(group).can_view:
+            return []
+
         if group.code in normalized_payload.repeatable_groups:
             rows = normalized_payload.repeatable_groups[group.code]
             count = len(rows)
@@ -141,11 +151,15 @@ class FormDraftSubmitValidationService:
         group,
         normalized_payload,
         parent_row=None,
+        permission_context=None,
     ):
         if parent_row is not None:
             raise ValueError(
                 "_validate_normal_group expects a root group."
             )
+
+        if permission_context is not None and not permission_context.group(group).can_view:
+            return []
 
         if group.code in normalized_payload.repeatable_groups:
             rows = normalized_payload.repeatable_groups[group.code]
@@ -179,13 +193,14 @@ class FormDraftSubmitValidationService:
                     instance=instance,
                     group=group,
                     row=row,
+                    permission_context=permission_context,
                 )
             )
 
         return errors
 
     @classmethod
-    def _validate_row(cls, *, instance, group, row):
+    def _validate_row(cls, *, instance, group, row, permission_context=None):
         persisted_values = cls._persisted_values(row_id=row.row_id)
         errors = []
 
@@ -193,6 +208,8 @@ class FormDraftSubmitValidationService:
             is_active=True,
             is_required=True,
         ).order_by("order", "id"):
+            if permission_context is not None and not permission_context.field(field).can_view:
+                continue
             if cls._is_server_derived_field(field):
                 continue
 
@@ -226,6 +243,9 @@ class FormDraftSubmitValidationService:
                         parent_row_id=row.row_id,
                     )
                 )
+
+            if permission_context is not None and not permission_context.group(child_group).can_view:
+                continue
 
             if child_group.group_type == FormRepeatableGroup.GroupType.DEVICE:
                 if child_group.is_required and not child_rows:
@@ -261,6 +281,7 @@ class FormDraftSubmitValidationService:
                         instance=instance,
                         group=child_group,
                         row=child_row,
+                        permission_context=permission_context,
                     )
                 )
 
