@@ -79,6 +79,22 @@ document.addEventListener("DOMContentLoaded", () => {
             newText: output.textContent,
             outputHTML: output.outerHTML,
         });
+        window.setTimeout(() => {
+            console.debug("[Formula] after 0ms", {
+                code: formula.code,
+                connected: output.isConnected,
+                currentText: output.textContent,
+                outputHTML: output.outerHTML,
+            });
+        }, 0);
+        window.setTimeout(() => {
+            console.debug("[Formula] after 100ms", {
+                code: formula.code,
+                connected: output.isConnected,
+                currentText: output.textContent,
+                outputHTML: output.outerHTML,
+            });
+        }, 100);
     }
 
     function setRowFormulaValue(formula, row, value) {
