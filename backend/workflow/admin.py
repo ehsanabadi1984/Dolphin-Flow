@@ -2971,6 +2971,7 @@ class FormFieldAdmin(admin.ModelAdmin):
                     "code",
                     "label",
                     "field_type",
+                    "calendar",
                     "system_key",
                     "help_text",
                     "is_required",
