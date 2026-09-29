@@ -2561,6 +2561,30 @@ class DynamicFormService:
                             # Build fields
                             # -------------------------------------------------
 
+                            # Custom DEVICE values live on the canonical
+                            # RepeatableRowValue store. Keep this lookup local
+                            # to the persisted GET path as well.
+                            device_repeatable_values = {}
+                            if instance_device.pk:
+                                device_repeatable_row = (
+                                    RepeatableRow.objects
+                                    .filter(
+                                        instance_device=instance_device,
+                                        group=group,
+                                    )
+                                    .prefetch_related(
+                                        "values__field",
+                                        "values__static_choice_item",
+                                        "values__lookup_item",
+                                    )
+                                    .first()
+                                )
+                                if device_repeatable_row is not None:
+                                    device_repeatable_values = {
+                                        value.field_id: value
+                                        for value in device_repeatable_row.values.all()
+                                    }
+
                             item_fields = []
 
                             for field_info in group_fields:
