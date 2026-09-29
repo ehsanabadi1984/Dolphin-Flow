@@ -16,7 +16,6 @@ from workflow.models import (
     RepeatableGroupAccess,
     RepeatableRow,
     RepeatableRowValue,
-    User,
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
