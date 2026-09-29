@@ -1113,6 +1113,98 @@ class FormulaPersistenceTestCase(TestCase):
 
         self.assertEqual(calculated[live_total.code], "10.00")
 
+    def test_live_nested_aggregate_matches_real_multi_row_edit_payload(self):
+        """Mirror the nested multi-row payload used by the live Formula scenario."""
+        from django.http import QueryDict
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="liveNestedMulti",
+            code="liveNestedMulti",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=5,
+            is_active=True,
+        )
+        live_value = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="liveValueMulti",
+            code="liveValueMulti",
+            field_type=FormField.FieldType.NUMBER,
+            label="Live value",
+            order=0,
+            is_active=True,
+        )
+        live_total = FormField.objects.create(
+            section=self.final_section,
+            name="LiveNestedMultiTotal",
+            code="LiveNestedMultiTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Live nested multi total",
+            order=11,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": live_value.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=2),
+        )
+
+        instance = self.make_instance()
+        root_rows = [
+            RepeatableRow.objects.create(instance=instance, group=self.group, row_order=0),
+            RepeatableRow.objects.create(instance=instance, group=self.group, row_order=1),
+        ]
+        child_values = [
+            ("1.5", root_rows[0], 0),
+            ("2", root_rows[0], 1),
+            ("1", root_rows[0], 2),
+            ("1.1", root_rows[0], 3),
+            ("2", root_rows[1], 0),
+        ]
+        child_rows = []
+        for value, parent, order in child_values:
+            row = RepeatableRow.objects.create(
+                instance=instance,
+                group=child_group,
+                parent_row=parent,
+                row_order=order,
+            )
+            RepeatableRowValue.objects.create(
+                row=row,
+                field=live_value,
+                decimal_value=Decimal(value),
+            )
+            child_rows.append(row)
+
+        submitted = QueryDict("", mutable=True)
+        for index, row in enumerate(root_rows):
+            submitted[f"{self.group.code}_{index}__id"] = str(row.pk)
+        for index, (value, parent, order) in enumerate(child_values):
+            child_index = order
+            if parent == root_rows[1]:
+                child_index = 0
+            submitted[
+                f"{self.group.code}_{0 if parent == root_rows[0] else 1}_{child_group.code}_{child_index}__id"
+            ] = str(child_rows[index].pk)
+            submitted[
+                f"{self.group.code}_{0 if parent == root_rows[0] else 1}_{child_group.code}_{child_index}_{live_value.code}"
+            ] = "10" if index == 0 else value
+
+        context = _build_context_data(
+            instance=instance,
+            submitted_data=submitted,
+        )
+        calculated = FormulaService.calculate_context_data(
+            form=self.form,
+            data=context,
+        )
+
+        self.assertEqual(calculated[live_total.code], "16.10")
+
     def test_live_post_context_overlays_changed_repeatable_input_before_formula_calculation(self):
         """Mirror the browser's flat POST and verify the pre-calculation context."""
         from django.http import QueryDict
