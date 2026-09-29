@@ -38,14 +38,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function getNormalFormulaContainer(formula) {
         const containers = getNormalFieldContainers();
-        const expectedIndex = Number(formula.dom_index);
-        if (Number.isInteger(expectedIndex) && expectedIndex >= 0) {
-            const exact = containers[expectedIndex];
-            if (exact) return exact;
-        }
+
         for (const field of containers) {
             if (field.dataset.fieldCode === formula.code) return field;
         }
+
+        const expectedIndex = Number(formula.dom_index);
+        if (Number.isInteger(expectedIndex) && expectedIndex >= 0) {
+            return containers[expectedIndex] || null;
+        }
+
         return null;
     }
 
