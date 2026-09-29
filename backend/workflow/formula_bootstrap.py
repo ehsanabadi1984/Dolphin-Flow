@@ -94,7 +94,7 @@ def _build_context_data(*, instance, submitted_data):
     for code in editable_top_level_codes:
         data[code] = submitted_data.get(code, "")
 
-    def merge_submitted_group_rows(group, canonical_rows):
+    def merge_submitted_group_rows(group, canonical_rows, path_prefix=""):
         """
         Overlay flat POST keys onto the already reconstructed canonical
         repeatable hierarchy.
@@ -122,7 +122,7 @@ def _build_context_data(*, instance, submitted_data):
             ).values_list("code", flat=True)
         )
 
-        group_prefix = f"{group.code}_"
+        group_prefix = f"{path_prefix}{group.code}_"
         parsed = {}
 
         for key in submitted_data.keys():
@@ -222,6 +222,7 @@ def _build_context_data(*, instance, submitted_data):
                 child_merged = merge_submitted_group_rows(
                     child_group,
                     child_canonical,
+                    path_prefix=f"{path_prefix}{group.code}_{row_index}_",
                 )
                 merged_children.append({
                     "code": child_group.code,
