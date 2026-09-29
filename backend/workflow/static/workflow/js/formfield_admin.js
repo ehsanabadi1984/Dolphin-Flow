@@ -9,6 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const value = document.getElementById("id_choice_value_field");
     const parent = document.getElementById("id_choice_parent_field");
     const filter = document.getElementById("id_choice_filter_field");
+    const fieldType = document.getElementById("id_field_type");
+    const calendar = document.getElementById("id_calendar");
 
     function getFieldRow(field) {
         if (!field) return null;
@@ -25,6 +27,16 @@ document.addEventListener("DOMContentLoaded", () => {
         if (row) {
             row.style.display = visible ? "" : "none";
         }
+    }
+
+    function updateCalendarVisibility() {
+        if (!fieldType || !calendar) return;
+
+        const isDate =
+            fieldType.value === "DATE" ||
+            fieldType.value === "DATETIME";
+
+        setVisible(calendar, isDate);
     }
 
     function updateChoiceSourceVisibility() {
@@ -121,6 +133,13 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     }
 
+    if (fieldType) {
+        fieldType.addEventListener(
+            "change",
+            updateCalendarVisibility
+        );
+    }
+
     if (model) {
         model.addEventListener(
             "change",
@@ -129,6 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     updateChoiceSourceVisibility();
+    updateCalendarVisibility();
 
     if (model && model.value) {
         loadFields();
