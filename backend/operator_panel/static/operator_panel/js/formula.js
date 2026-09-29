@@ -68,7 +68,17 @@ document.addEventListener("DOMContentLoaded", () => {
             if (fallback) fallback.replaceWith(output);
             else container.appendChild(output);
         }
+        console.debug("[Formula] before DOM write", {
+            code: formula.code,
+            currentText: output.textContent,
+            outputHTML: output.outerHTML,
+        });
         output.textContent = formatNumber(value, formula.decimal_places);
+        console.debug("[Formula] after DOM write", {
+            code: formula.code,
+            newText: output.textContent,
+            outputHTML: output.outerHTML,
+        });
     }
 
     function setRowFormulaValue(formula, row, value) {
