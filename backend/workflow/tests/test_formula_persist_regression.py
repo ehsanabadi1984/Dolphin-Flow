@@ -499,6 +499,127 @@ class FormulaPersistenceTestCase(TestCase):
 
         self.assertEqual(result[nested_total.code], "3.00")
 
+    def test_formula_definitions_merges_posted_nested_repeatable_values(self):
+        from django.urls import reverse
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="nestedLiveTable",
+            code="nestedLiveTable",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=2,
+            is_active=True,
+        )
+        child_value = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="nestedLiveValue",
+            code="nestedLiveValue",
+            field_type=FormField.FieldType.NUMBER,
+            label="Nested live value",
+            order=0,
+            is_active=True,
+        )
+        live_total = FormField.objects.create(
+            section=self.final_section,
+            name="NestedLiveTotal",
+            code="NestedLiveTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Nested live total",
+            order=3,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": child_value.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=2),
+        )
+
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=child_value,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+        FieldAccess.objects.create(
+            field=live_total,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=False,
+        )
+
+        instance = self.make_instance()
+        root_rows = [
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=self.group,
+                row_order=index,
+            )
+            for index in range(2)
+        ]
+        child_rows = [
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=child_group,
+                parent_row=root_rows[0],
+                row_order=0,
+            ),
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=child_group,
+                parent_row=root_rows[0],
+                row_order=1,
+            ),
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=child_group,
+                parent_row=root_rows[1],
+                row_order=0,
+            ),
+        ]
+        for row, value in zip(child_rows, ("1", "1", "1")):
+            RepeatableRowValue.objects.create(
+                row=row,
+                field=child_value,
+                decimal_value=Decimal(value),
+            )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("operator_panel:formula_definitions", args=[instance.pk]),
+            {
+                f"{self.group.code}_0__id": str(root_rows[0].pk),
+                f"{self.group.code}_0_{child_group.code}_0__id": str(child_rows[0].pk),
+                f"{self.group.code}_0_{child_group.code}_0_{child_value.code}": "2",
+                f"{self.group.code}_0_{child_group.code}_1__id": str(child_rows[1].pk),
+                f"{self.group.code}_0_{child_group.code}_1_{child_value.code}": "3",
+                f"{self.group.code}_1__id": str(root_rows[1].pk),
+                f"{self.group.code}_1_{child_group.code}_0__id": str(child_rows[2].pk),
+                f"{self.group.code}_1_{child_group.code}_0_{child_value.code}": "4",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            payload["formula_results"][str(live_total.pk)]["value"],
+            "9.00",
+        )
+
     # --------------------------------------------------------------
     # Second save / edit semantics (previous_item matters)
     # --------------------------------------------------------------
