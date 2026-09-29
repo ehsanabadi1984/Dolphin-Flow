@@ -1052,6 +1052,22 @@ class FormulaPersistenceTestCase(TestCase):
             is_active=True,
         )
 
+        live_total = FormField.objects.create(
+            section=self.final_section,
+            name="LiveNestedTotal",
+            code="LiveNestedTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Live nested total",
+            order=10,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": live_value.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=2),
+        )
+
         instance = self.make_instance()
         root_row = RepeatableRow.objects.create(
             instance=instance,
@@ -1089,6 +1105,13 @@ class FormulaPersistenceTestCase(TestCase):
             if group["code"] == child_group.code
         )
         self.assertEqual(child["items"][0][live_value.code], "10")
+
+        calculated = FormulaService.calculate_context_data(
+            form=self.form,
+            data=context,
+        )
+
+        self.assertEqual(calculated[live_total.code], "10.00")
 
     def test_live_post_context_overlays_changed_repeatable_input_before_formula_calculation(self):
         """Mirror the browser's flat POST and verify the pre-calculation context."""
