@@ -53,6 +53,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function setNormalFormulaValue(formula, value) {
         const container = getNormalFormulaContainer(formula);
+        console.debug("[Formula] target DOM", {
+            code: formula.code,
+            fieldId: formula.field_id,
+            found: Boolean(container),
+            container,
+        });
         if (!container) return;
         let output = container.querySelector(".df-formula-value");
         if (!output) {
@@ -91,6 +97,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const result = state.formulaResultsById.get(Number(formula.field_id));
             if (!result) continue;
             if (formula.scope === "FORM") {
+                console.debug("[Formula] formula result", {
+                    fieldId: formula.field_id,
+                    code: formula.code,
+                    value: result.value,
+                });
                 setNormalFormulaValue(formula, toNumber(result.value));
                 continue;
             }
@@ -133,6 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             if (!response.ok) return;
             const payload = await response.json();
+            console.debug("[Formula] POST response", payload);
             state.formulaResultsById.clear();
             for (const [fieldId, result] of Object.entries(payload.formula_results || {})) {
                 state.formulaResultsById.set(Number(fieldId), result);
