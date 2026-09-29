@@ -3,7 +3,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!form) return;
 
     const instanceId = form.dataset.instanceId;
-    const endpoint = new URL("formula-definitions/", form.action).toString();
+    const actionUrl = new URL(form.action);
+    actionUrl.pathname = actionUrl.pathname.replace(/\/$/, "") + "/formula-definitions/";
+    const endpoint = actionUrl.toString();
 
     const state = {
         fieldsById: new Map(),
