@@ -53,12 +53,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function setNormalFormulaValue(formula, value) {
         const container = getNormalFormulaContainer(formula);
-        console.debug("[Formula] target DOM", {
-            code: formula.code,
-            fieldId: formula.field_id,
-            found: Boolean(container),
-            container,
-        });
         if (!container) return;
         let output = container.querySelector(".df-formula-value");
         if (!output) {
@@ -68,33 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (fallback) fallback.replaceWith(output);
             else container.appendChild(output);
         }
-        console.debug("[Formula] before DOM write", {
-            code: formula.code,
-            currentText: output.textContent,
-            outputHTML: output.outerHTML,
-        });
         output.textContent = formatNumber(value, formula.decimal_places);
-        console.debug("[Formula] after DOM write", {
-            code: formula.code,
-            newText: output.textContent,
-            outputHTML: output.outerHTML,
-        });
-        window.setTimeout(() => {
-            console.debug("[Formula] after 0ms", {
-                code: formula.code,
-                connected: output.isConnected,
-                currentText: output.textContent,
-                outputHTML: output.outerHTML,
-            });
-        }, 0);
-        window.setTimeout(() => {
-            console.debug("[Formula] after 100ms", {
-                code: formula.code,
-                connected: output.isConnected,
-                currentText: output.textContent,
-                outputHTML: output.outerHTML,
-            });
-        }, 100);
     }
 
     function setRowFormulaValue(formula, row, value) {
@@ -123,11 +91,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const result = state.formulaResultsById.get(Number(formula.field_id));
             if (!result) continue;
             if (formula.scope === "FORM") {
-                console.debug("[Formula] formula result", {
-                    fieldId: formula.field_id,
-                    code: formula.code,
-                    value: result.value,
-                });
                 setNormalFormulaValue(formula, toNumber(result.value));
                 continue;
             }
@@ -161,9 +124,6 @@ document.addEventListener("DOMContentLoaded", () => {
         state.loading = true;
         try {
             const formData = new FormData(form);
-            console.debug("[Formula] POST payload", {
-                entries: Array.from(formData.entries()),
-            });
             const response = await fetch(`${endpoint}?instance_id=${encodeURIComponent(instanceId)}`, {
                 method: "POST",
                 body: formData,
@@ -174,7 +134,6 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             if (!response.ok) return;
             const payload = await response.json();
-            console.debug("[Formula] POST response", payload);
             state.formulaResultsById.clear();
             for (const [fieldId, result] of Object.entries(payload.formula_results || {})) {
                 state.formulaResultsById.set(Number(fieldId), result);
