@@ -949,13 +949,13 @@ class FormulaPersistenceTestCase(TestCase):
 
         # The formula result remains visible while one of its numeric inputs
         # is explicitly hidden from the user.
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ])
         FieldAccess.objects.filter(field=self.price, step=self.step).update(
             can_view=False,
             can_edit=False,
         )
-        instance = self.save_rows([
-            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
-        ])
         self.client.force_login(self.user)
 
         response = self.client.get(
@@ -970,13 +970,13 @@ class FormulaPersistenceTestCase(TestCase):
     def test_formula_definitions_calculates_posted_inputs_server_side(self):
         from django.urls import reverse
 
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ])
         FieldAccess.objects.filter(field=self.price, step=self.step).update(
             can_view=False,
             can_edit=False,
         )
-        instance = self.save_rows([
-            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
-        ])
         self.client.force_login(self.user)
 
         response = self.client.post(
