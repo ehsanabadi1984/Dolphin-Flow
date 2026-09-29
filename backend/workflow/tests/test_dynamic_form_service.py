@@ -406,6 +406,64 @@ class DynamicFormServiceTests(TestCase):
             "Brake pad",
         )
 
+    def test_device_custom_jalali_date_uses_canonical_repeatable_value(self):
+        date_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.device_group,
+            name="Warranty Date",
+            code="warranty_date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.JALALI,
+            label="Warranty Date",
+            order=6,
+            is_active=True,
+        )
+        FieldAccess.objects.create(
+            field=date_field,
+            step=self.step_one,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+
+        instance = self.create_instance()
+        instance_device = InstanceDevice.objects.create(
+            instance=instance,
+            draft_imei="111111111111111",
+            draft_device_model=self.device_model,
+            draft_device_type=self.device_model.device_type,
+        )
+        row = RepeatableRow.objects.create(
+            instance=instance,
+            group=self.device_group,
+            row_order=0,
+            instance_device=instance_device,
+        )
+        RepeatableRowValue.objects.create(
+            row=row,
+            field=date_field,
+            date_value=date(2026, 9, 27),
+        )
+
+        result = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+            edit_mode=False,
+        )
+        device_group = next(
+            group
+            for section in result["sections"]
+            for group in section["repeatable_groups"]
+            if group["group"].pk == self.device_group.pk
+        )
+        fields = {
+            item["code"]: item
+            for item in device_group["items"][0]["fields"]
+        }
+
+        self.assertEqual(fields["warranty_date"]["value"], "۱۴۰۵/۰۷/۰۵")
+        self.assertEqual(fields["warranty_date"]["display_value"], "۱۴۰۵/۰۷/۰۵")
+
     def test_get_form_for_step_uses_repeatable_row_id_for_device_rows(self):
         instance = self.create_instance()
 
