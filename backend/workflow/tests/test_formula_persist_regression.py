@@ -1027,6 +1027,69 @@ class FormulaPersistenceTestCase(TestCase):
         )
 
 
+    def test_live_post_context_overlays_changed_nested_repeatable_input_before_formula_calculation(self):
+        """Verify the exact browser-style nested POST reaches the canonical context."""
+        from django.http import QueryDict
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="liveNested",
+            code="liveNested",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=4,
+            is_active=True,
+        )
+        live_value = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="liveValue",
+            code="liveValue",
+            field_type=FormField.FieldType.NUMBER,
+            label="Live value",
+            order=0,
+            is_active=True,
+        )
+
+        instance = self.make_instance()
+        root_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=child_group,
+            parent_row=root_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=live_value,
+            decimal_value=Decimal("1.5"),
+        )
+
+        submitted = QueryDict("", mutable=True)
+        submitted.update({
+            f"{self.group.code}_0__id": str(root_row.pk),
+            f"{self.group.code}_0_{child_group.code}_0__id": str(child_row.pk),
+            f"{self.group.code}_0_{child_group.code}_0_{live_value.code}": "10",
+        })
+
+        context = _build_context_data(
+            instance=instance,
+            submitted_data=submitted,
+        )
+
+        root = context[self.group.code][0]
+        child = next(
+            group
+            for group in root["child_groups"]
+            if group["code"] == child_group.code
+        )
+        self.assertEqual(child["items"][0][live_value.code], "10")
+
     def test_live_post_context_overlays_changed_repeatable_input_before_formula_calculation(self):
         """Mirror the browser's flat POST and verify the pre-calculation context."""
         from django.http import QueryDict
