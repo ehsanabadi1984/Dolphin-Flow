@@ -160,9 +160,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isEditMode() || state.loading) return;
         state.loading = true;
         try {
+            const formData = new FormData(form);
+            console.debug("[Formula] POST payload", {
+                entries: Array.from(formData.entries()),
+            });
             const response = await fetch(`${endpoint}?instance_id=${encodeURIComponent(instanceId)}`, {
                 method: "POST",
-                body: new FormData(form),
+                body: formData,
                 headers: {
                     "X-Requested-With": "XMLHttpRequest",
                     "X-CSRFToken": getCsrfToken(),
