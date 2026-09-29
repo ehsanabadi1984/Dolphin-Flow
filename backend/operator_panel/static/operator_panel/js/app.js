@@ -1834,20 +1834,6 @@ document.addEventListener("click", (event) => {
         "visibilitychange",
         () => {
 
-            console.log("=== VISIBILITY CHANGE ===");
-
-            console.log({
-                visibility: document.visibilityState,
-                hidden: document.hidden,
-                socketState: notificationSocket?.readyState,
-                socketStateName: {
-                    0: "CONNECTING",
-                    1: "OPEN",
-                    2: "CLOSING",
-                    3: "CLOSED",
-                }[notificationSocket?.readyState],
-            });
-
 
             if (!document.hidden) {
 
