@@ -993,6 +993,39 @@ class FormulaPersistenceTestCase(TestCase):
         self.assertEqual(payload["formula_results"][str(self.total.pk)]["values"], ["2100"])
         self.assertEqual(payload["formula_results"][str(self.final.pk)]["value"], "2100.00")
 
+    def test_live_post_context_overlays_changed_repeatable_input_before_formula_calculation(self):
+        """Mirror the browser's flat POST and verify the pre-calculation context."""
+        from django.http import QueryDict
+
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500"},
+        ])
+
+        submitted = QueryDict("", mutable=True)
+        submitted.update({
+            "cunspartTable_0_quantity": "7",
+            "cunspartTable_0_UnitPrice": "500",
+            "cunspartTable_0_TotalPrice": "5000",
+        })
+
+        context = _build_context_data(
+            instance=instance,
+            submitted_data=submitted,
+        )
+
+        self.assertEqual(context["cunspartTable"][0]["quantity"], "7")
+        self.assertEqual(context["cunspartTable"][0]["UnitPrice"], "500")
+        self.assertNotEqual(context["cunspartTable"][0]["quantity"], "10")
+
+        calculated = FormulaService.calculate_context_data(
+            form=self.form,
+            data=context,
+        )
+
+        self.assertEqual(calculated["cunspartTable"][0]["TotalPrice"], "3500")
+        self.assertEqual(calculated["FinalPriceRepair"], "3500.00")
+
+
     def test_read_only_get_renders_derived_values(self):
         instance = self.save_rows([
             {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
