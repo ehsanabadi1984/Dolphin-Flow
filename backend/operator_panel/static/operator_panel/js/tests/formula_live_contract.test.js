@@ -24,3 +24,18 @@ test("live Formula response is applied to the visible Formula DOM", () => {
     assert.match(formulaJs, /applyServerResults\(\);/);
     assert.match(formulaJs, /output\.textContent = formatNumber\(value, formula\.decimal_places\);/);
 });
+
+test("normal Formula DOM lookup prefers the Formula field code over dom_index", () => {
+    const lookup = formulaJs.slice(
+        formulaJs.indexOf("function getNormalFormulaContainer"),
+        formulaJs.indexOf("function setNormalFormulaValue"),
+    );
+    assert.match(
+        lookup,
+        /field\.dataset\.fieldCode === formula\.code\) return field;/,
+    );
+    assert.ok(
+        lookup.indexOf("field.dataset.fieldCode === formula.code") <
+        lookup.indexOf("const expectedIndex = Number(formula.dom_index);"),
+    );
+});
