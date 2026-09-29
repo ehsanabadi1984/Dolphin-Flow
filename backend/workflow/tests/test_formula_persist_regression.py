@@ -993,6 +993,40 @@ class FormulaPersistenceTestCase(TestCase):
         self.assertEqual(payload["formula_results"][str(self.total.pk)]["values"], ["2100"])
         self.assertEqual(payload["formula_results"][str(self.final.pk)]["value"], "2100.00")
 
+    def test_live_formula_http_recalculates_after_editing_persisted_row(self):
+        """Mirror the browser POST after an existing row is edited in place."""
+        from django.urls import reverse
+
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500"},
+        ])
+        row_id = self.persisted_rows(instance)["cunspartTable"][0]["_id"]
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("operator_panel:formula_definitions", args=[instance.pk]),
+            {
+                f"cunspartTable_0__id": row_id,
+                "cunspartTable_0_quantity": "7",
+                "cunspartTable_0_UnitPrice": "500",
+                # Browser may submit the previously rendered derived value.
+                "cunspartTable_0_TotalPrice": "5000",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            payload["formula_results"][str(self.total.pk)]["values"],
+            ["3500"],
+        )
+        self.assertEqual(
+            payload["formula_results"][str(self.final.pk)]["value"],
+            "3500.00",
+        )
+
+
     def test_live_post_context_overlays_changed_repeatable_input_before_formula_calculation(self):
         """Mirror the browser's flat POST and verify the pre-calculation context."""
         from django.http import QueryDict
