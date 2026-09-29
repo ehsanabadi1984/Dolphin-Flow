@@ -457,7 +457,7 @@ class DynamicFormServiceTests(TestCase):
             if group["group"].pk == self.device_group.pk
         )
         fields = {
-            item["code"]: item
+            item["field"].code: item
             for item in device_group["items"][0]["fields"]
         }
 
