@@ -2132,6 +2132,32 @@ class DynamicFormService:
                             # Build fields
                             # -------------------------------------------------
 
+                            # DEVICE rows are also backed by RepeatableRow. For
+                            # custom fields, use that canonical value store so
+                            # DATE/DATETIME presentation follows the field's
+                            # configured calendar just like non-DEVICE rows.
+                            device_repeatable_row = None
+                            device_repeatable_values = {}
+                            if instance_device.pk:
+                                device_repeatable_row = (
+                                    RepeatableRow.objects
+                                    .filter(
+                                        instance_device=instance_device,
+                                        group=group,
+                                    )
+                                    .prefetch_related(
+                                        "values__field",
+                                        "values__static_choice_item",
+                                        "values__lookup_item",
+                                    )
+                                    .first()
+                                )
+                                if device_repeatable_row is not None:
+                                    device_repeatable_values = {
+                                        value.field_id: value
+                                        for value in device_repeatable_row.values.all()
+                                    }
+
                             item_fields = []
 
                             for field_info in group_fields:
@@ -2674,9 +2700,13 @@ class DynamicFormService:
 
                                 else:
 
-                                    value = ""
-
-                                    display_value = ""
+                                    value_object = device_repeatable_values.get(field.pk)
+                                    value, display_value = (
+                                        RepeatableRowReadService._custom_value(
+                                            field=field,
+                                            value_object=value_object,
+                                        )
+                                    )
 
                                 # -------------------------------------------------
                                 # Identity fields
