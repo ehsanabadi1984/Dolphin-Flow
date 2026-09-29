@@ -790,11 +790,7 @@ class DynamicFormService:
                 field = base_context["field"]
                 field_context = dict(base_context)
                 raw_field = raw_fields.get(field.code, {})
-                raw_value = raw_field.get("value", "")
-                field_context["value"] = DynamicFormService._get_input_value(
-                    field=field,
-                    value=raw_value,
-                )
+                field_context["value"] = raw_field.get("value", "")
                 field_context["display_value"] = raw_field.get(
                     "display_value",
                     DynamicFormService._get_display_value(
@@ -2890,11 +2886,7 @@ class DynamicFormService:
 
                         for field_context in row_field_contexts:
                             field = field_context["field"]
-                            raw_value = raw_item.get(field.code, "")
-                            value = DynamicFormService._get_input_value(
-                                field=field,
-                                value=raw_value,
-                            )
+                            value = raw_item.get(field.code, "")
                             field_context["value"] = value
 
                             if field.field_type == field.FieldType.SELECT:
