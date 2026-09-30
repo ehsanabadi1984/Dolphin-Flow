@@ -583,7 +583,7 @@ class FormulaService:
                             row_calculating.remove(field.pk)
                         row_cache[field.pk] = value
                         return value
-                    return cls._to_decimal(row.get(field.code))
+                    return cls._to_decimal(raw_row.get(field.code))
 
                 for field in group_formula_fields:
                     cfg = cls.get_config(field)
