@@ -874,7 +874,7 @@ class DynamicFormServiceTests(TestCase):
         )
 
         self.assertIn(
-            'class="df-repeatable-child-row df-device-child-row"',
+            'class="df-repeatable-item df-repeatable-flat-row df-repeatable-child-flat-row"',
             html,
         )
         self.assertIn(
@@ -1596,7 +1596,8 @@ class DynamicFormServiceTests(TestCase):
             role=WorkflowMembership.Role.EXECUTOR,
         )
         group_access.can_view = False
-        group_access.save(update_fields=["can_view"])
+        group_access.can_edit = False
+        group_access.save(update_fields=["can_view", "can_edit"])
 
 
         submitted_data = {
