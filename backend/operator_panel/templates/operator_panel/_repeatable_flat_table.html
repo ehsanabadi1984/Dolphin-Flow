@@ -37,7 +37,7 @@
                 <input
                   type="text"
                   name="{{ cell.input_prefix }}{{ cell.field.code }}"
-                  value="{{ cell.value|default:'' }}"
+                  value="{{ cell.display_value|default:cell.value|default:'' }}"
                   class="df-table-input"
                 />
               {% elif cell.field.field_type == "TEXTAREA" %}
