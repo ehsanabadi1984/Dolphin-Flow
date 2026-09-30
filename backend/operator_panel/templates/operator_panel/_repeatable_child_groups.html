@@ -343,14 +343,14 @@
                                         />
                                       {% elif child_field.field.field_type == "DATE" %}
                                         <input
-                                          type="date"
+                                          type="{% if child_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if child_field.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %}
                                           id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                           value="{{ child_field.value|default:'' }}"
                                         />
                                       {% elif child_field.field.field_type == "DATETIME" %}
                                         <input
-                                          type="datetime-local"
+                                          type="{% if child_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if child_field.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %}
                                           id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                           value="{{ child_field.value|default:'' }}"
@@ -422,14 +422,14 @@
                                     />
                                   {% elif template_field.field.field_type == "DATE" %}
                                     <input
-                                      type="date"
+                                      type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %}
                                       id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                     />
                                   {% elif template_field.field.field_type == "DATETIME" %}
                                     <input
-                                      type="datetime-local"
-                                      id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                      type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %}
+                                      id="repeatable-{{ name_prefix }}_{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                     />
                                   {% elif template_field.field.field_type == "BOOLEAN" %}
