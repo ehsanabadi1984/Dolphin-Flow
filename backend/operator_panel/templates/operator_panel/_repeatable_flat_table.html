@@ -67,6 +67,10 @@
                   value="{{ cell.display_value|default:cell.value|default:'' }}"
                   class="df-table-input"
                 />
+              {% elif cell.field.field_type == "FORMULA" %}
+                <div class="df-table-value df-table-formula-value">
+                  {{ cell.display_value|default:cell.value|default:"—" }}
+                </div>
               {% elif cell.field.field_type == "BOOLEAN" %}
                 <input
                   type="checkbox"
