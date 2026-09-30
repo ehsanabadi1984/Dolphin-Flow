@@ -185,9 +185,17 @@
 
                 {% else %}
 
-                  <div class="df-form-value">
-                    {{ item.display_value|default:item.value|default:"—" }}
-                  </div>
+                  {% if item.field.field_type == "BOOLEAN" %}
+                    <input
+                      type="checkbox"
+                      {% if item.value %}checked{% endif %}
+                      disabled
+                    />
+                  {% else %}
+                    <div class="df-form-value">
+                      {{ item.display_value|default:item.value|default:"—" }}
+                    </div>
+                  {% endif %}
 
                 {% endif %}
 
@@ -475,9 +483,17 @@
 
                         {% else %}
 
-                          <div class="df-form-value">
-                            {{ item_field.display_value|default:item_field.value|default:"—" }}
-                          </div>
+                          {% if item_field.field.field_type == "BOOLEAN" %}
+                            <input
+                              type="checkbox"
+                              {% if item_field.value %}checked{% endif %}
+                              disabled
+                            />
+                          {% else %}
+                            <div class="df-form-value">
+                              {{ item_field.display_value|default:item_field.value|default:"—" }}
+                            </div>
+                          {% endif %}
 
                         {% endif %}
                         
