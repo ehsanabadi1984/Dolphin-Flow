@@ -510,6 +510,117 @@ class FormulaPersistenceTestCase(TestCase):
             ["300", "1000"],
         )
 
+    def test_device_formula_ui_result_maps_each_device_value_to_its_row_id(self):
+        """Mirror the Flat TABLE contract: each DEVICE result has its own stable row id."""
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="uiDevicesForFormula",
+            code="uiDevicesForFormula",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=30,
+            is_active=True,
+        )
+        parts_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=device_group,
+            name="uiDevicePartsForFormula",
+            code="uiDevicePartsForFormula",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=31,
+            is_active=True,
+        )
+        amount = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parts_group,
+            name="uiPartAmount",
+            code="uiPartAmount",
+            field_type=FormField.FieldType.NUMBER,
+            label="UI part amount",
+            order=0,
+            is_active=True,
+        )
+        total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=device_group,
+            name="uiDeviceTotal",
+            code="uiDeviceTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="UI device total",
+            order=1,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": amount.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+        for field in (amount, total):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=field == amount,
+            )
+        RepeatableGroupAccess.objects.create(
+            group=device_group,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=parts_group,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+
+        instance = self.make_instance()
+        devices = [
+            RepeatableRow.objects.create(instance=instance, group=device_group, row_order=0),
+            RepeatableRow.objects.create(instance=instance, group=device_group, row_order=1),
+        ]
+        for device, values in zip(devices, ((100, 200), (400, 600))):
+            for order, value in enumerate(values):
+                child = RepeatableRow.objects.create(
+                    instance=instance,
+                    group=parts_group,
+                    parent_row=device,
+                    row_order=order,
+                )
+                RepeatableRowValue.objects.create(
+                    row=child,
+                    field=amount,
+                    decimal_value=Decimal(value),
+                )
+
+        from django.test import RequestFactory
+        request = RequestFactory().get(
+            f"/operator/workflow/{instance.pk}/formula-definitions/"
+        )
+        request.user = self.user
+        response = formula_definitions(request, instance.pk)
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        result = payload["formula_results"][str(total.pk)]
+        self.assertEqual(result["group_code"], device_group.code)
+        self.assertEqual(result["values"], ["300", "1000"])
+        self.assertEqual(
+            result["row_ids"],
+            [str(devices[0].pk), str(devices[1].pk)],
+        )
+        self.assertEqual(len(result["values"]), len(result["row_ids"]))
+
     def test_same_group_aggregate_remains_global_for_repeatable_rows(self):
         same_group_total = FormField.objects.create(
             section=self.section,
