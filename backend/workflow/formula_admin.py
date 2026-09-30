@@ -131,7 +131,34 @@ class FormulaFieldAdminForm(forms.ModelForm):
             queryset = queryset.exclude(pk=current_id)
 
         if group_id:
-            return queryset.filter(repeatable_group_id=group_id)
+            group = (
+                FormRepeatableGroup.objects
+                .filter(pk=group_id, section__form=section.form, is_active=True)
+                .first()
+            )
+            if group is None:
+                return queryset.none()
+
+            group_ids = {group.pk}
+            pending_ids = {group.pk}
+            all_groups = FormRepeatableGroup.objects.filter(
+                section__form=section.form,
+                is_active=True,
+            ).only("pk", "parent_group_id")
+
+            while pending_ids:
+                child_ids = {
+                    item.pk
+                    for item in all_groups
+                    if item.parent_group_id in pending_ids
+                    and item.pk not in group_ids
+                }
+                if not child_ids:
+                    break
+                group_ids.update(child_ids)
+                pending_ids = child_ids
+
+            return queryset.filter(repeatable_group_id__in=group_ids)
 
         return queryset
 
@@ -163,12 +190,6 @@ class FormulaFieldAdminForm(forms.ModelForm):
             return cleaned
 
         group = cleaned.get("repeatable_group")
-        if group and group.group_type == FormRepeatableGroup.GroupType.DEVICE:
-            raise ValidationError(
-                {
-                    "field_type": "فیلدهای فرمولی داخل گروه دستگاه‌ها پشتیبانی نمی‌شوند."
-                }
-            )
 
         cleaned["is_required"] = False
         cleaned["system_key"] = FormField.SystemKey.NONE
@@ -205,11 +226,21 @@ class FormulaFieldAdminForm(forms.ModelForm):
         draft.field_type = FormulaService.FIELD_TYPE
         draft.repeatable_group = group
 
+        available_fields = list(self._available_formula_fields())
+        available_groups = {
+            item.pk: item
+            for item in FormRepeatableGroup.objects.filter(
+                section__form=draft.section.form,
+                is_active=True,
+            )
+        }
+
         try:
             FormulaService.validate_tokens(
                 field=draft,
                 tokens=tokens,
-                available_fields=list(self._available_formula_fields()),
+                available_fields=available_fields,
+                available_groups=available_groups,
             )
         except ValidationError as exc:
             raise ValidationError({"formula_builder": exc.messages})
