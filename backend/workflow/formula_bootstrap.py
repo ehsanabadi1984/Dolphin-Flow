@@ -320,7 +320,7 @@ def _inject_formula_context(*, context, calculated_data):
                                 if (
                                     cell.get("group_code")
                                     == group_obj.code
-                                    and cell.get("field") is field
+                                    and cell.get("field").pk == field.pk
                                 ):
                                     cell["value"] = value
                                     cell["display_value"] = value
