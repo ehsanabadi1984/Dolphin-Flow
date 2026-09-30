@@ -878,11 +878,15 @@ class DynamicFormServiceTests(TestCase):
             html,
         )
         self.assertIn(
-            'data-device-parent-row-id="1"',
+            'data-row-path="devices_0_device_details_0_installation_parts_0"',
             html,
         )
         self.assertIn(
-            'data-device-parent-index="0"',
+            'data-row-id="8"',
+            html,
+        )
+        self.assertIn(
+            'data-parent-row-id="7"',
             html,
         )
         self.assertIn(
