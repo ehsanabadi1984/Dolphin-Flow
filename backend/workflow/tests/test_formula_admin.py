@@ -1,9 +1,11 @@
 import json
 
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 
 from workflow.formula_admin import FormulaFieldAdminForm
 from workflow.formula_services import FormulaService
+from accounts.models import User
+from operator_panel.formula_views import formula_field_options
 from workflow.models import FormDefinition, FormField, FormRepeatableGroup, FormSection, Workflow
 
 
@@ -105,6 +107,41 @@ class FormulaFieldAdminFormTests(TestCase):
             "formula_decimal_places": "0",
         }
 
+    def test_formula_field_options_returns_device_and_descendant_fields_only(self):
+        device_amount = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.device_group,
+            name="Device Amount",
+            code="device_amount",
+            field_type=FormField.FieldType.NUMBER,
+            label="Device Amount",
+            order=1,
+            is_active=True,
+        )
+
+        staff_user = User.objects.create_user(
+            username="formula-options-staff",
+            password="test-password",
+            is_staff=True,
+        )
+        request = RequestFactory().get(
+            "/operator/formula-field-options/",
+            {
+                "section_id": self.section.pk,
+                "group_id": self.device_group.pk,
+            },
+        )
+        request.user = staff_user
+
+        response = formula_field_options(request)
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        option_ids = {item["id"] for item in payload["fields"]}
+
+        self.assertIn(device_amount.pk, option_ids)
+        self.assertIn(self.amount.pk, option_ids)
+        self.assertNotIn(self.sibling_amount.pk, option_ids)
     def test_device_formula_can_aggregate_descendant_field(self):
         form = FormulaFieldAdminForm(
             data=self._data(
