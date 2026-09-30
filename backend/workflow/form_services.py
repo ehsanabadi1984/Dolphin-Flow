@@ -2164,7 +2164,7 @@ class DynamicFormService:
                                 device_repeatable_row = (
                                     RepeatableRow.objects
                                     .filter(
-                                        instance_device=instance_device,
+                                        instance_device=existing_instance_device,
                                         group=group,
                                     )
                                     .prefetch_related(
