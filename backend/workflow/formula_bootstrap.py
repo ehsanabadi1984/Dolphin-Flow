@@ -259,6 +259,136 @@ def _build_context_data(*, instance, submitted_data):
 def _inject_formula_context(*, context, calculated_data):
     from .formula_services import FormulaService
 
+    def calculated_group_rows(group_code):
+        rows = []
+
+        direct_rows = calculated_data.get(group_code)
+        if isinstance(direct_rows, list):
+            rows.extend(
+                row for row in direct_rows
+                if isinstance(row, dict)
+            )
+
+        def visit_rows(parent_rows):
+            if not isinstance(parent_rows, list):
+                return
+            for row in parent_rows:
+                if not isinstance(row, dict):
+                    continue
+                for child_group in row.get("child_groups", []) or []:
+                    visit_group(child_group)
+
+        def visit_group(group_payload):
+            if not isinstance(group_payload, dict):
+                return
+            if group_payload.get("code") == group_code:
+                items = group_payload.get("items", [])
+                if isinstance(items, list):
+                    rows.extend(
+                        row for row in items
+                        if isinstance(row, dict)
+                    )
+                return
+            visit_rows(group_payload.get("items", []))
+
+        for payload in calculated_data.values():
+            if isinstance(payload, list):
+                visit_rows(payload)
+            elif isinstance(payload, dict) and payload.get("code"):
+                visit_group(payload)
+
+        # The direct and recursive representations can overlap when a group
+        # is materialized at the top level and also reachable through its
+        # parent row. Keep one authoritative row per stable row_id.
+        unique = []
+        seen_ids = set()
+        for row in rows:
+            row_id = str(row.get("row_id") or row.get("_id") or "")
+            if row_id and row_id in seen_ids:
+                continue
+            if row_id:
+                seen_ids.add(row_id)
+            unique.append(row)
+        return unique
+
+    def inject_group(group):
+        group_obj = group.get("group")
+        if not group_obj:
+            return
+
+        formula_fields = [
+            field_info.get("field")
+            for field_info in group.get("fields", [])
+            if FormulaService.is_formula(field_info.get("field"))
+        ]
+        formula_by_code = {
+            field.code: field
+            for field in formula_fields
+            if field is not None
+        }
+
+        for field_info in group.get("fields", []):
+            field = field_info.get("field")
+            if FormulaService.is_formula(field):
+                field_info["can_edit"] = False
+                field_info["permission_can_edit"] = False
+
+        if formula_by_code:
+            rows_by_id = {
+                str(row.get("row_id") or row.get("_id")): row
+                for row in calculated_group_rows(group_obj.code)
+                if row.get("row_id") is not None or row.get("_id") is not None
+            }
+
+            for item in group.get("items", []):
+                item_id = str(item.get("row_id") or "")
+                row_data = rows_by_id.get(item_id, {})
+                for item_field in item.get("fields", []):
+                    field = item_field.get("field")
+                    if field is None or field.code not in formula_by_code:
+                        continue
+
+                    value = row_data.get(field.code, "")
+                    item_field["value"] = value
+                    item_field["display_value"] = value
+                    item_field["can_edit"] = False
+                    item_field["permission_can_edit"] = False
+
+            flat_table = group.get("flat_table", {})
+            for flat_row in flat_table.get("rows", []):
+                path_pairs = list(zip(
+                    flat_row.get("path", []),
+                    flat_row.get("path_row_ids", []),
+                ))
+                for cell in flat_row.get("column_cells", []):
+                    field = cell.get("field")
+                    if field is None or field.code not in formula_by_code:
+                        continue
+
+                    source_row_id = next(
+                        (
+                            row_id
+                            for group_code, row_id in path_pairs
+                            if group_code == group_obj.code
+                        ),
+                        None,
+                    )
+                    if source_row_id is None:
+                        continue
+
+                    row_data = rows_by_id.get(str(source_row_id), {})
+                    value = row_data.get(field.code, "")
+                    cell["value"] = value
+                    cell["display_value"] = value
+                    cell["can_edit"] = False
+
+        for child_group in group.get("child_groups", []):
+            inject_group(child_group)
+
+        for item in group.get("items", []):
+            for child_group in item.get("child_groups", []):
+                inject_group(child_group)
+
     for section in context.get("sections", []):
         for item in section.get("fields", []):
             field = item.get("field")
@@ -271,73 +401,7 @@ def _inject_formula_context(*, context, calculated_data):
             item["permission_can_edit"] = False
 
         for group in section.get("repeatable_groups", []):
-            group_obj = group.get("group")
-            if not group_obj:
-                continue
-
-            formula_codes = {
-                field_info["field"].code
-                for field_info in group.get("fields", [])
-                if field_info.get("field")
-                and FormulaService.is_formula(field_info["field"])
-            }
-            if formula_codes:
-                for field_info in group.get("fields", []):
-                    field = field_info.get("field")
-                    if FormulaService.is_formula(field):
-                        field_info["can_edit"] = False
-                        field_info["permission_can_edit"] = False
-
-                rows = calculated_data.get(group_obj.code, [])
-                if not isinstance(rows, list):
-                    rows = []
-
-                for row_index, item in enumerate(group.get("items", [])):
-                    row_data = rows[row_index] if row_index < len(rows) else {}
-                    if not isinstance(row_data, dict):
-                        row_data = {}
-                    for item_field in item.get("fields", []):
-                        field = item_field.get("field")
-                        if not FormulaService.is_formula(field):
-                            continue
-                        value = row_data.get(field.code, "")
-                        item_field["value"] = value
-                        item_field["display_value"] = value
-                        item_field["can_edit"] = False
-                        item_field["permission_can_edit"] = False
-
-                        # Flat TABLE column_cells are built before Formula
-                        # injection. A root row with populated children is
-                        # represented only through ancestor cells on the
-                        # rendered child row, so the flat row's own row_id
-                        # cannot identify the source row for every cell.
-                        for flat_row in group.get("flat_table", {}).get(
-                            "rows", []
-                        ):
-                            source_row_id = None
-                            for (
-                                path_group_code,
-                                path_row_id,
-                            ) in zip(
-                                flat_row.get("path", []),
-                                flat_row.get("path_row_ids", []),
-                            ):
-                                if path_group_code == group_obj.code:
-                                    source_row_id = path_row_id
-                                    break
-
-                            if str(source_row_id) != str(item.get("row_id")):
-                                continue
-
-                            for cell in flat_row.get("column_cells", []):
-                                if (
-                                    cell.get("group_code")
-                                    == group_obj.code
-                                    and cell.get("field").pk == field.pk
-                                ):
-                                    cell["value"] = value
-                                    cell["display_value"] = value
-                                    break
+            inject_group(group)
 
     context["has_editable_fields"] = any(
         item.get("permission_can_edit", False)
