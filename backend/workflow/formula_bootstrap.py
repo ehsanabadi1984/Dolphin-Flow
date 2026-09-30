@@ -306,6 +306,26 @@ def _inject_formula_context(*, context, calculated_data):
                         item_field["can_edit"] = False
                         item_field["permission_can_edit"] = False
 
+                        # Flat TABLE column_cells are built before Formula
+                        # injection. Keep the presentation projection in
+                        # sync with the calculated row field.
+                        for flat_row in group.get("flat_table", {}).get(
+                            "rows", []
+                        ):
+                            if str(flat_row.get("row_id")) != str(
+                                item.get("row_id")
+                            ):
+                                continue
+                            for cell in flat_row.get("column_cells", []):
+                                if (
+                                    cell.get("group_code")
+                                    == group_obj.code
+                                    and cell.get("field") is field
+                                ):
+                                    cell["value"] = value
+                                    cell["display_value"] = value
+                                    break
+
     context["has_editable_fields"] = any(
         item.get("permission_can_edit", False)
         for section in context.get("sections", [])
