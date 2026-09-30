@@ -57,9 +57,29 @@ def _formula_source_fields(*, section_id, group_id, exclude_id=None):
             FormRepeatableGroup,
             pk=group_id,
             section__form=section.form,
-            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            is_active=True,
         )
-        return queryset.filter(repeatable_group=group)
+
+        group_ids = {group.pk}
+        pending_ids = {group.pk}
+        all_groups = FormRepeatableGroup.objects.filter(
+            section__form=section.form,
+            is_active=True,
+        ).only("pk", "parent_group_id")
+
+        while pending_ids:
+            child_ids = {
+                item.pk
+                for item in all_groups
+                if item.parent_group_id in pending_ids
+                and item.pk not in group_ids
+            }
+            if not child_ids:
+                break
+            group_ids.update(child_ids)
+            pending_ids = child_ids
+
+        return queryset.filter(repeatable_group_id__in=group_ids)
 
     return queryset
 
