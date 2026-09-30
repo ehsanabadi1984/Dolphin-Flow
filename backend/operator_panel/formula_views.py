@@ -384,6 +384,12 @@ def formula_definitions(request, instance_id):
                     row.get(field.code, "") if isinstance(row, dict) else ""
                     for row in rows
                 ],
+                "row_ids": [
+                    str(row.get("row_id") or row.get("_id"))
+                    for row in rows
+                    if isinstance(row, dict)
+                    and (row.get("row_id") is not None or row.get("_id") is not None)
+                ],
             }
         else:
             formula_results[str(field.pk)] = {
