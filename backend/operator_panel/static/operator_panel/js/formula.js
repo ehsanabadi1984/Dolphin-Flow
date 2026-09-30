@@ -66,11 +66,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function setRowFormulaValue(formula, row, value) {
-        const columns = formula.visible_columns || [];
-        const columnIndex = columns.indexOf(formula.code);
-        if (columnIndex < 0) return;
-        const cell = row.children[columnIndex];
+        const cells = Array.from(row.querySelectorAll("[data-column-group][data-field-code]"));
+        const cell = cells.find(
+            candidate =>
+                candidate.dataset.columnGroup === formula.group_code &&
+                candidate.dataset.fieldCode === formula.code
+        );
         if (!cell) return;
+
         let output = cell.querySelector(".df-formula-value");
         if (!output) {
             output = document.createElement("div");
@@ -78,6 +81,23 @@ document.addEventListener("DOMContentLoaded", () => {
             cell.replaceChildren(output);
         }
         output.textContent = formatNumber(value, formula.decimal_places);
+    }
+
+    function findRenderedRowById(rowId) {
+        if (rowId === null || rowId === undefined || rowId === "") return null;
+        const wanted = String(rowId);
+        const rows = form.querySelectorAll(
+            "[data-repeatable-item]:not([data-repeatable-template])"
+        );
+        for (const row of rows) {
+            const idInputs = row.querySelectorAll(
+                'input[data-repeatable-row-id], input[data-repeatable-root-row-id]'
+            );
+            for (const input of idInputs) {
+                if (String(input.value) === wanted) return row;
+            }
+        }
+        return null;
     }
 
     function isEditMode() {
@@ -94,23 +114,28 @@ document.addEventListener("DOMContentLoaded", () => {
                 setNormalFormulaValue(formula, toNumber(result.value));
                 continue;
             }
-            const group = form.querySelector(`[data-repeatable-group="${CSS.escape(formula.group_code)}"]`);
-            if (!group) continue;
-            const rows = group.querySelectorAll("[data-repeatable-item]:not([data-repeatable-template])");
             const values = Array.isArray(result.values) ? result.values : [];
-            rows.forEach((row, index) => {
-                const value = values[index] === undefined ? "" : values[index];
-                if (group.classList.contains("df-table-group")) {
-                    setRowFormulaValue(formula, row, toNumber(value));
-                } else {
-                    let output = row.querySelector(`.df-formula-value[data-formula-id="${formula.field_id}"]`);
+            const rowIds = Array.isArray(result.row_ids) ? result.row_ids : [];
+
+            values.forEach((value, index) => {
+                const row = findRenderedRowById(rowIds[index]);
+                if (!row) return;
+
+                setRowFormulaValue(formula, row, toNumber(value));
+
+                if (!row.querySelector("[data-column-group][data-field-code]")) {
+                    let output = row.querySelector(
+                        '.df-formula-value[data-formula-id="' + formula.field_id + '"]'
+                    );
                     if (!output) {
                         output = document.createElement("div");
                         output.className = "df-form-value df-formula-value";
                         output.dataset.formulaId = String(formula.field_id);
                         row.appendChild(output);
                     }
-                    output.textContent = `${formula.label}: ${formatNumber(toNumber(value), formula.decimal_places)}`;
+                    output.textContent =
+                        formula.label + ": " +
+                        formatNumber(toNumber(value), formula.decimal_places);
                 }
             });
         }
