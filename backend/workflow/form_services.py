@@ -207,6 +207,28 @@ class DynamicFormService:
             except (ArithmeticError, ValueError, TypeError):
                 return str(value)
 
+        if field.field_type == FormField.FieldType.DATE:
+            try:
+                return DateFieldService.to_display_date(
+                    value,
+                    calendar=field.calendar,
+                )
+            except (TypeError, ValueError):
+                # Validation-error rerenders and RepeatableRow reads may
+                # already carry the presentation-form value. Preserve it.
+                return str(value)
+
+        if field.field_type == FormField.FieldType.DATETIME:
+            try:
+                return DateFieldService.to_display_datetime(
+                    value,
+                    calendar=field.calendar,
+                )
+            except (TypeError, ValueError):
+                # Validation-error rerenders and RepeatableRow reads may
+                # already carry the presentation-form value. Preserve it.
+                return str(value)
+
         if field.field_type != FormField.FieldType.SELECT:
             return str(value)
 
