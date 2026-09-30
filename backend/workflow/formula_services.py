@@ -542,9 +542,14 @@ class FormulaService:
             )
         }
 
+        processed_group_ids = set()
+
         def calculate_group_rows(group, rows):
-            if not isinstance(rows, list):
+            if not isinstance(rows, list) or not rows:
                 return
+            if group.pk in processed_group_ids:
+                return
+            processed_group_ids.add(group.pk)
 
             group_formula_fields = [
                 field for field in all_fields
@@ -616,5 +621,14 @@ class FormulaService:
             if group.parent_group_id is not None:
                 continue
             calculate_group_rows(group, result.get(group.code, []))
+
+        # Root traversal handles the normal hierarchy. Any active NORMAL
+        # group not reached from a root is resolved from its reconstructed
+        # hierarchy so nested row formulas also receive their calculated
+        # values in the returned context.
+        for group in groups_by_id.values():
+            if group.pk in processed_group_ids:
+                continue
+            calculate_group_rows(group, _find_group_rows(group.code))
 
         return result
