@@ -1523,7 +1523,9 @@ class FormulaPersistenceTestCase(TestCase):
             {"quantity": "10", "UnitPrice": "500"},
         ])
 
-        request = self.client.get(
+        from django.test import RequestFactory
+
+        request = RequestFactory().get(
             f"/operator/workflow/{instance.pk}/formula-definitions/"
         )
         request.user = self.user
