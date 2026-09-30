@@ -546,10 +546,9 @@ class FormulaService:
             group = field.repeatable_group
             if current_group is not None and current_row is not None:
                 if group.pk == current_group.pk:
-                    if current_row_resolver is None:
-                        return Decimal("0")
-                    return current_row_resolver(field_id)
-                rows = _find_descendant_rows(current_row, group.code)
+                    rows = _find_group_rows(group.code)
+                else:
+                    rows = _find_descendant_rows(current_row, group.code)
             else:
                 rows = _find_group_rows(group.code)
             values: list[Decimal] = []
