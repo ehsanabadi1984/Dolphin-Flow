@@ -18,7 +18,7 @@
           {% if cell.show %}
             {% if edit_mode and not dynamic_form.is_submitted and cell.can_edit %}
               {% if cell.field.system_key == "IMEI" and cell.field_context.is_imei_immutable %}
-                <input type="text" name="{{ cell.input_prefix }}{{ cell.field.code }}" value="{{ cell.value|default:'' }}" class="df-table-input" readonly />
+                <input type="text" name="{{ cell.input_prefix }}{{ cell.field.code }}" value="{{ cell.display_value|default:cell.value|default:'' }}" class="df-table-input" readonly />
               {% elif cell.field.system_key == "DEVICE_TYPE" %}
                 <select name="{{ cell.input_prefix }}{{ cell.field.code }}" class="df-table-input" data-system-key="DEVICE_TYPE">
                   <option value="">---------</option>
@@ -57,14 +57,14 @@
                 <input
                   type="{% if cell.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if cell.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if cell.field.calendar == 'JALALI' %}data-jdp{% endif %}
                   name="{{ cell.input_prefix }}{{ cell.field.code }}"
-                  value="{{ cell.value|default:'' }}"
+                  value="{{ cell.display_value|default:cell.value|default:'' }}"
                   class="df-table-input"
                 />
               {% elif cell.field.field_type == "DATETIME" %}
                 <input
                   type="{% if cell.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if cell.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %} {% if cell.field.calendar == 'JALALI' %}data-jdp{% endif %} data-jdp-has-second="true"
                   name="{{ cell.input_prefix }}{{ cell.field.code }}"
-                  value="{{ cell.value|default:'' }}"
+                  value="{{ cell.display_value|default:cell.value|default:'' }}"
                   class="df-table-input"
                 />
               {% elif cell.field.field_type == "BOOLEAN" %}
