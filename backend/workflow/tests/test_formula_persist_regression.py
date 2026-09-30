@@ -429,6 +429,86 @@ class FormulaPersistenceTestCase(TestCase):
             Decimal("125"),
         )
 
+    def test_device_formula_aggregates_only_its_own_child_rows(self):
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="devicesForFormula",
+            code="devicesForFormula",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=20,
+            is_active=True,
+        )
+        parts_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=device_group,
+            name="devicePartsForFormula",
+            code="devicePartsForFormula",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=21,
+            is_active=True,
+        )
+        amount = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parts_group,
+            name="partAmount",
+            code="partAmount",
+            field_type=FormField.FieldType.NUMBER,
+            label="Part amount",
+            order=0,
+            is_active=True,
+        )
+        parts_total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=device_group,
+            name="devicePartsTotal",
+            code="devicePartsTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Device parts total",
+            order=0,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": amount.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+
+        data = {
+            device_group.code: [
+                {
+                    "child_groups": [{
+                        "code": parts_group.code,
+                        "items": [
+                            {"partAmount": "100"},
+                            {"partAmount": "200"},
+                        ],
+                    }],
+                },
+                {
+                    "child_groups": [{
+                        "code": parts_group.code,
+                        "items": [
+                            {"partAmount": "400"},
+                            {"partAmount": "600"},
+                        ],
+                    }],
+                },
+            ],
+        }
+
+        result = FormulaService.calculate_context_data(
+            form=self.form,
+            data=data,
+        )
+
+        self.assertEqual(
+            [row[parts_total.code] for row in result[device_group.code]],
+            ["300", "1000"],
+        )
+
     def test_same_group_aggregate_remains_global_for_repeatable_rows(self):
         same_group_total = FormField.objects.create(
             section=self.section,
