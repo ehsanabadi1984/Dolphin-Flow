@@ -181,7 +181,10 @@ def formula_definitions(request, instance_id):
     for field in all_fields:
         if field.repeatable_group_id:
             group = field.repeatable_group
-            if group.group_type != FormRepeatableGroup.GroupType.NORMAL:
+            if group.group_type not in {
+                FormRepeatableGroup.GroupType.NORMAL,
+                FormRepeatableGroup.GroupType.DEVICE,
+            }:
                 continue
             if not permission_context.group(group).can_view:
                 continue
