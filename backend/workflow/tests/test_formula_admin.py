@@ -91,8 +91,12 @@ class FormulaFieldAdminFormTests(TestCase):
             "name": "Parts Total",
             "code": "parts_total",
             "label": "Parts Total",
-            "order": "1",
+            "order": "2",
             "is_active": "on",
+            "calendar": FormField.Calendar.GREGORIAN,
+            "choice_source": FormField.ChoiceSource.NONE,
+            "decimal_places": "2",
+            "system_key": FormField.SystemKey.NONE,
             "formula_builder": json.dumps({
                 "version": 2,
                 "decimal_places": 0,
