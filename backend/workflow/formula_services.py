@@ -95,7 +95,7 @@ class FormulaService:
         return ids
 
     @classmethod
-    def validate_tokens(cls, *, field, tokens, available_fields=None) -> None:
+    def validate_tokens(cls, *, field, tokens, available_fields=None, available_groups=None) -> None:
         if not isinstance(tokens, list) or not tokens:
             raise FormulaError("فرمول نمی‌تواند خالی باشد.")
         if len(tokens) > cls.MAX_TOKENS:
@@ -106,7 +106,12 @@ class FormulaService:
             if getattr(item, "pk", None) is not None
         }
         ast = cls._parse_tokens(tokens)
-        cls._validate_ast(field=field, node=ast, available=available)
+        cls._validate_ast(
+            field=field,
+            node=ast,
+            available=available,
+            available_groups=available_groups,
+        )
 
     @classmethod
     def _parse_tokens(cls, tokens):
@@ -218,7 +223,21 @@ class FormulaService:
         return False
 
     @classmethod
-    def _validate_ast(cls, *, field, node, available, aggregate_context=None):
+    def _is_descendant_group(cls, ancestor_group_id, descendant_group_id, available_groups):
+        if ancestor_group_id is None or descendant_group_id is None:
+            return False
+        seen = set()
+        current_id = descendant_group_id
+        while current_id is not None and current_id not in seen:
+            if current_id == ancestor_group_id:
+                return True
+            seen.add(current_id)
+            group = (available_groups or {}).get(current_id)
+            current_id = getattr(group, "parent_group_id", None)
+        return False
+
+    @classmethod
+    def _validate_ast(cls, *, field, node, available, available_groups=None, aggregate_context=None):
         node_type = node[0]
         if node_type == "number":
             return
@@ -233,7 +252,16 @@ class FormulaService:
 
             if field.repeatable_group_id:
                 if referenced.repeatable_group_id != field.repeatable_group_id:
-                    raise FormulaError("فرمول یک ردیف جدول فقط می‌تواند به فیلدهای همان جدول ارجاع دهد.")
+                    is_scoped_aggregate = (
+                        aggregate_context in cls.AGGREGATE_FUNCTIONS
+                        and cls._is_descendant_group(
+                            field.repeatable_group_id,
+                            referenced.repeatable_group_id,
+                            available_groups,
+                        )
+                    )
+                    if not is_scoped_aggregate:
+                        raise FormulaError("فرمول یک ردیف جدول فقط می‌تواند به فیلدهای همان جدول ارجاع دهد.")
             elif referenced.repeatable_group_id is not None and aggregate_context not in cls.AGGREGATE_FUNCTIONS:
                 raise FormulaError("برای استفاده از فیلدهای گروه تکرارشونده در فرمول عادی باید از SUM، MIN، MAX یا AVG استفاده کنید.")
 
@@ -242,8 +270,8 @@ class FormulaService:
             return
 
         if node_type == "binary":
-            cls._validate_ast(field=field, node=node[2], available=available, aggregate_context=aggregate_context)
-            cls._validate_ast(field=field, node=node[3], available=available, aggregate_context=aggregate_context)
+            cls._validate_ast(field=field, node=node[2], available=available, available_groups=available_groups, aggregate_context=aggregate_context)
+            cls._validate_ast(field=field, node=node[3], available=available, available_groups=available_groups, aggregate_context=aggregate_context)
             return
 
         if node_type == "function":
@@ -261,6 +289,7 @@ class FormulaService:
                     field=field,
                     node=arg,
                     available=available,
+                    available_groups=available_groups,
                     aggregate_context=name if name in cls.AGGREGATE_FUNCTIONS else aggregate_context,
                 )
             return
@@ -366,12 +395,21 @@ class FormulaService:
     def validate_form_formulas(cls, form: FormDefinition) -> None:
         all_fields = list(FormField.objects.filter(section__form=form, is_active=True).select_related("repeatable_group"))
         by_id = {field.pk: field for field in all_fields}
+        available_groups = {
+            group.pk: group
+            for group in FormRepeatableGroup.objects.filter(section__form=form, is_active=True)
+        }
         formulas = [field for field in all_fields if cls.is_formula(field)]
         for field in formulas:
             config = cls.get_config(field)
             if not config:
                 raise FormulaError(f"فرمول فیلد «{field.label}» تنظیم نشده است.")
-            cls.validate_tokens(field=field, tokens=config["tokens"], available_fields=all_fields)
+            cls.validate_tokens(
+                field=field,
+                tokens=config["tokens"],
+                available_fields=all_fields,
+                available_groups=available_groups,
+            )
             for field_id in cls.referenced_field_ids(config):
                 if field_id not in by_id:
                     raise FormulaError(f"ارجاع فیلد «{field.label}» معتبر نیست.")
@@ -473,12 +511,47 @@ class FormulaService:
 
             return rows
 
-        def resolve_group_aggregate(field_id: int, function_name: str) -> Decimal:
+        def _find_descendant_rows(current_row, target_group_code: str) -> list[dict]:
+            found = []
+
+            def visit_row(row_payload):
+                if not isinstance(row_payload, dict):
+                    return
+                for child_group in row_payload.get("child_groups", []) or []:
+                    if not isinstance(child_group, dict):
+                        continue
+                    items = child_group.get("items", [])
+                    if child_group.get("code") == target_group_code:
+                        if isinstance(items, list):
+                            found.extend(item for item in items if isinstance(item, dict))
+                        continue
+                    if isinstance(items, list):
+                        for item in items:
+                            visit_row(item)
+
+            visit_row(current_row)
+            return found
+
+        def resolve_group_aggregate(
+            field_id: int,
+            function_name: str,
+            *,
+            current_group=None,
+            current_row=None,
+            current_row_resolver=None,
+        ) -> Decimal:
             field = by_id.get(field_id)
             if field is None or field.repeatable_group_id is None:
                 return resolve_normal(field_id)
             group = field.repeatable_group
-            rows = _find_group_rows(group.code)
+            if current_group is not None and current_row is not None:
+                if group.pk == current_group.pk:
+                    if current_row_resolver is None:
+                        return Decimal("0")
+                    return current_row_resolver(field_id)
+                rows = _find_descendant_rows(current_row, group.code)
+            else:
+                rows = _find_group_rows(group.code)
             values: list[Decimal] = []
             group_fields = {
                 item.pk: item for item in all_fields if item.repeatable_group_id == group.pk
@@ -537,7 +610,6 @@ class FormulaService:
             group.pk: group
             for group in FormRepeatableGroup.objects.filter(
                 section__form=form,
-                group_type=FormRepeatableGroup.GroupType.NORMAL,
                 is_active=True,
             )
         }
@@ -583,7 +655,14 @@ class FormulaService:
                             value = cls.evaluate_tokens(
                                 tokens=cfg["tokens"],
                                 field_resolver=resolve_row,
-                            )
+                                aggregate_field_resolver=lambda aggregate_field_id, function_name: resolve_group_aggregate(
+                                    aggregate_field_id,
+                                    function_name,
+                                    current_group=group,
+                                    current_row=row,
+                                    current_row_resolver=resolve_row,
+                                ),
+                            
                         finally:
                             row_calculating.remove(field.pk)
                         row_cache[field.pk] = value
