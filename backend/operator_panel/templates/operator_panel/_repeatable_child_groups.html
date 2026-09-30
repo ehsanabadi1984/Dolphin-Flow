@@ -429,7 +429,7 @@
                                   {% elif template_field.field.field_type == "DATETIME" %}
                                     <input
                                       type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %}
-                                      id="repeatable-{{ name_prefix }}_{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                      id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                     />
                                   {% elif template_field.field.field_type == "BOOLEAN" %}
