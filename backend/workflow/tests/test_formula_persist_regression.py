@@ -499,6 +499,92 @@ class FormulaPersistenceTestCase(TestCase):
 
         self.assertEqual(result[nested_total.code], "3.00")
 
+    def test_parent_scoped_aggregate_is_dynamic_per_parent_and_preserves_global_aggregate(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="scopedParts",
+            code="scopedParts",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=10,
+            is_active=True,
+        )
+        amount = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="amount",
+            code="amount",
+            field_type=FormField.FieldType.NUMBER,
+            label="Amount",
+            order=0,
+            is_active=True,
+        )
+        parent_total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="partsTotal",
+            code="partsTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Parts total",
+            order=10,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": amount.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+        grand_total = FormField.objects.create(
+            section=self.final_section,
+            name="AllPartsTotal",
+            code="AllPartsTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="All parts total",
+            order=10,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": amount.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+
+        data = {
+            self.group.code: [
+                {
+                    "child_groups": [{
+                        "code": child_group.code,
+                        "items": [
+                            {"amount": "10"},
+                            {"amount": "20"},
+                            {"amount": "30"},
+                        ],
+                    }],
+                },
+                {
+                    "child_groups": [{
+                        "code": child_group.code,
+                        "items": [
+                            {"amount": "100"},
+                            {"amount": "200"},
+                        ],
+                    }],
+                },
+            ],
+        }
+
+        result = FormulaService.calculate_context_data(
+            form=self.form,
+            data=data,
+        )
+
+        self.assertEqual(result[self.group.code][0]["partsTotal"], "60")
+        self.assertEqual(result[self.group.code][1]["partsTotal"], "300")
+        self.assertEqual(result[grand_total.code], "360")
+
     def test_formula_definitions_merges_posted_nested_repeatable_values(self):
         from django.urls import reverse
 
