@@ -890,11 +890,11 @@ class DynamicFormServiceTests(TestCase):
             html,
         )
         self.assertIn(
-            'data-repeatable-group="device_details"',
+            'data-repeatable-row-group="installation_parts"',
             html,
         )
         self.assertIn(
-            'data-repeatable-group="installation_parts"',
+            'data-row-path="devices_0_device_details_0_installation_parts_0"',
             html,
         )
         self.assertIn(
@@ -910,7 +910,7 @@ class DynamicFormServiceTests(TestCase):
             html,
         )
         self.assertIn(
-            'class="df-repeatable-child-row df-device-child-row"',
+            'class="df-repeatable-item df-repeatable-flat-row df-repeatable-child-flat-row"',
             html,
         )
 
