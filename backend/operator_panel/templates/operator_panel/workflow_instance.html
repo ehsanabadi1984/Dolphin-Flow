@@ -103,7 +103,7 @@
                       id="field-{{ item.field.code }}"
                       type="text"
                       name="{{ item.field.code }}"
-                      value="{{ item.value|default:'' }}"
+                      value="{{ item.display_value|default:item.value|default:'' }}"
                     />
 
                   {% elif item.field.field_type == "TEXTAREA" %}
@@ -129,7 +129,7 @@
                       id="field-{{ item.field.code }}"
                       type="{% if item.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if item.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if item.field.calendar == 'JALALI' %}data-jdp{% endif %}
                       name="{{ item.field.code }}"
-                      value="{{ item.value|default:'' }}"
+                      value="{{ item.display_value|default:item.value|default:'' }}"
                     />
 
                   {% elif item.field.field_type == "DATETIME" %}
@@ -138,7 +138,7 @@
                       id="field-{{ item.field.code }}"
                       type="{% if item.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if item.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %} {% if item.field.calendar == 'JALALI' %}data-jdp{% endif %} data-jdp-has-second="true"
                       name="{{ item.field.code }}"
-                      value="{{ item.value|default:'' }}"
+                      value="{{ item.display_value|default:item.value|default:'' }}"
                     />
 
                   {% elif item.field.field_type == "BOOLEAN" %}
@@ -395,7 +395,7 @@
                               type="text"
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
                               name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
-                              value="{{ item_field.value|default:'' }}"
+                              value="{{ item_field.display_value|default:item_field.value|default:'' }}"
                             />
 
                           {% elif item_field.field.field_type == "TEXTAREA" %}
@@ -421,7 +421,7 @@
                               type="{% if item_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}" {% if item_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
                               name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
-                              value="{{ item_field.value|default:'' }}"
+                              value="{{ item_field.display_value|default:item_field.value|default:'' }}"
                             />
 
                           {% elif item_field.field.field_type == "DATETIME" %}
@@ -430,7 +430,7 @@
                               type="{% if item_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}" {% if item_field.field.calendar == 'JALALI' %}data-jdp{% endif %} data-jdp-has-second="true"
                               id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
                               name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
-                              value="{{ item_field.value|default:'' }}"
+                              value="{{ item_field.display_value|default:item_field.value|default:'' }}"
                             />
 
                           {% elif item_field.field.field_type == "BOOLEAN" %}
