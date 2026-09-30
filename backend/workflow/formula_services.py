@@ -556,8 +556,8 @@ class FormulaService:
                 if field.repeatable_group_id == group.pk
             }
 
-            for raw_row in rows:
-                if not isinstance(raw_row, dict):
+            for row in rows:
+                if not isinstance(row, dict):
                     continue
 
                 row_cache: dict[int, Decimal] = {}
