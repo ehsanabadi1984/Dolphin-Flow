@@ -130,9 +130,18 @@
                                                 </select>
                                               {% endif %}
                                             {% else %}
-                                              <div class="df-form-value">
-                                                {{ child_field.display_value|default:child_field.value|default:"—" }}
-                                              </div>
+                                              {% if child_field.field.field_type == "BOOLEAN" %}
+                                                <input
+                                                  type="checkbox"
+                                                  {% if child_field.value %}checked{% endif %}
+                                                  disabled
+                                                  class="df-table-checkbox"
+                                                />
+                                              {% else %}
+                                                <div class="df-form-value">
+                                                  {{ child_field.display_value|default:child_field.value|default:"—" }}
+                                                </div>
+                                              {% endif %}
                                             {% endif %}
                                           </td>
                                         {% endfor %}
@@ -379,9 +388,17 @@
                                         </select>
                                       {% endif %}
                                     {% else %}
-                                      <div class="df-form-value">
-                                        {{ child_field.display_value|default:child_field.value|default:"—" }}
-                                      </div>
+                                      {% if child_field.field.field_type == "BOOLEAN" %}
+                                        <input
+                                          type="checkbox"
+                                          {% if child_field.value %}checked{% endif %}
+                                          disabled
+                                        />
+                                      {% else %}
+                                        <div class="df-form-value">
+                                          {{ child_field.display_value|default:child_field.value|default:"—" }}
+                                        </div>
+                                      {% endif %}
                                     {% endif %}
                                   </div>
                                 {% endfor %}
