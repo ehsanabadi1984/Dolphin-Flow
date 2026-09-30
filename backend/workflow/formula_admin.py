@@ -227,10 +227,11 @@ class FormulaFieldAdminForm(forms.ModelForm):
         draft.repeatable_group = group
 
         available_fields = list(self._available_formula_fields())
+        section = cleaned.get("section")
         available_groups = {
             item.pk: item
             for item in FormRepeatableGroup.objects.filter(
-                section__form=draft.section.form,
+                section__form=section.form,
                 is_active=True,
             )
         }
