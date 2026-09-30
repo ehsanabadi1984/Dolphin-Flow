@@ -34,6 +34,7 @@ from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.repeatable_row_read_services import RepeatableRowReadService
 from workflow.formula_bootstrap import bootstrap_formula_system, _build_context_data
 from workflow.formula_services import FormulaService
+from operator_panel.formula_views import formula_definitions
 from workflow.history_models import HistoryConfiguration, HistoryField
 from workflow.history_services import HistoryService
 from workflow.models import (
@@ -1516,6 +1517,30 @@ class FormulaPersistenceTestCase(TestCase):
     # --------------------------------------------------------------
     # HTTP / template rendering: edit state must be server-signalled
     # --------------------------------------------------------------
+
+    def test_formula_definitions_exposes_repeatable_formula_to_operator_ui(self):
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500"},
+        ])
+
+        request = self.client.get(
+            f"/operator/workflow/{instance.pk}/formula-definitions/"
+        )
+        request.user = self.user
+        response = formula_definitions(request, instance.pk)
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        formula = next(
+            item for item in payload["formulas"]
+            if item["field_id"] == self.total.pk
+        )
+        self.assertEqual(formula["scope"], "ROW")
+        self.assertEqual(formula["group_code"], self.group.code)
+        result = payload["formula_results"][str(self.total.pk)]
+        self.assertEqual(result["group_code"], self.group.code)
+        self.assertEqual(result["values"], ["5000"])
+        self.assertEqual(len(result["row_ids"]), 1)
 
     def test_rendered_form_carries_server_signalled_edit_mode(self):
         """
