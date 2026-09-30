@@ -662,7 +662,7 @@ class FormulaService:
                                     current_row=row,
                                     current_row_resolver=resolve_row,
                                 ),
-                            
+                            )
                         finally:
                             row_calculating.remove(field.pk)
                         row_cache[field.pk] = value
