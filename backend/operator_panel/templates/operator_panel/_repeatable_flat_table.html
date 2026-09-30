@@ -97,9 +97,18 @@
                 </select>
               {% endif %}
             {% else %}
-              <div class="df-table-value">
-                {{ cell.display_value|default:cell.value|default:"—" }}
-              </div>
+              {% if cell.field.field_type == "BOOLEAN" %}
+                <input
+                  type="checkbox"
+                  {% if cell.value %}checked{% endif %}
+                  disabled
+                  class="df-table-checkbox"
+                />
+              {% else %}
+                <div class="df-table-value">
+                  {{ cell.display_value|default:cell.value|default:"—" }}
+                </div>
+              {% endif %}
             {% endif %}
           {% endif %}
         </td>
