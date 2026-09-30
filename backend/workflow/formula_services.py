@@ -533,27 +533,33 @@ class FormulaService:
                 cfg.get("decimal_places", 2),
             )
 
-        for group in FormRepeatableGroup.objects.filter(
-            section__form=form,
-            group_type=FormRepeatableGroup.GroupType.NORMAL,
-            is_active=True,
-        ):
-            rows = result.get(group.code, [])
+        groups_by_id = {
+            group.pk: group
+            for group in FormRepeatableGroup.objects.filter(
+                section__form=form,
+                group_type=FormRepeatableGroup.GroupType.NORMAL,
+                is_active=True,
+            )
+        }
+
+        def calculate_group_rows(group, rows):
             if not isinstance(rows, list):
-                rows = []
+                return
+
             group_formula_fields = [
                 field for field in all_fields
                 if cls.is_formula(field) and field.repeatable_group_id == group.pk
             ]
-            if not group_formula_fields:
-                continue
-
-            group_result = []
             group_field_ids = {
-                field.pk: field for field in all_fields if field.repeatable_group_id == group.pk
+                field.pk: field
+                for field in all_fields
+                if field.repeatable_group_id == group.pk
             }
+
             for raw_row in rows:
-                row = dict(raw_row) if isinstance(raw_row, dict) else {}
+                if not isinstance(raw_row, dict):
+                    continue
+
                 row_cache: dict[int, Decimal] = {}
                 row_calculating: set[int] = set()
 
@@ -569,7 +575,10 @@ class FormulaService:
                         row_calculating.add(field.pk)
                         try:
                             cfg = cls.get_config(field)
-                            value = cls.evaluate_tokens(tokens=cfg["tokens"], field_resolver=resolve_row)
+                            value = cls.evaluate_tokens(
+                                tokens=cfg["tokens"],
+                                field_resolver=resolve_row,
+                            )
                         finally:
                             row_calculating.remove(field.pk)
                         row_cache[field.pk] = value
@@ -578,8 +587,34 @@ class FormulaService:
 
                 for field in group_formula_fields:
                     cfg = cls.get_config(field)
-                    row[field.code] = cls.format_result(resolve_row(field.pk), cfg.get("decimal_places", 2))
-                group_result.append(row)
-            result[group.code] = group_result
+                    row[field.code] = cls.format_result(
+                        resolve_row(field.pk),
+                        cfg.get("decimal_places", 2),
+                    )
+
+                child_groups = row.get("child_groups", [])
+                if not isinstance(child_groups, list):
+                    continue
+                for child_payload in child_groups:
+                    if not isinstance(child_payload, dict):
+                        continue
+                    child_group = next(
+                        (
+                            item for item in groups_by_id.values()
+                            if item.code == child_payload.get("code")
+                        ),
+                        None,
+                    )
+                    if child_group is None:
+                        continue
+                    calculate_group_rows(
+                        child_group,
+                        child_payload.get("items", []),
+                    )
+
+        for group in groups_by_id.values():
+            if group.parent_group_id is not None:
+                continue
+            calculate_group_rows(group, result.get(group.code, []))
 
         return result
