@@ -2324,7 +2324,12 @@ class DynamicFormService:
                                         "",
                                     )
 
-                                    display_value = value
+                                    display_value = (
+                                        DynamicFormService._get_display_value(
+                                            field=field,
+                                            value=value,
+                                        )
+                                    )
 
                                 # -------------------------------------------------
                                 # Existing Device Identity Fields
