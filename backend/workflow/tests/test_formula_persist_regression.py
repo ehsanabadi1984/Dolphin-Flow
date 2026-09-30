@@ -429,6 +429,42 @@ class FormulaPersistenceTestCase(TestCase):
             Decimal("125"),
         )
 
+    def test_same_group_aggregate_remains_global_for_repeatable_rows(self):
+        same_group_total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="sameGroupTotal",
+            code="sameGroupTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Same group total",
+            order=20,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": self.qty.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+
+        data = {
+            self.group.code: [
+                {"quantity": "10", "UnitPrice": "100"},
+                {"quantity": "20", "UnitPrice": "200"},
+                {"quantity": "30", "UnitPrice": "300"},
+            ],
+        }
+
+        result = FormulaService.calculate_context_data(
+            form=self.form,
+            data=data,
+        )
+
+        self.assertEqual(
+            [row[same_group_total.code] for row in result[self.group.code]],
+            ["60", "60", "60"],
+        )
+
     def test_top_level_aggregate_traverses_nested_repeatable_group(self):
         child_group = FormRepeatableGroup.objects.create(
             section=self.section,
