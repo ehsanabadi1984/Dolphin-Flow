@@ -614,14 +614,12 @@ class FormulaService:
             )
         }
 
-        processed_group_ids = set()
+        reached_group_ids = set()
 
         def calculate_group_rows(group, rows):
             if not isinstance(rows, list) or not rows:
                 return
-            if group.pk in processed_group_ids:
-                return
-            processed_group_ids.add(group.pk)
+            reached_group_ids.add(group.pk)
 
             group_formula_fields = [
                 field for field in all_fields
@@ -706,7 +704,7 @@ class FormulaService:
         # hierarchy so nested row formulas also receive their calculated
         # values in the returned context.
         for group in groups_by_id.values():
-            if group.pk in processed_group_ids:
+            if group.pk in reached_group_ids:
                 continue
             calculate_group_rows(group, _find_group_rows(group.code))
 
