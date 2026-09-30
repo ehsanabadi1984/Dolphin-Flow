@@ -336,14 +336,48 @@ def formula_definitions(request, instance_id):
         for item in formulas
         if not item.get("calculation_only")
     }
+    def find_calculated_group_rows(group_code):
+        rows = []
+        direct_rows = calculated_data.get(group_code)
+        if isinstance(direct_rows, list):
+            rows.extend(row for row in direct_rows if isinstance(row, dict))
+
+        def visit_rows(parent_rows):
+            if not isinstance(parent_rows, list):
+                return
+            for row in parent_rows:
+                if not isinstance(row, dict):
+                    continue
+                child_groups = row.get("child_groups", [])
+                if not isinstance(child_groups, list):
+                    continue
+                for child_group in child_groups:
+                    visit_group(child_group)
+
+        def visit_group(group_payload):
+            if not isinstance(group_payload, dict):
+                return
+            if group_payload.get("code") == group_code:
+                items = group_payload.get("items", [])
+                if isinstance(items, list):
+                    rows.extend(row for row in items if isinstance(row, dict))
+                return
+            visit_rows(group_payload.get("items", []))
+
+        for payload in calculated_data.values():
+            if isinstance(payload, list):
+                visit_rows(payload)
+            elif isinstance(payload, dict) and payload.get("code"):
+                visit_group(payload)
+
+        return rows
+
     formula_results = {}
     for field in all_formula_fields:
         if field.pk not in visible_formula_ids:
             continue
         if field.repeatable_group_id:
-            rows = calculated_data.get(field.repeatable_group.code, [])
-            if not isinstance(rows, list):
-                rows = []
+            rows = find_calculated_group_rows(field.repeatable_group.code)
             formula_results[str(field.pk)] = {
                 "group_code": field.repeatable_group.code,
                 "values": [
