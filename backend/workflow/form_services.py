@@ -2160,7 +2160,7 @@ class DynamicFormService:
                             # configured calendar just like non-DEVICE rows.
                             device_repeatable_row = None
                             device_repeatable_values = {}
-                            if instance_device.pk:
+                            if existing_instance_device is not None:
                                 device_repeatable_row = (
                                     RepeatableRow.objects
                                     .filter(
