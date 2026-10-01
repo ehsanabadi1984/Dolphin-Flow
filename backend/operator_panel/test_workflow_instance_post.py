@@ -113,9 +113,6 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             )
         self.client.force_login(self.user)
 
-    @patch(
-        "operator_panel.views.WorkflowExecutionService.execute_transition"
-    )
     def test_member_can_view_process_from_my_processes_with_field_permissions(self):
         other_user = User.objects.create_user(
             username="operator-post-member",
@@ -149,6 +146,9 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIsNotNone(response.context["dynamic_form"])
 
+    @patch(
+        "operator_panel.views.WorkflowExecutionService.execute_transition"
+    )
     def test_transition_validation_errors_render_as_structured_edit_form(
         self,
         execute_transition,
