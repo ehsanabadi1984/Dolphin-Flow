@@ -171,6 +171,98 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIsNotNone(response.context["dynamic_form"])
 
+    def test_active_my_processes_uses_last_submitted_step_of_historical_operator(self):
+        historical_user = User.objects.create_user(
+            username="operator-post-active-historical",
+            password="password",
+        )
+        current_user = User.objects.create_user(
+            username="operator-post-active-current",
+            password="password",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=historical_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=current_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+
+        later_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Current Later Step",
+            code="CURRENT_LATER_STEP",
+            order=2,
+            is_active=True,
+        )
+
+        FieldAccess.objects.create(
+            field=self.name_field,
+            step=self.step,
+            user=historical_user,
+            can_view=True,
+            can_edit=True,
+        )
+        FieldAccess.objects.create(
+            field=self.name_field,
+            step=later_step,
+            user=historical_user,
+            can_view=False,
+            can_edit=False,
+        )
+
+        historical_execution = WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step,
+            performed_by=historical_user,
+            is_submitted=True,
+        )
+        historical_execution.submitted_at = historical_execution.performed_at
+        historical_execution.save(
+            update_fields=["is_submitted", "submitted_at"],
+        )
+
+        WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=later_step,
+            performed_by=current_user,
+            is_submitted=False,
+        )
+
+        self.instance.current_step = later_step
+        self.instance.save(update_fields=["current_step"])
+
+        self.client.force_login(historical_user)
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"source": "my_processes"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        dynamic_form = response.context["dynamic_form"]
+
+        visible_codes = {
+            item["field"].code
+            for section in dynamic_form["sections"]
+            for item in section["fields"]
+        }
+        self.assertIn(self.name_field.code, visible_codes)
+        self.assertEqual(
+            response.context["dynamic_form"]["is_submitted"],
+            True,
+        )
+        self.assertFalse(response.context["edit_mode"])
+        self.assertEqual(response.context["transitions"], ())
+
     def test_member_can_view_completed_process_from_my_processes_with_field_permissions(self):
         other_user = User.objects.create_user(
             username="operator-post-completed-member",
