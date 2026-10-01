@@ -153,6 +153,68 @@ class NotificationServiceTests(TestCase):
             notification.is_read,
         )
 
+    def test_mark_instance_notifications_as_read(self):
+        NotificationService.create(
+            recipient=self.user,
+            notification_type=(
+                Notification.NotificationType.STEP_ENTERED
+            ),
+            title="Instance notification",
+            message="Open this instance",
+            workflow_instance=self.instance,
+            workflow_step=self.step,
+        )
+        NotificationService.create(
+            recipient=self.user,
+            notification_type=(
+                Notification.NotificationType.ACTION_REQUIRED
+            ),
+            title="Other notification",
+            message="Other instance",
+        )
+
+        marked = NotificationService.mark_instance_notifications_as_read(
+            user=self.user,
+            workflow_instance=self.instance,
+        )
+
+        self.assertEqual(marked, 1)
+        self.assertFalse(
+            Notification.objects.get(
+                workflow_instance=self.instance,
+                recipient=self.user,
+            ).is_read is False
+        )
+        self.assertEqual(
+            NotificationService.get_unread(user=self.user).count(),
+            1,
+        )
+
+    def test_mark_instance_notifications_as_read_does_not_touch_other_users(self):
+        other_user = User.objects.create_user(
+            username="other_instance_notification_user",
+            password="test-password",
+        )
+        notification = NotificationService.create(
+            recipient=other_user,
+            notification_type=(
+                Notification.NotificationType.STEP_ENTERED
+            ),
+            title="Other user",
+            message="Other user notification",
+            workflow_instance=self.instance,
+            workflow_step=self.step,
+        )
+
+        marked = NotificationService.mark_instance_notifications_as_read(
+            user=self.user,
+            workflow_instance=self.instance,
+        )
+
+        self.assertEqual(marked, 0)
+        notification.refresh_from_db()
+        self.assertFalse(notification.is_read)
+
     def test_get_unread_notifications(self):
         NotificationService.create(
             recipient=self.user,
