@@ -541,6 +541,28 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                 can_edit=False,
             )
 
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent_group,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=parent_row,
+            field=parent_field,
+            text_value="Parent value",
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=child_field,
+            text_value="Child value",
+        )
+
         self.execution.is_submitted = True
         self.execution.save(update_fields=["is_submitted"])
         self.instance.current_step = None
