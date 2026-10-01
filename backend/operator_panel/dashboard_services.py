@@ -465,13 +465,71 @@ class DashboardService:
                 )
             )
         )
+
+        historical_view_steps = WorkflowStepExecution.objects.filter(
+            instance_id=OuterRef("pk"),
+            workflow_step__is_active=True,
+        )
+        historical_user_allow = WorkflowPermission.objects.filter(
+            workflow_id=OuterRef("workflow_id"),
+            step_id=OuterRef("workflow_step_id"),
+            action=WorkflowPermission.Action.VIEW,
+            effect=WorkflowPermission.Effect.ALLOW,
+            user=self.user,
+        )
+        historical_user_deny = WorkflowPermission.objects.filter(
+            workflow_id=OuterRef("workflow_id"),
+            step_id=OuterRef("workflow_step_id"),
+            action=WorkflowPermission.Action.VIEW,
+            effect=WorkflowPermission.Effect.DENY,
+            user=self.user,
+        )
+        historical_role_allow = WorkflowPermission.objects.filter(
+            workflow_id=OuterRef("workflow_id"),
+            step_id=OuterRef("workflow_step_id"),
+            action=WorkflowPermission.Action.VIEW,
+            effect=WorkflowPermission.Effect.ALLOW,
+            user__isnull=True,
+            role__in=WorkflowMembership.objects.filter(
+                workflow_id=OuterRef("workflow_id"),
+                user=self.user,
+                is_active=True,
+            ).values("role"),
+        )
+        historical_role_deny = WorkflowPermission.objects.filter(
+            workflow_id=OuterRef("workflow_id"),
+            step_id=OuterRef("workflow_step_id"),
+            action=WorkflowPermission.Action.VIEW,
+            effect=WorkflowPermission.Effect.DENY,
+            user__isnull=True,
+            role__in=WorkflowMembership.objects.filter(
+                workflow_id=OuterRef("workflow_id"),
+                user=self.user,
+                is_active=True,
+            ).values("role"),
+        )
+        historical_view = Exists(
+            historical_view_steps.filter(
+                Q(
+                    ~Exists(historical_user_deny),
+                    Exists(historical_user_allow),
+                )
+                | Q(
+                    ~Exists(historical_user_deny),
+                    ~Exists(historical_user_allow),
+                    ~Exists(historical_role_deny),
+                    Exists(historical_role_allow),
+                )
+            )
+        )
+
         return (
             self._accessible_active_queryset()
             .filter(_meaningful_instance_q())
             .filter(
                 Q(started_by=self.user)
                 | Q(current_step__assigned_to=self.user)
-                | participated
+                | (participated & historical_view)
             )
             .distinct()
         )
