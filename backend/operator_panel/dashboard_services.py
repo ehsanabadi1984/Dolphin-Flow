@@ -440,6 +440,22 @@ class DashboardService:
             .select_related("workflow", "current_step")
         )
 
+    def dashboard_timeline_queryset(self):
+        """Return active meaningful instances whose timeline belongs on this user's dashboard.
+
+        A timeline is visible to the process starter or the operator assigned to
+        the current step, subject to the existing VIEW permission contract.
+        """
+        return (
+            self._accessible_active_queryset()
+            .filter(_meaningful_instance_q())
+            .filter(
+                Q(started_by=self.user)
+                | Q(current_step__assigned_to=self.user)
+            )
+            .distinct()
+        )
+
     def my_processes_queryset(self):
         # "My Processes" is a membership-based process list. The form
         # itself remains responsible for enforcing the operator's VIEW
@@ -480,7 +496,7 @@ class DashboardService:
         counts = self.get_sidebar_counts()
         my_instances = self.my_processes_queryset()
         active_processes = list(
-            self._my_active_queryset()[:ACTIVE_PROCESSES_LIMIT]
+            self.dashboard_timeline_queryset()[:ACTIVE_PROCESSES_LIMIT]
         )
         self._attach_dashboard_state(active_processes, now=now)
         sla_summary = self._build_sla_summary(now=now)
