@@ -309,6 +309,55 @@ class SidebarActiveCountTests(DashboardSidebarBase):
         self.assertEqual(counts["active"], context["summary"]["active"])
 
 
+class DashboardTimelineRenderTests(DashboardSidebarBase):
+    """The dashboard renders the server-built tracker for active processes."""
+
+    def test_active_process_timeline_renders_current_completed_and_future_steps(self):
+        self.grant_role_action_permissions()
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            role=WorkflowMembership.Role.EXECUTOR,
+            action=WorkflowPermission.Action.VIEW,
+            step=self.step_two,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        instance = self.create_active_instance(
+            started_by=self.user,
+            step=self.step_two,
+        )
+        FormData.objects.create(instance=instance, data={"note": "timeline"})
+
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_one,
+            performed_by=self.user,
+            is_submitted=True,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_two,
+            performed_by=self.user,
+        )
+        WorkflowTransitionExecution.objects.create(
+            instance=instance,
+            transition=self.transition,
+            performed_by=self.user,
+        )
+
+        response = self.get_client().get(reverse("operator_panel:dashboard"))
+        self.assertEqual(response.status_code, 200)
+
+        content = response.content.decode()
+        self.assertIn('id="active-process-timeline"', content)
+        self.assertIn("df-process-tracker", content)
+        self.assertIn("Step One", content)
+        self.assertIn("Step Two", content)
+        self.assertIn('df-tracker-step is-completed', content)
+        self.assertIn('df-tracker-step is-current', content)
+        self.assertIn("در انتظار", content)
+
+
 class AbandonedStartConsistencyTests(DashboardSidebarBase):
     """F: abandoned starts are excluded consistently from the sidebar
     badge, the dashboard active KPI/panel, and the my_processes page."""
