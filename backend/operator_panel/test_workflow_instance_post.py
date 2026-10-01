@@ -230,9 +230,12 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         WorkflowStepExecution.objects.create(
             instance=self.instance,
             workflow_step=later_step,
-            performed_by=current_user,
+            performed_by=historical_user,
             is_submitted=False,
         )
+
+        later_step.assigned_to = current_user
+        later_step.save(update_fields=["assigned_to"])
 
         self.instance.current_step = later_step
         self.instance.save(update_fields=["current_step"])
