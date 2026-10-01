@@ -248,6 +248,16 @@ class RepeatableRowService:
             )
             return None
 
+        if field.field_type in (
+            FormField.FieldType.DATE,
+            FormField.FieldType.DATETIME,
+        ) and value in (None, ""):
+            RepeatableRowService.remove_value(
+                row=locked_row,
+                field=field,
+            )
+            return None
+
         value_kwargs = RepeatableRowService._value_kwargs(
             field=field,
             value=value,
@@ -321,7 +331,8 @@ class RepeatableRowService:
 
         if field.field_type == FormField.FieldType.NUMBER:
             if value is None or value == "":
-                raise ValidationError("مقدار NUMBER نمی‌تواند خالی باشد.")
+                kwargs["decimal_value"] = Decimal("0")
+                return kwargs
             try:
                 kwargs["decimal_value"] = Decimal(str(value))
             except (InvalidOperation, TypeError, ValueError):
@@ -331,18 +342,21 @@ class RepeatableRowService:
             return kwargs
 
         if field.field_type == FormField.FieldType.DATE:
-            if value is None:
+            if value is None or value == "":
                 raise ValidationError("مقدار DATE نمی‌تواند خالی باشد.")
             kwargs["date_value"] = value
             return kwargs
 
         if field.field_type == FormField.FieldType.DATETIME:
-            if value is None:
+            if value is None or value == "":
                 raise ValidationError("مقدار DATETIME نمی‌تواند خالی باشد.")
             kwargs["datetime_value"] = value
             return kwargs
 
         if field.field_type == FormField.FieldType.BOOLEAN:
+            if value in (None, ""):
+                kwargs["boolean_value"] = False
+                return kwargs
             if not isinstance(value, bool):
                 raise ValidationError("مقدار BOOLEAN باید True یا False باشد.")
             kwargs["boolean_value"] = value
