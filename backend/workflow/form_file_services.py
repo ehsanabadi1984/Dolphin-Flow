@@ -92,7 +92,7 @@ def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
             for item in FormFile.objects.filter(form_data=form_data)
         }
 
-    step = read_context_step
+    step = instance.current_step
     permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=step, user=user)
     errors = []
 
