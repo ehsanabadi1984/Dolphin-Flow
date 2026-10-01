@@ -25,6 +25,7 @@
               <input
                 type="number"
                 name="PARENT_PREFIX{{ child_template.group.code }}_TEMPLATE_{{ field_context.field.code }}"
+                step="{{ field_context.field.number_step }}"
                 class="df-table-input"
               />
             {% elif field_context.field.field_type == "DATE" %}
