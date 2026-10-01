@@ -366,6 +366,45 @@ class DashboardTimelineRenderTests(DashboardSidebarBase):
         self.assertIn('df-tracker-step is-current', content)
         self.assertIn("در انتظار", content)
 
+    def test_assigned_non_starter_sees_process_timeline(self):
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            action=WorkflowPermission.Action.VIEW,
+            step=self.step_two,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        self.step_two.assigned_to = self.user
+        self.step_two.save(update_fields=["assigned_to"])
+
+        instance = self.create_active_instance(
+            started_by=self.other,
+            step=self.step_two,
+        )
+        FormData.objects.create(instance=instance, data={"note": "assigned timeline"})
+        WorkflowTransitionExecution.objects.create(
+            instance=instance,
+            transition=self.transition,
+            performed_by=self.other,
+        )
+
+        service = DashboardService(self.user)
+        self.assertNotIn(
+            instance.pk,
+            service._my_active_queryset().values_list("pk", flat=True),
+        )
+        self.assertIn(
+            instance.pk,
+            service.dashboard_timeline_queryset().values_list("pk", flat=True),
+        )
+
+        response = self.get_client().get(reverse("operator_panel:dashboard"))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('id="active-process-timeline"', content)
+        self.assertIn(f"#{instance.pk}", content)
+        self.assertIn("Step Two", content)
+
 
 class AbandonedStartConsistencyTests(DashboardSidebarBase):
     """F: abandoned starts are excluded consistently from the sidebar
