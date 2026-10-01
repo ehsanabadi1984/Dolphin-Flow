@@ -203,6 +203,7 @@
                                               type="number"
                                               id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              step="{{ template_field.field.number_step }}"
                                               class="df-table-input"
                                             />
                                           {% elif template_field.field.field_type == "DATE" %}
@@ -349,6 +350,7 @@
                                           id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
                                                   name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
                                           value="{{ child_field.value|default:'' }}"
+                                          step="{{ child_field.field.number_step }}"
                                         />
                                       {% elif child_field.field.field_type == "DATE" %}
                                         <input
@@ -436,6 +438,7 @@
                                       type="number"
                                       id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                      step="{{ template_field.field.number_step }}"
                                     />
                                   {% elif template_field.field.field_type == "DATE" %}
                                     <input
