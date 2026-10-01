@@ -145,7 +145,6 @@ def formula_definitions(request, instance_id):
         if read_context_step is None:
             final_execution = (
                 instance.step_executions
-                .filter(is_submitted=True)
                 .order_by("-performed_at")
                 .select_related("workflow_step")
                 .first()
