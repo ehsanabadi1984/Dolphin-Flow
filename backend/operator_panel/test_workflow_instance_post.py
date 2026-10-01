@@ -248,6 +248,106 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertIn(self.number_field.code, visible_codes)
         self.assertNotIn(self.enabled_field.code, visible_codes)
 
+    def test_member_completed_my_processes_filters_repeatable_groups_by_view_permission(self):
+        other_user = User.objects.create_user(
+            username="operator-post-completed-group-filter",
+            password="password",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=other_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+
+        visible_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Visible Group",
+            code="visible_group",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=3,
+        )
+        visible_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=visible_group,
+            name="Visible Group Field",
+            code="visible_group_field",
+            label="Visible Group Field",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        hidden_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Hidden Group",
+            code="hidden_group",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=4,
+        )
+        hidden_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=hidden_group,
+            name="Hidden Group Field",
+            code="hidden_group_field",
+            label="Hidden Group Field",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        RepeatableGroupAccess.objects.create(
+            group=visible_group,
+            step=self.step,
+            user=other_user,
+            can_view=True,
+            can_edit=False,
+            can_add=False,
+            can_delete=False,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=hidden_group,
+            step=self.step,
+            user=other_user,
+            can_view=False,
+            can_edit=False,
+            can_add=False,
+            can_delete=False,
+        )
+        for field in (visible_field, hidden_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=other_user,
+                can_view=True,
+                can_edit=False,
+            )
+
+        self.execution.is_submitted = True
+        self.execution.save(update_fields=["is_submitted"])
+        self.instance.current_step = None
+        self.instance.status = WorkflowInstance.Status.COMPLETED
+        self.instance.save(update_fields=["current_step", "status"])
+
+        self.client.force_login(other_user)
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"source": "my_processes"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        dynamic_form = response.context["dynamic_form"]
+        self.assertIsNotNone(dynamic_form)
+
+        visible_group_codes = {
+            group_context["group"].code
+            for section in dynamic_form["sections"]
+            for group_context in section["repeatable_groups"]
+        }
+        self.assertIn(visible_group.code, visible_group_codes)
+        self.assertNotIn(hidden_group.code, visible_group_codes)
+
     @patch(
         "operator_panel.views.WorkflowExecutionService.execute_transition"
     )
