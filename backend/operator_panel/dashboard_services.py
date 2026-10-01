@@ -443,15 +443,35 @@ class DashboardService:
     def dashboard_timeline_queryset(self):
         """Return active meaningful instances whose timeline belongs on this user's dashboard.
 
-        A timeline is visible to the process starter or the operator assigned to
-        the current step, subject to the existing VIEW permission contract.
+        A timeline is visible to the process starter, the operator assigned to
+        the current step, or an operator who has already participated in the
+        instance, subject to the existing VIEW permission contract.
         """
+        participated = (
+            Q(
+                Exists(
+                    WorkflowStepExecution.objects.filter(
+                        instance_id=OuterRef("pk"),
+                        performed_by=self.user,
+                    )
+                )
+            )
+            | Q(
+                Exists(
+                    WorkflowTransitionExecution.objects.filter(
+                        instance_id=OuterRef("pk"),
+                        performed_by=self.user,
+                    )
+                )
+            )
+        )
         return (
             self._accessible_active_queryset()
             .filter(_meaningful_instance_q())
             .filter(
                 Q(started_by=self.user)
                 | Q(current_step__assigned_to=self.user)
+                | participated
             )
             .distinct()
         )
