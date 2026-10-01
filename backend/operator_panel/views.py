@@ -331,20 +331,38 @@ def workflow_instance(request, instance_id, _return_save_result=False):
     )
 
     # ---------------------------------------------------------
-    # Current step execution
+    # Read-context step
     # ---------------------------------------------------------
+    # A completed instance has no current step. Its last submitted
+    # execution supplies the historical step needed only to rebuild
+    # the final form and its step-scoped field/group permissions.
+    read_context_step = instance.current_step
+    if read_context_step is None:
+        final_execution = (
+            instance.step_executions
+            .filter(is_submitted=True)
+            .order_by("-performed_at")
+            .select_related("workflow_step")
+            .first()
+        )
+        read_context_step = (
+            final_execution.workflow_step
+            if final_execution is not None
+            else None
+        )
 
     current_step_execution = (
         instance.step_executions
-        .filter(
-            workflow_step=instance.current_step,
-        )
+        .filter(workflow_step=read_context_step)
         .order_by("-performed_at")
         .first()
+        if read_context_step is not None
+        else None
     )
 
     no_longer_my_task = (
-        request.GET.get("source") == "my_processes"
+        instance.current_step is not None
+        and request.GET.get("source") == "my_processes"
         and instance.current_step.assigned_to_id
         and instance.current_step.assigned_to_id != request.user.id
     )
@@ -591,6 +609,7 @@ def workflow_instance(request, instance_id, _return_save_result=False):
             instance=instance,
             user=request.user,
             edit_mode=edit_mode,
+            read_context_step=read_context_step,
         )
     )
 
@@ -842,6 +861,9 @@ def start_workflow(request, workflow_id):
     )
 
 def _get_edit_mode(*, instance, request):
+    if instance.current_step is None:
+        return False
+
     current_step_execution = (
         instance.step_executions
         .filter(
