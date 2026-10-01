@@ -360,7 +360,6 @@ def workflow_instance(request, instance_id, _return_save_result=False):
     if read_context_step is None:
         final_execution = (
             instance.step_executions
-            .filter(is_submitted=True)
             .order_by("-performed_at")
             .select_related("workflow_step")
             .first()
