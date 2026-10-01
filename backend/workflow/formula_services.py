@@ -575,6 +575,13 @@ class FormulaService:
                             value = cls.evaluate_tokens(
                                 tokens=cfg["tokens"],
                                 field_resolver=resolve_row,
+                                aggregate_field_resolver=lambda aggregate_field_id, function_name: resolve_group_aggregate(
+                                    aggregate_field_id,
+                                    function_name,
+                                    current_group=group,
+                                    current_row=row,
+                                    current_row_resolver=resolve_row,
+                                ),
                             )
                         finally:
                             row_calculating.remove(row_field.pk)
