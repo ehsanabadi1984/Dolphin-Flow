@@ -239,7 +239,7 @@ class RepeatableRowService:
                 "فیلد باید متعلق به همان RepeatableGroup ردیف باشد."
             )
 
-        if field.field_type == FormField.FieldType.SELECT and value == "":
+        if field.field_type == FormField.FieldType.SELECT and value in (None, ""):
             if field.is_required:
                 raise ValidationError("مقدار SELECT نمی‌تواند خالی باشد.")
             RepeatableRowService.remove_value(
