@@ -12,6 +12,17 @@
 .df-sla-on-track { color:#15803d; }
 .df-sla-warning { color:#d97706; }
 .df-sla-breached { color:#dc2626; }
+.df-process-tracker-wrap { overflow-x:auto; padding:6px 2px 18px; }
+.df-process-tracker { display:flex; align-items:flex-start; min-width:max-content; }
+.df-tracker-step { position:relative; display:flex; flex-direction:column; align-items:center; width:116px; text-align:center; }
+.df-tracker-step:not(:last-child)::after { content:""; position:absolute; top:13px; right:calc(50% - 58px); width:116px; height:2px; background:var(--df-border,#e5e7eb); z-index:0; }
+.df-tracker-step.is-completed:not(:last-child)::after { background:var(--df-primary,#2563eb); }
+.df-tracker-node { position:relative; z-index:2; display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; border:2px solid var(--df-border,#d1d5db); background:var(--df-surface,#fff); font-size:13px; font-weight:700; }
+.df-tracker-step.is-completed .df-tracker-node { color:#fff; border-color:var(--df-primary,#2563eb); background:var(--df-primary,#2563eb); }
+.df-tracker-step.is-current .df-tracker-node { color:#fff; border-color:#f59e0b; background:#f59e0b; box-shadow:0 0 0 5px rgba(245,158,11,.14); }
+.df-tracker-label { margin-top:9px; max-width:108px; font-size:12px; line-height:1.7; }
+.df-tracker-state { margin-top:2px; font-size:10px; opacity:.55; }
+.df-tracker-step.is-current .df-tracker-state { color:#d97706; opacity:1; font-weight:700; }
 .df-dashboard-empty { padding:24px 12px; text-align:center; opacity:.65; }
 .df-dashboard-priority { width:8px; height:8px; flex:0 0 8px; border-radius:50%; margin-top:6px; background:var(--accent); }
 .df-dashboard-priority-warning { background:#f59e0b; }
@@ -129,6 +140,39 @@
             </div>
             {% if unfinished_processes_count > 5 %}<div class="df-panel-footer"><a href="{% url 'operator_panel:unfinished_processes' %}" class="df-panel-link">مشاهده همه {{ unfinished_processes_count }} مورد</a></div>{% endif %}
         </section>
+    </section>
+
+    <section class="df-card df-panel" id="active-process-timeline">
+        <div class="df-panel-header">
+            <div class="df-panel-title">فرآیندهای در حال اجرا</div>
+            <a href="{% url 'operator_panel:my_processes' %}" class="df-panel-link">مشاهده همه</a>
+        </div>
+        <div class="df-dashboard-scroll">
+            {% for instance in active_processes %}
+                <article class="df-process-card">
+                    <div class="df-process-card-header">
+                        <div>
+                            <div class="df-process-card-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
+                            <div class="df-process-card-meta">{% if instance.current_step %}مرحله فعلی: {{ instance.current_step.name }} · {% endif %}شروع {{ instance.started_at|timesince }} قبل</div>
+                        </div>
+                        <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
+                    </div>
+                    <div class="df-process-tracker-wrap">
+                        <div class="df-process-tracker">
+                            {% for item in instance.dashboard_tracker %}
+                                <div class="df-tracker-step {% if item.state == 'completed' %}is-completed{% elif item.state == 'current' %}is-current{% endif %}">
+                                    <div class="df-tracker-node">{% if item.state == 'completed' %}✓{% elif item.state == 'current' %}●{% else %}○{% endif %}</div>
+                                    <div class="df-tracker-label">{{ item.step.name }}</div>
+                                    <div class="df-tracker-state">{% if item.state == 'completed' %}تکمیل شده{% elif item.state == 'current' %}مرحله فعلی{% else %}در انتظار{% endif %}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </article>
+            {% empty %}
+                <div class="df-dashboard-empty">در حال حاضر فرآیند فعالی که توسط شما شروع شده باشد وجود ندارد.</div>
+            {% endfor %}
+        </div>
     </section>
 
     <section class="df-grid">
