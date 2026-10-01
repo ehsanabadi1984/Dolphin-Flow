@@ -186,7 +186,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertIsNotNone(response.context["dynamic_form"])
         self.assertTrue(response.context["dynamic_form"]["sections"])
 
-    def test_completed_my_processes_uses_view_permissions_from_submitted_history(self):
+    def test_completed_my_processes_uses_view_permissions_from_latest_submitted_history(self):
         other_user = User.objects.create_user(
             username="operator-post-completed-history-permission",
             password="password",
@@ -223,14 +223,17 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
 
         first_execution = self.execution
         first_execution.is_submitted = True
-        first_execution.save(update_fields=["is_submitted"])
+        first_execution.submitted_at = first_execution.performed_at
+        first_execution.save(update_fields=["is_submitted", "submitted_at"])
 
-        WorkflowStepExecution.objects.create(
+        later_execution = WorkflowStepExecution.objects.create(
             instance=self.instance,
             workflow_step=later_step,
             performed_by=other_user,
             is_submitted=True,
         )
+        later_execution.submitted_at = later_execution.performed_at
+        later_execution.save(update_fields=["submitted_at"])
 
         self.instance.current_step = None
         self.instance.status = WorkflowInstance.Status.COMPLETED
@@ -255,7 +258,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             for section in dynamic_form["sections"]
             for item in section["fields"]
         }
-        self.assertIn(self.name_field.code, visible_codes)
+        self.assertNotIn(self.name_field.code, visible_codes)
 
     def test_completed_my_processes_ignores_latest_non_submitted_execution(self):
         other_user = User.objects.create_user(
