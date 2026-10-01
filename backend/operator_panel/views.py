@@ -166,13 +166,24 @@ def dependent_field_options(request):
         pk=instance_id,
     )
 
-    WorkflowAuthorizationService.require_permission(
-        user=request.user,
-        workflow=instance.workflow,
-        action=WorkflowPermission.Action.VIEW,
-        step=instance.current_step,
-        instance=instance,
-    )
+    if request.GET.get("source") == "my_processes":
+        is_workflow_member = WorkflowMembership.objects.filter(
+            workflow=instance.workflow,
+            user=request.user,
+            is_active=True,
+        ).exists()
+        if not is_workflow_member:
+            raise PermissionDenied(
+                "کاربر عضو این فرآیند نیست."
+            )
+    else:
+        WorkflowAuthorizationService.require_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.VIEW,
+            step=instance.current_step,
+            instance=instance,
+        )
 
     try:
         field = (
@@ -359,25 +370,6 @@ def workflow_instance(request, instance_id, _return_save_result=False):
         if read_context_step is not None
         else None
     )
-
-    no_longer_my_task = (
-        instance.current_step is not None
-        and request.GET.get("source") == "my_processes"
-        and instance.current_step.assigned_to_id
-        and instance.current_step.assigned_to_id != request.user.id
-    )
-
-    if no_longer_my_task:
-        return render(
-            request,
-            "operator_panel/workflow_instance.html",
-            {
-                "instance": instance,
-                "no_longer_my_task": True,
-                "page_title": instance.workflow.name,
-                "page_breadcrumb": instance.workflow.name,
-            },
-        )
 
     # ---------------------------------------------------------
     # Determine whether current step is submitted
