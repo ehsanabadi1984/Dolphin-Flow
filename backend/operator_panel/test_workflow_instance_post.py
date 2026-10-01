@@ -186,6 +186,68 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertIsNotNone(response.context["dynamic_form"])
         self.assertTrue(response.context["dynamic_form"]["sections"])
 
+    def test_member_completed_my_processes_filters_fields_by_view_permission(self):
+        other_user = User.objects.create_user(
+            username="operator-post-completed-field-filter",
+            password="password",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=other_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        FieldAccess.objects.create(
+            field=self.name_field,
+            step=self.step,
+            user=other_user,
+            can_view=True,
+            can_edit=False,
+        )
+        FieldAccess.objects.create(
+            field=self.enabled_field,
+            step=self.step,
+            user=other_user,
+            can_view=False,
+            can_edit=False,
+        )
+        FieldAccess.objects.create(
+            field=self.number_field,
+            step=self.step,
+            user=other_user,
+            can_view=True,
+            can_edit=False,
+        )
+
+        self.execution.is_submitted = True
+        self.execution.save(update_fields=["is_submitted"])
+        self.instance.current_step = None
+        self.instance.status = WorkflowInstance.Status.COMPLETED
+        self.instance.save(update_fields=["current_step", "status"])
+
+        self.client.force_login(other_user)
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"source": "my_processes"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        dynamic_form = response.context["dynamic_form"]
+        self.assertIsNotNone(dynamic_form)
+
+        visible_codes = {
+            item["field"].code
+            for section in dynamic_form["sections"]
+            for item in section["fields"]
+        }
+        self.assertIn(self.name_field.code, visible_codes)
+        self.assertIn(self.number_field.code, visible_codes)
+        self.assertNotIn(self.enabled_field.code, visible_codes)
+
     @patch(
         "operator_panel.views.WorkflowExecutionService.execute_transition"
     )
