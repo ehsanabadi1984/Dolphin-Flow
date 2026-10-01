@@ -405,6 +405,73 @@ class DashboardTimelineRenderTests(DashboardSidebarBase):
         self.assertIn(f"#{instance.pk}", content)
         self.assertIn("Step Two", content)
 
+    def test_participating_non_starter_keeps_process_timeline_after_transition(self):
+        step_three = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Step Three",
+            code="DASH_S3_PARTICIPANT",
+            order=3,
+            is_active=True,
+            assigned_to=self.other,
+        )
+        transition_two = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="Forward Again",
+            code="DASH_T2_PARTICIPANT",
+            from_step=self.step_two,
+            to_step=step_three,
+            is_active=True,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            action=WorkflowPermission.Action.VIEW,
+            step=self.step_two,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            action=WorkflowPermission.Action.VIEW,
+            step=step_three,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        instance = self.create_active_instance(
+            started_by=self.other,
+            step=step_three,
+        )
+        FormData.objects.create(instance=instance, data={"note": "participant timeline"})
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_two,
+            performed_by=self.user,
+            is_submitted=True,
+        )
+        WorkflowTransitionExecution.objects.create(
+            instance=instance,
+            transition=transition_two,
+            performed_by=self.user,
+        )
+
+        service = DashboardService(self.user)
+        self.assertNotIn(
+            instance.pk,
+            service._my_active_queryset().values_list("pk", flat=True),
+        )
+        self.assertNotEqual(instance.current_step.assigned_to_id, self.user.pk)
+        self.assertIn(
+            instance.pk,
+            service.dashboard_timeline_queryset().values_list("pk", flat=True),
+        )
+
+        response = self.get_client().get(reverse("operator_panel:dashboard"))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('id="active-process-timeline"', content)
+        self.assertIn(f"#{instance.pk}", content)
+        self.assertIn("Step Three", content)
+
 
 class AbandonedStartConsistencyTests(DashboardSidebarBase):
     """F: abandoned starts are excluded consistently from the sidebar
