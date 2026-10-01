@@ -85,6 +85,30 @@ class NotificationService:
         return True
 
     @staticmethod
+    @transaction.atomic
+    def mark_instance_notifications_as_read(
+        *,
+        user,
+        workflow_instance,
+    ):
+        """
+        Mark unread notifications for this user and workflow instance
+        as read when the instance is actually opened.
+        """
+        return (
+            Notification.objects
+            .filter(
+                recipient=user,
+                workflow_instance=workflow_instance,
+                is_read=False,
+            )
+            .update(
+                is_read=True,
+                read_at=timezone.now(),
+            )
+        )
+
+    @staticmethod
     def get_unread(
         *,
         user,
