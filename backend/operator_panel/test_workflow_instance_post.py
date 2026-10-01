@@ -146,6 +146,46 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIsNotNone(response.context["dynamic_form"])
 
+    def test_member_can_view_completed_process_from_my_processes_with_field_permissions(self):
+        other_user = User.objects.create_user(
+            username="operator-post-completed-member",
+            password="password",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=other_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        for field in (self.name_field, self.enabled_field, self.number_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=other_user,
+                can_view=True,
+                can_edit=False,
+            )
+
+        self.execution.is_submitted = True
+        self.execution.save(update_fields=["is_submitted"])
+        self.instance.current_step = None
+        self.instance.status = WorkflowInstance.Status.COMPLETED
+        self.instance.save(update_fields=["current_step", "status"])
+
+        self.client.force_login(other_user)
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"source": "my_processes"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(response.context["dynamic_form"])
+        self.assertTrue(response.context["dynamic_form"]["sections"])
+
     @patch(
         "operator_panel.views.WorkflowExecutionService.execute_transition"
     )
