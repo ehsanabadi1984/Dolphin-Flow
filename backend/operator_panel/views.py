@@ -298,13 +298,22 @@ def workflow_instance(request, instance_id, _return_save_result=False):
         pk=instance_id,
     )
 
-    WorkflowAuthorizationService.require_permission(
-        user=request.user,
-        workflow=instance.workflow,
-        action=WorkflowPermission.Action.VIEW,
-        step=instance.current_step,
-        instance=instance,
-    )
+    if request.GET.get("source") == "my_processes":
+        is_workflow_member = WorkflowMembership.objects.filter(
+            workflow=instance.workflow,
+            user=request.user,
+            is_active=True,
+        ).exists()
+        if not is_workflow_member:
+            raise PermissionDenied("کاربر عضو این فرآیند نیست.")
+    else:
+        WorkflowAuthorizationService.require_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.VIEW,
+            step=instance.current_step,
+            instance=instance,
+        )
 
     can_view_device_history = WorkflowAuthorizationService.has_permission(
         user=request.user,
