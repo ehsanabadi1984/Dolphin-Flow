@@ -331,15 +331,17 @@ class RepeatableRowServiceTests(TestCase):
             group=self.group,
         )
 
-        with self.assertRaisesMessage(
-            ValidationError,
-            "مقدار SELECT نمی‌تواند خالی باشد.",
-        ):
+        with self.assertRaises(ValidationError) as context:
             RepeatableRowService.set_value(
                 row=row,
                 field=field,
                 value="",
             )
+
+        self.assertEqual(
+            context.exception.messages,
+            ["مقدار SELECT نمی‌تواند خالی باشد."],
+        )
 
     def test_set_static_select_value(self):
         choice_set = StaticChoiceSet.objects.create(
