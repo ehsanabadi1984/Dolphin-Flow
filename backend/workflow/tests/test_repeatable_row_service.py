@@ -271,6 +271,76 @@ class RepeatableRowServiceTests(TestCase):
 
         self.assertFalse(value.boolean_value)
 
+    def test_set_optional_select_empty_removes_existing_value(self):
+        choice_set = StaticChoiceSet.objects.create(
+            name="Statuses Optional",
+            code="SERVICE_STATUS_OPTIONAL",
+        )
+        choice = StaticChoiceItem.objects.create(
+            choice_set=choice_set,
+            value="READY",
+            label="Ready",
+            order=0,
+        )
+        field = self.make_field(
+            "STATUS_OPTIONAL",
+            FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.STATIC,
+            choice_static_set=choice_set,
+        )
+        row = RepeatableRowService.create_row(
+            instance=self.instance,
+            group=self.group,
+        )
+
+        value = RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value=choice.value,
+        )
+        self.assertEqual(value.static_choice_item_id, choice.id)
+
+        cleared = RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value="",
+        )
+
+        self.assertIsNone(cleared)
+        self.assertFalse(
+            RepeatableRowValue.objects.filter(
+                row=row,
+                field=field,
+            ).exists()
+        )
+
+    def test_set_required_select_empty_is_rejected(self):
+        choice_set = StaticChoiceSet.objects.create(
+            name="Statuses Required",
+            code="SERVICE_STATUS_REQUIRED",
+        )
+        field = self.make_field(
+            "STATUS_REQUIRED",
+            FormField.FieldType.SELECT,
+            is_required=True,
+            choice_source=FormField.ChoiceSource.STATIC,
+            choice_static_set=choice_set,
+        )
+        row = RepeatableRowService.create_row(
+            instance=self.instance,
+            group=self.group,
+        )
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "مقدار SELECT نمی‌تواند خالی باشد.",
+        ):
+            RepeatableRowService.set_value(
+                row=row,
+                field=field,
+                value="",
+            )
+
     def test_set_static_select_value(self):
         choice_set = StaticChoiceSet.objects.create(
             name="Statuses",
