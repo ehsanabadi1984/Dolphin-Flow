@@ -256,6 +256,103 @@ class RepeatableRowServiceTests(TestCase):
 
         self.assertEqual(value.decimal_value, Decimal("1250.500000"))
 
+    def test_set_number_empty_value_defaults_to_zero(self):
+        field = self.make_field("COST", FormField.FieldType.NUMBER)
+        row = RepeatableRowService.create_row(
+            instance=self.instance,
+            group=self.group,
+        )
+
+        value = RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value="",
+        )
+
+        self.assertEqual(value.decimal_value, Decimal("0"))
+
+    def test_set_number_none_value_defaults_to_zero(self):
+        field = self.make_field("COST", FormField.FieldType.NUMBER)
+        row = RepeatableRowService.create_row(
+            instance=self.instance,
+            group=self.group,
+        )
+
+        value = RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value=None,
+        )
+
+        self.assertEqual(value.decimal_value, Decimal("0"))
+
+    def test_set_boolean_empty_value_defaults_to_false(self):
+        field = self.make_field("ACTIVE", FormField.FieldType.BOOLEAN)
+        row = RepeatableRowService.create_row(
+            instance=self.instance,
+            group=self.group,
+        )
+
+        value = RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value="",
+        )
+
+        self.assertFalse(value.boolean_value)
+
+    def test_set_optional_date_empty_removes_existing_value(self):
+        field = self.make_field("DUE_DATE", FormField.FieldType.DATE)
+        row = RepeatableRowService.create_row(
+            instance=self.instance,
+            group=self.group,
+        )
+        RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value=date(2026, 10, 2),
+        )
+
+        cleared = RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value="",
+        )
+
+        self.assertIsNone(cleared)
+        self.assertFalse(
+            RepeatableRowValue.objects.filter(
+                row=row,
+                field=field,
+            ).exists()
+        )
+
+    def test_set_optional_datetime_empty_removes_existing_value(self):
+        field = self.make_field("DUE_AT", FormField.FieldType.DATETIME)
+        row = RepeatableRowService.create_row(
+            instance=self.instance,
+            group=self.group,
+        )
+        RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value=datetime(2026, 10, 2, 12, 30, tzinfo=timezone.utc),
+        )
+
+        cleared = RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value=None,
+        )
+
+        self.assertIsNone(cleared)
+        self.assertFalse(
+            RepeatableRowValue.objects.filter(
+                row=row,
+                field=field,
+            ).exists()
+        )
+
     def test_set_boolean_false(self):
         field = self.make_field("ACTIVE", FormField.FieldType.BOOLEAN)
         row = RepeatableRowService.create_row(
@@ -341,6 +438,47 @@ class RepeatableRowServiceTests(TestCase):
         self.assertEqual(
             context.exception.messages,
             ["مقدار SELECT نمی‌تواند خالی باشد."],
+        )
+
+    def test_set_optional_select_none_removes_existing_value(self):
+        choice_set = StaticChoiceSet.objects.create(
+            name="Statuses Optional None",
+            code="SERVICE_STATUS_OPTIONAL_NONE",
+        )
+        choice = StaticChoiceItem.objects.create(
+            choice_set=choice_set,
+            value="READY",
+            label="Ready",
+            order=0,
+        )
+        field = self.make_field(
+            "STATUS_OPTIONAL_NONE",
+            FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.STATIC,
+            choice_static_set=choice_set,
+        )
+        row = RepeatableRowService.create_row(
+            instance=self.instance,
+            group=self.group,
+        )
+        RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value=choice.value,
+        )
+
+        cleared = RepeatableRowService.set_value(
+            row=row,
+            field=field,
+            value=None,
+        )
+
+        self.assertIsNone(cleared)
+        self.assertFalse(
+            RepeatableRowValue.objects.filter(
+                row=row,
+                field=field,
+            ).exists()
         )
 
     def test_set_static_select_value(self):
