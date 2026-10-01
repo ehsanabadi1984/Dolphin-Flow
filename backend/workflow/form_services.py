@@ -1943,14 +1943,37 @@ class DynamicFormService:
                                 group=group,
                             )
                         )
-                        persisted_device_children = {
-                            item.get("instance_device_id"): item
-                            for item in reconstructed_device_group.get(
-                                "items",
-                                [],
+                        persisted_device_children = {}
+                        for item in reconstructed_device_group.get(
+                            "items",
+                            [],
+                        ):
+                            instance_device_id = item.get(
+                                "instance_device_id"
                             )
-                            if item.get("instance_device_id")
-                        }
+                            if not instance_device_id:
+                                continue
+
+                            # Use the FormulaService-calculated row payload for
+                            # the child tree. The canonical reconstruction is
+                            # still the source of truth for identity and
+                            # non-Formula values, but Formula values exist only
+                            # in the read-time calculated payload.
+                            calculated_item = formula_values_by_row_id.get(
+                                str(item.get("row_id", ""))
+                            )
+                            if calculated_item is not None:
+                                item = {
+                                    **item,
+                                    "child_groups": calculated_item.get(
+                                        "child_groups",
+                                        item.get("child_groups", []),
+                                    ),
+                                }
+
+                            persisted_device_children[
+                                instance_device_id
+                            ] = item
 
                     def submitted_child_reconstruction(
                         *,
