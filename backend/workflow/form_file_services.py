@@ -20,6 +20,7 @@ from .models import (
     FormField,
     FormRepeatableGroup,
     WorkflowInstance,
+    WorkflowMembership,
     WorkflowPermission,
 )
 
@@ -590,7 +591,7 @@ def file_field_definitions(request, instance_id):
     if form is None or read_context_step is None:
         return JsonResponse({"fields": [], "groups": []})
 
-    step = instance.current_step
+    step = read_context_step
     permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=step, user=request.user)
 
     form_data = FormData.objects.filter(instance=instance).first()
@@ -603,7 +604,6 @@ def file_field_definitions(request, instance_id):
 
     fields = []
     groups = []
-    step = instance.current_step
 
     for section in form.sections.filter(is_active=True):
         for field in section.fields.filter(
