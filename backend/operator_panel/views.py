@@ -367,21 +367,40 @@ def workflow_instance(request, instance_id, _return_save_result=False):
     # form. This keeps completed "My Processes" reads scoped to
     # the latest historical step the operator can actually see.
     read_context_step = instance.current_step
-    if read_context_step is None:
-        form = (
-            FormDefinition.objects
-            .filter(
-                workflow=instance.workflow,
-                is_active=True,
-            )
-            .first()
-        )
+    historical_read_context = False
 
+    form = (
+        FormDefinition.objects
+        .filter(
+            workflow=instance.workflow,
+            is_active=True,
+        )
+        .first()
+    )
+
+    if read_context_step is None:
         read_context_step = _get_historical_view_step(
             instance=instance,
             user=request.user,
             form=form,
         )
+        historical_read_context = read_context_step is not None
+    elif request.GET.get("source") == "my_processes":
+        historical_step = _get_historical_view_step(
+            instance=instance,
+            user=request.user,
+            form=form,
+        )
+        if (
+            historical_step is not None
+            and not instance.step_executions.filter(
+                workflow_step=instance.current_step,
+                performed_by=request.user,
+                is_submitted=False,
+            ).exists()
+        ):
+            read_context_step = historical_step
+            historical_read_context = True
 
     current_step_execution = (
         instance.step_executions
@@ -443,6 +462,10 @@ def workflow_instance(request, instance_id, _return_save_result=False):
 
     # Use the canonical edit_mode derivation
     edit_mode = _get_edit_mode(instance=instance, request=request)
+
+    if historical_read_context:
+        edit_mode = False
+        transitions = ()
 
     # =========================================================
     # POST
@@ -655,7 +678,10 @@ def _get_historical_view_step(*, instance, user, form):
 
     executions = (
         instance.step_executions
-        .filter(is_submitted=True)
+        .filter(
+            is_submitted=True,
+            performed_by=user,
+        )
         .order_by("-submitted_at", "-performed_at")
         .select_related("workflow_step")
     )
