@@ -392,11 +392,7 @@ def workflow_instance(request, instance_id, _return_save_result=False):
                 performed_by=request.user,
                 is_submitted=True,
             ).exists()
-            and not instance.step_executions.filter(
-                workflow_step=instance.current_step,
-                performed_by=request.user,
-                is_submitted=False,
-            ).exists()
+            and instance.current_step.assigned_to_id != request.user.pk
         )
     ):
         historical_step = _get_historical_view_step(
