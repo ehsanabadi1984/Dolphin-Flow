@@ -315,6 +315,14 @@ def workflow_instance(request, instance_id, _return_save_result=False):
             instance=instance,
         )
 
+    # Opening a workflow instance through any authorized route means the
+    # user has seen the process; clear its stale unread notifications so
+    # the bell does not later navigate to an obsolete step context.
+    NotificationService.mark_instance_notifications_as_read(
+        user=request.user,
+        workflow_instance=instance,
+    )
+
     can_view_device_history = WorkflowAuthorizationService.has_permission(
         user=request.user,
         workflow=instance.workflow,
