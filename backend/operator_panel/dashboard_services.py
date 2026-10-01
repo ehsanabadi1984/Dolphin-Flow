@@ -441,7 +441,9 @@ class DashboardService:
         )
 
     def my_processes_queryset(self):
-        annotations = _view_annotations(self.user)
+        # "My Processes" is a membership-based process list. The form
+        # itself remains responsible for enforcing the operator's VIEW
+        # permissions at workflow/field/group level.
         return (
             WorkflowInstance.objects
             .filter(
@@ -449,8 +451,6 @@ class DashboardService:
                 workflow__memberships__user=self.user,
                 workflow__memberships__is_active=True,
             )
-            .annotate(**annotations)
-            .filter(_can_view_q(self.user))
             .filter(_meaningful_instance_q())
             .select_related("workflow", "current_step")
             .distinct()
