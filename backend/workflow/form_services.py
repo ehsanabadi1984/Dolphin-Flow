@@ -813,7 +813,14 @@ class DynamicFormService:
                 field = base_context["field"]
                 field_context = dict(base_context)
                 raw_field = raw_fields.get(field.code, {})
-                field_context["value"] = raw_field.get("value", "")
+                calculated_value = raw_item.get(field.code)
+                if (
+                    field.field_type == FormField.FieldType.FORMULA
+                    and calculated_value is not None
+                ):
+                    field_context["value"] = calculated_value
+                else:
+                    field_context["value"] = raw_field.get("value", "")
                 field_context["display_value"] = raw_field.get(
                     "display_value",
                     DynamicFormService._get_display_value(
