@@ -1433,6 +1433,28 @@ class DynamicFormService:
             },
         )
 
+        # Index calculated repeatable values by their canonical RepeatableRow
+        # identity.  Formula values are read-time derived values and therefore
+        # do not exist in RepeatableRowValue; DEVICE presentation must consume
+        # the already-calculated values instead of re-reading persistence.
+        formula_values_by_row_id = {}
+
+        def index_formula_rows(items):
+            for item in items or []:
+                if not isinstance(item, dict):
+                    continue
+
+                row_id = item.get("row_id", item.get("_id"))
+                if row_id is not None:
+                    formula_values_by_row_id[str(row_id)] = item
+
+                for child_group in item.get("child_groups", []):
+                    if isinstance(child_group, dict):
+                        index_formula_rows(child_group.get("items", []))
+
+        for group_items in repeatable_data.values():
+            index_formula_rows(group_items)
+
         current_step_execution = (
             instance.step_executions
             .filter(
@@ -2780,13 +2802,32 @@ class DynamicFormService:
 
                                 else:
 
-                                    value_object = device_repeatable_values.get(field.pk)
-                                    value, display_value = (
-                                        RepeatableRowReadService._custom_value(
-                                            field=field,
-                                            value_object=value_object,
-                                        )
+                                    formula_row = formula_values_by_row_id.get(
+                                        str(device_repeatable_row.pk)
+                                        if device_repeatable_row is not None
+                                        else "",
                                     )
+
+                                    if field.field_type == FormulaService.FIELD_TYPE:
+                                        value = (
+                                            formula_row.get(field.code, "")
+                                            if formula_row
+                                            else ""
+                                        )
+                                        display_value = (
+                                            DynamicFormService._get_display_value(
+                                                field=field,
+                                                value=value,
+                                            )
+                                        )
+                                    else:
+                                        value_object = device_repeatable_values.get(field.pk)
+                                        value, display_value = (
+                                            RepeatableRowReadService._custom_value(
+                                                field=field,
+                                                value_object=value_object,
+                                            )
+                                        )
 
                                 # -------------------------------------------------
                                 # Identity fields
