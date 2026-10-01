@@ -353,22 +353,26 @@ def workflow_instance(request, instance_id, _return_save_result=False):
     # ---------------------------------------------------------
     # Read-context step
     # ---------------------------------------------------------
-    # A completed instance has no current step. Its last submitted
-    # execution supplies the historical step needed only to rebuild
-    # the final form and its step-scoped field/group permissions.
+    # A completed instance has no current step. Walk submitted
+    # history from newest to oldest and use the newest step for
+    # which this operator has any configured view access to the
+    # form. This keeps completed "My Processes" reads scoped to
+    # the latest historical step the operator can actually see.
     read_context_step = instance.current_step
     if read_context_step is None:
-        final_execution = (
-            instance.step_executions
-            .filter(is_submitted=True)
-            .order_by("-submitted_at", "-performed_at")
-            .select_related("workflow_step")
+        form = (
+            FormDefinition.objects
+            .filter(
+                workflow=instance.workflow,
+                is_active=True,
+            )
             .first()
         )
-        read_context_step = (
-            final_execution.workflow_step
-            if final_execution is not None
-            else None
+
+        read_context_step = _get_historical_view_step(
+            instance=instance,
+            user=request.user,
+            form=form,
         )
 
     current_step_execution = (
@@ -634,6 +638,47 @@ def workflow_instance(request, instance_id, _return_save_result=False):
             "page_breadcrumb": instance.workflow.name,
         },
     )
+
+
+def _get_historical_view_step(*, instance, user, form):
+    """Return the newest submitted historical step visible to the user."""
+    if form is None:
+        return None
+
+    executions = (
+        instance.step_executions
+        .filter(is_submitted=True)
+        .order_by("-submitted_at", "-performed_at")
+        .select_related("workflow_step")
+    )
+
+    for execution in executions:
+        step = execution.workflow_step
+        permission_context = PermissionContext.build(
+            workflow=instance.workflow,
+            form=form,
+            step=step,
+            user=user,
+        )
+
+        if (
+            any(
+                permission.can_view
+                for permission in permission_context.normal_fields.values()
+            )
+            or any(
+                permission.can_view
+                for permission in permission_context.repeatable_fields.values()
+            )
+            or any(
+                permission.can_view
+                for permission in permission_context.groups.values()
+            )
+        ):
+            return step
+
+    return None
+
 
 def _require_device_group_delete_permission(*, instance, user, group_code, request):
     current_execution = (
