@@ -819,15 +819,21 @@ class DynamicFormService:
                     and calculated_value is not None
                 ):
                     field_context["value"] = calculated_value
+                    field_context["display_value"] = (
+                        DynamicFormService._get_display_value(
+                            field=field,
+                            value=calculated_value,
+                        )
+                    )
                 else:
                     field_context["value"] = raw_field.get("value", "")
-                field_context["display_value"] = raw_field.get(
-                    "display_value",
-                    DynamicFormService._get_display_value(
-                        field=field,
-                        value=field_context["value"],
-                    ),
-                )
+                    field_context["display_value"] = raw_field.get(
+                        "display_value",
+                        DynamicFormService._get_display_value(
+                            field=field,
+                            value=field_context["value"],
+                        ),
+                    )
                 row_fields.append(field_context)
 
             child_contexts = []
