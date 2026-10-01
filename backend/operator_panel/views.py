@@ -385,7 +385,14 @@ def workflow_instance(request, instance_id, _return_save_result=False):
             form=form,
         )
         historical_read_context = read_context_step is not None
-    elif request.GET.get("source") == "my_processes":
+    elif (
+        request.GET.get("source") == "my_processes"
+        or instance.step_executions.filter(
+            workflow_step=instance.current_step,
+            performed_by=request.user,
+            is_submitted=True,
+        ).exists()
+    ):
         historical_step = _get_historical_view_step(
             instance=instance,
             user=request.user,
