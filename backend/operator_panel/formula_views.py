@@ -133,20 +133,42 @@ def formula_definitions(request, instance_id):
         pk=instance_id,
     )
 
-    WorkflowAuthorizationService.require_permission(
-        user=request.user,
+    if WorkflowMembership.objects.filter(
         workflow=instance.workflow,
-        action=WorkflowPermission.Action.VIEW,
-        step=instance.current_step,
-        instance=instance,
-    )
+        user=request.user,
+        is_active=True,
+    ).exists():
+        read_context_step = instance.current_step
+        if read_context_step is None:
+            final_execution = (
+                instance.step_executions
+                .filter(is_submitted=True)
+                .order_by("-performed_at")
+                .select_related("workflow_step")
+                .first()
+            )
+            read_context_step = (
+                final_execution.workflow_step
+                if final_execution is not None
+                else None
+            )
+        step_for_view = read_context_step
+    else:
+        WorkflowAuthorizationService.require_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.VIEW,
+            step=instance.current_step,
+            instance=instance,
+        )
+        step_for_view = instance.current_step
 
     form = (
         FormDefinition.objects
         .filter(workflow=instance.workflow, is_active=True)
         .first()
     )
-    if form is None or instance.current_step_id is None:
+    if form is None or read_context_step is None:
         return JsonResponse(
             {
                 "form_id": form.pk if form else None,
@@ -159,7 +181,7 @@ def formula_definitions(request, instance_id):
     permission_context = PermissionContext.build(
         workflow=instance.workflow,
         form=form,
-        step=instance.current_step,
+        step=read_context_step,
         user=request.user,
     )
 
