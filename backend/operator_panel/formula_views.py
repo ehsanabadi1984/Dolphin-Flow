@@ -16,6 +16,7 @@ from workflow.models import (
     FormRepeatableGroup,
     FormSection,
     WorkflowInstance,
+    WorkflowMembership,
     WorkflowPermission,
 )
 
@@ -152,7 +153,6 @@ def formula_definitions(request, instance_id):
                 if final_execution is not None
                 else None
             )
-        step_for_view = read_context_step
     else:
         WorkflowAuthorizationService.require_permission(
             user=request.user,
@@ -161,7 +161,6 @@ def formula_definitions(request, instance_id):
             step=instance.current_step,
             instance=instance,
         )
-        step_for_view = instance.current_step
 
     form = (
         FormDefinition.objects
