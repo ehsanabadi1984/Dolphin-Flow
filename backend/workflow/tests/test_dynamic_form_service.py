@@ -882,11 +882,11 @@ class DynamicFormServiceTests(TestCase):
             html,
         )
         self.assertIn(
-            'data-row-id="8"',
+            f'data-row-id="{grandchild_row.pk}"',
             html,
         )
         self.assertIn(
-            'data-parent-row-id="7"',
+            f'data-parent-row-id="{child_row.pk}"',
             html,
         )
         self.assertIn(
