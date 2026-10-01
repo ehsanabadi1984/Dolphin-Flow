@@ -3,6 +3,7 @@ from .permission_context import PermissionContext
 from .operator_form_serializer import OperatorFormSerializer
 from .repeatable_row_read_services import RepeatableRowReadService
 from .date_field_services import DateFieldService
+from .formula_services import FormulaService
 
 from .instance_device_services import InstanceDeviceService
 from .device_services import DeviceService
@@ -1383,27 +1384,54 @@ class DynamicFormService:
         reconstructed = RepeatableRowReadService.reconstruct_instance(
             instance=instance,
         )
+        def build_formula_row_payload(item):
+            """Normalize a reconstructed row for FormulaService evaluation."""
+            row = {
+                "_id": str(item["row_id"]),
+                "row_id": str(item["row_id"]),
+                "row_order": item.get("row_order", 0),
+                "parent_row_id": (
+                    str(item["parent_row_id"])
+                    if item.get("parent_row_id") is not None
+                    else None
+                ),
+                **{
+                    field["code"]: field["value"]
+                    for field in item.get("fields", [])
+                },
+                "fields": item.get("fields", []),
+                "child_groups": [],
+            }
+
+            for child_group in item.get("child_groups", []):
+                row["child_groups"].append({
+                    "code": child_group["code"],
+                    "items": [
+                        build_formula_row_payload(child_item)
+                        for child_item in child_group.get("items", [])
+                    ],
+                })
+
+            return row
+
         repeatable_data = {}
         for reconstructed_group in reconstructed.get("groups", []):
             repeatable_data[reconstructed_group["code"]] = [
-                {
-                    "_id": str(item["row_id"]),
-                    "row_id": str(item["row_id"]),
-                    "row_order": item.get("row_order", 0),
-                    "parent_row_id": (
-                        str(item["parent_row_id"])
-                        if item.get("parent_row_id") is not None
-                        else None
-                    ),
-                    **{
-                        field["code"]: field["value"]
-                        for field in item.get("fields", [])
-                    },
-                    "fields": item.get("fields", []),
-                    "child_groups": item.get("child_groups", []),
-                }
+                build_formula_row_payload(item)
                 for item in reconstructed_group.get("items", [])
             ]
+
+        # Formula results for repeatable fields are derived at read time.
+        # They are never persisted in RepeatableRowValue.  This is especially
+        # important for completed/My Processes views, where canonical row data
+        # is reconstructed directly from RepeatableRow/RepeatableRowValue.
+        data = FormulaService.calculate_context_data(
+            form=form,
+            data={
+                **data,
+                **repeatable_data,
+            },
+        )
 
         current_step_execution = (
             instance.step_executions
