@@ -471,21 +471,21 @@ class DashboardService:
             workflow_step__is_active=True,
         )
         historical_user_allow = WorkflowPermission.objects.filter(
-            workflow_id=OuterRef("workflow_id"),
+            workflow_id=OuterRef("workflow_step__workflow_id"),
             step_id=OuterRef("workflow_step_id"),
             action=WorkflowPermission.Action.VIEW,
             effect=WorkflowPermission.Effect.ALLOW,
             user=self.user,
         )
         historical_user_deny = WorkflowPermission.objects.filter(
-            workflow_id=OuterRef("workflow_id"),
+            workflow_id=OuterRef("workflow_step__workflow_id"),
             step_id=OuterRef("workflow_step_id"),
             action=WorkflowPermission.Action.VIEW,
             effect=WorkflowPermission.Effect.DENY,
             user=self.user,
         )
         historical_role_allow = WorkflowPermission.objects.filter(
-            workflow_id=OuterRef("workflow_id"),
+            workflow_id=OuterRef("workflow_step__workflow_id"),
             step_id=OuterRef("workflow_step_id"),
             action=WorkflowPermission.Action.VIEW,
             effect=WorkflowPermission.Effect.ALLOW,
@@ -497,7 +497,7 @@ class DashboardService:
             ).values("role"),
         )
         historical_role_deny = WorkflowPermission.objects.filter(
-            workflow_id=OuterRef("workflow_id"),
+            workflow_id=OuterRef("workflow_step__workflow_id"),
             step_id=OuterRef("workflow_step_id"),
             action=WorkflowPermission.Action.VIEW,
             effect=WorkflowPermission.Effect.DENY,
