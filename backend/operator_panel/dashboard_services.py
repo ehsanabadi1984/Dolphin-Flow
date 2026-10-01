@@ -523,13 +523,41 @@ class DashboardService:
             )
         )
 
+        # Timeline access is intentionally broader than the current-step
+        # dashboard lists: a participant may retain VIEW through a step that
+        # they already executed, even after the instance moves elsewhere.
+        annotations = {
+            **_view_annotations(self.user),
+            **_actionability_annotations(self.user),
+        }
+        current_view = _can_view_q(self.user)
+
         return (
-            self._accessible_active_queryset()
+            WorkflowInstance.objects
+            .filter(
+                status=WorkflowInstance.Status.ACTIVE,
+                workflow__is_active=True,
+                workflow__memberships__user=self.user,
+                workflow__memberships__is_active=True,
+            )
+            .annotate(**annotations)
             .filter(_meaningful_instance_q())
+            .filter(
+                current_view
+                | (participated & historical_view)
+            )
             .filter(
                 Q(started_by=self.user)
                 | Q(current_step__assigned_to=self.user)
-                | (participated & historical_view)
+                | participated
+            )
+            .select_related("workflow", "current_step")
+            .prefetch_related(
+                Prefetch(
+                    "workflow__steps",
+                    queryset=WorkflowStep.objects.filter(is_active=True).order_by("order"),
+                    to_attr="dashboard_steps",
+                )
             )
             .distinct()
         )
