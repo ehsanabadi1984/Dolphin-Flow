@@ -5,6 +5,7 @@ from workflow.models import (
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
+    FormData,
     WorkflowPermission,
     WorkflowStep,
 )
@@ -52,6 +53,8 @@ class DashboardPermissionContractTests(TestCase):
             started_by=self.other_user,
             status=WorkflowInstance.Status.ACTIVE,
         )
+
+        FormData.objects.create(instance=self.instance)
 
     def add_permission(self, *, action, effect, user=None, role=None):
         return WorkflowPermission.objects.create(
