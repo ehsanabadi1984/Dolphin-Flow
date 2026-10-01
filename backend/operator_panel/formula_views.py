@@ -134,6 +134,8 @@ def formula_definitions(request, instance_id):
         pk=instance_id,
     )
 
+    read_context_step = instance.current_step
+
     if WorkflowMembership.objects.filter(
         workflow=instance.workflow,
         user=request.user,
