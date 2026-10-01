@@ -228,7 +228,7 @@ class NestedRepeatableFormulaPresentationTests(TestCase):
 
         self.assertEqual(
             child_fields["child_amount"]["value"],
-            "750",
+            Decimal("750.000000"),
         )
 
         # Formula values are calculated on read and are intentionally not
