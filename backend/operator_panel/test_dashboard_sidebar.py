@@ -322,6 +322,14 @@ class DashboardTimelineRenderTests(DashboardSidebarBase):
             effect=WorkflowPermission.Effect.ALLOW,
         )
 
+        step_three = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Step Three",
+            code="DASH_S3",
+            order=3,
+            is_active=True,
+        )
+
         instance = self.create_active_instance(
             started_by=self.user,
             step=self.step_two,
@@ -353,6 +361,7 @@ class DashboardTimelineRenderTests(DashboardSidebarBase):
         self.assertIn("df-process-tracker", content)
         self.assertIn("Step One", content)
         self.assertIn("Step Two", content)
+        self.assertIn("Step Three", content)
         self.assertIn('df-tracker-step is-completed', content)
         self.assertIn('df-tracker-step is-current', content)
         self.assertIn("در انتظار", content)
