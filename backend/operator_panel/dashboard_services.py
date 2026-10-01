@@ -445,7 +445,6 @@ class DashboardService:
         return (
             WorkflowInstance.objects
             .filter(
-                started_by=self.user,
                 workflow__is_active=True,
                 workflow__memberships__user=self.user,
                 workflow__memberships__is_active=True,
