@@ -1338,9 +1338,10 @@ class DynamicFormService:
         user,
         submitted_data=None,
         edit_mode=False,
+        read_context_step=None,
     ):
         workflow = instance.workflow
-        step = instance.current_step
+        step = read_context_step or instance.current_step
 
         if step is None:
             return None
