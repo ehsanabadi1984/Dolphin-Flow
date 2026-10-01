@@ -390,6 +390,7 @@ def workflow_instance(request, instance_id, _return_save_result=False):
             instance=instance,
             user=request.user,
             form=form,
+            performed_by=request.user,
         )
         if (
             historical_step is not None
@@ -671,7 +672,7 @@ def workflow_instance(request, instance_id, _return_save_result=False):
     )
 
 
-def _get_historical_view_step(*, instance, user, form):
+def _get_historical_view_step(*, instance, user, form, performed_by=None):
     """Return the newest submitted historical step visible to the user."""
     if form is None:
         return None
@@ -680,8 +681,13 @@ def _get_historical_view_step(*, instance, user, form):
         instance.step_executions
         .filter(
             is_submitted=True,
-            performed_by=user,
         )
+    )
+    if performed_by is not None:
+        executions = executions.filter(performed_by=performed_by)
+
+    executions = (
+        executions
         .order_by("-submitted_at", "-performed_at")
         .select_related("workflow_step")
     )
