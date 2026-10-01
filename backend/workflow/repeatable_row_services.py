@@ -239,6 +239,15 @@ class RepeatableRowService:
                 "فیلد باید متعلق به همان RepeatableGroup ردیف باشد."
             )
 
+        if field.field_type == FormField.FieldType.SELECT and value == "":
+            if field.is_required:
+                raise ValidationError("مقدار SELECT نمی‌تواند خالی باشد.")
+            RepeatableRowService.remove_value(
+                row=locked_row,
+                field=field,
+            )
+            return None
+
         value_kwargs = RepeatableRowService._value_kwargs(
             field=field,
             value=value,
