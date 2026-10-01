@@ -454,6 +454,104 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         }
         self.assertNotIn(child_group.code, child_codes)
 
+    def test_member_completed_my_processes_shows_nested_repeatable_group_with_view_permission(self):
+        other_user = User.objects.create_user(
+            username="operator-post-completed-nested-group-visible",
+            password="password",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=other_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Visible Parent Group",
+            code="visible_parent_group",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=3,
+        )
+        parent_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="Parent Field",
+            code="parent_field",
+            label="Parent Field",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="Visible Child Group",
+            code="visible_child_group",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=4,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Field",
+            code="child_field",
+            label="Child Field",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        for group in (parent_group, child_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step,
+                user=other_user,
+                can_view=True,
+                can_edit=False,
+                can_add=False,
+                can_delete=False,
+            )
+        for field in (parent_field, child_field):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                user=other_user,
+                can_view=True,
+                can_edit=False,
+            )
+
+        self.execution.is_submitted = True
+        self.execution.save(update_fields=["is_submitted"])
+        self.instance.current_step = None
+        self.instance.status = WorkflowInstance.Status.COMPLETED
+        self.instance.save(update_fields=["current_step", "status"])
+
+        self.client.force_login(other_user)
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"source": "my_processes"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        dynamic_form = response.context["dynamic_form"]
+        self.assertIsNotNone(dynamic_form)
+
+        parent_context = next(
+            group_context
+            for section in dynamic_form["sections"]
+            for group_context in section["repeatable_groups"]
+            if group_context["group"].code == parent_group.code
+        )
+        child_codes = {
+            child["group"].code
+            for child in parent_context["items"]
+            for child in child["child_groups"]
+        }
+        self.assertIn(child_group.code, child_codes)
+
     @patch(
         "operator_panel.views.WorkflowExecutionService.execute_transition"
     )
