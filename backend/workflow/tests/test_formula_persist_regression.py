@@ -430,6 +430,102 @@ class FormulaPersistenceTestCase(TestCase):
             Decimal("125"),
         )
 
+    def test_nested_parent_formula_aggregate_resolves_descendant_formula(self):
+        """A parent aggregate must evaluate a child formula through descendant scope."""
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="nestedFormulaParent",
+            code="nestedFormulaParent",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=20,
+            is_active=True,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="nestedFormulaChild",
+            code="nestedFormulaChild",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=21,
+            is_active=True,
+        )
+        base = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="nestedBase",
+            code="nestedBase",
+            field_type=FormField.FieldType.NUMBER,
+            label="Nested base",
+            order=0,
+            is_active=True,
+        )
+        extra = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="nestedExtra",
+            code="nestedExtra",
+            field_type=FormField.FieldType.NUMBER,
+            label="Nested extra",
+            order=1,
+            is_active=True,
+        )
+        child_total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="nestedChildTotal",
+            code="nestedChildTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Nested child total",
+            order=2,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "field", "field_id": base.pk},
+                {"type": "operator", "value": "+"},
+                {"type": "field", "field_id": extra.pk},
+            ], decimal_places=0),
+        )
+        parent_total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="nestedParentTotal",
+            code="nestedParentTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Nested parent total",
+            order=0,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": child_total.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+        instance_data = {
+            parent_group.code: [
+                {
+                    "child_groups": [{
+                        "code": child_group.code,
+                        "items": [
+                            {base.code: "10", extra.code: "5"},
+                            {base.code: "20", extra.code: "7"},
+                        ],
+                    }],
+                },
+            ],
+        }
+
+        result = FormulaService.calculate_context_data(
+            form=self.form,
+            data=instance_data,
+        )
+
+        self.assertEqual(
+            result[parent_group.code][0][parent_total.code],
+            "42",
+        )
+
     def test_device_formula_aggregates_only_its_own_child_rows(self):
         device_group = FormRepeatableGroup.objects.create(
             section=self.section,
