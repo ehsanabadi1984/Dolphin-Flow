@@ -483,12 +483,14 @@ def bootstrap_formula_system():
             user,
             edit_mode=False,
             submitted_data=None,
+            read_context_step=None,
         ):
             context = original_get(
                 instance=instance,
                 user=user,
                 edit_mode=edit_mode,
                 submitted_data=submitted_data,
+                read_context_step=read_context_step,
             )
             if context is None:
                 return None
