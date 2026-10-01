@@ -113,6 +113,30 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             )
         self.client.force_login(self.user)
 
+    def test_opening_workflow_instance_marks_its_unread_notifications_as_read(self):
+        from workflow.models import Notification
+
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="اقدام لازم",
+            message="این فرآیند نیازمند اقدام است.",
+            workflow_instance=self.instance,
+            workflow_step=self.step,
+        )
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        notification.refresh_from_db()
+        self.assertTrue(notification.is_read)
+        self.assertIsNotNone(notification.read_at)
+
     def test_member_can_view_process_from_my_processes_with_field_permissions(self):
         other_user = User.objects.create_user(
             username="operator-post-member",
