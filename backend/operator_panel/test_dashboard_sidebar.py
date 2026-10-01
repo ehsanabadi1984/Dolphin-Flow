@@ -429,14 +429,6 @@ class DashboardTimelineRenderTests(DashboardSidebarBase):
             step=self.step_two,
             effect=WorkflowPermission.Effect.ALLOW,
         )
-        WorkflowPermission.objects.create(
-            workflow=self.workflow,
-            user=self.user,
-            action=WorkflowPermission.Action.VIEW,
-            step=step_three,
-            effect=WorkflowPermission.Effect.ALLOW,
-        )
-
         instance = self.create_active_instance(
             started_by=self.other,
             step=step_three,
