@@ -92,6 +92,22 @@ class DashboardPermissionContractTests(TestCase):
             )
         }
 
+    def test_my_processes_includes_non_owner_member_without_instance_view_grant(self):
+        queryset = DashboardService(self.user).my_processes_queryset()
+
+        self.assertIn(self.instance.pk, queryset.values_list("pk", flat=True))
+
+    def test_my_processes_excludes_non_member(self):
+        outsider = User.objects.create_user(
+            username="dashboard_permission_outsider",
+            password="test-password",
+        )
+
+        self.assertNotIn(
+            self.instance.pk,
+            DashboardService(outsider).my_processes_queryset().values_list("pk", flat=True),
+        )
+
     def test_membership_alone_does_not_grant_dashboard_view(self):
         self.assertNotIn(self.instance.pk, self.accessible_ids())
 
