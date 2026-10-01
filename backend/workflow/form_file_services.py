@@ -557,6 +557,8 @@ def file_field_definitions(request, instance_id):
         WorkflowInstance.objects.select_related("workflow", "current_step"),
         pk=instance_id,
     )
+    read_context_step = instance.current_step
+
     if WorkflowMembership.objects.filter(
         workflow=instance.workflow,
         user=request.user,
