@@ -179,11 +179,11 @@ class NotificationServiceTests(TestCase):
         )
 
         self.assertEqual(marked, 1)
-        self.assertFalse(
+        self.assertTrue(
             Notification.objects.get(
                 workflow_instance=self.instance,
                 recipient=self.user,
-            ).is_read is False
+            ).is_read
         )
         self.assertEqual(
             NotificationService.get_unread(user=self.user).count(),
