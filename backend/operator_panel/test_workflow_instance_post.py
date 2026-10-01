@@ -130,6 +130,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                 "operator_panel:workflow_instance",
                 args=[self.instance.pk],
             ),
+            {"source": "my_processes"},
         )
 
         self.assertEqual(response.status_code, 200)
