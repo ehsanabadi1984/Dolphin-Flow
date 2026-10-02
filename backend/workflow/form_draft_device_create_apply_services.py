@@ -128,6 +128,23 @@ class FormDraftDeviceCreateApplyService:
                 draft_device_model=None,
                 draft_device_type=None,
             )
+        elif device_model is not None:
+            device = DeviceService.create_device(
+                device_model=device_model,
+            )
+            if imei:
+                DeviceService.attach_identifier(
+                    device=device,
+                    identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+                    value=imei,
+                )
+            instance_device = InstanceDevice.objects.create(
+                instance=instance,
+                device=device,
+                draft_imei="",
+                draft_device_model=None,
+                draft_device_type=None,
+            )
         else:
             instance_device = InstanceDevice.objects.create(
                 instance=instance,
