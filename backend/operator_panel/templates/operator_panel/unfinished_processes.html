@@ -36,8 +36,8 @@
                 <div>
                     <div class="df-unfinished-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
                     <div class="df-unfinished-meta">
-                        {% if instance.current_step %}مرحله فعلی: {{ instance.current_step.name }} · {% endif %}
-                        شروع {{ instance.started_at|timesince }} قبل
+                        {% if instance.current_step %}مرحله فعلی: {{ instance.current_step.name }}{% endif %}
+                        <span style="display:block;font-size:10px;opacity:.65;margin-top:2px;">Started {{ instance.started_at|timesince }} ago</span>
                     </div>
                 </div>
                 <div class="df-unfinished-actions">
