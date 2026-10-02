@@ -75,5 +75,5 @@ def device_history(request, instance_id, device_id):
         )
 
     return redirect(
-        f"{reverse('operator_panel:workflow_instance', args=[previous_instance])}?source=history"
+        f"{reverse('operator_panel:workflow_instance', args=[previous_instance])}?source=history_device"
     )
