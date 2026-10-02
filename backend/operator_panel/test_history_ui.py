@@ -223,7 +223,11 @@ class HistoryTemplateTests(SimpleTestCase):
 
         queryset = MagicMock()
         filter_devices.return_value = queryset
-        queryset.values_list.return_value.first.return_value = 18
+        previous_queryset = MagicMock()
+        queryset.exclude.return_value = previous_queryset
+        previous_queryset.select_related.return_value = previous_queryset
+        previous_queryset.order_by.return_value = previous_queryset
+        previous_queryset.values_list.return_value.first.return_value = 18
 
         response = history_views.device_history.__wrapped__(
             request,
@@ -239,16 +243,16 @@ class HistoryTemplateTests(SimpleTestCase):
         )
         filter_devices.assert_called_once_with(device=device)
         queryset.exclude.assert_called_once_with(instance_id=42)
-        queryset.select_related.assert_called_once_with(
+        previous_queryset.select_related.assert_called_once_with(
             "instance",
             "instance__workflow",
             "instance__current_step",
         )
-        queryset.order_by.assert_called_once_with(
+        previous_queryset.order_by.assert_called_once_with(
             "-instance__started_at",
             "-received_at",
         )
-        queryset.values_list.assert_called_once_with("instance", flat=True)
+        previous_queryset.values_list.assert_called_once_with("instance", flat=True)
         reverse_url.assert_called_once_with(
             "operator_panel:workflow_instance",
             args=[18],
@@ -277,7 +281,11 @@ class HistoryTemplateTests(SimpleTestCase):
 
         queryset = MagicMock()
         filter_devices.return_value = queryset
-        queryset.values_list.return_value.first.return_value = None
+        previous_queryset = MagicMock()
+        queryset.exclude.return_value = previous_queryset
+        previous_queryset.select_related.return_value = previous_queryset
+        previous_queryset.order_by.return_value = previous_queryset
+        previous_queryset.values_list.return_value.first.return_value = None
 
         with self.assertRaises(PermissionDenied):
             history_views.device_history.__wrapped__(
