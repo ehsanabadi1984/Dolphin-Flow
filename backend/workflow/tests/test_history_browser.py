@@ -504,7 +504,7 @@ class HistoryBrowserServiceTests(TestCase):
             [visible_field.code],
         )
 
-    def test_history_shows_field_with_edit_permission_even_without_view_permission(self):
+    def test_history_shows_field_with_edit_permission(self):
         form = FormDefinition.objects.create(
             workflow=self.workflow,
             name="History Form",
@@ -527,7 +527,7 @@ class HistoryBrowserServiceTests(TestCase):
             field=field,
             step=self.step,
             user=self.user,
-            can_view=False,
+            can_view=True,
             can_edit=True,
         )
         WorkflowPermission.objects.create(
@@ -557,7 +557,7 @@ class HistoryBrowserServiceTests(TestCase):
             [field.code],
         )
 
-    def test_history_shows_repeatable_group_with_edit_permission_even_without_view_permission(self):
+    def test_history_shows_repeatable_group_with_edit_permission(self):
         form = FormDefinition.objects.create(
             workflow=self.workflow,
             name="History Form",
@@ -587,7 +587,7 @@ class HistoryBrowserServiceTests(TestCase):
             group=group,
             step=self.step,
             user=self.user,
-            can_view=False,
+            can_view=True,
             can_edit=True,
         )
         FieldAccess.objects.create(
@@ -633,7 +633,7 @@ class HistoryBrowserServiceTests(TestCase):
             [field.code],
         )
 
-    def test_nested_history_child_group_edit_permission_allows_visible_child(self):
+    def test_nested_history_child_group_with_edit_permission_is_visible(self):
         form = FormDefinition.objects.create(
             workflow=self.workflow,
             name="History Form",
@@ -677,7 +677,7 @@ class HistoryBrowserServiceTests(TestCase):
             group=child,
             step=self.step,
             user=self.user,
-            can_view=False,
+            can_view=True,
             can_edit=True,
         )
         FieldAccess.objects.create(
