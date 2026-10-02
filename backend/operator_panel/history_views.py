@@ -77,6 +77,7 @@ def device_history(request, instance_id, device_id):
     history = HistoryBrowserService.get_history(
         device_id=device_id,
         user=request.user,
+        allow_workflow_history_permission=True,
     )
 
     legacy_histories = []
