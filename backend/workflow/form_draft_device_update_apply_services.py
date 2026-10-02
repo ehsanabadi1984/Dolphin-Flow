@@ -175,9 +175,16 @@ class FormDraftDeviceUpdateApplyService:
     ):
         if submitted_imei is not None:
             current_imei = cls._current_imei(instance_device)
-            if submitted_imei != current_imei:
-                raise ValidationError(
-                    "IMEI دستگاهی که قبلاً شناسایی شده است قابل تغییر نیست."
+            if current_imei:
+                if submitted_imei != current_imei:
+                    raise ValidationError(
+                        "IMEI دستگاهی که قبلاً شناسایی شده است قابل تغییر نیست."
+                    )
+            elif submitted_imei:
+                DeviceService.attach_identifier(
+                    device=instance_device.device,
+                    identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+                    value=submitted_imei,
                 )
 
         device = instance_device.device
