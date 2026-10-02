@@ -349,6 +349,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
             ),
         )
         diff = FormDraftDiff(
+            normal_fields={},
             groups=(
                 RepeatableGroupDiff(
                     group=child_group,
