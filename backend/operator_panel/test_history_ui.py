@@ -245,6 +245,42 @@ class HistoryTemplateTests(SimpleTestCase):
     @patch.object(HistoryBrowserService, "get_history", return_value=[])
     @patch.object(history_views.WorkflowAuthorizationService, "require_permission")
     @patch("operator_panel.history_views.get_object_or_404")
+    def test_device_history_uses_workflow_history_permission_for_stored_snapshot(
+        self,
+    ):
+        instance = SimpleNamespace(
+            pk=42,
+            workflow=SimpleNamespace(name="Workflow"),
+            current_step=SimpleNamespace(),
+        )
+        device = SimpleNamespace(pk=7)
+        request = SimpleNamespace(user=SimpleNamespace(is_authenticated=True))
+        history = [{"snapshot": {"version": 1}}]
+
+        with patch("operator_panel.history_views.get_object_or_404") as get_object_or_404, \
+             patch.object(HistoryBrowserService, "get_history", return_value=history) as get_history, \
+             patch("operator_panel.history_views.render", return_value="response") as render:
+            get_object_or_404.side_effect = [instance, device]
+            response = history_views.device_history.__wrapped__(
+                request,
+                instance_id=42,
+                device_id=7,
+            )
+
+        self.assertEqual(response, "response")
+        get_history.assert_called_once_with(
+            device_id=7,
+            user=request.user,
+            allow_workflow_history_permission=True,
+        )
+        render.assert_called_once()
+
+    @patch("operator_panel.history_views.render")
+    @patch("operator_panel.history_views.InstanceDevice.objects.filter")
+    @patch.object(HistoryBrowserService, "has_stored_history", return_value=True)
+    @patch.object(HistoryBrowserService, "get_history", return_value=[])
+    @patch.object(history_views.WorkflowAuthorizationService, "require_permission")
+    @patch("operator_panel.history_views.get_object_or_404")
     def test_device_history_does_not_use_legacy_fallback_when_snapshot_is_stored_but_hidden(
         self,
         get_object_or_404,
