@@ -56,6 +56,77 @@ class DeviceService:
 
     @staticmethod
     @transaction.atomic
+    def create_device(*, device_model):
+        """
+        Create a persistent Device without requiring an identifier.
+        """
+
+        if not device_model:
+            raise ValidationError(
+                "مدل دستگاه الزامی است."
+            )
+
+        return Device.objects.create(
+            device_model=device_model,
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def attach_identifier(*, device, identifier_type, value):
+        """
+        Attach an identifier to an existing Device.
+
+        An identifier already attached to this Device is returned as-is.
+        An identifier owned by another Device is rejected.
+        """
+
+        if not device:
+            raise ValidationError(
+                "دستگاه مشخص نشده است."
+            )
+
+        if not identifier_type:
+            raise ValidationError(
+                "نوع شناسه دستگاه مشخص نشده است."
+            )
+
+        if not value:
+            raise ValidationError(
+                "مقدار شناسه دستگاه الزامی است."
+            )
+
+        value = str(value).strip()
+
+        if not value:
+            raise ValidationError(
+                "مقدار شناسه دستگاه الزامی است."
+            )
+
+        existing_identifier = (
+            DeviceIdentifier.objects
+            .select_related("device")
+            .filter(
+                identifier_type=identifier_type,
+                value=value,
+            )
+            .first()
+        )
+
+        if existing_identifier is not None:
+            if existing_identifier.device_id != device.pk:
+                raise ValidationError(
+                    "این شناسه قبلاً برای دستگاه دیگری ثبت شده است."
+                )
+            return existing_identifier
+
+        return DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=identifier_type,
+            value=value,
+        )
+
+    @staticmethod
+    @transaction.atomic
     def get_or_create_by_imei(
         *,
         imei,
