@@ -343,7 +343,7 @@ class FormDraftDeviceUpdateApplyServiceTests(TestCase):
 
     def test_unresolved_device_can_resolve_by_imei(self):
         group, fields = self.create_device_group()
-        row, instance_device = self.create_unresolved_row(group, imei="333333333333333")
+        row, instance_device = self.create_unresolved_row(group, imei="222222222222222")
         device = Device.objects.create(device_model=self.device_model)
         DeviceIdentifier.objects.create(
             device=device,
