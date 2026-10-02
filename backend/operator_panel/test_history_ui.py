@@ -145,6 +145,48 @@ class HistoryTemplateTests(SimpleTestCase):
         self.assertIn(">0<", rendered)
         self.assertIn(">False<", rendered)
 
+    @patch("operator_panel.history_views.redirect")
+    @patch("operator_panel.history_views.reverse")
+    @patch.object(history_views.WorkflowAuthorizationService, "require_permission")
+    @patch("operator_panel.history_views.get_object_or_404")
+    def test_workflow_history_requires_history_permission_and_redirects_to_read_only_form(
+        self,
+        get_object_or_404,
+        require_permission,
+        reverse_url,
+        redirect,
+    ):
+        instance = SimpleNamespace(
+            pk=42,
+            workflow=SimpleNamespace(name="Workflow"),
+            current_step=SimpleNamespace(),
+        )
+        get_object_or_404.return_value = instance
+        reverse_url.return_value = "/operator/workflow-instance/42/"
+        redirect.return_value = "response"
+        request = SimpleNamespace(
+            user=SimpleNamespace(is_authenticated=True),
+        )
+
+        response = history_views.workflow_history.__wrapped__(
+            request,
+            instance_id=42,
+        )
+
+        self.assertEqual(response, "response")
+        require_permission.assert_called_once_with(
+            user=request.user,
+            workflow=instance.workflow,
+            action=HISTORY_ACTION,
+        )
+        reverse_url.assert_called_once_with(
+            "operator_panel:workflow_instance",
+            args=[42],
+        )
+        redirect.assert_called_once_with(
+            "/operator/workflow-instance/42/?source=history",
+        )
+
     def test_device_history_url_resolves_to_canonical_history_view(self):
         match = resolve(
             reverse(
