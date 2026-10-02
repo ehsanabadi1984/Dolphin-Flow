@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.history_browser_service import HistoryBrowserService
@@ -9,7 +10,6 @@ from workflow.models import (
     Device,
     InstanceDevice,
     WorkflowInstance,
-    WorkflowPermission,
 )
 
 
@@ -23,38 +23,14 @@ def workflow_history(request, instance_id):
         pk=instance_id,
     )
 
-    history = HistoryBrowserService.get_history(
+    WorkflowAuthorizationService.require_permission(
         user=request.user,
-        instance_id=instance.pk,
+        workflow=instance.workflow,
+        action=HISTORY_ACTION,
     )
 
-    if not history and HistoryBrowserService.has_stored_history(
-        instance_id=instance.pk,
-    ):
-        raise PermissionDenied("کاربر اجازه مشاهده سوابق این فرآیند را ندارد.")
-
-    if not history:
-        WorkflowAuthorizationService.require_permission(
-            user=request.user,
-            workflow=instance.workflow,
-            action=WorkflowPermission.Action.VIEW,
-            step=instance.current_step,
-            instance=instance,
-        )
-
-    return render(
-        request,
-        "operator_panel/history.html",
-        {
-            "instance": instance,
-            "device": None,
-            "history": history,
-            "legacy_histories": [],
-            "history_title": "سوابق اجرای فرآیند",
-            "history_subtitle": instance.workflow.name,
-            "page_title": "سوابق",
-            "page_breadcrumb": "سوابق",
-        },
+    return redirect(
+        f"{reverse('operator_panel:workflow_instance', args=[instance.pk])}?source=history"
     )
 
 
