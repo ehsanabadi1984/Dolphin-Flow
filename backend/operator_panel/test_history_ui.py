@@ -258,7 +258,7 @@ class HistoryTemplateTests(SimpleTestCase):
             args=[18],
         )
         redirect.assert_called_once_with(
-            "/operator/workflow-instance/18/?source=history",
+            "/operator/workflow-instance/18/?source=history_device",
         )
 
     @patch.object(history_views.WorkflowAuthorizationService, "require_permission")
