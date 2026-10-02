@@ -4,7 +4,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from workflow.authorization import WorkflowAuthorizationService
-from workflow.history_browser_service import HistoryBrowserService
 from workflow.history_permissions import HISTORY_ACTION
 from workflow.models import (
     Device,
@@ -50,53 +49,31 @@ def device_history(request, instance_id, device_id):
         workflow_instances__instance=instance,
     )
 
-    history = HistoryBrowserService.get_history(
-        device_id=device_id,
+    WorkflowAuthorizationService.require_permission(
         user=request.user,
-        allow_workflow_history_permission=True,
+        workflow=instance.workflow,
+        action=HISTORY_ACTION,
     )
 
-    legacy_histories = []
-    if not history and not HistoryBrowserService.has_stored_history(
-        device_id=device_id,
-    ):
-        WorkflowAuthorizationService.require_permission(
-            user=request.user,
-            workflow=instance.workflow,
-            action=HISTORY_ACTION,
+    previous_instance = (
+        InstanceDevice.objects
+        .filter(device=device)
+        .exclude(instance_id=instance.pk)
+        .select_related(
+            "instance",
+            "instance__workflow",
+            "instance__current_step",
+        )
+        .order_by("-instance__started_at", "-received_at")
+        .values_list("instance", flat=True)
+        .first()
+    )
+
+    if previous_instance is None:
+        raise PermissionDenied(
+            "برای این دستگاه سابقه ثبت‌شده‌ای وجود ندارد."
         )
 
-        legacy_histories = (
-            InstanceDevice.objects.filter(
-                device=device,
-                instance__workflow__memberships__user=request.user,
-                instance__workflow__memberships__is_active=True,
-            )
-            .select_related(
-                "instance",
-                "instance__workflow",
-                "instance__current_step",
-            )
-            .distinct()
-            .order_by("-received_at")
-        )
-
-    elif not history and HistoryBrowserService.has_stored_history(
-        device_id=device_id,
-    ):
-        raise PermissionDenied("کاربر اجازه مشاهده سوابق این دستگاه را ندارد.")
-
-    return render(
-        request,
-        "operator_panel/history.html",
-        {
-            "instance": instance,
-            "device": device,
-            "history": history,
-            "legacy_histories": legacy_histories,
-            "history_title": "سوابق دستگاه",
-            "history_subtitle": str(device),
-            "page_title": "سوابق",
-            "page_breadcrumb": "سوابق",
-        },
+    return redirect(
+        f"{reverse('operator_panel:workflow_instance', args=[previous_instance])}?source=history"
     )
