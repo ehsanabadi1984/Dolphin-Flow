@@ -223,6 +223,48 @@ class FormDraftDeviceUpdateApplyServiceTests(TestCase):
             "Black",
         )
 
+    def test_resolved_device_without_imei_can_attach_new_imei(self):
+        group, fields = self.create_device_group()
+        device = Device.objects.create(device_model=self.device_model)
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=device,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+            instance_device=instance_device,
+        )
+        imei = "777777777777777"
+
+        diff = self.build_diff(
+            group=group,
+            row=self.row(
+                row_id=row.pk,
+                fields={
+                    fields[FormField.SystemKey.IMEI].code: imei,
+                    fields[FormField.SystemKey.DEVICE_MODEL].code: self.device_model.pk,
+                    fields[FormField.SystemKey.DEVICE_TYPE].code: self.device_type.pk,
+                },
+            ),
+        )
+
+        FormDraftDeviceUpdateApplyService.apply(
+            instance=self.instance,
+            diff=diff,
+        )
+
+        instance_device.refresh_from_db()
+        device.refresh_from_db()
+        self.assertEqual(instance_device.device_id, device.pk)
+        self.assertEqual(device.identifiers.count(), 1)
+        identifier = device.identifiers.get(
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+        )
+        self.assertEqual(identifier.value, imei)
+        self.assertEqual(device.device_model_id, self.device_model.pk)
+
     def test_resolved_imei_cannot_change(self):
         group, fields = self.create_device_group()
         row, instance_device, device = self.create_resolved_row(group)
