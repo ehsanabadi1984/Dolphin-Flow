@@ -126,7 +126,7 @@
                         <div class="df-dashboard-priority"></div>
                         <div class="df-unfinished-main">
                             <div class="df-unfinished-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
-                            <div class="df-unfinished-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}شروع {{ instance.started_at|timesince }} قبل</div>
+                            <div class="df-unfinished-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }}{% endif %}<span style="display:block;font-size:10px;opacity:.65;margin-top:2px;">Started {{ instance.started_at|timesince }} ago</span></div>
                         </div>
                         <div class="df-unfinished-actions">
                             <form method="post" action="{% url 'operator_panel:hide_dashboard_process' instance.pk %}">
