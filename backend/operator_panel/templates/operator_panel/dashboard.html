@@ -153,7 +153,7 @@
                     <div class="df-process-card-header">
                         <div>
                             <div class="df-process-card-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
-                            <div class="df-process-card-meta">{% if instance.current_step %}مرحله فعلی: {{ instance.current_step.name }} · {% endif %}شروع {{ instance.started_at|timesince }} قبل</div>
+                            <div class="df-process-card-meta">{% if instance.current_step %}مرحله فعلی: {{ instance.current_step.name }}{% endif %}<span style="display:block;font-size:10px;opacity:.65;margin-top:2px;">Started {{ instance.started_at|timesince }} ago</span></div>
                         </div>
                         <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-success">مشاهده</a>
                     </div>
