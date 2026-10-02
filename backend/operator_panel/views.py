@@ -299,7 +299,9 @@ def workflow_instance(request, instance_id, _return_save_result=False):
 
     source = request.GET.get("source")
 
-    if source == "my_processes":
+    if source in {"my_processes", "history_device"}:
+        if source == "history_device" and request.method != "GET":
+            raise PermissionDenied("سوابق دستگاه فقط به صورت خواندنی قابل مشاهده است.")
         is_workflow_member = WorkflowMembership.objects.filter(
             workflow=instance.workflow,
             user=request.user,
@@ -407,7 +409,7 @@ def workflow_instance(request, instance_id, _return_save_result=False):
         )
         historical_read_context = read_context_step is not None
     elif (
-        source == "my_processes"
+        source in {"my_processes", "history_device"}
         or (
             instance.step_executions.filter(
                 performed_by=request.user,
