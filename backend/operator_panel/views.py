@@ -388,18 +388,16 @@ def workflow_instance(request, instance_id, _return_save_result=False):
     )
 
     if source == "history":
-        historical_step = (
-            instance.step_executions
-            .filter(is_submitted=True)
-            .order_by("-submitted_at", "-performed_at")
-            .select_related("workflow_step")
-            .first()
+        historical_step = _get_historical_view_step(
+            instance=instance,
+            user=request.user,
+            form=form,
         )
         if historical_step is None:
             raise PermissionDenied(
-                "برای این فرآیند سابقه ثبت‌شده‌ای وجود ندارد."
+                "برای این فرآیند سابقه قابل مشاهده‌ای وجود ندارد."
             )
-        read_context_step = historical_step.workflow_step
+        read_context_step = historical_step
         historical_read_context = True
     elif read_context_step is None:
         read_context_step = _get_historical_view_step(
