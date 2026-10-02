@@ -297,7 +297,9 @@ def workflow_instance(request, instance_id, _return_save_result=False):
         pk=instance_id,
     )
 
-    if request.GET.get("source") == "my_processes":
+    source = request.GET.get("source")
+
+    if source == "my_processes":
         is_workflow_member = WorkflowMembership.objects.filter(
             workflow=instance.workflow,
             user=request.user,
@@ -305,6 +307,14 @@ def workflow_instance(request, instance_id, _return_save_result=False):
         ).exists()
         if not is_workflow_member:
             raise PermissionDenied("کاربر عضو این فرآیند نیست.")
+    elif source == "history":
+        if request.method != "GET":
+            raise PermissionDenied("سوابق فرآیند فقط به صورت خواندنی قابل مشاهده است.")
+        WorkflowAuthorizationService.require_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=HISTORY_ACTION,
+        )
     else:
         WorkflowAuthorizationService.require_permission(
             user=request.user,
@@ -377,7 +387,19 @@ def workflow_instance(request, instance_id, _return_save_result=False):
         .first()
     )
 
-    if read_context_step is None:
+    if source == "history":
+        historical_step = _get_historical_view_step(
+            instance=instance,
+            user=request.user,
+            form=form,
+        )
+        if historical_step is None:
+            raise PermissionDenied(
+                "کاربر در سوابق این فرآیند به هیچ بخش قابل مشاهده‌ای دسترسی ندارد."
+            )
+        read_context_step = historical_step
+        historical_read_context = True
+    elif read_context_step is None:
         read_context_step = _get_historical_view_step(
             instance=instance,
             user=request.user,
@@ -385,7 +407,7 @@ def workflow_instance(request, instance_id, _return_save_result=False):
         )
         historical_read_context = read_context_step is not None
     elif (
-        request.GET.get("source") == "my_processes"
+        source == "my_processes"
         or (
             instance.step_executions.filter(
                 performed_by=request.user,
