@@ -41,13 +41,21 @@ class HistoryBrowserService:
         return queryset
 
     @staticmethod
-    def _is_authorized(*, execution, user):
-        return WorkflowAuthorizationService.has_permission(
+    def _is_authorized(*, execution, user, allow_workflow_history_permission=False):
+        allowed = WorkflowAuthorizationService.has_permission(
             user=user,
             workflow=execution.instance.workflow,
             action=HISTORY_ACTION,
             step=execution.workflow_step,
             instance=execution.instance,
+        )
+        if allowed or not allow_workflow_history_permission:
+            return allowed
+
+        return WorkflowAuthorizationService.has_permission(
+            user=user,
+            workflow=execution.instance.workflow,
+            action=HISTORY_ACTION,
         )
 
     @staticmethod
@@ -192,7 +200,14 @@ class HistoryBrowserService:
         }
 
     @classmethod
-    def get_history(cls, *, user, instance_id=None, device_id=None):
+    def get_history(
+        cls,
+        *,
+        user,
+        instance_id=None,
+        device_id=None,
+        allow_workflow_history_permission=False,
+    ):
         history = []
         form_cache = {}
         permission_cache = {}
@@ -211,6 +226,7 @@ class HistoryBrowserService:
                 authorization_cache[authorization_key] = cls._is_authorized(
                     execution=execution,
                     user=user,
+                    allow_workflow_history_permission=allow_workflow_history_permission,
                 )
             if not authorization_cache[authorization_key]:
                 continue
