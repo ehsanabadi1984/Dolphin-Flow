@@ -153,7 +153,7 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
         value = RepeatableRowValue.objects.get(row=row, field=fields["custom"])
         self.assertEqual(value.text_value, "Black")
 
-    def test_new_imei_creates_unresolved_draft_device(self):
+    def test_new_imei_creates_device_with_identifier(self):
         _, fields = self.create_device_group()
         diff = self.build_diff(
             devices=[self.row(fields={
@@ -166,12 +166,20 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
             instance=self.instance, diff=diff,
         )
         instance_device = next(iter(created.values())).instance_device
-        self.assertIsNone(instance_device.device_id)
-        self.assertEqual(instance_device.draft_imei, "222222222222222")
-        self.assertEqual(instance_device.draft_device_model_id, self.device_model.pk)
-        self.assertEqual(instance_device.draft_device_type_id, self.device_type.pk)
+        self.assertIsNotNone(instance_device.device_id)
+        self.assertEqual(instance_device.device.device_model_id, self.device_model.pk)
+        self.assertEqual(instance_device.draft_imei, "")
+        self.assertIsNone(instance_device.draft_device_model_id)
+        self.assertIsNone(instance_device.draft_device_type_id)
+        self.assertTrue(
+            DeviceIdentifier.objects.filter(
+                device=instance_device.device,
+                identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+                value="222222222222222",
+            ).exists()
+        )
 
-    def test_blank_imei_creates_unidentified_device_without_lookup(self):
+    def test_blank_imei_creates_persistent_device_without_identifier(self):
         _, fields = self.create_device_group()
         diff = self.build_diff(
             devices=[self.row(fields={
@@ -184,10 +192,16 @@ class FormDraftDeviceCreateApplyServiceTests(TestCase):
             instance=self.instance, diff=diff,
         )
         instance_device = next(iter(created.values())).instance_device
-        self.assertIsNone(instance_device.device_id)
+        self.assertIsNotNone(instance_device.device_id)
+        self.assertEqual(instance_device.device.device_model_id, self.device_model.pk)
         self.assertEqual(instance_device.draft_imei, "")
-        self.assertEqual(instance_device.draft_device_model_id, self.device_model.pk)
-        self.assertEqual(instance_device.draft_device_type_id, self.device_type.pk)
+        self.assertIsNone(instance_device.draft_device_model_id)
+        self.assertIsNone(instance_device.draft_device_type_id)
+        self.assertFalse(
+            DeviceIdentifier.objects.filter(
+                device=instance_device.device,
+            ).exists()
+        )
 
     def test_system_fields_are_persisted_on_instance_device(self):
         _, fields = self.create_device_group()
