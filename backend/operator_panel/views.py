@@ -139,7 +139,6 @@ def device_models_by_type(request):
     })
 
 @login_required
-@login_required
 def dependent_field_options(request):
     """
     Return dependent SELECT options only for a field the current user
