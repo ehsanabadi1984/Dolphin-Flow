@@ -239,15 +239,7 @@ class HistoryTemplateTests(SimpleTestCase):
         require_permission.assert_not_called()
         filter_devices.assert_not_called()
 
-    @patch("operator_panel.history_views.render")
-    @patch("operator_panel.history_views.InstanceDevice.objects.filter")
-    @patch.object(HistoryBrowserService, "has_stored_history", return_value=True)
-    @patch.object(HistoryBrowserService, "get_history", return_value=[])
-    @patch.object(history_views.WorkflowAuthorizationService, "require_permission")
-    @patch("operator_panel.history_views.get_object_or_404")
-    def test_device_history_uses_workflow_history_permission_for_stored_snapshot(
-        self,
-    ):
+    def test_device_history_uses_workflow_history_permission_for_stored_snapshot(self):
         instance = SimpleNamespace(
             pk=42,
             workflow=SimpleNamespace(name="Workflow"),
