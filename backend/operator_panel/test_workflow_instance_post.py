@@ -216,6 +216,9 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             can_edit=False,
         )
 
+        self.step.assigned_to = historical_user
+        self.step.save(update_fields=["assigned_to"])
+
         historical_execution = WorkflowStepExecution.objects.create(
             instance=self.instance,
             workflow_step=self.step,
