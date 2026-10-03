@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -5,6 +6,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
 from .models import Notification
+from .tasks import dispatch_n8n_notification
 
 
 class NotificationService:
@@ -54,9 +56,12 @@ class NotificationService:
                     "notification": notification_payload,
                 },
             )
-        transaction.on_commit(
-            publish_notification
-        )
+        transaction.on_commit(publish_notification)
+
+        if getattr(settings, "N8N_NOTIFICATION_WEBHOOK_URL", ""):
+            transaction.on_commit(
+                lambda: dispatch_n8n_notification.delay(notification.id)
+            )
 
         return notification
 
