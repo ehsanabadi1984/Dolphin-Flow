@@ -1,6 +1,7 @@
 from django.conf import settings
 
-import requests
+import json
+from urllib.request import Request, urlopen
 
 
 class N8NNotificationDispatcher:
@@ -66,11 +67,15 @@ class N8NNotificationDispatcher:
         if secret:
             headers["Authorization"] = f"Bearer {secret}"
 
-        response = requests.post(
+        request = Request(
             webhook_url,
-            json=payload,
+            data=json.dumps(payload).encode("utf-8"),
             headers=headers,
-            timeout=10,
+            method="POST",
         )
-        response.raise_for_status()
+        with urlopen(request, timeout=10) as response:
+            if response.status < 200 or response.status >= 300:
+                raise RuntimeError(
+                    f"n8n webhook returned HTTP {response.status}"
+                )
         return True
