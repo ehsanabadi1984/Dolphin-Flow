@@ -337,23 +337,25 @@ class NotificationServiceTests(TestCase):
     @override_settings(N8N_NOTIFICATION_WEBHOOK_URL="https://n8n.example/webhook/test")
     @patch("workflow.tasks.dispatch_n8n_notification.delay")
     def test_create_notification_schedules_n8n_delivery_after_commit(self, mock_delay):
-        notification = NotificationService.create(
-            recipient=self.user,
-            notification_type=Notification.NotificationType.ACTION_REQUIRED,
-            title="n8n test",
-            message="Send this to n8n",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            notification = NotificationService.create(
+                recipient=self.user,
+                notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                title="n8n test",
+                message="Send this to n8n",
+            )
 
         mock_delay.assert_called_once_with(notification.id)
 
     @override_settings(N8N_NOTIFICATION_WEBHOOK_URL="")
     @patch("workflow.tasks.dispatch_n8n_notification.delay")
     def test_create_notification_does_not_schedule_n8n_when_disabled(self, mock_delay):
-        NotificationService.create(
-            recipient=self.user,
-            notification_type=Notification.NotificationType.ACTION_REQUIRED,
-            title="No n8n",
-            message="Keep existing notification only",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            NotificationService.create(
+                recipient=self.user,
+                notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                title="No n8n",
+                message="Keep existing notification only",
+            )
 
         mock_delay.assert_not_called()
