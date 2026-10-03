@@ -6,7 +6,6 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
 from .models import Notification
-from .tasks import dispatch_n8n_notification
 
 
 class NotificationService:
@@ -59,6 +58,8 @@ class NotificationService:
         transaction.on_commit(publish_notification)
 
         if getattr(settings, "N8N_NOTIFICATION_WEBHOOK_URL", ""):
+            from .tasks import dispatch_n8n_notification
+
             transaction.on_commit(
                 lambda: dispatch_n8n_notification.delay(notification.id)
             )
