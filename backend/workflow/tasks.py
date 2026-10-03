@@ -1,6 +1,7 @@
 from celery import shared_task
 
 from .sla_monitor_services import SLAMonitorService
+from .n8n_notification_services import N8NNotificationDispatcher
 
 
 @shared_task
