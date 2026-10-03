@@ -581,6 +581,10 @@ class WorkflowTransition(models.Model):
         default=True,
     )
 
+    requires_acceptance = models.BooleanField(
+        default=False,
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )
