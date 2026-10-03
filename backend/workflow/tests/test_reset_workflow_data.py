@@ -68,11 +68,11 @@ class ResetWorkflowDataCommandTests(TestCase):
             name="Next",
             code="NEXT",
         )
-        WorkflowMembership.objects.create(
+        self.membership = WorkflowMembership.objects.create(
             workflow=self.workflow,
             user=self.user,
         )
-        WorkflowPermission.objects.create(
+        self.permission = WorkflowPermission.objects.create(
             workflow=self.workflow,
             step=self.step1,
             user=self.user,
@@ -124,7 +124,7 @@ class ResetWorkflowDataCommandTests(TestCase):
             weekday=0,
             is_working=True,
         )
-        WorkflowStepSLA.objects.create(
+        self.step_sla = WorkflowStepSLA.objects.create(
             step=self.step1,
             calendar=self.calendar,
             duration=timedelta(hours=1),
@@ -182,12 +182,12 @@ class ResetWorkflowDataCommandTests(TestCase):
             order=0,
         )
 
-        FieldAccess.objects.create(
+        self.field_access = FieldAccess.objects.create(
             field=self.child_field,
             step=self.step1,
             user=self.user,
         )
-        RepeatableGroupAccess.objects.create(
+        self.group_access = RepeatableGroupAccess.objects.create(
             group=self.child_group,
             step=self.step1,
             user=self.user,
@@ -197,7 +197,7 @@ class ResetWorkflowDataCommandTests(TestCase):
             form=self.form,
             name="Reset History",
         )
-        HistoryField.objects.create(
+        self.history_field = HistoryField.objects.create(
             configuration=self.history_config,
             form_field=self.child_field,
         )
@@ -207,11 +207,11 @@ class ResetWorkflowDataCommandTests(TestCase):
             current_step=self.step1,
             started_by=self.user,
         )
-        self.instance_device = InstanceDevice.objects.create(
+        InstanceDevice.objects.create(
             instance=self.instance,
             device=self.device,
         )
-        self.form_data = FormData.objects.create(
+        FormData.objects.create(
             instance=self.instance,
             data={"Child": "A"},
         )
@@ -259,6 +259,11 @@ class ResetWorkflowDataCommandTests(TestCase):
             "membership": WorkflowMembership.objects.count(),
             "form": FormDefinition.objects.count(),
             "instance": WorkflowInstance.objects.count(),
+            "step_execution": WorkflowStepExecution.objects.count(),
+            "transition_execution": WorkflowTransitionExecution.objects.count(),
+            "form_data": FormData.objects.count(),
+            "repeatable_row": RepeatableRow.objects.count(),
+            "notification": Notification.objects.count(),
             "static": StaticChoiceSet.objects.count(),
             "lookup": LookupList.objects.count(),
             "calendar": BusinessCalendar.objects.count(),
@@ -272,6 +277,11 @@ class ResetWorkflowDataCommandTests(TestCase):
             "membership": WorkflowMembership.objects.count(),
             "form": FormDefinition.objects.count(),
             "instance": WorkflowInstance.objects.count(),
+            "step_execution": WorkflowStepExecution.objects.count(),
+            "transition_execution": WorkflowTransitionExecution.objects.count(),
+            "form_data": FormData.objects.count(),
+            "repeatable_row": RepeatableRow.objects.count(),
+            "notification": Notification.objects.count(),
             "static": StaticChoiceSet.objects.count(),
             "lookup": LookupList.objects.count(),
             "calendar": BusinessCalendar.objects.count(),
@@ -280,50 +290,76 @@ class ResetWorkflowDataCommandTests(TestCase):
         self.assertEqual(before, after)
         self.assertIn("DRY RUN", output.getvalue())
 
-    def test_reset_deletes_forms_and_runtime_but_preserves_configuration(self):
+    def test_reset_deletes_runtime_data_but_preserves_configuration_and_history(self):
         output = StringIO()
         call_command("reset_workflow_data", "--yes", stdout=output)
 
         self.assertTrue(get_user_model().objects.filter(pk=self.user.pk).exists())
         self.assertTrue(Workflow.objects.filter(pk=self.workflow.pk).exists())
-        self.assertTrue(WorkflowMembership.objects.filter(
-            pk=self.workflow.memberships.get(user=self.user).pk
-        ).exists())
+        self.assertTrue(
+            WorkflowMembership.objects.filter(pk=self.membership.pk).exists()
+        )
+        self.assertTrue(
+            WorkflowPermission.objects.filter(pk=self.permission.pk).exists()
+        )
         self.assertTrue(WorkflowStep.objects.filter(pk=self.step1.pk).exists())
         self.assertTrue(WorkflowStep.objects.filter(pk=self.step2.pk).exists())
-        self.assertTrue(WorkflowTransition.objects.filter(pk=self.transition.pk).exists())
-        self.assertTrue(WorkflowPermission.objects.filter(workflow=self.workflow).exists())
+        self.assertTrue(
+            WorkflowTransition.objects.filter(pk=self.transition.pk).exists()
+        )
 
         self.assertTrue(DeviceType.objects.filter(pk=self.device_type.pk).exists())
         self.assertTrue(DeviceModel.objects.filter(pk=self.device_model.pk).exists())
         self.assertTrue(Device.objects.filter(pk=self.device.pk).exists())
-        self.assertTrue(DeviceIdentifier.objects.filter(pk=self.identifier.pk).exists())
+        self.assertTrue(
+            DeviceIdentifier.objects.filter(pk=self.identifier.pk).exists()
+        )
 
         self.assertTrue(StaticChoiceSet.objects.filter(pk=self.static_set.pk).exists())
-        self.assertTrue(StaticChoiceItem.objects.filter(pk=self.static_item.pk).exists())
+        self.assertTrue(
+            StaticChoiceItem.objects.filter(pk=self.static_item.pk).exists()
+        )
         self.assertTrue(LookupList.objects.filter(pk=self.lookup_list.pk).exists())
         self.assertTrue(LookupItem.objects.filter(pk=self.lookup_item.pk).exists())
 
         self.assertTrue(BusinessCalendar.objects.filter(pk=self.calendar.pk).exists())
         self.assertTrue(WeeklySchedule.objects.filter(pk=self.weekday.pk).exists())
-        self.assertTrue(WorkflowStepSLA.objects.filter(step=self.step1).exists())
+        self.assertTrue(
+            WorkflowStepSLA.objects.filter(pk=self.step_sla.pk).exists()
+        )
 
-        self.assertEqual(FormDefinition.objects.count(), 0)
-        self.assertEqual(FormSection.objects.count(), 0)
-        self.assertEqual(FormField.objects.count(), 0)
-        self.assertEqual(FormRepeatableGroup.objects.count(), 0)
-        self.assertEqual(FieldAccess.objects.count(), 0)
-        self.assertEqual(RepeatableGroupAccess.objects.count(), 0)
-        self.assertEqual(HistoryConfiguration.objects.count(), 0)
-        self.assertEqual(HistoryField.objects.count(), 0)
+        self.assertTrue(FormDefinition.objects.filter(pk=self.form.pk).exists())
+        self.assertTrue(FormSection.objects.filter(pk=self.section.pk).exists())
+        self.assertTrue(FormField.objects.filter(pk=self.child_field.pk).exists())
+        self.assertTrue(
+            FormRepeatableGroup.objects.filter(pk=self.parent_group.pk).exists()
+        )
+        self.assertTrue(
+            FormRepeatableGroup.objects.filter(pk=self.child_group.pk).exists()
+        )
+        self.assertTrue(FieldAccess.objects.filter(pk=self.field_access.pk).exists())
+        self.assertTrue(
+            RepeatableGroupAccess.objects.filter(pk=self.group_access.pk).exists()
+        )
+        self.assertTrue(
+            HistoryConfiguration.objects.filter(pk=self.history_config.pk).exists()
+        )
+        self.assertTrue(HistoryField.objects.filter(pk=self.history_field.pk).exists())
 
-        self.assertEqual(WorkflowInstance.objects.count(), 0)
+        self.assertTrue(WorkflowInstance.objects.filter(pk=self.instance.pk).exists())
+        self.assertTrue(
+            WorkflowStepExecution.objects.filter(pk=self.step_execution.pk).exists()
+        )
+        self.assertTrue(
+            WorkflowTransitionExecution.objects.filter(
+                pk=self.transition_execution.pk
+            ).exists()
+        )
+
         self.assertEqual(FormData.objects.count(), 0)
         self.assertEqual(InstanceDevice.objects.count(), 0)
         self.assertEqual(RepeatableRow.objects.count(), 0)
         self.assertEqual(RepeatableRowValue.objects.count(), 0)
-        self.assertEqual(WorkflowStepExecution.objects.count(), 0)
-        self.assertEqual(WorkflowTransitionExecution.objects.count(), 0)
         self.assertEqual(Notification.objects.count(), 0)
         self.assertEqual(FormFile.objects.count(), 0)
 
