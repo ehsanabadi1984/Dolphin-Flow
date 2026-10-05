@@ -865,6 +865,156 @@ class WorkflowExecutionTests(TestCase):
             user=self.user,
         )
 
+    def test_acceptance_transition_notifies_unique_accept_reject_recipients(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.grant_transition_permission(self.transition_two)
+
+        self.transition_two.requires_acceptance = True
+        self.transition_two.reject_to_step = self.step_one
+        self.transition_two.save(
+            update_fields=[
+                "requires_acceptance",
+                "reject_to_step",
+            ]
+        )
+
+        third_user = User.objects.create_user(
+            username="acceptance_notification_third",
+            password="test-password",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=third_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+        self.grant_step_action_permission(
+            user=third_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        instance = self.start_instance()
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+        transition_execution = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_two,
+            user=self.user,
+        )
+
+        notifications = Notification.objects.filter(
+            workflow_instance=instance,
+            transition_execution=transition_execution,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+        )
+
+        self.assertEqual(notifications.count(), 2)
+        self.assertEqual(
+            set(notifications.values_list("recipient_id", flat=True)),
+            {self.destination_user.pk, third_user.pk},
+        )
+        self.assertTrue(
+            notifications.filter(
+                workflow_step=self.step_three,
+                title="نیاز به تأیید دریافت",
+            ).exists()
+        )
+
+    def test_acceptance_transition_does_not_notify_users_without_step_action_permission(self):
+        transition_execution = self._create_pending_acceptance_execution()
+
+        notifications = Notification.objects.filter(
+            transition_execution=transition_execution,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+        )
+
+        self.assertEqual(notifications.count(), 0)
+
+    def test_normal_transition_does_not_create_acceptance_notification(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_two,
+            action_code="ACCEPT",
+        )
+
+        instance = self.start_instance()
+        transition_execution = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+
+        self.assertFalse(
+            Notification.objects.filter(
+                transition_execution=transition_execution,
+                notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                title="نیاز به تأیید دریافت",
+            ).exists()
+        )
+
+    def test_acceptance_notification_is_linked_to_pending_transition(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.grant_transition_permission(self.transition_two)
+
+        self.transition_two.requires_acceptance = True
+        self.transition_two.save(update_fields=["requires_acceptance"])
+
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+
+        instance = self.start_instance()
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+        transition_execution = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_two,
+            user=self.user,
+        )
+
+        notification = Notification.objects.get(
+            recipient=self.destination_user,
+            transition_execution=transition_execution,
+        )
+
+        self.assertEqual(
+            notification.workflow_instance_id,
+            instance.pk,
+        )
+        self.assertEqual(
+            notification.workflow_step_id,
+            self.step_three.pk,
+        )
+        self.assertEqual(
+            notification.notification_type,
+            Notification.NotificationType.ACTION_REQUIRED,
+        )
+
     def test_accept_transition_execution_resolves_pending_transition(self):
         transition_execution = self._create_pending_acceptance_execution()
 
