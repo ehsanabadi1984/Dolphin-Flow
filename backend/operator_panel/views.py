@@ -306,7 +306,7 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
             )
         source = "pending_acceptance"
 
-    if source in {"my_processes", "history_device", "acceptance_result"}:
+    if source in {"my_processes", "history_device"}:
         if source in {"history_device", "acceptance_result"} and request.method != "GET":
             raise PermissionDenied("این صفحه فقط به صورت خواندنی قابل مشاهده است.")
         is_workflow_member = WorkflowMembership.objects.filter(
@@ -434,7 +434,9 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
     ).exists()
 
     transitions = () if (
-        _pending_acceptance or has_pending_acceptance
+        _pending_acceptance
+        or has_pending_acceptance
+        or source == "acceptance_result"
     ) else (
         WorkflowAuthorizationService
         .get_allowed_transitions(
@@ -466,6 +468,10 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
 
     if _pending_acceptance:
         read_context_step = _pending_acceptance_step or instance.current_step
+    elif source == "acceptance_result":
+        # The acceptance_result authorization above already binds the
+        # read context to the accepted transition's reject_to_step.
+        pass
     elif source == "history":
         historical_step = _get_historical_view_step(
             instance=instance,
