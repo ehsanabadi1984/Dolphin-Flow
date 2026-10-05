@@ -15,6 +15,12 @@ class WorkflowTransitionExecutionStatusTests(TestCase):
         self.user = get_user_model().objects.create_user(
             username="transition-status-user",
         )
+        self.accepted_by = get_user_model().objects.create_user(
+            username="transition-accepted-by",
+        )
+        self.rejected_by = get_user_model().objects.create_user(
+            username="transition-rejected-by",
+        )
         self.workflow = Workflow.objects.create(
             name="Transition Execution Status Test",
         )
@@ -87,3 +93,33 @@ class WorkflowTransitionExecutionStatusTests(TestCase):
             set(WorkflowTransitionExecution.Status.values),
             {"PENDING", "ACCEPTED", "REJECTED"},
         )
+
+    def test_acceptance_actors_are_stored_independently(self):
+        execution = self._create_execution(
+            WorkflowTransitionExecution.Status.ACCEPTED,
+        )
+        execution.accepted_by = self.accepted_by
+        execution.save(update_fields=["accepted_by"])
+
+        execution.rejected_by = None
+        execution.save(update_fields=["rejected_by"])
+
+        execution.refresh_from_db()
+
+        self.assertEqual(execution.accepted_by_id, self.accepted_by.pk)
+        self.assertIsNone(execution.rejected_by_id)
+
+    def test_rejection_actor_is_stored_independently(self):
+        execution = self._create_execution(
+            WorkflowTransitionExecution.Status.REJECTED,
+        )
+        execution.rejected_by = self.rejected_by
+        execution.save(update_fields=["rejected_by"])
+
+        execution.accepted_by = None
+        execution.save(update_fields=["accepted_by"])
+
+        execution.refresh_from_db()
+
+        self.assertEqual(execution.rejected_by_id, self.rejected_by.pk)
+        self.assertIsNone(execution.accepted_by_id)
