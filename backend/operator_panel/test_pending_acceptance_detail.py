@@ -283,7 +283,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
         execution = self.instance.transition_executions.get()
         form_file = FormFile.objects.create(
             form_data=self.instance.form_data,
-            field=self.field,
+            field=self.file_field,
             row_id="",
             file=SimpleUploadedFile(
                 "hidden.txt",
@@ -314,7 +314,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
         execution = self.instance.transition_executions.get()
         form_file = FormFile.objects.create(
             form_data=self.instance.form_data,
-            field=self.field,
+            field=self.file_field,
             row_id="",
             file=SimpleUploadedFile(
                 "pending.txt",
