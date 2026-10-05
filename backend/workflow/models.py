@@ -484,6 +484,12 @@ class WorkflowStepExecution(models.Model):
         auto_now_add=True,
     )
 
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ACCEPTED,
+    )
+
     notes = models.TextField(
         blank=True,
     )
@@ -629,6 +635,12 @@ class WorkflowTransition(models.Model):
         )
 
 class WorkflowTransitionExecution(models.Model):
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "در انتظار تأیید"
+        ACCEPTED = "ACCEPTED", "تأیید شده"
+        REJECTED = "REJECTED", "رد شده"
+
     instance = models.ForeignKey(
         WorkflowInstance,
         on_delete=models.PROTECT,
