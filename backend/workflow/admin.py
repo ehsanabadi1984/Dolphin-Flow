@@ -562,6 +562,11 @@ class WorkflowPermissionInline(admin.TabularInline):
 
 
 class WorkflowStepPermissionForm(forms.ModelForm):
+    class Media:
+        js = (
+            "workflow/js/workflow-step-permission-admin.js",
+        )
+
     ACTION_CODE_CHOICES = (
         ("ACCEPT", "تأیید دریافت"),
         ("REJECT", "رد دریافت"),
