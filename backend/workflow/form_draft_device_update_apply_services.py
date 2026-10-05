@@ -174,8 +174,34 @@ class FormDraftDeviceUpdateApplyService:
         submitted_type_id,
     ):
         if submitted_imei is not None:
-            current_imei = cls._current_imei(instance_device)
-            if current_imei:
+            current_identifier = (
+                instance_device.device.identifiers
+                .filter(
+                    identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+                )
+                .first()
+            )
+            current_imei = (
+                current_identifier.value
+                if current_identifier is not None
+                else ""
+            )
+
+            if (
+                instance_device.device_origin
+                == InstanceDevice.DeviceOrigin.NEW
+            ):
+                if submitted_imei != current_imei:
+                    if submitted_imei:
+                        DeviceService.attach_identifier(
+                            device=instance_device.device,
+                            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+                            value=submitted_imei,
+                        )
+
+                    if current_identifier is not None:
+                        current_identifier.delete()
+            elif current_imei:
                 if submitted_imei != current_imei:
                     raise ValidationError(
                         "IMEI دستگاهی که قبلاً شناسایی شده است قابل تغییر نیست."
@@ -297,6 +323,7 @@ class FormDraftDeviceUpdateApplyService:
                 instance_device.save(
                     update_fields=[
                         "device",
+                        "device_origin",
                         "draft_imei",
                         "draft_device_model",
                         "draft_device_type",
