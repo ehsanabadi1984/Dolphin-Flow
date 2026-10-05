@@ -16,6 +16,7 @@ from workflow.models import (
     WorkflowStep,
     WorkflowTransition,
     WorkflowTransitionExecution,
+    Notification,
 )
 from workflow.form_file_models import FormFile
 
@@ -287,6 +288,84 @@ class PendingAcceptanceDetailViewTests(TestCase):
         self.assertNotContains(response, "ذخیره")
         self.assertNotContains(response, "عملیات فرآیند")
         self.assertContains(response, "تأیید دریافت")
+
+
+    def test_accepted_result_notification_opens_read_only_reject_step_context(self):
+        self.step_one.assigned_to = self.receiver
+        self.step_one.save(update_fields=["assigned_to"])
+
+        FieldAccess.objects.create(
+            field=self.field,
+            step=self.step_one,
+            user=self.receiver,
+            can_view=True,
+            can_edit=True,
+        )
+
+        execution = self.instance.transition_executions.get()
+        execution.status = WorkflowTransitionExecution.Status.ACCEPTED
+        execution.accepted_by = self.receiver
+        execution.save(update_fields=["status", "accepted_by"])
+        self.instance.current_step = self.step_two
+        self.instance.save(update_fields=["current_step"])
+
+        notification = Notification.objects.create(
+            recipient=self.receiver,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="فرآیند تأیید شد",
+            message="نتیجه تأیید",
+            workflow_instance=self.instance,
+            workflow_step=self.step_one,
+            transition_execution=execution,
+        )
+
+        response = self.client.get(
+            reverse("operator_panel:notifications")
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["notifications"]), 1)
+        self.assertEqual(
+            payload["notifications"][0]["workflow_instance_url"],
+            (
+                f"{reverse('operator_panel:workflow_instance', args=[self.instance.pk])}"
+                f"?source=acceptance_result&read_step={self.step_one.pk}"
+            ),
+        )
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "source": "acceptance_result",
+                "read_step": self.step_one.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["edit_mode"])
+        self.assertEqual(response.context["transitions"], ())
+        self.assertEqual(
+            response.context["dynamic_form"]["sections"][0]["fields"][0]["value"],
+            "Customer One",
+        )
+
+    def test_acceptance_result_view_requires_valid_read_step(self):
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "source": "acceptance_result",
+                "read_step": "999999",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
 
 
     def test_pending_acceptance_file_is_downloadable_without_general_view(self):
