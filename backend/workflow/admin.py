@@ -605,6 +605,8 @@ class WorkflowStepPermissionInline(admin.TabularInline):
     fk_name = "step"
     extra = 0
 
+    form = WorkflowStepPermissionForm
+
     fields = (
         "user",
         "role",
