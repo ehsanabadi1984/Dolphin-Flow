@@ -744,11 +744,11 @@ class WorkflowPermission(models.Model):
             models.CheckConstraint(
                 condition=(
                     models.Q(
-                        action=Action.STEP_ACTION,
+                        action="STEP_ACTION",
                         action_code__isnull=False,
                     )
                     | models.Q(
-                        ~models.Q(action=Action.STEP_ACTION),
+                        ~models.Q(action="STEP_ACTION"),
                         action_code__isnull=True,
                     )
                 ),
