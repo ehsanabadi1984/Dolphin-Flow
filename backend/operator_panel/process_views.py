@@ -69,6 +69,7 @@ def pending_acceptance_detail(request, transition_execution_id):
         request,
         transition_execution.instance_id,
         _pending_acceptance=True,
+        _pending_acceptance_step=transition_execution.transition.to_step,
     )
 
 
