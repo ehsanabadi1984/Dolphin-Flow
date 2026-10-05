@@ -1,10 +1,10 @@
-from django.test import SimpleTestCase
+from django.test import TestCase
 
 from workflow.admin import WorkflowStepPermissionForm, WorkflowStepPermissionInline
 from workflow.models import WorkflowPermission
 
 
-class WorkflowStepPermissionAdminTests(SimpleTestCase):
+class WorkflowStepPermissionAdminTests(TestCase):
     def test_step_action_exposes_accept_and_reject_choices(self):
         form = WorkflowStepPermissionForm()
 
