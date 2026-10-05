@@ -192,6 +192,40 @@ class WorkflowAuthorizationService:
         return False
 
     @staticmethod
+    def get_users_with_step_action_permission(
+        *,
+        workflow,
+        step,
+        action_code,
+    ):
+        """Return active workflow members with effective STEP_ACTION permission."""
+        if not workflow or not workflow.is_active:
+            return []
+
+        if not step or step.workflow_id != workflow.id:
+            return []
+
+        memberships = (
+            workflow.memberships
+            .filter(
+                is_active=True,
+                user__is_active=True,
+            )
+            .select_related("user")
+        )
+
+        return [
+            membership.user
+            for membership in memberships
+            if WorkflowAuthorizationService.has_permission(
+                user=membership.user,
+                workflow=workflow,
+                action=WorkflowPermission.Action.STEP_ACTION,
+                action_code=action_code,
+                step=step,
+            )
+        ]
+    @staticmethod
     def require_permission(
         *,
         user,
