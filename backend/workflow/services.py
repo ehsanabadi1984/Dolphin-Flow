@@ -122,6 +122,31 @@ class WorkflowExecutionService:
         instance.current_step = transition.to_step
         instance.save(update_fields=["current_step"])
 
+        recipient = transition.to_step.assigned_to
+        if (
+            recipient
+            and recipient.is_active
+            and recipient != user
+        ):
+            NotificationService.create(
+                recipient=recipient,
+                notification_type=(
+                    Notification.NotificationType.ACTION_REQUIRED
+                ),
+                title=(
+                    f" فرآیند جدید "
+                    f"«{instance.workflow.name}»"
+                ),
+                message=(
+                    f"فرآیند «{instance.workflow.name}» "
+                    f"وارد مرحله «{transition.to_step.name}» شده "
+                    "و نیازمند اقدام شماست."
+                ),
+                workflow_instance=instance,
+                workflow_step=transition.to_step,
+                transition_execution=transition_execution,
+            )
+
         transaction.on_commit(
             lambda: WorkflowRealtimeService.notify_instance_changed(
                 instance_id=instance.pk,
@@ -246,6 +271,31 @@ class WorkflowExecutionService:
 
         instance.current_step = reject_to_step
         instance.save(update_fields=["current_step"])
+
+        recipient = reject_to_step.assigned_to
+        if (
+            recipient
+            and recipient.is_active
+            and recipient != user
+        ):
+            NotificationService.create(
+                recipient=recipient,
+                notification_type=(
+                    Notification.NotificationType.ACTION_REQUIRED
+                ),
+                title=(
+                    f" فرآیند جدید "
+                    f"«{instance.workflow.name}»"
+                ),
+                message=(
+                    f"فرآیند «{instance.workflow.name}» "
+                    f"وارد مرحله «{reject_to_step.name}» شده "
+                    "و نیازمند اقدام شماست."
+                ),
+                workflow_instance=instance,
+                workflow_step=reject_to_step,
+                transition_execution=transition_execution,
+            )
 
         transaction.on_commit(
             lambda: WorkflowRealtimeService.notify_instance_changed(
