@@ -31,9 +31,7 @@
 
     function updateAllRows() {
         document
-            .querySelectorAll(
-                ".dynamic-workflowsteppermission_set"
-            )
+            .querySelectorAll(".inline-related")
             .forEach(updateRow);
     }
 
@@ -58,17 +56,11 @@
         updateAllRows();
 
         document
-            .querySelectorAll(
-                ".dynamic-workflowsteppermission_set"
-            )
+            .querySelectorAll(".inline-related")
             .forEach(bindRow);
 
         document.addEventListener("formset:added", function (event) {
-            if (
-                event.detail &&
-                event.detail.formsetName ===
-                    "workflowsteppermission_set"
-            ) {
+            if (event.target) {
                 bindRow(event.target);
             }
         });
