@@ -265,6 +265,62 @@ class FormDraftDeviceUpdateApplyServiceTests(TestCase):
         self.assertEqual(identifier.value, imei)
         self.assertEqual(device.device_model_id, self.device_model.pk)
 
+    def test_new_resolved_device_can_replace_imei(self):
+        group, fields = self.create_device_group()
+        device = Device.objects.create(device_model=self.device_model)
+        old_imei = "111111111111111"
+        new_imei = "999999999999999"
+        old_identifier = DeviceIdentifier.objects.create(
+            device=device,
+            identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            value=old_imei,
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            device=device,
+            device_origin=InstanceDevice.DeviceOrigin.NEW,
+        )
+        row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+            instance_device=instance_device,
+        )
+
+        diff = self.build_diff(
+            group=group,
+            row=self.row(
+                row_id=row.pk,
+                fields={
+                    fields[FormField.SystemKey.IMEI].code: new_imei,
+                    fields[FormField.SystemKey.DEVICE_MODEL].code: self.device_model.pk,
+                    fields[FormField.SystemKey.DEVICE_TYPE].code: self.device_type.pk,
+                },
+            ),
+        )
+
+        FormDraftDeviceUpdateApplyService.apply(
+            instance=self.instance,
+            diff=diff,
+        )
+
+        self.assertFalse(
+            DeviceIdentifier.objects.filter(pk=old_identifier.pk).exists()
+        )
+        self.assertTrue(
+            DeviceIdentifier.objects.filter(
+                device=device,
+                identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+                value=new_imei,
+            ).exists()
+        )
+        self.assertEqual(
+            device.identifiers.filter(
+                identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            ).count(),
+            1,
+        )
+
     def test_resolved_imei_cannot_change(self):
         group, fields = self.create_device_group()
         row, instance_device, device = self.create_resolved_row(group)
