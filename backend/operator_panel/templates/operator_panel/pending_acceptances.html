@@ -1,0 +1,71 @@
+{% extends "operator_panel/base.html" %}
+
+{% block title %}تأییدهای در انتظار | Dolphin Flow{% endblock %}
+
+{% block content %}
+<style>
+.df-page-heading { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; }
+.df-page-heading-title { margin:8px 0 6px; font-size:22px; }
+.df-page-heading-meta { margin:0; color:var(--muted); font-size:11px; }
+.df-pending-list { overflow:hidden; }
+.df-pending-row { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:17px 20px; border-bottom:1px solid var(--border); }
+.df-pending-row:last-child { border-bottom:0; }
+.df-pending-title { font-size:12px; font-weight:600; }
+.df-pending-title span { color:var(--muted); font-weight:500; }
+.df-pending-meta { display:flex; flex-wrap:wrap; gap:7px; margin-top:7px; color:var(--muted); font-size:9px; }
+.df-pending-flow { margin-top:7px; font-size:10px; }
+.df-pending-flow strong { color:var(--text); }
+.df-empty-state { padding:45px 20px; text-align:center; }
+.df-pagination { display:flex; align-items:center; justify-content:center; gap:16px; padding:16px; border-top:1px solid var(--border); color:var(--muted); font-size:10px; }
+.df-pagination a { padding:7px 11px; border:1px solid var(--border); border-radius:8px; background:var(--surface-2); color:var(--text); }
+@media (max-width:600px) { .df-pending-row { align-items:flex-start; flex-direction:column; } }
+</style>
+
+<section class="df-content">
+    <div class="df-page-heading">
+        <div>
+            <h1 class="df-page-heading-title">تأییدهای در انتظار</h1>
+            <p class="df-page-heading-meta">فرآیندهایی که انتقال آن‌ها به مرحله دریافت، منتظر تصمیم شماست.</p>
+        </div>
+    </div>
+
+    <div class="df-card df-panel df-pending-list">
+        <div class="df-panel-header">
+            <div class="df-panel-title">موارد در انتظار</div>
+            <div>{{ page_obj.paginator.count }} مورد</div>
+        </div>
+
+        {% for execution in executions %}
+            <div class="df-pending-row">
+                <div>
+                    <div class="df-pending-title">
+                        {{ execution.workflow.name }}
+                        <span>#{{ execution.instance.pk }}</span>
+                    </div>
+                    <div class="df-pending-meta">
+                        <span>ارسال‌کننده: {{ execution.performed_by.get_full_name|default:execution.performed_by.username }}</span>
+                        <span>·</span>
+                        <span>{{ execution.performed_at|date:"Y/m/d - H:i" }}</span>
+                    </div>
+                    <div class="df-pending-flow">
+                        <strong>{{ execution.transition.from_step.name }}</strong>
+                        <span> ← انتقال به → </span>
+                        <strong>{{ execution.transition.to_step.name }}</strong>
+                    </div>
+                </div>
+                <a href="{% url 'operator_panel:pending_acceptance_detail' execution.pk %}" class="df-status df-status-warning">مشاهده</a>
+            </div>
+        {% empty %}
+            <div class="df-empty-state">در حال حاضر موردی برای تأیید دریافت شما وجود ندارد.</div>
+        {% endfor %}
+
+        {% if page_obj.paginator.num_pages > 1 %}
+            <div class="df-pagination">
+                {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">قبلی</a>{% endif %}
+                <span>صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+                {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">بعدی</a>{% endif %}
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
