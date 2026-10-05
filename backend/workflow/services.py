@@ -42,7 +42,7 @@ class WorkflowExecutionService:
         transition_execution = (
             WorkflowTransitionExecution.objects
             .select_for_update()
-            .select_related("transition", "transition__to_step")
+            .select_related("transition")
             .get(pk=transition_execution.pk)
         )
 
