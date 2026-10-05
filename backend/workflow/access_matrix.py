@@ -24,6 +24,11 @@ STEP_ACTIONS = (
     (WorkflowPermission.Action.MANAGE, "مدیریت"),
 )
 
+STEP_ACTION_SUBTYPES = (
+    ("ACCEPT", "تأیید دریافت"),
+    ("REJECT", "رد دریافت"),
+)
+
 
 def _subject_kwargs(subject_type, subject_value):
     if subject_type == "user":
@@ -37,9 +42,20 @@ def _permission_scope_qs(workflow, subject_type, subject_value):
     return WorkflowPermission.objects.filter(workflow=workflow, user__isnull=True, role=subject_value)
 
 
-def _set_permission(workflow, subject_type, subject_value, *, action, step=None, transition=None, enabled=False):
+def _set_permission(
+    workflow,
+    subject_type,
+    subject_value,
+    *,
+    action,
+    action_code=None,
+    step=None,
+    transition=None,
+    enabled=False,
+):
     qs = _permission_scope_qs(workflow, subject_type, subject_value).filter(
         action=action,
+        action_code=action_code,
         step=step,
         transition=transition,
     )
@@ -49,6 +65,7 @@ def _set_permission(workflow, subject_type, subject_value, *, action, step=None,
             WorkflowPermission.objects.create(
                 workflow=workflow,
                 action=action,
+                action_code=action_code,
                 effect=WorkflowPermission.Effect.ALLOW,
                 step=step,
                 transition=transition,
@@ -136,6 +153,23 @@ def save_access_matrix(*, workflow, subject_type, subject_value, step, post_data
 
     for action, _label in STEP_ACTIONS:
         _set_permission(workflow, subject_type, subject_value, action=action, step=step, enabled=post_data.get(f"step_{action}") == "1")
+
+    acceptance_enabled = WorkflowTransition.objects.filter(
+        workflow=workflow,
+        to_step=step,
+        is_active=True,
+        requires_acceptance=True,
+    ).exists()
+    for action_code, _label in STEP_ACTION_SUBTYPES:
+        _set_permission(
+            workflow,
+            subject_type,
+            subject_value,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code=action_code,
+            step=step,
+            enabled=acceptance_enabled and post_data.get(f"step_action_{action_code}") == "1",
+        )
 
     transitions = WorkflowTransition.objects.filter(workflow=workflow, from_step=step, is_active=True)
     for transition in transitions:
