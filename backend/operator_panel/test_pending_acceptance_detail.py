@@ -132,7 +132,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
         self.client.force_login(self.receiver)
 
     def test_pending_detail_is_visible_without_general_view_permission(self):
-        execution = self.instance.transition_executions.get()
+        execution = WorkflowTransitionExecution.objects.get(instance=self.instance)
 
         response = self.client.get(
             reverse(
