@@ -603,11 +603,24 @@ def file_field_definitions(request, instance_id):
             pending_acceptance_id = int(pending_acceptance_id)
         except (TypeError, ValueError):
             raise Http404
-        if not PendingAcceptanceQueueService(request.user).get_queryset().filter(
-            pk=pending_acceptance_id,
-            instance_id=instance.pk,
-        ).exists():
+
+        pending_execution = (
+            PendingAcceptanceQueueService(request.user)
+            .get_queryset()
+            .filter(
+                pk=pending_acceptance_id,
+                instance_id=instance.pk,
+            )
+            .select_related("transition", "transition__to_step")
+            .first()
+        )
+        if pending_execution is None:
             raise Http404
+
+        read_context_step = (
+            pending_execution.transition.to_step
+            or read_context_step
+        )
     else:
         pending_acceptance_id = None
 
