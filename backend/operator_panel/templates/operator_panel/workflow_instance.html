@@ -40,6 +40,7 @@
     action="{% url 'operator_panel:workflow_instance' instance.pk %}{% if edit_mode %}?edit=1{% endif %}"
     data-instance-id="{{ instance.pk }}"
     data-edit-mode="{{ edit_mode|yesno:'1,0' }}"
+    {% if pending_acceptance %}data-pending-acceptance-id="{{ request.resolver_match.kwargs.transition_execution_id }}"{% endif %}
   >
 
     {% csrf_token %}
