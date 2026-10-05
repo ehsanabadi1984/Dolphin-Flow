@@ -919,10 +919,14 @@ def open_pending_acceptance_file(request, transition_execution_id, file_id):
     if form is None:
         raise Http404
 
+    read_context_step = transition_execution.transition.to_step
+    if read_context_step is None:
+        raise Http404
+
     permission_context = PermissionContext.build(
         workflow=instance.workflow,
         form=form,
-        step=instance.current_step,
+        step=read_context_step,
         user=request.user,
     )
 
