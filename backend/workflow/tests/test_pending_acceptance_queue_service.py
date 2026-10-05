@@ -91,6 +91,13 @@ class PendingAcceptanceQueueServiceTests(TestCase):
 
         WorkflowPermission.objects.create(
             workflow=self.workflow,
+            user=self.sender,
+            action=WorkflowPermission.Action.START,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
             transition=self.transition_one,
             user=self.sender,
             action=WorkflowPermission.Action.TRANSITION,
