@@ -9,6 +9,12 @@
 <div class="workflow-instance">
   <h1>{{ instance.workflow.name }}</h1>
 
+  {% if pending_acceptance %}
+  <div class="df-message df-message-info">
+    این فرآیند در انتظار تأیید دریافت است. اطلاعات زیر فقط برای بررسی مورد نمایش داده می‌شود.
+  </div>
+  {% endif %}
+
   <p>شماره فرم: {{ instance.form_number }}</p>
   <p>تاریخ ایجاد: {{ instance.started_at|date:"Y/m/d - H:i" }}</p>
 
@@ -934,7 +940,7 @@
     {% endfor %}
 {% endfor %}
 
-{% if not dynamic_form.is_submitted and dynamic_form.has_saved_data and dynamic_form.can_reenter_edit_mode and not edit_mode %}
+{% if not pending_acceptance and not dynamic_form.is_submitted and dynamic_form.has_saved_data and dynamic_form.can_reenter_edit_mode and not edit_mode %}
 
   <div class="df-form-actions">
     <a
@@ -960,7 +966,7 @@
   {{ validation_errors|json_script:"validation-errors" }}
 {% endif %}
   
-  {% if instance.status == "ACTIVE" %}
+  {% if instance.status == "ACTIVE" and not pending_acceptance %}
 
   <section class="df-workflow-actions">
     <div class="df-workflow-actions-header">
@@ -994,6 +1000,10 @@
 
     <p>این فرآیند فعال نیست.</p>
 
-    {% endif %} {% endblock %}
-  </section>
+    {% endif %}
+
+    {% if pending_acceptance %}
+      <p>برای این مورد هنوز تصمیمی ثبت نشده است.</p>
+    {% endif %}
+  </section> {% endblock %}
 </div>
