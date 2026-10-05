@@ -239,6 +239,39 @@ class PendingAcceptanceDetailViewTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_normal_instance_hides_transitions_while_acceptance_is_pending(self):
+        FieldAccess.objects.create(
+            field=self.field,
+            step=self.step_one,
+            user=self.receiver,
+            can_view=True,
+            can_edit=False,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_one,
+            user=self.receiver,
+            action=WorkflowPermission.Action.VIEW,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            transition=self.transition,
+            user=self.receiver,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["transitions"], ())
+
     def test_pending_detail_is_read_only_and_has_no_normal_transition_actions(self):
         execution = self.instance.transition_executions.get()
 
