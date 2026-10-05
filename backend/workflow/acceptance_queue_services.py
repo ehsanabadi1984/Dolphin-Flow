@@ -101,6 +101,7 @@ class PendingAcceptanceQueueService:
         return (
             WorkflowTransitionExecution.objects
             .filter(
+                Exists(active_memberships),
                 status=WorkflowTransitionExecution.Status.PENDING,
                 transition__requires_acceptance=True,
                 transition__is_active=True,
@@ -109,7 +110,6 @@ class PendingAcceptanceQueueService:
                 transition__workflow__is_active=True,
                 instance__status=WorkflowInstance.Status.ACTIVE,
                 instance__workflow__is_active=True,
-                Exists(active_memberships),
             )
             .filter(
                 effective_permission_q("ACCEPT")
