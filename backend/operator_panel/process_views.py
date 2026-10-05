@@ -9,12 +9,48 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from workflow.models import WorkflowInstance
+from workflow.acceptance_queue_services import PendingAcceptanceQueueService
 
 from .dashboard_enhancements import DashboardEnhancementService
 from .dashboard_services import DashboardService, _can_take_action_q
 
 
 FORM_NUMBER_PATTERN = re.compile(r"^(?P<date>\d{6})-(?P<pk>\d{6})$")
+
+
+@login_required
+def pending_acceptance_detail(request, transition_execution_id):
+    """Display a pending acceptance item as a read-only workflow form."""
+    if request.method != "GET":
+        raise PermissionDenied(
+            "صفحه تأیید دریافت فقط به صورت خواندنی قابل مشاهده است."
+        )
+
+    transition_execution = (
+        PendingAcceptanceQueueService(request.user)
+        .get_queryset()
+        .filter(pk=transition_execution_id)
+        .select_related(
+            "instance",
+            "transition",
+            "transition__from_step",
+            "transition__to_step",
+        )
+        .first()
+    )
+
+    if transition_execution is None:
+        raise PermissionDenied(
+            "این مورد در صف تأیید دریافت شما نیست."
+        )
+
+    from operator_panel import views
+
+    return views.workflow_instance(
+        request,
+        transition_execution.instance_id,
+        _pending_acceptance=True,
+    )
 
 
 @login_required
