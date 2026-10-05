@@ -775,6 +775,80 @@ class WorkflowExecutionTests(TestCase):
             self.step_two.pk,
         )
 
+    def test_acceptance_transition_stays_pending_at_source_step(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_two)
+
+        self.transition_two.requires_acceptance = True
+        self.transition_two.save(update_fields=["requires_acceptance"])
+
+        instance = self.start_instance()
+
+        transition_execution = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+
+        # Move to step two using the normal transition first.
+        instance.refresh_from_db()
+        self.assertEqual(instance.current_step_id, self.step_two.pk)
+
+        # The acceptance-required transition is then executed from step two.
+        transition_execution = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_two,
+            user=self.user,
+        )
+
+        instance.refresh_from_db()
+        transition_execution.refresh_from_db()
+
+        self.assertEqual(
+            transition_execution.status,
+            WorkflowTransitionExecution.Status.PENDING,
+        )
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_two.pk,
+        )
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_three,
+            ).exists()
+        )
+
+    def test_normal_transition_remains_accepted_and_advances(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+
+        instance = self.start_instance()
+
+        transition_execution = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+
+        instance.refresh_from_db()
+        transition_execution.refresh_from_db()
+
+        self.assertEqual(
+            transition_execution.status,
+            WorkflowTransitionExecution.Status.ACCEPTED,
+        )
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_two.pk,
+        )
+        self.assertTrue(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_two,
+            ).exists()
+        )
+
     def test_transition_creates_notification_for_destination_executors(self):
         self.grant_execute_permission()
         self.grant_start_permission()
