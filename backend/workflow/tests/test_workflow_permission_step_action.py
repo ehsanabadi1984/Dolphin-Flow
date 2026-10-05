@@ -66,3 +66,13 @@ class WorkflowPermissionStepActionTests(TestCase):
         )
 
         self.assertIsNone(permission.action_code)
+
+    def test_custom_permission_action_without_action_code_remains_supported(self):
+        permission = WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            action="HISTORY",
+        )
+
+        self.assertEqual(permission.action, "HISTORY")
+        self.assertIsNone(permission.action_code)
