@@ -1198,13 +1198,6 @@ def notifications(request):
                 ),
                 "workflow_instance_url": (
                     (
-                        f"{reverse(
-                            'operator_panel:workflow_instance',
-                            args=[notification.workflow_instance_id],
-                        )}?source=acceptance_result"
-                        f"&transition_execution={notification.transition_execution_id}"
-                    )
-                    (
                         reverse(
                             "operator_panel:pending_acceptance_detail",
                             args=[notification.transition_execution_id],
@@ -1217,28 +1210,30 @@ def notifications(request):
                             and notification.transition_execution.transition.requires_acceptance
                         )
                         else (
-                        (
-                            f"{reverse(
-                                'operator_panel:workflow_instance',
-                                args=[notification.workflow_instance_id],
-                            )}?source=acceptance_result"
-                            f"&transition_execution={notification.transition_execution_id}"
+                            (
+                                f"{reverse(
+                                    'operator_panel:workflow_instance',
+                                    args=[notification.workflow_instance_id],
+                                )}?source=acceptance_result"
+                                f"&transition_execution={notification.transition_execution_id}"
+                            )
+                            if (
+                                notification.workflow_instance_id
+                                and notification.transition_execution_id
+                                and notification.transition_execution.status
+                                == WorkflowTransitionExecution.Status.ACCEPTED
+                                and notification.transition_execution.transition.requires_acceptance
+                                and notification.transition_execution.transition.reject_to_step_id
+                            )
+                            else (
+                                reverse(
+                                    "operator_panel:workflow_instance",
+                                    args=[notification.workflow_instance_id],
+                                )
+                                if notification.workflow_instance_id
+                                else None
+                            )
                         )
-                        if (
-                            notification.workflow_instance_id
-                            and notification.transition_execution_id
-                            and notification.transition_execution.status
-                            == WorkflowTransitionExecution.Status.ACCEPTED
-                            and notification.transition_execution.transition.requires_acceptance
-                            and notification.transition_execution.transition.reject_to_step_id
-                        )
-                        else (
-                        reverse(
-                            "operator_panel:workflow_instance",
-                            args=[notification.workflow_instance_id],
-                        )
-                        if notification.workflow_instance_id
-                        else None
                     )
                 ),
             }
