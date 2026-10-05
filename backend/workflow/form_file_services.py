@@ -8,6 +8,7 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 
+from .acceptance_queue_services import PendingAcceptanceQueueService
 from .authorization import WorkflowAuthorizationService
 from .form_file_models import FormFile
 from .form_services import DynamicFormService
@@ -542,11 +543,19 @@ def save_uploaded_form_files(
     return storage_files
 
 
-def _file_payload(item):
+def _file_payload(item, *, pending_acceptance_id=None):
+    download_url = (
+        reverse(
+            "operator_panel:download_pending_acceptance_file",
+            args=[pending_acceptance_id, item.pk],
+        )
+        if pending_acceptance_id is not None
+        else reverse("operator_panel:download_form_file", args=[item.pk])
+    )
     return {
         "id": item.pk,
         "name": item.original_name or Path(item.file.name).name,
-        "url": reverse("operator_panel:download_form_file", args=[item.pk]),
+        "url": download_url,
         "delete_url": reverse("operator_panel:delete_form_file", args=[item.pk]),
     }
 
@@ -588,6 +597,20 @@ def file_field_definitions(request, instance_id):
         )
         step_for_view = instance.current_step
 
+    pending_acceptance_id = request.GET.get("pending_acceptance_id")
+    if pending_acceptance_id:
+        try:
+            pending_acceptance_id = int(pending_acceptance_id)
+        except (TypeError, ValueError):
+            raise Http404
+        if not PendingAcceptanceQueueService(request.user).get_queryset().filter(
+            pk=pending_acceptance_id,
+            instance_id=instance.pk,
+        ).exists():
+            raise Http404
+    else:
+        pending_acceptance_id = None
+
     form = _current_form(instance)
     if form is None or read_context_step is None:
         return JsonResponse({"fields": [], "groups": []})
@@ -599,7 +622,10 @@ def file_field_definitions(request, instance_id):
     existing = {}
     if form_data:
         existing = {
-            (item.field_id, item.row_id): _file_payload(item)
+            (item.field_id, item.row_id): _file_payload(
+                item,
+                pending_acceptance_id=pending_acceptance_id,
+            )
             for item in FormFile.objects.filter(form_data=form_data)
         }
 
