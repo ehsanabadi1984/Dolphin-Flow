@@ -255,6 +255,7 @@ class SidebarBadgeHiddenTests(DashboardSidebarBase):
         self.assertIn('id="df-sidebar-active-count" hidden', content)
         self.assertIn('id="df-sidebar-task-count" hidden', content)
         self.assertIn('id="df-sidebar-pending-count" hidden', content)
+        self.assertIn('id="df-sidebar-pending-acceptance-count" hidden', content)
 
     def test_nonzero_badge_renders_without_hidden(self):
         self.grant_role_action_permissions()
@@ -270,6 +271,35 @@ class SidebarBadgeHiddenTests(DashboardSidebarBase):
         # Zero counters still carry hidden.
         self.assertIn('id="df-sidebar-active-count" hidden', content)
         self.assertIn('id="df-sidebar-task-count" hidden', content)
+
+    def test_pending_acceptance_badge_counts_queue_items(self):
+        self.transition.requires_acceptance = True
+        self.transition.reject_to_step = self.step_one
+        self.transition.save(update_fields=["requires_acceptance", "reject_to_step"])
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            step=self.step_two,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="ACCEPT",
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        instance = self.create_active_instance(started_by=self.other)
+        WorkflowTransitionExecution.objects.create(
+            instance=instance,
+            transition=self.transition,
+            performed_by=self.other,
+            status=WorkflowTransitionExecution.Status.PENDING,
+        )
+
+        counts = DashboardService(self.user).get_sidebar_counts()
+        self.assertEqual(counts["pending_acceptances"], 1)
+
+        response = self.get_client().get(reverse("operator_panel:dashboard"))
+        self.assertIn(
+            'id="df-sidebar-pending-acceptance-count">1',
+            response.content.decode(),
+        )
 
     def test_css_forces_hidden_badges_to_not_display(self):
         css = APP_CSS.read_text()
