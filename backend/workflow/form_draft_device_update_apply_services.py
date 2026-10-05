@@ -290,6 +290,7 @@ class FormDraftDeviceUpdateApplyService:
                     )
 
                 instance_device.device = existing_device
+                instance_device.device_origin = InstanceDevice.DeviceOrigin.EXISTING
                 instance_device.draft_imei = ""
                 instance_device.draft_device_model = None
                 instance_device.draft_device_type = None
