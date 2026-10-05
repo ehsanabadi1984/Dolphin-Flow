@@ -179,7 +179,7 @@ class WorkflowPermissionStepActionTests(TestCase):
             action_code="ACCEPT",
         )
 
-        self.assertEqual({user.pk for user in users}, {role_user.pk})
+        self.assertEqual({user.pk for user in users}, {self.user.pk, role_user.pk})
 
     def test_recipient_resolver_user_deny_overrides_role_allow(self):
         role_user = get_user_model().objects.create_user(
