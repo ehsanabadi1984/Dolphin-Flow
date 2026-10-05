@@ -20,6 +20,245 @@ class WorkflowExecutionService:
 
     @staticmethod
     @transaction.atomic
+    def accept_transition_execution(
+        *,
+        transition_execution,
+        user,
+    ):
+        """
+        Resolve a pending acceptance-required transition as accepted.
+        """
+        instance = (
+            WorkflowInstance.objects
+            .select_for_update()
+            .get(pk=transition_execution.instance_id)
+        )
+
+        if instance.status != WorkflowInstance.Status.ACTIVE:
+            raise ValidationError(
+                "این نمونه از فرآیند فعال نیست."
+            )
+
+        transition_execution = (
+            WorkflowTransitionExecution.objects
+            .select_for_update()
+            .select_related("transition", "transition__to_step")
+            .get(pk=transition_execution.pk)
+        )
+
+        transition = transition_execution.transition
+
+        if transition_execution.instance_id != instance.pk:
+            raise ValidationError(
+                "این Transition Execution متعلق به Instance دیگری است."
+            )
+
+        if transition.workflow_id != instance.workflow_id:
+            raise ValidationError(
+                "این Transition متعلق به Workflow این Instance نیست."
+            )
+
+        if not transition.is_active:
+            raise ValidationError(
+                "این Transition فعال نیست."
+            )
+
+        if not transition.requires_acceptance:
+            raise ValidationError(
+                "این Transition نیازمند تأیید نیست."
+            )
+
+        if transition.to_step is None:
+            raise ValidationError(
+                "Transition تأییدشونده باید مرحله مقصد داشته باشد."
+            )
+
+        if transition.to_step.workflow_id != instance.workflow_id:
+            raise ValidationError(
+                "مرحله مقصد متعلق به Workflow این Instance نیست."
+            )
+
+        if transition_execution.status != WorkflowTransitionExecution.Status.PENDING:
+            raise ValidationError(
+                "این Transition Execution قبلاً تعیین تکلیف شده است."
+            )
+
+        if instance.current_step_id != transition.from_step_id:
+            raise ValidationError(
+                "این Transition Execution دیگر مربوط به مرحله فعلی نیست."
+            )
+
+        WorkflowAuthorizationService.require_permission(
+            user=user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="ACCEPT",
+            step=transition.to_step,
+        )
+
+        transition_execution.status = (
+            WorkflowTransitionExecution.Status.ACCEPTED
+        )
+        transition_execution.accepted_by = user
+        transition_execution.rejected_by = None
+        transition_execution.save(
+            update_fields=[
+                "status",
+                "accepted_by",
+                "rejected_by",
+            ]
+        )
+
+        step_execution = WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=transition.to_step,
+            performed_by=user,
+        )
+
+        SLAService.start_sla_if_configured(
+            step_execution=step_execution,
+        )
+
+        instance.current_step = transition.to_step
+        instance.save(update_fields=["current_step"])
+
+        transaction.on_commit(
+            lambda: WorkflowRealtimeService.notify_instance_changed(
+                instance_id=instance.pk,
+                workflow_id=instance.workflow_id,
+                actor_id=user.pk,
+            )
+        )
+
+        return transition_execution
+
+    @staticmethod
+    @transaction.atomic
+    def reject_transition_execution(
+        *,
+        transition_execution,
+        user,
+    ):
+        """
+        Resolve a pending acceptance-required transition as rejected.
+        """
+        instance = (
+            WorkflowInstance.objects
+            .select_for_update()
+            .get(pk=transition_execution.instance_id)
+        )
+
+        if instance.status != WorkflowInstance.Status.ACTIVE:
+            raise ValidationError(
+                "این نمونه از فرآیند فعال نیست."
+            )
+
+        transition_execution = (
+            WorkflowTransitionExecution.objects
+            .select_for_update()
+            .select_related("transition", "transition__to_step")
+            .get(pk=transition_execution.pk)
+        )
+
+        transition = transition_execution.transition
+
+        if transition_execution.instance_id != instance.pk:
+            raise ValidationError(
+                "این Transition Execution متعلق به Instance دیگری است."
+            )
+
+        if transition.workflow_id != instance.workflow_id:
+            raise ValidationError(
+                "این Transition متعلق به Workflow این Instance نیست."
+            )
+
+        if not transition.is_active:
+            raise ValidationError(
+                "این Transition فعال نیست."
+            )
+
+        if not transition.requires_acceptance:
+            raise ValidationError(
+                "این Transition نیازمند تأیید نیست."
+            )
+
+        if transition.to_step is None:
+            raise ValidationError(
+                "Transition تأییدشونده باید مرحله مقصد داشته باشد."
+            )
+
+        if transition.to_step.workflow_id != instance.workflow_id:
+            raise ValidationError(
+                "مرحله مقصد متعلق به Workflow این Instance نیست."
+            )
+
+        if transition_execution.status != WorkflowTransitionExecution.Status.PENDING:
+            raise ValidationError(
+                "این Transition Execution قبلاً تعیین تکلیف شده است."
+            )
+
+        if instance.current_step_id != transition.from_step_id:
+            raise ValidationError(
+                "این Transition Execution دیگر مربوط به مرحله فعلی نیست."
+            )
+
+        reject_to_step = transition.reject_to_step
+        if reject_to_step is None:
+            raise ValidationError(
+                "برای رد این Transition مرحله بازگشت تنظیم نشده است."
+            )
+
+        if reject_to_step.workflow_id != instance.workflow_id:
+            raise ValidationError(
+                "مرحله بازگشت متعلق به Workflow این Instance نیست."
+            )
+
+        WorkflowAuthorizationService.require_permission(
+            user=user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="REJECT",
+            step=transition.to_step,
+        )
+
+        transition_execution.status = (
+            WorkflowTransitionExecution.Status.REJECTED
+        )
+        transition_execution.accepted_by = None
+        transition_execution.rejected_by = user
+        transition_execution.save(
+            update_fields=[
+                "status",
+                "accepted_by",
+                "rejected_by",
+            ]
+        )
+
+        step_execution = WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=reject_to_step,
+            performed_by=user,
+        )
+
+        SLAService.start_sla_if_configured(
+            step_execution=step_execution,
+        )
+
+        instance.current_step = reject_to_step
+        instance.save(update_fields=["current_step"])
+
+        transaction.on_commit(
+            lambda: WorkflowRealtimeService.notify_instance_changed(
+                instance_id=instance.pk,
+                workflow_id=instance.workflow_id,
+                actor_id=user.pk,
+            )
+        )
+
+        return transition_execution
+
+    @staticmethod
+    @transaction.atomic
     def start_workflow(
         *,
         workflow,
