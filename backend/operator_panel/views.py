@@ -1173,12 +1173,29 @@ def notifications(request):
                     notification.workflow_instance_id
                 ),
                 "workflow_instance_url": (
-                    reverse(
-                        "operator_panel:workflow_instance",
-                        args=[notification.workflow_instance_id],
+                    (
+                        f"{reverse(
+                            'operator_panel:workflow_instance',
+                            args=[notification.workflow_instance_id],
+                        )}?source=acceptance_result&read_step="
+                        f"{notification.transition_execution.transition.reject_to_step_id}"
                     )
-                    if notification.workflow_instance_id
-                    else None
+                    if (
+                        notification.workflow_instance_id
+                        and notification.transition_execution_id
+                        and notification.transition_execution.status
+                        == WorkflowTransitionExecution.Status.ACCEPTED
+                        and notification.transition_execution.transition.requires_acceptance
+                        and notification.transition_execution.transition.reject_to_step_id
+                    )
+                    else (
+                        reverse(
+                            "operator_panel:workflow_instance",
+                            args=[notification.workflow_instance_id],
+                        )
+                        if notification.workflow_instance_id
+                        else None
+                    )
                 ),
             }
         )
