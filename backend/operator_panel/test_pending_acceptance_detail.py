@@ -85,6 +85,16 @@ class PendingAcceptanceDetailViewTests(TestCase):
             is_active=True,
         )
 
+        self.file_field = FormField.objects.create(
+            section=self.section,
+            name="Attachment",
+            code="attachment",
+            label="Attachment",
+            field_type=FormField.FieldType.FILE,
+            order=2,
+            is_active=True,
+        )
+
         WorkflowMembership.objects.create(
             workflow=self.workflow,
             user=self.sender,
@@ -116,6 +126,14 @@ class PendingAcceptanceDetailViewTests(TestCase):
         )
         FieldAccess.objects.create(
             field=self.field,
+            step=self.step_one,
+            user=self.receiver,
+            can_view=True,
+            can_edit=False,
+        )
+
+        FieldAccess.objects.create(
+            field=self.file_field,
             step=self.step_one,
             user=self.receiver,
             can_view=True,
@@ -202,7 +220,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
         execution = self.instance.transition_executions.get()
         form_file = FormFile.objects.create(
             form_data=self.instance.form_data,
-            field=self.field,
+            field=self.file_field,
             row_id="",
             file=SimpleUploadedFile(
                 "pending.txt",
@@ -238,7 +256,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
         )
         form_file = FormFile.objects.create(
             form_data=other_form_data,
-            field=self.field,
+            field=self.file_field,
             row_id="",
             file=SimpleUploadedFile(
                 "other.txt",
@@ -278,7 +296,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
             uploaded_by=self.sender,
         )
         FieldAccess.objects.filter(
-            field=self.field,
+            field=self.file_field,
             step=self.step_one,
             user=self.receiver,
         ).update(can_view=False)
