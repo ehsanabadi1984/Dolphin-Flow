@@ -10,6 +10,8 @@ from .process_views import (
     waiting_for_others,
     pending_acceptance_detail,
     pending_acceptances,
+    accept_pending_acceptance,
+    reject_pending_acceptance,
 )
 from .formula_views import formula_definitions, formula_field_options
 from .views import (
@@ -45,6 +47,8 @@ urlpatterns = [
     path("waiting-for-others/", waiting_for_others, name="waiting_for_others"),
     path("pending-acceptances/", pending_acceptances, name="pending_acceptances"),
     path("pending-acceptances/<int:transition_execution_id>/", pending_acceptance_detail, name="pending_acceptance_detail"),
+    path("pending-acceptances/<int:transition_execution_id>/accept/", accept_pending_acceptance, name="accept_pending_acceptance"),
+    path("pending-acceptances/<int:transition_execution_id>/reject/", reject_pending_acceptance, name="reject_pending_acceptance"),
     path("workflow/<int:workflow_id>/start/", start_workflow, name="start_workflow"),
     path("workflow-instance/<int:instance_id>/", workflow_instance_with_files, name="workflow_instance"),
     path("workflow-instance/<int:instance_id>/history/", workflow_history, name="workflow_history"),
