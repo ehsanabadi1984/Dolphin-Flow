@@ -68,6 +68,11 @@
             <span>وظایف اختصاص‌یافته</span><span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-task-count"{% if not sidebar_counts.tasks %} hidden{% endif %}>{{ sidebar_counts.tasks }}</span>
         </a>
 
+        <a href="{% url 'operator_panel:pending_acceptances' %}" class="df-nav-link{% if request.resolver_match.url_name == 'pending_acceptances' %} active{% endif %}" data-tooltip="تأییدهای در انتظار">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l3 2"></path></svg>
+            <span>تأییدهای در انتظار</span>
+        </a>
+
         <a href="{% url 'operator_panel:dashboard' %}#pending-actions" class="df-nav-link" data-tooltip="اقدام‌های قابل انجام">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l2.5 2"></path></svg>
             <span>اقدام‌های قابل انجام</span><span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-pending-count"{% if not sidebar_counts.pending %} hidden{% endif %}>{{ sidebar_counts.pending }}</span>
