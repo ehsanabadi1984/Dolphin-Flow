@@ -971,39 +971,35 @@
   <section class="df-workflow-actions">
     <div class="df-workflow-actions-header">
       <h2>عملیات فرآیند</h2>
-
       <p>با انتخاب یک گزینه، فرآیند به مرحله بعد منتقل می‌شود.</p>
     </div>
 
-    {% if transitions %} {% for transition in transitions %}
-
-    <form
-      method="post"
-      action="{% url 'operator_panel:execute_transition' instance.pk transition.pk %}"
-    >
-      {% csrf_token %}
-
-      <button type="submit" class="df-button df-button-secondary"{% if edit_mode %} disabled{% endif %}>{{ transition.name }}</button>
-
-      {% if transition.description %}
-      <p>{{ transition.description }}</p>
-      {% endif %}
-    </form>
-
-    {% endfor %} {% else %}
-
-    <p>هیچ Transition فعالی برای این مرحله وجود ندارد.</p>
-
-    {% endif %} 
-
+    {% if transitions %}
+      {% for transition in transitions %}
+      <form method="post" action="{% url 'operator_panel:execute_transition' instance.pk transition.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="df-button df-button-secondary"{% if edit_mode %} disabled{% endif %}>{{ transition.name }}</button>
+        {% if transition.description %}<p>{{ transition.description }}</p>{% endif %}
+      </form>
+      {% endfor %}
     {% else %}
-
-    <p>این فرآیند فعال نیست.</p>
-
+      <p>هیچ Transition فعالی برای این مرحله وجود ندارد.</p>
     {% endif %}
+  </section>
 
-    {% if pending_acceptance %}
-      <p>برای این مورد هنوز تصمیمی ثبت نشده است.</p>
-    {% endif %}
-  </section> {% endblock %}
+{% elif pending_acceptance %}
+
+  <section class="df-workflow-actions">
+    <div class="df-workflow-actions-header">
+      <h2>تأیید دریافت</h2>
+      <p>این مورد در انتظار تعیین تکلیف است.</p>
+    </div>
+  </section>
+
+{% else %}
+
+  <p>این فرآیند فعال نیست.</p>
+
+{% endif %}
+{% endblock %}
 </div>
