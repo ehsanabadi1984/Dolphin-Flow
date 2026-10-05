@@ -1168,6 +1168,71 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             status_code=400,
         )
 
+    def test_saved_device_description_is_editable_when_reentering_edit_mode(self):
+        group, description_field = self._create_device_group()
+
+        description_field.name = "Description"
+        description_field.code = "description"
+        description_field.label = "Description"
+        description_field.save(
+            update_fields=["name", "code", "label"],
+        )
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "devices_0_description": "Initial description",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        readonly_response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+        )
+        self.assertEqual(readonly_response.status_code, 200)
+        self.assertFalse(readonly_response.context["edit_mode"])
+
+        edit_response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {"edit": "1"},
+        )
+
+        self.assertEqual(edit_response.status_code, 200)
+        self.assertTrue(edit_response.context["edit_mode"])
+
+        dynamic_form = edit_response.context["dynamic_form"]
+        device_group = next(
+            group_context
+            for section in dynamic_form["sections"]
+            for group_context in section["repeatable_groups"]
+            if group_context["group"].pk == group.pk
+        )
+        description_item = next(
+            field_context
+            for field_context in device_group["items"][0]["fields"]
+            if field_context["field"].pk == description_field.pk
+        )
+
+        self.assertTrue(description_item["can_edit"])
+        self.assertContains(
+            edit_response,
+            'name="devices_0_description"',
+        )
+        self.assertNotContains(
+            edit_response,
+            'name="devices_0_description" disabled',
+        )
+
     def test_workflow_instance_post_creates_new_device_row(self):
         group, label_field = self._create_device_group()
 
