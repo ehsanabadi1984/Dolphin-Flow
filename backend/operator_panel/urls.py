@@ -23,6 +23,7 @@ from .history_list_views import history_list
 from workflow.form_file_services import (
     file_field_definitions,
     open_form_file,
+    open_pending_acceptance_file,
     workflow_instance_with_files,
     delete_form_file,
 )
@@ -55,6 +56,7 @@ urlpatterns = [
     path("formula-field-options/", formula_field_options, name="formula_field_options"),
     path("workflow-instance/<int:instance_id>/file-field-definitions/", file_field_definitions, name="file_field_definitions"),
     path("workflow-file/<int:file_id>/download/", open_form_file, name="download_form_file"),
+    path("pending-acceptances/<int:transition_execution_id>/files/<int:file_id>/download/", open_pending_acceptance_file, name="download_pending_acceptance_file"),
     path("workflow-file/<int:file_id>/delete/", delete_form_file, name="delete_form_file"),
     path("notifications/", notifications, name="notifications"),
     path("notifications/<int:notification_id>/read/", mark_notification_as_read, name="mark_notification_as_read"),
