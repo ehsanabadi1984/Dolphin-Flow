@@ -452,12 +452,15 @@ class WorkflowTransitionInline(admin.TabularInline):
         "to_step",
         "name",
         "is_active",
+        "requires_acceptance",
+        "reject_to_step",
         "code",
     )
 
     autocomplete_fields = (
         "from_step",
         "to_step",
+        "reject_to_step",
     )
 
     readonly_fields = (
@@ -484,6 +487,15 @@ class WorkflowTransitionInline(admin.TabularInline):
             )
 
             form.base_fields["to_step"].queryset = (
+                WorkflowStep.objects
+                .filter(
+                    workflow=obj,
+                    is_active=True,
+                )
+                .order_by("order")
+            )
+
+            form.base_fields["reject_to_step"].queryset = (
                 WorkflowStep.objects
                 .filter(
                     workflow=obj,
@@ -906,6 +918,8 @@ class WorkflowTransitionAdminForm(forms.ModelForm):
         workflow = cleaned_data.get("workflow")
         from_step = cleaned_data.get("from_step")
         to_step = cleaned_data.get("to_step")
+        requires_acceptance = cleaned_data.get("requires_acceptance")
+        reject_to_step = cleaned_data.get("reject_to_step")
 
         if workflow and from_step:
             if from_step.workflow_id != workflow.id:
@@ -918,6 +932,17 @@ class WorkflowTransitionAdminForm(forms.ModelForm):
                 raise forms.ValidationError(
                     "مرحله مقصد باید متعلق به همین Workflow باشد."
                 )
+
+        if workflow and reject_to_step:
+            if reject_to_step.workflow_id != workflow.id:
+                raise forms.ValidationError(
+                    "مرحله بازگشت پس از رد باید متعلق به همین Workflow باشد."
+                )
+
+        if reject_to_step and not requires_acceptance:
+            raise forms.ValidationError(
+                "مرحله بازگشت پس از رد فقط برای Transitionهای نیازمند تأیید قابل تنظیم است."
+            )
 
         if from_step and to_step:
             if from_step.pk == to_step.pk:
@@ -949,6 +974,8 @@ class WorkflowTransitionAdmin(admin.ModelAdmin):
         "code",
         "from_step",
         "to_step",
+        "reject_to_step",
+        "requires_acceptance",
         "is_active",
     )
 
@@ -964,6 +991,7 @@ class WorkflowTransitionAdmin(admin.ModelAdmin):
         "code",
         "from_step__name",
         "to_step__name",
+        "reject_to_step__name",
     )
 
     
