@@ -98,6 +98,13 @@ class WorkflowExecutionTests(TestCase):
             is_active=True,
         )
 
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.destination_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+
     def grant_execute_permission(self):
         WorkflowPermission.objects.create(
             workflow=self.workflow,
@@ -127,6 +134,16 @@ class WorkflowExecutionTests(TestCase):
         return WorkflowExecutionService.start_workflow(
             workflow=self.workflow,
             user=self.user,
+        )
+
+    def grant_step_action_permission(self, *, user, step, action_code):
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=step,
+            user=user,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code=action_code,
+            effect=WorkflowPermission.Effect.ALLOW,
         )
 
     def test_allow(self):
@@ -819,6 +836,121 @@ class WorkflowExecutionTests(TestCase):
                 workflow_step=self.step_three,
             ).exists()
         )
+
+    def _create_pending_acceptance_execution(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.grant_transition_permission(self.transition_two)
+
+        self.transition_two.requires_acceptance = True
+        self.transition_two.reject_to_step = self.step_one
+        self.transition_two.save(
+            update_fields=[
+                "requires_acceptance",
+                "reject_to_step",
+            ]
+        )
+
+        instance = self.start_instance()
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+        return WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_two,
+            user=self.user,
+        )
+
+    def test_accept_transition_execution_resolves_pending_transition(self):
+        transition_execution = self._create_pending_acceptance_execution()
+
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+
+        resolved = WorkflowExecutionService.accept_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        instance = WorkflowInstance.objects.get(pk=transition_execution.instance_id)
+        resolved.refresh_from_db()
+
+        self.assertEqual(
+            resolved.status,
+            WorkflowTransitionExecution.Status.ACCEPTED,
+        )
+        self.assertEqual(resolved.accepted_by_id, self.destination_user.pk)
+        self.assertIsNone(resolved.rejected_by_id)
+        self.assertEqual(instance.current_step_id, self.step_three.pk)
+
+        destination_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_three,
+        )
+        self.assertEqual(
+            destination_execution.performed_by_id,
+            self.destination_user.pk,
+        )
+
+    def test_reject_transition_execution_returns_to_configured_step(self):
+        transition_execution = self._create_pending_acceptance_execution()
+
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        resolved = WorkflowExecutionService.reject_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        instance = WorkflowInstance.objects.get(pk=transition_execution.instance_id)
+        resolved.refresh_from_db()
+
+        self.assertEqual(
+            resolved.status,
+            WorkflowTransitionExecution.Status.REJECTED,
+        )
+        self.assertIsNone(resolved.accepted_by_id)
+        self.assertEqual(resolved.rejected_by_id, self.destination_user.pk)
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
+
+        returned_execution = WorkflowStepExecution.objects.filter(
+            instance=instance,
+            workflow_step=self.step_one,
+        ).order_by("-performed_at").first()
+        self.assertEqual(
+            returned_execution.performed_by_id,
+            self.destination_user.pk,
+        )
+        self.assertFalse(returned_execution.is_submitted)
+
+    def test_accept_transition_execution_requires_accept_permission(self):
+        transition_execution = self._create_pending_acceptance_execution()
+
+        with self.assertRaises(PermissionDenied):
+            WorkflowExecutionService.accept_transition_execution(
+                transition_execution=transition_execution,
+                user=self.destination_user,
+            )
+
+        transition_execution.refresh_from_db()
+        instance = WorkflowInstance.objects.get(pk=transition_execution.instance_id)
+
+        self.assertEqual(
+            transition_execution.status,
+            WorkflowTransitionExecution.Status.PENDING,
+        )
+        self.assertIsNone(transition_execution.accepted_by_id)
+        self.assertIsNone(transition_execution.rejected_by_id)
+        self.assertEqual(instance.current_step_id, self.step_two.pk)
 
     def test_normal_transition_remains_accepted_and_advances(self):
         self.grant_start_permission()
