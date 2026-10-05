@@ -995,6 +995,20 @@
       <h2>تأیید دریافت</h2>
       <p>این مورد در انتظار تعیین تکلیف است.</p>
     </div>
+
+    {% if pending_acceptance_can_accept %}
+    <form method="post" action="{% url 'operator_panel:accept_pending_acceptance' request.resolver_match.kwargs.transition_execution_id %}">
+      {% csrf_token %}
+      <button type="submit" class="df-button df-button-primary">تأیید دریافت</button>
+    </form>
+    {% endif %}
+
+    {% if pending_acceptance_can_reject %}
+    <form method="post" action="{% url 'operator_panel:reject_pending_acceptance' request.resolver_match.kwargs.transition_execution_id %}">
+      {% csrf_token %}
+      <button type="submit" class="df-button df-button-secondary">رد دریافت</button>
+    </form>
+    {% endif %}
   </section>
 
 {% else %}
