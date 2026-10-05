@@ -2185,10 +2185,15 @@ class DynamicFormService:
                                     .first()
                                 )
 
-                            is_existing_device = (
+                            is_resolved_device = (
                                 existing_instance_device is not None
                                 and existing_instance_device.device_id
                                 is not None
+                            )
+                            is_existing_device = (
+                                existing_instance_device is not None
+                                and existing_instance_device.device_origin
+                                == InstanceDevice.DeviceOrigin.EXISTING
                             )
 
                             # -------------------------------------------------
@@ -2198,7 +2203,7 @@ class DynamicFormService:
                             # POST cannot change it.
                             # -------------------------------------------------
 
-                            if is_existing_device:
+                            if is_resolved_device:
 
                                 real_device = (
                                     existing_instance_device.device
@@ -2587,16 +2592,20 @@ class DynamicFormService:
                             # Determine device state
                             # -------------------------------------------------
 
-                            is_existing_device = (
+                            is_resolved_device = (
                                 instance_device.device_id
                                 is not None
+                            )
+                            is_existing_device = (
+                                instance_device.device_origin
+                                == InstanceDevice.DeviceOrigin.EXISTING
                             )
 
                             # -------------------------------------------------
                             # DRAFT DEVICE
                             # -------------------------------------------------
 
-                            if not is_existing_device:
+                            if not is_resolved_device:
 
                                 draft_model = (
                                     instance_device.draft_device_model
