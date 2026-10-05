@@ -153,3 +153,141 @@ class WorkflowPermissionStepActionTests(TestCase):
 
         self.assertEqual(permission.action, "HISTORY")
         self.assertIsNone(permission.action_code)
+
+    def test_recipient_resolver_uses_role_allow(self):
+        role_user = get_user_model().objects.create_user(
+            username="role-allow-user",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=role_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="ACCEPT",
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        users = WorkflowAuthorizationService.get_users_with_step_action_permission(
+            workflow=self.workflow,
+            step=self.step,
+            action_code="ACCEPT",
+        )
+
+        self.assertEqual({user.pk for user in users}, {role_user.pk})
+
+    def test_recipient_resolver_user_deny_overrides_role_allow(self):
+        role_user = get_user_model().objects.create_user(
+            username="role-allow-denied-user",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=role_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="ACCEPT",
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=role_user,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="ACCEPT",
+            effect=WorkflowPermission.Effect.DENY,
+        )
+
+        users = WorkflowAuthorizationService.get_users_with_step_action_permission(
+            workflow=self.workflow,
+            step=self.step,
+            action_code="ACCEPT",
+        )
+
+        self.assertNotIn(role_user.pk, {user.pk for user in users})
+
+    def test_recipient_resolver_user_allow_overrides_role_deny(self):
+        role_denied_user = get_user_model().objects.create_user(
+            username="role-deny-user",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=role_denied_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="ACCEPT",
+            effect=WorkflowPermission.Effect.DENY,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=role_denied_user,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="ACCEPT",
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        users = WorkflowAuthorizationService.get_users_with_step_action_permission(
+            workflow=self.workflow,
+            step=self.step,
+            action_code="ACCEPT",
+        )
+
+        self.assertIn(role_denied_user.pk, {user.pk for user in users})
+
+    def test_recipient_resolver_excludes_inactive_membership_and_user(self):
+        inactive_membership_user = get_user_model().objects.create_user(
+            username="inactive-membership-user",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=inactive_membership_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=False,
+        )
+
+        inactive_user = get_user_model().objects.create_user(
+            username="inactive-user",
+            is_active=False,
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=inactive_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="ACCEPT",
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        users = WorkflowAuthorizationService.get_users_with_step_action_permission(
+            workflow=self.workflow,
+            step=self.step,
+            action_code="ACCEPT",
+        )
+
+        user_ids = {user.pk for user in users}
+        self.assertNotIn(inactive_membership_user.pk, user_ids)
+        self.assertNotIn(inactive_user.pk, user_ids)
