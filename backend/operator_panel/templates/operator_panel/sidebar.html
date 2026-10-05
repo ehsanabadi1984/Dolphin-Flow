@@ -70,7 +70,7 @@
 
         <a href="{% url 'operator_panel:pending_acceptances' %}" class="df-nav-link{% if request.resolver_match.url_name == 'pending_acceptances' %} active{% endif %}" data-tooltip="تأییدهای در انتظار">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l3 2"></path></svg>
-            <span>تأییدهای در انتظار</span>
+            <span>تأییدهای در انتظار</span><span class="df-nav-badge df-nav-badge-warning" id="df-sidebar-pending-acceptance-count"{% if not sidebar_counts.pending_acceptances %} hidden{% endif %}>{{ sidebar_counts.pending_acceptances }}</span>
         </a>
 
         <a href="{% url 'operator_panel:dashboard' %}#pending-actions" class="df-nav-link" data-tooltip="اقدام‌های قابل انجام">
