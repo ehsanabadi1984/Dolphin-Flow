@@ -1069,6 +1069,65 @@ class WorkflowExecutionTests(TestCase):
             Notification.NotificationType.ACTION_REQUIRED,
         )
 
+    def test_accept_transition_execution_notifies_destination_assignee(self):
+        transition_execution = self._create_pending_acceptance_execution()
+
+        self.step_three.assigned_to = self.user
+        self.step_three.save(update_fields=["assigned_to"])
+
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+
+        WorkflowExecutionService.accept_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        notification = Notification.objects.get(
+            recipient=self.user,
+            workflow_instance_id=transition_execution.instance_id,
+            workflow_step=self.step_three,
+            transition_execution=transition_execution,
+        )
+        self.assertEqual(
+            notification.notification_type,
+            Notification.NotificationType.ACTION_REQUIRED,
+        )
+
+    def test_reject_transition_execution_notifies_reject_target_assignee(self):
+        transition_execution = self._create_pending_acceptance_execution()
+
+        self.transition_two.reject_to_step = self.step_one
+        self.transition_two.save(update_fields=["reject_to_step"])
+
+        self.step_one.assigned_to = self.user
+        self.step_one.save(update_fields=["assigned_to"])
+
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        WorkflowExecutionService.reject_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        notification = Notification.objects.get(
+            recipient=self.user,
+            workflow_instance_id=transition_execution.instance_id,
+            workflow_step=self.step_one,
+            transition_execution=transition_execution,
+        )
+        self.assertEqual(
+            notification.notification_type,
+            Notification.NotificationType.ACTION_REQUIRED,
+        )
+
     def test_accept_transition_execution_resolves_pending_transition(self):
         transition_execution = self._create_pending_acceptance_execution()
 
