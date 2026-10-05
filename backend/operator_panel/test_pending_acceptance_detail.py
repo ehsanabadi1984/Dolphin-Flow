@@ -330,7 +330,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
             payload["notifications"][0]["workflow_instance_url"],
             (
                 f"{reverse('operator_panel:workflow_instance', args=[self.instance.pk])}"
-                f"?source=acceptance_result&read_step={self.step_one.pk}"
+                f"?source=acceptance_result&transition_execution={execution.pk}"
             ),
         )
 
@@ -341,7 +341,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
             ),
             {
                 "source": "acceptance_result",
-                "read_step": self.step_one.pk,
+                "transition_execution": execution.pk,
             },
         )
 
@@ -353,7 +353,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
             "Customer One",
         )
 
-    def test_acceptance_result_view_requires_valid_read_step(self):
+    def test_acceptance_result_view_rejects_read_step_only_url(self):
         response = self.client.get(
             reverse(
                 "operator_panel:workflow_instance",
@@ -361,7 +361,22 @@ class PendingAcceptanceDetailViewTests(TestCase):
             ),
             {
                 "source": "acceptance_result",
-                "read_step": "999999",
+                "read_step": self.step_one.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+
+    def test_acceptance_result_view_requires_valid_transition_execution(self):
+        response = self.client.get(
+            reverse(
+                "operator_panel:workflow_instance",
+                args=[self.instance.pk],
+            ),
+            {
+                "source": "acceptance_result",
+                "transition_execution": "999999",
             },
         )
 
