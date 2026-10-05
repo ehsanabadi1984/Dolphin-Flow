@@ -171,6 +171,46 @@ class PendingAcceptanceDetailViewTests(TestCase):
             response.context["edit_mode"]
         )
 
+    def test_pending_detail_shows_only_accept_button_for_accept_permission(self):
+        execution = self.instance.transition_executions.get()
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:pending_acceptance_detail",
+                args=[execution.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "تأیید دریافت")
+        self.assertNotContains(response, "رد دریافت")
+        self.assertTrue(response.context["pending_acceptance_can_accept"])
+        self.assertFalse(response.context["pending_acceptance_can_reject"])
+
+    def test_pending_detail_shows_both_buttons_for_both_permissions(self):
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_two,
+            user=self.receiver,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="REJECT",
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        execution = self.instance.transition_executions.get()
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:pending_acceptance_detail",
+                args=[execution.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "تأیید دریافت")
+        self.assertContains(response, "رد دریافت")
+        self.assertTrue(response.context["pending_acceptance_can_accept"])
+        self.assertTrue(response.context["pending_acceptance_can_reject"])
+
     def test_pending_detail_does_not_grant_access_without_accept_or_reject(self):
         WorkflowPermission.objects.filter(
             workflow=self.workflow,
