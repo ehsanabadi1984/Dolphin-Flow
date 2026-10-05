@@ -561,6 +561,45 @@ class WorkflowPermissionInline(admin.TabularInline):
         return formset
 
 
+class WorkflowStepPermissionForm(forms.ModelForm):
+    ACTION_CODE_CHOICES = (
+        ("ACCEPT", "تأیید دریافت"),
+        ("REJECT", "رد دریافت"),
+    )
+
+    action_code = forms.ChoiceField(
+        label="نوع عملیات مرحله",
+        choices=ACTION_CODE_CHOICES,
+        required=False,
+    )
+
+    class Meta:
+        model = WorkflowPermission
+        fields = (
+            "user",
+            "role",
+            "action",
+            "action_code",
+            "effect",
+        )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        action = cleaned_data.get("action")
+        action_code = cleaned_data.get("action_code")
+
+        if action == WorkflowPermission.Action.STEP_ACTION:
+            if not action_code:
+                self.add_error(
+                    "action_code",
+                    "برای عملیات مرحله باید نوع عملیات انتخاب شود.",
+                )
+        else:
+            cleaned_data["action_code"] = None
+
+        return cleaned_data
+
+
 class WorkflowStepPermissionInline(admin.TabularInline):
     model = WorkflowPermission
     fk_name = "step"
@@ -570,6 +609,7 @@ class WorkflowStepPermissionInline(admin.TabularInline):
         "user",
         "role",
         "action",
+        "action_code",
         "effect",
     )
 
