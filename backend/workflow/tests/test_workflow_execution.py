@@ -971,6 +971,60 @@ class WorkflowExecutionTests(TestCase):
             ).exists()
         )
 
+    def test_acceptance_notification_rolls_back_with_pending_transition(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.grant_transition_permission(self.transition_two)
+
+        self.transition_two.requires_acceptance = True
+        self.transition_two.save(update_fields=["requires_acceptance"])
+
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+
+        instance = self.start_instance()
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+
+        from unittest.mock import patch
+
+        with patch(
+            "workflow.services.NotificationService.create",
+            side_effect=RuntimeError("notification failure"),
+        ):
+            with self.assertRaises(RuntimeError):
+                WorkflowExecutionService.execute_transition(
+                    instance=instance,
+                    transition=self.transition_two,
+                    user=self.user,
+                )
+
+        instance.refresh_from_db()
+
+        self.assertEqual(
+            instance.current_step_id,
+            self.step_two.pk,
+        )
+        self.assertFalse(
+            WorkflowTransitionExecution.objects.filter(
+                instance=instance,
+                transition=self.transition_two,
+            ).exists()
+        )
+        self.assertFalse(
+            Notification.objects.filter(
+                workflow_instance=instance,
+                notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                title="نیاز به تأیید دریافت",
+            ).exists()
+        )
+
     def test_acceptance_notification_is_linked_to_pending_transition(self):
         self.grant_start_permission()
         self.grant_transition_permission(self.transition_one)
