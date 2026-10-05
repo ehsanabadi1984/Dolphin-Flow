@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import redirect, render
@@ -11,6 +11,7 @@ from django.views.decorators.http import require_POST
 
 from workflow.models import WorkflowInstance
 from workflow.acceptance_queue_services import PendingAcceptanceQueueService
+from workflow.services import WorkflowExecutionService
 
 from .dashboard_enhancements import DashboardEnhancementService
 from .dashboard_services import DashboardService, _can_take_action_q
@@ -71,6 +72,68 @@ def pending_acceptance_detail(request, transition_execution_id):
         _pending_acceptance=True,
         _pending_acceptance_step=transition_execution.transition.to_step,
     )
+
+
+
+@login_required
+@require_POST
+def accept_pending_acceptance(request, transition_execution_id):
+    """Accept a pending acceptance execution available to the user."""
+    transition_execution = (
+        PendingAcceptanceQueueService(request.user)
+        .get_queryset()
+        .filter(pk=transition_execution_id)
+        .first()
+    )
+
+    if transition_execution is None:
+        raise PermissionDenied(
+            "این مورد در صف تأیید دریافت شما نیست."
+        )
+
+    try:
+        WorkflowExecutionService.accept_transition_execution(
+            transition_execution=transition_execution,
+            user=request.user,
+        )
+    except ValidationError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, "دریافت با موفقیت تأیید شد.")
+
+    return redirect("operator_panel:pending_acceptances")
+
+
+@login_required
+@require_POST
+def reject_pending_acceptance(request, transition_execution_id):
+    """Reject a pending acceptance execution available to the user."""
+    transition_execution = (
+        PendingAcceptanceQueueService(request.user)
+        .get_queryset()
+        .filter(pk=transition_execution_id)
+        .first()
+    )
+
+    if transition_execution is None:
+        raise PermissionDenied(
+            "این مورد در صف تأیید دریافت شما نیست."
+        )
+
+    try:
+        WorkflowExecutionService.reject_transition_execution(
+            transition_execution=transition_execution,
+            user=request.user,
+        )
+    except ValidationError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(
+            request,
+            "دریافت رد شد و فرآیند به مرحله مربوطه بازگشت.",
+        )
+
+    return redirect("operator_panel:pending_acceptances")
 
 
 @login_required
