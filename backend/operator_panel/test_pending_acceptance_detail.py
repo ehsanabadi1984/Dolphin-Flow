@@ -6,7 +6,6 @@ from django.urls import reverse
 from workflow.models import (
     FieldAccess,
     FormData,
-    FormFile,
     FormDefinition,
     FormField,
     FormSection,
@@ -18,6 +17,7 @@ from workflow.models import (
     WorkflowTransition,
     WorkflowTransitionExecution,
 )
+from workflow.form_file_models import FormFile
 
 
 User = get_user_model()
