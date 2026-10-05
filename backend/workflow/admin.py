@@ -902,6 +902,7 @@ class WorkflowTransitionAdminForm(forms.ModelForm):
 
             self.fields["from_step"].queryset = steps
             self.fields["to_step"].queryset = steps
+            self.fields["reject_to_step"].queryset = steps
 
         else:
             self.fields["from_step"].queryset = (
@@ -909,6 +910,10 @@ class WorkflowTransitionAdminForm(forms.ModelForm):
             )
 
             self.fields["to_step"].queryset = (
+                WorkflowStep.objects.none()
+            )
+
+            self.fields["reject_to_step"].queryset = (
                 WorkflowStep.objects.none()
             )
 
