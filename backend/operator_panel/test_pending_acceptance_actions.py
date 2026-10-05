@@ -224,12 +224,10 @@ class PendingAcceptanceActionViewTests(TestCase):
             )
         )
 
-        self.assertRedirects(
-            response,
-            reverse("operator_panel:pending_acceptances"),
-        )
+        self.assertEqual(response.status_code, 403)
         self.execution.refresh_from_db()
         self.assertEqual(
             self.execution.status,
             WorkflowTransitionExecution.Status.ACCEPTED,
         )
+
