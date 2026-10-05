@@ -372,6 +372,24 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
     # GET
     # =========================================================
 
+    pending_acceptance_can_accept = False
+    pending_acceptance_can_reject = False
+    if _pending_acceptance and _pending_acceptance_step is not None:
+        pending_acceptance_can_accept = WorkflowAuthorizationService.has_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="ACCEPT",
+            step=_pending_acceptance_step,
+        )
+        pending_acceptance_can_reject = WorkflowAuthorizationService.has_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="REJECT",
+            step=_pending_acceptance_step,
+        )
+
     transitions = () if _pending_acceptance else (
         WorkflowAuthorizationService
         .get_allowed_transitions(
@@ -711,6 +729,8 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
             "page_title": instance.workflow.name,
             "page_breadcrumb": instance.workflow.name,
             "pending_acceptance": _pending_acceptance,
+            "pending_acceptance_can_accept": pending_acceptance_can_accept,
+            "pending_acceptance_can_reject": pending_acceptance_can_reject,
         },
     )
 
