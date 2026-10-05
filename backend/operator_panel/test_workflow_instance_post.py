@@ -1399,7 +1399,26 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
 
         self.assertEqual(len(child_rows), 2)
         self.assertEqual(len(grandchild_rows), 2)
-        self.assertEqual(device_row.instance_device.draft_imei, "894000000000001")
+        self.assertIsNotNone(device_row.instance_device.device_id)
+        self.assertEqual(
+            device_row.instance_device.device_origin,
+            InstanceDevice.DeviceOrigin.NEW,
+        )
+        self.assertEqual(
+            device_row.instance_device.draft_imei,
+            "",
+        )
+        self.assertEqual(
+            device_row.instance_device.device.device_model_id,
+            device_model.pk,
+        )
+        self.assertTrue(
+            DeviceIdentifier.objects.filter(
+                device=device_row.instance_device.device,
+                identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+                value="894000000000001",
+            ).exists()
+        )
 
         child_values = [
             row.values.get(field=child_field).text_value
