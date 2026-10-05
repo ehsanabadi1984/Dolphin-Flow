@@ -219,6 +219,16 @@ class WorkflowExecutionService:
             data=data or {},
         )
 
+        if transition.requires_acceptance:
+            transaction.on_commit(
+                lambda: WorkflowRealtimeService.notify_instance_changed(
+                    instance_id=instance.pk,
+                    workflow_id=instance.workflow_id,
+                    actor_id=user.pk,
+                )
+            )
+            return transition_execution
+
         if is_finish:
             instance.status = WorkflowInstance.Status.COMPLETED
             instance.completed_at = now
