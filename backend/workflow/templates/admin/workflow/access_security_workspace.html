@@ -43,6 +43,13 @@
                     <table class="df-access-table"><thead><tr><th>Action</th><th class="center">دسترسی</th></tr></thead><tbody>{% for row in matrix.step_permission_rows %}<tr><td>{{ row.label }}</td><td class="center"><input class="df-access-check" type="checkbox" name="step_{{ row.value }}" value="1" {% if row.enabled %}checked{% endif %}></td></tr>{% endfor %}</tbody></table>
                 </div>
 
+                {% if matrix.step_action_enabled %}
+                <div class="df-access-section">
+                    <div class="df-access-section-head"><div><h2>عملیات مرحله</h2><p>عملیات دریافت برای Transitionهایی که نیاز به تأیید دارند.</p></div></div>
+                    <table class="df-access-table"><thead><tr><th>Action</th><th class="center">دسترسی</th></tr></thead><tbody>{% for row in matrix.step_action_rows %}<tr><td>{{ row.label }}</td><td class="center"><input class="df-access-check" type="checkbox" name="step_action_{{ row.value }}" value="1" {% if row.enabled %}checked{% endif %}></td></tr>{% endfor %}</tbody></table>
+                </div>
+                {% endif %}
+
                 <div class="df-access-section">
                     <div class="df-access-section-head"><div><h2>Transitions</h2><p>انتقال از {{ selected_step.name }} به مرحله بعد.</p></div></div>
                     {% if matrix.transition_rows %}<table class="df-access-table"><thead><tr><th>از</th><th>به</th><th class="center">مجاز</th></tr></thead><tbody>{% for row in matrix.transition_rows %}<tr><td>{{ row.transition.from_step.name }}</td><td>{% if row.transition.to_step %}{{ row.transition.to_step.name }}{% else %}پایان فرآیند{% endif %}</td><td class="center"><input class="df-access-check" type="checkbox" name="transition_{{ row.transition.pk }}" value="1" {% if row.allowed %}checked{% endif %}></td></tr>{% endfor %}</tbody></table>{% else %}<div class="df-access-empty">برای این Step، Transition فعالی تعریف نشده است.</div>{% endif %}
