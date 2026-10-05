@@ -306,9 +306,9 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
             )
         source = "pending_acceptance"
 
-    if source in {"my_processes", "history_device"}:
-        if source == "history_device" and request.method != "GET":
-            raise PermissionDenied("سوابق دستگاه فقط به صورت خواندنی قابل مشاهده است.")
+    if source in {"my_processes", "history_device", "acceptance_result"}:
+        if source in {"history_device", "acceptance_result"} and request.method != "GET":
+            raise PermissionDenied("این صفحه فقط به صورت خواندنی قابل مشاهده است.")
         is_workflow_member = WorkflowMembership.objects.filter(
             workflow=instance.workflow,
             user=request.user,
@@ -429,6 +429,25 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
 
     if _pending_acceptance:
         read_context_step = _pending_acceptance_step or instance.current_step
+    elif source == "acceptance_result":
+        read_step_id = request.GET.get("read_step")
+        if not read_step_id or not read_step_id.isdigit():
+            raise PermissionDenied("مرحله مشاهده نتیجه تأیید مشخص نشده است.")
+
+        acceptance_read_step = (
+            WorkflowStep.objects
+            .filter(
+                pk=int(read_step_id),
+                workflow=instance.workflow,
+                is_active=True,
+            )
+            .first()
+        )
+        if acceptance_read_step is None:
+            raise PermissionDenied("مرحله مشاهده نتیجه تأیید معتبر نیست.")
+
+        read_context_step = acceptance_read_step
+        historical_read_context = True
     elif source == "history":
         historical_step = _get_historical_view_step(
             instance=instance,
