@@ -390,7 +390,15 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
             step=_pending_acceptance_step,
         )
 
-    transitions = () if _pending_acceptance else (
+    has_pending_acceptance = instance.transition_executions.filter(
+        status=WorkflowTransitionExecution.Status.PENDING,
+        transition__requires_acceptance=True,
+        transition__from_step_id=instance.current_step_id,
+    ).exists()
+
+    transitions = () if (
+        _pending_acceptance or has_pending_acceptance
+    ) else (
         WorkflowAuthorizationService
         .get_allowed_transitions(
             user=request.user,
