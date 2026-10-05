@@ -843,6 +843,75 @@ def workflow_instance_with_files(request, instance_id):
 
 
 @login_required
+def open_pending_acceptance_file(request, transition_execution_id, file_id):
+    from .acceptance_queue_services import PendingAcceptanceQueueService
+
+    transition_execution = (
+        PendingAcceptanceQueueService(request.user)
+        .get_queryset()
+        .filter(pk=transition_execution_id)
+        .first()
+    )
+    if transition_execution is None:
+        raise Http404
+
+    form_file = (
+        FormFile.objects
+        .select_related(
+            "form_data",
+            "form_data__instance",
+            "form_data__instance__workflow",
+            "form_data__instance__current_step",
+            "field",
+            "field__section",
+            "field__repeatable_group",
+        )
+        .filter(
+            pk=file_id,
+            form_data__instance_id=transition_execution.instance_id,
+        )
+        .first()
+    )
+    if form_file is None:
+        raise Http404
+
+    instance = form_file.form_data.instance
+    form = _current_form(instance)
+    if form is None:
+        raise Http404
+
+    permission_context = PermissionContext.build(
+        workflow=instance.workflow,
+        form=form,
+        step=instance.current_step,
+        user=request.user,
+    )
+
+    if not permission_context.field(form_file.field).can_view:
+        raise Http404
+
+    if (
+        form_file.field.repeatable_group_id
+        and not permission_context.group(form_file.field.repeatable_group).can_view
+    ):
+        raise Http404
+
+    try:
+        form_file.file.open("rb")
+    except (FileNotFoundError, OSError):
+        raise Http404
+
+    filename = form_file.original_name or Path(form_file.file.name).name
+    response = FileResponse(
+        form_file.file,
+        as_attachment=True,
+        filename=filename,
+    )
+    if form_file.content_type:
+        response["Content-Type"] = form_file.content_type
+    return response
+
+@login_required
 def open_form_file(request, file_id):
     form_file = (
         FormFile.objects
