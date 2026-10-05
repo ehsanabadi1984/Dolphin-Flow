@@ -27,6 +27,7 @@ class WorkflowAuthorizationService:
         user,
         workflow,
         action,
+        action_code=None,
         step=None,
         transition=None,
         instance=None,
@@ -82,7 +83,20 @@ class WorkflowAuthorizationService:
         )
 
         # -----------------------------------------------------
-        # 4. Resolve authorization scope
+        # 4. Resolve action subtype
+        # -----------------------------------------------------
+
+        if action == WorkflowPermission.Action.STEP_ACTION:
+            if not action_code:
+                return False
+            permissions = permissions.filter(
+                action_code=action_code,
+            )
+        elif action_code is not None:
+            return False
+
+        # -----------------------------------------------------
+        # 5. Resolve authorization scope
         # -----------------------------------------------------
 
         if transition is not None:
@@ -110,7 +124,7 @@ class WorkflowAuthorizationService:
             )
 
         # -----------------------------------------------------
-        # 5. Explicit user permissions
+        # 6. Explicit user permissions
         # -----------------------------------------------------
 
         user_permissions = permissions.filter(
@@ -128,7 +142,7 @@ class WorkflowAuthorizationService:
             return True
 
         # -----------------------------------------------------
-        # 6. Role-based permissions
+        # 7. Role-based permissions
         # -----------------------------------------------------
 
         role_permissions = permissions.filter(
@@ -147,7 +161,7 @@ class WorkflowAuthorizationService:
             return True
 
         # -----------------------------------------------------
-        # 7. Instance-level implicit permissions
+        # 8. Instance-level implicit permissions
         # -----------------------------------------------------
         #
         # The user who started a WorkflowInstance is
@@ -172,7 +186,7 @@ class WorkflowAuthorizationService:
         # There is no implicit HISTORY grant for an instance starter.
 
         # -----------------------------------------------------
-        # 8. Deny by default
+        # 9. Deny by default
         # -----------------------------------------------------
 
         return False
@@ -183,6 +197,7 @@ class WorkflowAuthorizationService:
         user,
         workflow,
         action,
+        action_code=None,
         step=None,
         transition=None,
         instance=None,
@@ -197,6 +212,7 @@ class WorkflowAuthorizationService:
             user=user,
             workflow=workflow,
             action=action,
+            action_code=action_code,
             step=step,
             transition=transition,
             instance=instance,
