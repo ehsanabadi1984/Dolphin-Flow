@@ -37,3 +37,4 @@ class WorkflowStepPermissionAdminTests(TestCase):
 
     def test_step_permission_inline_includes_action_code(self):
         self.assertIn("action_code", WorkflowStepPermissionInline.fields)
+        self.assertIs(WorkflowStepPermissionInline.form, WorkflowStepPermissionForm)
