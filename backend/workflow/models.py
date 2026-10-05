@@ -382,6 +382,10 @@ class DeviceIdentifier(models.Model):
         return f"{self.get_identifier_type_display()}: {self.value}"
 
 class InstanceDevice(models.Model):
+    class DeviceOrigin(models.TextChoices):
+        EXISTING = "EXISTING", "دستگاه موجود"
+        NEW = "NEW", "دستگاه جدید"
+
     instance = models.ForeignKey(
         WorkflowInstance,
         on_delete=models.PROTECT,
@@ -392,6 +396,13 @@ class InstanceDevice(models.Model):
         Device,
         on_delete=models.PROTECT,
         related_name="workflow_instances",
+        null=True,
+        blank=True,
+    )
+
+    device_origin = models.CharField(
+        max_length=20,
+        choices=DeviceOrigin.choices,
         null=True,
         blank=True,
     )
