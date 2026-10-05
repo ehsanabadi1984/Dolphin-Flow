@@ -26,13 +26,7 @@ class Migration(migrations.Migration):
                         action_code__isnull=False,
                     )
                     | models.Q(
-                        action__in=[
-                            "VIEW",
-                            "EXECUTE",
-                            "START",
-                            "TRANSITION",
-                            "MANAGE",
-                        ],
+                        ~models.Q(action="STEP_ACTION"),
                         action_code__isnull=True,
                     )
                 ),
