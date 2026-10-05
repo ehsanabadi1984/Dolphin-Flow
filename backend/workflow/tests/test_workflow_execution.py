@@ -1277,8 +1277,18 @@ class WorkflowExecutionConcurrencyTests(TransactionTestCase):
         ).count()
 
         self.assertEqual(
-            destination_count + reject_target_count,
-            1,
+            destination_count,
+            1
+            if transition_execution.status
+            == WorkflowTransitionExecution.Status.ACCEPTED
+            else 0,
+        )
+        self.assertEqual(
+            reject_target_count,
+            1
+            if transition_execution.status
+            == WorkflowTransitionExecution.Status.ACCEPTED
+            else 2,
         )
         self.assertEqual(
             instance.current_step_id,
