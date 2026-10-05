@@ -6,7 +6,11 @@ document.addEventListener("DOMContentLoaded", () => {
     form.encoding = "multipart/form-data";
 
     const instanceId = form.dataset.instanceId;
-    const endpoint = new URL("file-field-definitions/", form.action).toString();
+    const pendingAcceptanceId = form.dataset.pendingAcceptanceId || "";
+    const endpoint = new URL("file-field-definitions/", form.action);
+    if (pendingAcceptanceId) {
+        endpoint.searchParams.set("pending_acceptance_id", pendingAcceptanceId);
+    }
 
     function cssEscape(value) {
         return window.CSS && CSS.escape
@@ -186,7 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
     async function loadDefinitions() {
         try {
             const response = await fetch(
-                `${endpoint}?instance_id=${encodeURIComponent(instanceId)}`,
+                `${endpoint.toString()}${endpoint.search ? "&" : "?"}instance_id=${encodeURIComponent(instanceId)}`,
                 { headers: { "X-Requested-With": "XMLHttpRequest" } }
             );
             if (!response.ok) return;
