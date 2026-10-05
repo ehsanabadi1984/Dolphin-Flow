@@ -8,6 +8,7 @@ from .process_views import (
     restore_dashboard_process,
     unfinished_processes,
     waiting_for_others,
+    pending_acceptance_detail,
 )
 from .formula_views import formula_definitions, formula_field_options
 from .views import (
@@ -40,6 +41,7 @@ urlpatterns = [
     path("unfinished-processes/<int:instance_id>/hide/", hide_dashboard_process, name="hide_dashboard_process"),
     path("unfinished-processes/<int:instance_id>/restore/", restore_dashboard_process, name="restore_dashboard_process"),
     path("waiting-for-others/", waiting_for_others, name="waiting_for_others"),
+    path("pending-acceptances/<int:transition_execution_id>/", pending_acceptance_detail, name="pending_acceptance_detail"),
     path("workflow/<int:workflow_id>/start/", start_workflow, name="start_workflow"),
     path("workflow-instance/<int:instance_id>/", workflow_instance_with_files, name="workflow_instance"),
     path("workflow-instance/<int:instance_id>/history/", workflow_history, name="workflow_history"),
