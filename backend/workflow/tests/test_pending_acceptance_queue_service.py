@@ -408,6 +408,12 @@ class PendingAcceptanceQueueServiceTests(TestCase):
         )
         WorkflowPermission.objects.create(
             workflow=workflow_two,
+            user=self.sender,
+            action=WorkflowPermission.Action.START,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.create(
+            workflow=workflow_two,
             transition=transition,
             user=self.sender,
             action=WorkflowPermission.Action.TRANSITION,
