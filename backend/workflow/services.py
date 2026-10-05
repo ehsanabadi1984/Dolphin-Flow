@@ -217,6 +217,11 @@ class WorkflowExecutionService:
             performed_by=user,
             notes=notes,
             data=data or {},
+            status=(
+                WorkflowTransitionExecution.Status.PENDING
+                if transition.requires_acceptance
+                else WorkflowTransitionExecution.Status.ACCEPTED
+            ),
         )
 
         if transition.requires_acceptance:
