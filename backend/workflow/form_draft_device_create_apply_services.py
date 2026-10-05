@@ -124,6 +124,7 @@ class FormDraftDeviceCreateApplyService:
             instance_device = InstanceDevice.objects.create(
                 instance=instance,
                 device=existing_device,
+                device_origin=InstanceDevice.DeviceOrigin.EXISTING,
                 draft_imei="",
                 draft_device_model=None,
                 draft_device_type=None,
@@ -141,6 +142,7 @@ class FormDraftDeviceCreateApplyService:
             instance_device = InstanceDevice.objects.create(
                 instance=instance,
                 device=device,
+                device_origin=InstanceDevice.DeviceOrigin.NEW,
                 draft_imei="",
                 draft_device_model=None,
                 draft_device_type=None,
