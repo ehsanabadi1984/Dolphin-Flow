@@ -2,6 +2,8 @@ from django.db.models import Exists, OuterRef, Prefetch, Q, Subquery
 from django.utils import timezone
 
 from workflow.authorization import WorkflowAuthorizationService
+from workflow.acceptance_queue_services import PendingAcceptanceQueueService
+
 from workflow.models import (
     FormData,
     InstanceDevice,
@@ -594,6 +596,9 @@ class DashboardService:
             ).exclude(
                 assigned_to_me,
             ).count(),
+            "pending_acceptances": PendingAcceptanceQueueService(
+                self.user
+            ).get_queryset().count(),
         }
 
     def get_context(self):
