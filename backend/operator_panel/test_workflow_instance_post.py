@@ -1224,6 +1224,27 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         )
 
         self.assertTrue(description_item["can_edit"])
+
+        flat_table = device_group["flat_table"]
+        description_column = next(
+            column
+            for column in flat_table["columns"]
+            if column["field_context"]["field"].pk == description_field.pk
+        )
+        description_cell = next(
+            cell
+            for row in flat_table["rows"]
+            for cell in row["column_cells"]
+            if cell["field"].pk == description_field.pk
+            and cell["show"]
+        )
+
+        self.assertEqual(
+            description_column["field_context"]["field"].pk,
+            description_field.pk,
+        )
+        self.assertTrue(description_cell["can_edit"])
+
         self.assertContains(
             edit_response,
             'name="devices_0_description"',
