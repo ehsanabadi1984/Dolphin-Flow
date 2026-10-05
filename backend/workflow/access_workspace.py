@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .access_matrix import STEP_ACTIONS, WORKFLOW_ACTIONS, save_access_matrix
+from .access_matrix import STEP_ACTION_SUBTYPES, STEP_ACTIONS, WORKFLOW_ACTIONS, save_access_matrix
 from .models import (
     FieldAccess,
     FormField,
@@ -72,8 +72,24 @@ def _resolve_context(workflow, request):
     return memberships, steps, subject_type, subject, selected_step, selected_user
 
 
-def _permission_exists(workflow, subject_type, subject_value, *, action, step=None, transition=None, role=None):
-    scope = {"workflow": workflow, "action": action, "step": step, "transition": transition}
+def _permission_exists(
+    workflow,
+    subject_type,
+    subject_value,
+    *,
+    action,
+    action_code=None,
+    step=None,
+    transition=None,
+    role=None,
+):
+    scope = {
+        "workflow": workflow,
+        "action": action,
+        "action_code": action_code,
+        "step": step,
+        "transition": transition,
+    }
 
     if subject_type == "role":
         permissions = WorkflowPermission.objects.filter(**scope, user__isnull=True, role=subject_value)
@@ -174,9 +190,27 @@ def _matrix_context(workflow, subject_type, subject, step, role=None):
         .select_related("from_step", "to_step")
         .order_by("to_step__order", "id")
     )
+    acceptance_enabled = WorkflowTransition.objects.filter(
+        workflow=workflow,
+        to_step=step,
+        is_active=True,
+        requires_acceptance=True,
+    ).exists()
 
     workflow_permissions = {action: _permission_exists(workflow, subject_type, subject, action=action, role=role) for action, _label in WORKFLOW_ACTIONS}
     step_permissions = {action: _permission_exists(workflow, subject_type, subject, action=action, step=step, role=role) for action, _label in STEP_ACTIONS}
+    step_action_permissions = {
+        action_code: _permission_exists(
+            workflow,
+            subject_type,
+            subject,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code=action_code,
+            step=step,
+            role=role,
+        )
+        for action_code, _label in STEP_ACTION_SUBTYPES
+    }
     transition_permissions = {
         transition.pk: _permission_exists(workflow, subject_type, subject, action=WorkflowPermission.Action.TRANSITION, transition=transition, role=role)
         for transition in transitions
@@ -188,6 +222,11 @@ def _matrix_context(workflow, subject_type, subject, step, role=None):
     return {
         "workflow_permission_rows": [{"value": action, "label": label, "enabled": workflow_permissions[action]} for action, label in WORKFLOW_ACTIONS],
         "step_permission_rows": [{"value": action, "label": label, "enabled": step_permissions[action]} for action, label in STEP_ACTIONS],
+        "step_action_enabled": acceptance_enabled,
+        "step_action_rows": [
+            {"value": action_code, "label": label, "enabled": step_action_permissions[action_code]}
+            for action_code, label in STEP_ACTION_SUBTYPES
+        ],
         "field_rows": [
             {"field": field, "view": bool(field_rules.get(field.pk, {}).get("can_view")), "edit": bool(field_rules.get(field.pk, {}).get("can_edit"))}
             for field in fields
