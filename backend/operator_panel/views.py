@@ -321,6 +321,43 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
         # PendingAcceptanceQueueService. The normal VIEW permission path
         # remains unchanged for every other route.
         pass
+    elif source == "acceptance_result":
+        transition_execution_id = request.GET.get(
+            "transition_execution"
+        )
+        if not transition_execution_id or not transition_execution_id.isdigit():
+            raise PermissionDenied(
+                "اجرای تأیید برای مشاهده نتیجه مشخص نشده است."
+            )
+
+        acceptance_execution = (
+            WorkflowTransitionExecution.objects
+            .select_related(
+                "transition",
+                "transition__reject_to_step",
+            )
+            .filter(
+                pk=int(transition_execution_id),
+                instance=instance,
+                status=WorkflowTransitionExecution.Status.ACCEPTED,
+                transition__requires_acceptance=True,
+            )
+            .first()
+        )
+        if acceptance_execution is None:
+            raise PermissionDenied(
+                "نتیجه تأیید معتبر نیست."
+            )
+
+        acceptance_read_step = acceptance_execution.transition.reject_to_step
+        if acceptance_read_step is None:
+            raise PermissionDenied(
+                "مرحله مشاهده نتیجه تأیید مشخص نشده است."
+            )
+
+        read_context_step = acceptance_read_step
+        historical_read_context = True
+
     elif source == "history":
         if request.method != "GET":
             raise PermissionDenied("سوابق فرآیند فقط به صورت خواندنی قابل مشاهده است.")
@@ -429,25 +466,6 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
 
     if _pending_acceptance:
         read_context_step = _pending_acceptance_step or instance.current_step
-    elif source == "acceptance_result":
-        read_step_id = request.GET.get("read_step")
-        if not read_step_id or not read_step_id.isdigit():
-            raise PermissionDenied("مرحله مشاهده نتیجه تأیید مشخص نشده است.")
-
-        acceptance_read_step = (
-            WorkflowStep.objects
-            .filter(
-                pk=int(read_step_id),
-                workflow=instance.workflow,
-                is_active=True,
-            )
-            .first()
-        )
-        if acceptance_read_step is None:
-            raise PermissionDenied("مرحله مشاهده نتیجه تأیید معتبر نیست.")
-
-        read_context_step = acceptance_read_step
-        historical_read_context = True
     elif source == "history":
         historical_step = _get_historical_view_step(
             instance=instance,
@@ -1177,8 +1195,8 @@ def notifications(request):
                         f"{reverse(
                             'operator_panel:workflow_instance',
                             args=[notification.workflow_instance_id],
-                        )}?source=acceptance_result&read_step="
-                        f"{notification.transition_execution.transition.reject_to_step_id}"
+                        )}?source=acceptance_result"
+                        f"&transition_execution={notification.transition_execution_id}"
                     )
                     if (
                         notification.workflow_instance_id
