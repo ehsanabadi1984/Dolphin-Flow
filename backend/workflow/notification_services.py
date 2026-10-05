@@ -128,6 +128,7 @@ class NotificationService:
             .select_related(
                 "workflow_instance",
                 "workflow_step",
+                "transition_execution__transition__reject_to_step",
             )
             .order_by("-created_at")
         )
