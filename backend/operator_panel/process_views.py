@@ -20,6 +20,24 @@ FORM_NUMBER_PATTERN = re.compile(r"^(?P<date>\d{6})-(?P<pk>\d{6})$")
 
 
 @login_required
+def pending_acceptances(request):
+    """List pending acceptance decisions available to the authenticated user."""
+    queryset = PendingAcceptanceQueueService(request.user).get_queryset()
+    paginator = Paginator(queryset, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(
+        request,
+        "operator_panel/pending_acceptances.html",
+        {
+            "page_obj": page_obj,
+            "executions": page_obj.object_list,
+            "page_title": "تأییدهای در انتظار",
+            "page_breadcrumb": "تأییدهای در انتظار",
+        },
+    )
+
+
+@login_required
 def pending_acceptance_detail(request, transition_execution_id):
     """Display a pending acceptance item as a read-only workflow form."""
     if request.method != "GET":
