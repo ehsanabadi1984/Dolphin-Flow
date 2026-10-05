@@ -464,6 +464,34 @@ class WorkflowExecutionService:
         )
 
         if transition.requires_acceptance:
+            acceptance_users = {
+                recipient.pk: recipient
+                for action_code in ("ACCEPT", "REJECT")
+                for recipient in WorkflowAuthorizationService.get_users_with_step_action_permission(
+                    workflow=instance.workflow,
+                    step=transition.to_step,
+                    action_code=action_code,
+                )
+                if recipient != user
+            }
+
+            for recipient in acceptance_users.values():
+                NotificationService.create(
+                    recipient=recipient,
+                    notification_type=(
+                        Notification.NotificationType.ACTION_REQUIRED
+                    ),
+                    title="نیاز به تأیید دریافت",
+                    message=(
+                        f"فرآیند «{instance.workflow.name}» "
+                        f"در انتظار تعیین تکلیف در مرحله "
+                        f"«{transition.to_step.name}» است."
+                    ),
+                    workflow_instance=instance,
+                    workflow_step=transition.to_step,
+                    transition_execution=transition_execution,
+                )
+
             transaction.on_commit(
                 lambda: WorkflowRealtimeService.notify_instance_changed(
                     instance_id=instance.pk,
