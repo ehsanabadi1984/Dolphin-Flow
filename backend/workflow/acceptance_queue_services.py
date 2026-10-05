@@ -27,7 +27,7 @@ class PendingAcceptanceQueueService:
         active_memberships = WorkflowMembership.objects.filter(
             user=self.user,
             is_active=True,
-            workflow_id=OuterRef("workflow_id"),
+            workflow_id=OuterRef("instance__workflow_id"),
         )
 
         base_permissions = WorkflowPermission.objects.filter(
