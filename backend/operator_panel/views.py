@@ -266,7 +266,7 @@ def dashboard(request):
 
 
 @login_required
-def workflow_instance(request, instance_id, _return_save_result=False):
+def workflow_instance(request, instance_id, _return_save_result=False, _pending_acceptance=False):
     """
     Display and save a workflow instance form.
 
@@ -299,6 +299,13 @@ def workflow_instance(request, instance_id, _return_save_result=False):
 
     source = request.GET.get("source")
 
+    if _pending_acceptance:
+        if request.method != "GET":
+            raise PermissionDenied(
+                "صفحه تأیید دریافت فقط به صورت خواندنی قابل مشاهده است."
+            )
+        source = "pending_acceptance"
+
     if source in {"my_processes", "history_device"}:
         if source == "history_device" and request.method != "GET":
             raise PermissionDenied("سوابق دستگاه فقط به صورت خواندنی قابل مشاهده است.")
@@ -309,6 +316,11 @@ def workflow_instance(request, instance_id, _return_save_result=False):
         ).exists()
         if not is_workflow_member:
             raise PermissionDenied("کاربر عضو این فرآیند نیست.")
+    elif source == "pending_acceptance":
+        # Entry authorization is performed by the dedicated view against
+        # PendingAcceptanceQueueService. The normal VIEW permission path
+        # remains unchanged for every other route.
+        pass
     elif source == "history":
         if request.method != "GET":
             raise PermissionDenied("سوابق فرآیند فقط به صورت خواندنی قابل مشاهده است.")
@@ -360,7 +372,7 @@ def workflow_instance(request, instance_id, _return_save_result=False):
     # GET
     # =========================================================
 
-    transitions = (
+    transitions = () if _pending_acceptance else (
         WorkflowAuthorizationService
         .get_allowed_transitions(
             user=request.user,
@@ -389,7 +401,9 @@ def workflow_instance(request, instance_id, _return_save_result=False):
         .first()
     )
 
-    if source == "history":
+    if _pending_acceptance:
+        read_context_step = instance.current_step
+    elif source == "history":
         historical_step = _get_historical_view_step(
             instance=instance,
             user=request.user,
@@ -487,9 +501,12 @@ def workflow_instance(request, instance_id, _return_save_result=False):
     )
 
     # Use the canonical edit_mode derivation
-    edit_mode = _get_edit_mode(instance=instance, request=request)
+    edit_mode = False if _pending_acceptance else _get_edit_mode(
+        instance=instance,
+        request=request,
+    )
 
-    if historical_read_context:
+    if historical_read_context and not _pending_acceptance:
         edit_mode = False
         transitions = ()
 
@@ -693,6 +710,7 @@ def workflow_instance(request, instance_id, _return_save_result=False):
             "has_saved_data": has_saved_data,
             "page_title": instance.workflow.name,
             "page_breadcrumb": instance.workflow.name,
+            "pending_acceptance": _pending_acceptance,
         },
     )
 
