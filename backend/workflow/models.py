@@ -669,6 +669,7 @@ class WorkflowPermission(models.Model):
         START = "START", "شروع فرآیند"
         TRANSITION = "TRANSITION", "تغییر مرحله"
         MANAGE = "MANAGE", "مدیریت"
+        STEP_ACTION = "STEP_ACTION", "عملیات مرحله"
 
     class Effect(models.TextChoices):
         ALLOW = "ALLOW", "مجاز"
@@ -747,13 +748,7 @@ class WorkflowPermission(models.Model):
                         action_code__isnull=False,
                     )
                     | models.Q(
-                        action__in=[
-                            Action.VIEW,
-                            Action.EXECUTE,
-                            Action.START,
-                            Action.TRANSITION,
-                            Action.MANAGE,
-                        ],
+                        ~models.Q(action=Action.STEP_ACTION),
                         action_code__isnull=True,
                     )
                 ),
