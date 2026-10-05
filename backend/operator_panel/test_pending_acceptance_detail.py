@@ -126,7 +126,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
         )
         FieldAccess.objects.create(
             field=self.field,
-            step=self.step_one,
+            step=self.step_two,
             user=self.receiver,
             can_view=True,
             can_edit=False,
@@ -134,7 +134,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
 
         FieldAccess.objects.create(
             field=self.file_field,
-            step=self.step_one,
+            step=self.step_two,
             user=self.receiver,
             can_view=True,
             can_edit=False,
@@ -297,7 +297,7 @@ class PendingAcceptanceDetailViewTests(TestCase):
         )
         FieldAccess.objects.filter(
             field=self.file_field,
-            step=self.step_one,
+            step=self.step_two,
             user=self.receiver,
         ).update(can_view=False)
 
