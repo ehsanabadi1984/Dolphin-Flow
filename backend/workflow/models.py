@@ -716,6 +716,12 @@ class WorkflowPermission(models.Model):
         choices=Action.choices,
     )
 
+    action_code = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+    )
+
     effect = models.CharField(
         max_length=10,
         choices=Effect.choices,
@@ -732,6 +738,28 @@ class WorkflowPermission(models.Model):
 
     class Meta:
         ordering = ["workflow", "action"]
+
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        action=Action.STEP_ACTION,
+                        action_code__isnull=False,
+                    )
+                    | models.Q(
+                        action__in=[
+                            Action.VIEW,
+                            Action.EXECUTE,
+                            Action.START,
+                            Action.TRANSITION,
+                            Action.MANAGE,
+                        ],
+                        action_code__isnull=True,
+                    )
+                ),
+                name="workflow_permission_step_action_code",
+            ),
+        ]
 
     def __str__(self):
         subject = self.user or self.role or "GLOBAL"
