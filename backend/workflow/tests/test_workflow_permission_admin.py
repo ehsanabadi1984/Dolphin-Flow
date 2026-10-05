@@ -10,6 +10,8 @@ class WorkflowStepPermissionAdminTests(TestCase):
 
         self.assertIn(("ACCEPT", "تأیید دریافت"), form.fields["action_code"].choices)
         self.assertIn(("REJECT", "رد دریافت"), form.fields["action_code"].choices)
+        self.assertEqual(form.fields["action_code"].widget.__class__.__name__, "Select")
+        self.assertIn("workflow/js/workflow-step-permission-admin.js", form.Media.js)
 
     def test_step_action_requires_action_code(self):
         form = WorkflowStepPermissionForm(
