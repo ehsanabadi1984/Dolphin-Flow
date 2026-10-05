@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.test import TestCase
+from django.db import close_old_connections
+from django.test import TestCase, TransactionTestCase
+import threading
 
 from workflow.history_models import HistoryConfiguration, HistoryField
 from workflow.models import (
@@ -1017,3 +1019,319 @@ class WorkflowExecutionTests(TestCase):
         self.assertFalse(
             notification.is_read,
         )
+
+
+class WorkflowExecutionConcurrencyTests(TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="concurrency_sender",
+            password="test-password",
+        )
+        self.accept_user_one = User.objects.create_user(
+            username="concurrency_accept_one",
+            password="test-password",
+        )
+        self.accept_user_two = User.objects.create_user(
+            username="concurrency_accept_two",
+            password="test-password",
+        )
+
+        self.workflow = Workflow.objects.create(
+            name="Concurrency Acceptance Test",
+            code="CONCURRENCY_ACCEPT_TEST",
+            is_active=True,
+        )
+        self.step_one = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Concurrency Step One",
+            code="CONCURRENCY_STEP_ONE",
+            order=1,
+            is_active=True,
+        )
+        self.step_two = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Concurrency Step Two",
+            code="CONCURRENCY_STEP_TWO",
+            order=2,
+            is_active=True,
+        )
+        self.step_three = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Concurrency Step Three",
+            code="CONCURRENCY_STEP_THREE",
+            order=3,
+            is_active=True,
+        )
+        self.transition_one = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="Concurrency Transition One",
+            code="CONCURRENCY_TRANSITION_ONE",
+            from_step=self.step_one,
+            to_step=self.step_two,
+            is_active=True,
+        )
+        self.transition_two = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="Concurrency Acceptance Transition",
+            code="CONCURRENCY_ACCEPTANCE_TRANSITION",
+            from_step=self.step_two,
+            to_step=self.step_three,
+            is_active=True,
+            requires_acceptance=True,
+            reject_to_step=self.step_one,
+        )
+
+        for user in (
+            self.user,
+            self.accept_user_one,
+            self.accept_user_two,
+        ):
+            WorkflowMembership.objects.create(
+                workflow=self.workflow,
+                user=user,
+                role=WorkflowMembership.Role.EXECUTOR,
+                is_active=True,
+            )
+
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            action=WorkflowPermission.Action.START,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            transition=self.transition_one,
+            user=self.user,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            transition=self.transition_two,
+            user=self.user,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        for user in (self.accept_user_one, self.accept_user_two):
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                step=self.step_three,
+                user=user,
+                action=WorkflowPermission.Action.STEP_ACTION,
+                action_code="ACCEPT",
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                step=self.step_three,
+                user=user,
+                action=WorkflowPermission.Action.STEP_ACTION,
+                action_code="REJECT",
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
+
+    def _create_pending_acceptance_execution(self):
+        instance = WorkflowExecutionService.start_workflow(
+            workflow=self.workflow,
+            user=self.user,
+        )
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+        return WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_two,
+            user=self.user,
+        )
+
+    def _run_two_actions(self, first_action, second_action):
+        barrier = threading.Barrier(2)
+        results = []
+        results_lock = threading.Lock()
+
+        def worker(action):
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                action()
+            except Exception as exc:
+                result = ("error", exc)
+            else:
+                result = ("success", None)
+            finally:
+                close_old_connections()
+
+            with results_lock:
+                results.append(result)
+
+        threads = [
+            threading.Thread(target=worker, args=(first_action,)),
+            threading.Thread(target=worker, args=(second_action,)),
+        ]
+
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+
+        self.assertFalse(
+            any(thread.is_alive() for thread in threads),
+            "Concurrency worker did not finish.",
+        )
+        self.assertEqual(len(results), 2)
+        return results
+
+    def test_concurrent_accept_accept_resolves_once(self):
+        transition_execution = self._create_pending_acceptance_execution()
+
+        results = self._run_two_actions(
+            lambda: WorkflowExecutionService.accept_transition_execution(
+                transition_execution=transition_execution,
+                user=self.accept_user_one,
+            ),
+            lambda: WorkflowExecutionService.accept_transition_execution(
+                transition_execution=transition_execution,
+                user=self.accept_user_two,
+            ),
+        )
+
+        self.assertEqual(
+            sum(result[0] == "success" for result in results),
+            1,
+        )
+        self.assertEqual(
+            sum(result[0] == "error" for result in results),
+            1,
+        )
+
+        transition_execution.refresh_from_db()
+        instance = WorkflowInstance.objects.get(pk=transition_execution.instance_id)
+
+        self.assertEqual(
+            transition_execution.status,
+            WorkflowTransitionExecution.Status.ACCEPTED,
+        )
+        self.assertEqual(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_three,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_one,
+            ).count(),
+            1,
+        )
+        self.assertEqual(instance.current_step_id, self.step_three.pk)
+
+    def test_concurrent_accept_reject_allows_only_one_resolution(self):
+        transition_execution = self._create_pending_acceptance_execution()
+
+        results = self._run_two_actions(
+            lambda: WorkflowExecutionService.accept_transition_execution(
+                transition_execution=transition_execution,
+                user=self.accept_user_one,
+            ),
+            lambda: WorkflowExecutionService.reject_transition_execution(
+                transition_execution=transition_execution,
+                user=self.accept_user_two,
+            ),
+        )
+
+        self.assertEqual(
+            sum(result[0] == "success" for result in results),
+            1,
+        )
+        self.assertEqual(
+            sum(result[0] == "error" for result in results),
+            1,
+        )
+
+        transition_execution.refresh_from_db()
+        instance = WorkflowInstance.objects.get(pk=transition_execution.instance_id)
+
+        self.assertIn(
+            transition_execution.status,
+            (
+                WorkflowTransitionExecution.Status.ACCEPTED,
+                WorkflowTransitionExecution.Status.REJECTED,
+            ),
+        )
+
+        destination_count = WorkflowStepExecution.objects.filter(
+            instance=instance,
+            workflow_step=self.step_three,
+        ).count()
+        reject_target_count = WorkflowStepExecution.objects.filter(
+            instance=instance,
+            workflow_step=self.step_one,
+        ).count()
+
+        self.assertEqual(
+            destination_count + reject_target_count,
+            1,
+        )
+        self.assertEqual(
+            instance.current_step_id,
+            (
+                self.step_three.pk
+                if transition_execution.status
+                == WorkflowTransitionExecution.Status.ACCEPTED
+                else self.step_one.pk
+            ),
+        )
+
+    def test_concurrent_reject_reject_resolves_once(self):
+        transition_execution = self._create_pending_acceptance_execution()
+
+        results = self._run_two_actions(
+            lambda: WorkflowExecutionService.reject_transition_execution(
+                transition_execution=transition_execution,
+                user=self.accept_user_one,
+            ),
+            lambda: WorkflowExecutionService.reject_transition_execution(
+                transition_execution=transition_execution,
+                user=self.accept_user_two,
+            ),
+        )
+
+        self.assertEqual(
+            sum(result[0] == "success" for result in results),
+            1,
+        )
+        self.assertEqual(
+            sum(result[0] == "error" for result in results),
+            1,
+        )
+
+        transition_execution.refresh_from_db()
+        instance = WorkflowInstance.objects.get(pk=transition_execution.instance_id)
+
+        self.assertEqual(
+            transition_execution.status,
+            WorkflowTransitionExecution.Status.REJECTED,
+        )
+        self.assertEqual(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_one,
+            ).count(),
+            2,
+        )
+        self.assertEqual(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_three,
+            ).count(),
+            0,
+        )
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
