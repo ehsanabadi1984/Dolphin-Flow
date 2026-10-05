@@ -777,6 +777,7 @@ class WorkflowExecutionTests(TestCase):
 
     def test_acceptance_transition_stays_pending_at_source_step(self):
         self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
         self.grant_transition_permission(self.transition_two)
 
         self.transition_two.requires_acceptance = True
