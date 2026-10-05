@@ -88,6 +88,17 @@ class WorkflowExecutionService:
                 "این Transition Execution دیگر مربوط به مرحله فعلی نیست."
             )
 
+        reject_to_step = transition.reject_to_step
+        if reject_to_step is None:
+            raise ValidationError(
+                "برای تأیید این Transition مرحله مربوطه تنظیم نشده است."
+            )
+
+        if reject_to_step.workflow_id != instance.workflow_id:
+            raise ValidationError(
+                "مرحله مربوطه متعلق به Workflow این Instance نیست."
+            )
+
         WorkflowAuthorizationService.require_permission(
             user=user,
             workflow=instance.workflow,
@@ -122,7 +133,7 @@ class WorkflowExecutionService:
         instance.current_step = transition.to_step
         instance.save(update_fields=["current_step"])
 
-        recipient = transition.to_step.assigned_to
+        recipient = reject_to_step.assigned_to
         if (
             recipient
             and recipient.is_active
@@ -134,16 +145,14 @@ class WorkflowExecutionService:
                     Notification.NotificationType.ACTION_REQUIRED
                 ),
                 title=(
-                    f" فرآیند جدید "
-                    f"«{instance.workflow.name}»"
+                    f"فرآیند «{instance.workflow.name}» تأیید شد"
                 ),
                 message=(
-                    f"فرآیند «{instance.workflow.name}» "
-                    f"وارد مرحله «{transition.to_step.name}» شده "
-                    "و نیازمند اقدام شماست."
+                    f"فرآیند «{instance.workflow.name}» تأیید شد و "
+                    f"برای اطلاع شما در مرحله «{reject_to_step.name}» قرار گرفت."
                 ),
                 workflow_instance=instance,
-                workflow_step=transition.to_step,
+                workflow_step=reject_to_step,
                 transition_execution=transition_execution,
             )
 
@@ -284,13 +293,11 @@ class WorkflowExecutionService:
                     Notification.NotificationType.ACTION_REQUIRED
                 ),
                 title=(
-                    f" فرآیند جدید "
-                    f"«{instance.workflow.name}»"
+                    f"فرآیند جدید «{instance.workflow.name}»"
                 ),
                 message=(
-                    f"فرآیند «{instance.workflow.name}» "
-                    f"وارد مرحله «{reject_to_step.name}» شده "
-                    "و نیازمند اقدام شماست."
+                    f"فرآیند «{instance.workflow.name}» به مرحله "
+                    f"«{reject_to_step.name}» بازگشت و نیازمند بررسی شماست."
                 ),
                 workflow_instance=instance,
                 workflow_step=reject_to_step,
