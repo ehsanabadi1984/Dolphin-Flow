@@ -1671,22 +1671,24 @@ class DynamicFormServiceTests(TestCase):
 
         instance_device = instance_devices.first()
 
-        self.assertIsNone(instance_device.device_id)
+        self.assertIsNotNone(instance_device.device_id)
 
         self.assertEqual(
-            instance_device.draft_imei,
-            "777777777777777",
-        )
-
-        self.assertIsNone(instance_device.device_id)
-
-        self.assertEqual(
-            instance_device.draft_imei,
-            "777777777777777",
+            instance_device.device_origin,
+            InstanceDevice.DeviceOrigin.NEW,
         )
 
         self.assertEqual(
+            instance_device.draft_imei,
+            "",
+        )
+
+        self.assertIsNone(
             instance_device.draft_device_model_id,
+        )
+
+        self.assertEqual(
+            instance_device.device.device_model_id,
             self.device_model.pk,
         )
 
