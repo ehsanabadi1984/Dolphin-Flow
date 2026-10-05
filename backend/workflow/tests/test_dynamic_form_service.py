@@ -2932,11 +2932,14 @@ class DynamicFormServiceTests(TestCase):
 
         instance_device.refresh_from_db()
 
-        self.assertIsNone(instance_device.device_id)
-
+        self.assertIsNotNone(instance_device.device_id)
+        self.assertEqual(
+            instance_device.device_origin,
+            InstanceDevice.DeviceOrigin.NEW,
+        )
         self.assertEqual(
             instance_device.draft_imei,
-            "444444444444444",
+            "",
         )
 
         self.assertFalse(
@@ -2945,18 +2948,20 @@ class DynamicFormServiceTests(TestCase):
             ).exists()
         )
 
-        self.assertFalse(
+        self.assertTrue(
             DeviceIdentifier.objects.filter(
                 value="444444444444444",
+                device=instance_device.device,
+                identifier_type="IMEI",
             ).exists()
         )
 
-        self.assertFalse(
+        self.assertEqual(
             DeviceIdentifier.objects.filter(
                 device=instance_device.device,
                 identifier_type="IMEI",
-                value="333333333333333",
-            ).exists()
+            ).count(),
+            1,
         )
 
         self.assertEqual(
