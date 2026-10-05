@@ -266,7 +266,7 @@ def dashboard(request):
 
 
 @login_required
-def workflow_instance(request, instance_id, _return_save_result=False, _pending_acceptance=False):
+def workflow_instance(request, instance_id, _return_save_result=False, _pending_acceptance=False, _pending_acceptance_step=None):
     """
     Display and save a workflow instance form.
 
@@ -402,7 +402,7 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
     )
 
     if _pending_acceptance:
-        read_context_step = instance.current_step
+        read_context_step = _pending_acceptance_step or instance.current_step
     elif source == "history":
         historical_step = _get_historical_view_step(
             instance=instance,
