@@ -2052,12 +2052,12 @@ class QueryScalingTests(DashboardSidebarBase):
         self.assertLessEqual(large, small + 5)
         self.assertLess(large, 45)
 
-    def test_counts_use_three_aggregate_queries(self):
+    def test_counts_use_four_aggregate_queries(self):
         self.grant_role_action_permissions()
         for _ in range(5):
             self.create_active_instance(started_by=self.other)
 
         with CaptureQueriesContext(connection) as ctx:
             DashboardService(self.user).get_sidebar_counts()
-        # active / tasks / pending - one aggregate query each.
-        self.assertEqual(len(ctx), 3)
+        # active / tasks / pending plus pending-acceptance queue.
+        self.assertEqual(len(ctx), 4)
