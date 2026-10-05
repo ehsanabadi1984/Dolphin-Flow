@@ -659,6 +659,22 @@ class WorkflowTransitionExecution(models.Model):
         related_name="workflow_transition_executions",
     )
 
+    accepted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="accepted_workflow_transition_executions",
+    )
+
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="rejected_workflow_transition_executions",
+    )
+
     performed_at = models.DateTimeField(
         auto_now_add=True,
     )
