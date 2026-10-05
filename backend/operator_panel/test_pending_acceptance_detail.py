@@ -1,10 +1,12 @@
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
 from workflow.models import (
     FieldAccess,
     FormData,
+    FormFile,
     FormDefinition,
     FormField,
     FormSection,
@@ -194,3 +196,130 @@ class PendingAcceptanceDetailViewTests(TestCase):
         self.assertNotContains(response, "ذخیره")
         self.assertNotContains(response, "عملیات فرآیند")
         self.assertContains(response, "تأیید دریافت")
+
+
+    def test_pending_acceptance_file_is_downloadable_without_general_view(self):
+        execution = self.instance.transition_executions.get()
+        form_file = FormFile.objects.create(
+            form_data=self.instance.form_data,
+            field=self.field,
+            row_id="",
+            file=SimpleUploadedFile(
+                "pending.txt",
+                b"pending acceptance file",
+                content_type="text/plain",
+            ),
+            original_name="pending.txt",
+            file_size=22,
+            content_type="text/plain",
+            uploaded_by=self.sender,
+        )
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:download_pending_acceptance_file",
+                args=[execution.pk, form_file.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), b"pending acceptance file")
+
+    def test_pending_acceptance_file_cannot_use_another_instance_file(self):
+        other_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step_one,
+            started_by=self.sender,
+            status=WorkflowInstance.Status.ACTIVE,
+        )
+        other_form_data = FormData.objects.create(
+            instance=other_instance,
+            data={"customer_name": "Other Customer"},
+        )
+        form_file = FormFile.objects.create(
+            form_data=other_form_data,
+            field=self.field,
+            row_id="",
+            file=SimpleUploadedFile(
+                "other.txt",
+                b"other instance file",
+                content_type="text/plain",
+            ),
+            original_name="other.txt",
+            file_size=18,
+            content_type="text/plain",
+            uploaded_by=self.sender,
+        )
+        execution = self.instance.transition_executions.get()
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:download_pending_acceptance_file",
+                args=[execution.pk, form_file.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_pending_acceptance_file_requires_field_view_permission(self):
+        execution = self.instance.transition_executions.get()
+        form_file = FormFile.objects.create(
+            form_data=self.instance.form_data,
+            field=self.field,
+            row_id="",
+            file=SimpleUploadedFile(
+                "hidden.txt",
+                b"hidden file",
+                content_type="text/plain",
+            ),
+            original_name="hidden.txt",
+            file_size=11,
+            content_type="text/plain",
+            uploaded_by=self.sender,
+        )
+        FieldAccess.objects.filter(
+            field=self.field,
+            step=self.step_one,
+            user=self.receiver,
+        ).update(can_view=False)
+
+        response = self.client.get(
+            reverse(
+                "operator_panel:download_pending_acceptance_file",
+                args=[execution.pk, form_file.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_pending_acceptance_file_metadata_uses_scoped_download_url(self):
+        execution = self.instance.transition_executions.get()
+        form_file = FormFile.objects.create(
+            form_data=self.instance.form_data,
+            field=self.field,
+            row_id="",
+            file=SimpleUploadedFile(
+                "pending.txt",
+                b"pending acceptance file",
+                content_type="text/plain",
+            ),
+            original_name="pending.txt",
+            file_size=22,
+            content_type="text/plain",
+            uploaded_by=self.sender,
+        )
+
+        response = self.client.get(
+            reverse("operator_panel:file_field_definitions", args=[self.instance.pk]),
+            {"pending_acceptance_id": execution.pk},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            payload["fields"][0]["file"]["url"],
+            reverse(
+                "operator_panel:download_pending_acceptance_file",
+                args=[execution.pk, form_file.pk],
+            ),
+        )
