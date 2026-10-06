@@ -38,6 +38,9 @@
 .df-next-action-main { flex:1; min-width:0; }
 .df-next-action-title { font-weight:700; }
 .df-next-action-meta { margin-top:5px; font-size:12px; opacity:.68; }
+.df-process-summary { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:7px; font-size:11px; line-height:1.6; }
+.df-process-summary-item { color:var(--muted); }
+.df-process-summary-item strong { color:var(--text); font-weight:600; }
 .df-next-action-badge { flex:0 0 auto; font-size:11px; font-weight:700; }
 .df-next-action-badge-danger { color:#dc2626; }
 .df-next-action-badge-warning { color:#d97706; }
@@ -72,7 +75,17 @@
             {% for instance in next_best_actions %}
                 <div class="df-next-action-item">
                     <div class="df-dashboard-priority {% if instance.dashboard_priority_class == 'danger' %}df-dashboard-priority-danger{% elif instance.dashboard_priority_class == 'warning' %}df-dashboard-priority-warning{% endif %}"></div>
-                    <div class="df-next-action-main"><div class="df-next-action-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div><div class="df-next-action-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}{% if instance.dashboard_sla.configured %}{{ instance.dashboard_sla.label }}{% else %}بدون SLA{% endif %}</div></div>
+                    <div class="df-next-action-main">
+                        <div class="df-next-action-title">{{ instance.workflow.name }} — #{{ instance.pk }}</div>
+                        <div class="df-next-action-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}{% if instance.dashboard_sla.configured %}{{ instance.dashboard_sla.label }}{% else %}بدون SLA{% endif %}</div>
+                        {% if instance.process_summary %}
+                            <div class="df-process-summary">
+                                {% for item in instance.process_summary %}
+                                    <span class="df-process-summary-item"><strong>{{ item.label }}:</strong> {{ item.value }}</span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
                     <span class="df-next-action-badge df-next-action-badge-{{ instance.dashboard_priority_class }}">{{ instance.dashboard_priority_label }}</span>
                     <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-warning">انجام</a>
                 </div>
