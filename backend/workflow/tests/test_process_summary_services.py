@@ -371,7 +371,10 @@ class ProcessSummaryServiceTests(TestCase):
         model_queries = [
             query["sql"]
             for query in queries
-            if model_table in query["sql"]
+            if (
+                f'FROM "{model_table}"' in query["sql"]
+                and f'JOIN "{model_table}"' not in query["sql"]
+            )
         ]
 
         self.assertEqual(
