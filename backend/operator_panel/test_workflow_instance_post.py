@@ -1562,7 +1562,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         self.assertEqual(len(child_rows), 2)
         self.assertEqual(len(grandchild_rows), 2)
         self.assertEqual(
-            [row.instance_device.draft_imei for row in device_rows],
+            [\n            row.instance_device.device.identifiers.filter(\n                identifier_type=DeviceIdentifier.IdentifierType.IMEI,\n            ).values_list("value", flat=True).first() or ""\n            for row in device_rows\n        ],
             ["895000000000001", "895000000000002"],
         )
         self.assertEqual(
@@ -1758,7 +1758,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         )
         self.assertEqual(len(device_rows), 3)
         self.assertEqual(
-            [row.instance_device.draft_imei for row in device_rows],
+            [\n            row.instance_device.device.identifiers.filter(\n                identifier_type=DeviceIdentifier.IdentifierType.IMEI,\n            ).values_list("value", flat=True).first() or ""\n            for row in device_rows\n        ],
             ["896000000000001", "896000000000002", "896000000000003"],
         )
 
