@@ -1,6 +1,10 @@
 import re
 from unittest.mock import patch
 
+from operator_panel.form_post_adapter import OperatorPanelFormPostAdapter
+from workflow.form_draft_diff_services import FormDraftDiffService, RowChangeAction
+from workflow.form_draft_save_services import FormDraftSaveService
+
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
@@ -1712,12 +1716,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         a_child2, a_part2 = a_children[1]
         b_child1, b_part1 = b_children[0]
 
-        response = self.client.post(
-            reverse(
-                "operator_panel:workflow_instance",
-                args=[self.instance.pk],
-            ) + "?edit=1",
-            {
+        post_data = {
                 # DEVICE A: keep child A2, update both A2 and its part.
                 "system_devices_0_system_imei": "896000000000001",
                 "system_devices_0_system_type": str(device_type.pk),
@@ -1750,8 +1749,47 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                 "system_devices_2_system_model": str(device_model.pk),
                 "system_devices_2_device_details_reconcile_post_0_child_name_reconcile_post": "Child C",
                 "system_devices_2_device_details_reconcile_post_0_parts_reconcile_post_0_part_name_reconcile_post": "Part C",
-            },
-        )
+        }
+
+        original_adapt = OperatorPanelFormPostAdapter.adapt
+        original_normalize = FormDraftSaveService._normalize_submitted_data
+        original_diff = FormDraftDiffService.build
+
+        def trace_adapt(*args, **kwargs):
+            result = original_adapt(*args, **kwargs)
+            print("\n=== TRACE payload -> adapted ===")
+            print("C:", result.get("system_devices", [])[2])
+            return result
+
+        def trace_normalize(*args, **kwargs):
+            result = original_normalize(*args, **kwargs)
+            print("\n=== TRACE adapted -> normalized ===")
+            print("C:", result.repeatable_groups["system_devices"][2])
+            return result
+
+        def trace_diff(*args, **kwargs):
+            result = original_diff(*args, **kwargs)
+            print("\n=== TRACE normalized -> CREATE ===")
+            for group_diff in result.groups:
+                if group_diff.group.code != "system_devices":
+                    continue
+                for change in group_diff.changes:
+                    if change.action == RowChangeAction.CREATE:
+                        print("CREATE:", change.desired_row.fields)
+            return result
+
+        with (
+            patch.object(OperatorPanelFormPostAdapter, "adapt", side_effect=trace_adapt),
+            patch.object(FormDraftSaveService, "_normalize_submitted_data", side_effect=trace_normalize),
+            patch.object(FormDraftDiffService, "build", side_effect=trace_diff),
+        ):
+            response = self.client.post(
+                reverse(
+                    "operator_panel:workflow_instance",
+                    args=[self.instance.pk],
+                ) + "?edit=1",
+                post_data,
+            )
 
         self.assertEqual(response.status_code, 302)
 
