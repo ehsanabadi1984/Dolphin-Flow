@@ -1067,6 +1067,14 @@ class ProcessSummaryServiceTests(TestCase):
             show_in_process_summary=True,
         )
         self.allow_field(field)
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Batch Rows",
+            label="ردیف‌ها",
+            code="batch_rows",
+            order=1,
+        )
+        self.allow_group(group)
         FormData.objects.create(instance=self.instance, data={"batch_value": "A"})
         FormData.objects.create(instance=second_instance, data={"batch_value": "B"})
 
