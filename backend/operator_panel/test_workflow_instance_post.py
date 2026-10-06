@@ -1754,6 +1754,10 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
         original_adapt = OperatorPanelFormPostAdapter.adapt
         original_normalize = FormDraftSaveService._normalize_submitted_data
         original_diff = FormDraftDiffService.build
+        from workflow.form_draft_device_create_apply_services import (
+            FormDraftDeviceCreateApplyService,
+        )
+        original_create_row = FormDraftDeviceCreateApplyService._create_row
 
         def trace_adapt(*args, **kwargs):
             result = original_adapt(*args, **kwargs)
@@ -1778,10 +1782,27 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                         print("CREATE:", change.desired_row.fields)
             return result
 
+        def trace_create_row(*args, **kwargs):
+            row = original_create_row(*args, **kwargs)
+            instance_device = row.instance_device
+            print("\n=== TRACE DEVICE CREATE APPLY ===")
+            print(
+                "row:",
+                row.pk,
+                "instance_device:",
+                instance_device.pk,
+                "device_id:",
+                instance_device.device_id,
+                "draft_imei:",
+                instance_device.draft_imei,
+            )
+            return row
+
         with (
             patch.object(OperatorPanelFormPostAdapter, "adapt", side_effect=trace_adapt),
             patch.object(FormDraftSaveService, "_normalize_submitted_data", side_effect=trace_normalize),
             patch.object(FormDraftDiffService, "build", side_effect=trace_diff),
+            patch.object(FormDraftDeviceCreateApplyService, "_create_row", side_effect=trace_create_row),
         ):
             response = self.client.post(
                 reverse(
