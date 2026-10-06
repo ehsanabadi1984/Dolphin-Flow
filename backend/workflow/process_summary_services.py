@@ -184,6 +184,8 @@ class ProcessSummaryService:
                 for field in group.fields.all():
                     if field.system_key != FormField.SystemKey.NONE:
                         continue
+                    if field.field_type == FormField.FieldType.FORMULA:
+                        continue
                     value_object = values_by_field_id.get(field.pk)
                     value, _ = RepeatableRowReadService._custom_value(
                         field=field,
