@@ -163,16 +163,13 @@ class ProcessSummaryService:
         rendered_rows = []
         for row in rows:
             items = []
+            values_by_field_id = {
+                item.field_id: item
+                for item in row.values.all()
+            }
 
             for field in fields:
-                value_object = next(
-                    (
-                        item
-                        for item in row.values.all()
-                        if item.field_id == field.pk
-                    ),
-                    None,
-                )
+                value_object = values_by_field_id.get(field.pk)
 
                 if field.system_key != FormField.SystemKey.NONE:
                     value, display_value = (
