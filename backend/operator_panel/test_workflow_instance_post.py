@@ -1751,93 +1751,7 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
                 "system_devices_2_device_details_reconcile_post_0_parts_reconcile_post_0_part_name_reconcile_post": "Part C",
         }
 
-        original_adapt = OperatorPanelFormPostAdapter.adapt
-        original_normalize = FormDraftSaveService._normalize_submitted_data
-        original_diff = FormDraftDiffService.build
-        from workflow.form_draft_device_create_apply_services import (
-            FormDraftDeviceCreateApplyService,
-        )
-        original_create_row = FormDraftDeviceCreateApplyService._create_row
-        from workflow.form_draft_create_apply_services import FormDraftCreateApplyService
-        from workflow.form_draft_device_update_apply_services import FormDraftDeviceUpdateApplyService
-        from workflow.form_draft_update_apply_services import FormDraftUpdateApplyService
-        from workflow.form_draft_delete_apply_services import FormDraftDeleteApplyService
-        original_device_create_apply = FormDraftDeviceCreateApplyService.apply
-        original_create_apply = FormDraftCreateApplyService.apply
-        original_device_update_apply = FormDraftDeviceUpdateApplyService.apply
-        original_update_apply = FormDraftUpdateApplyService.apply
-        original_delete_apply = FormDraftDeleteApplyService.apply
-
-        def trace_adapt(*args, **kwargs):
-            result = original_adapt(*args, **kwargs)
-            print("\n=== TRACE payload -> adapted ===")
-            print("C:", result.get("system_devices", [])[2])
-            return result
-
-        def trace_normalize(*args, **kwargs):
-            result = original_normalize(*args, **kwargs)
-            print("\n=== TRACE adapted -> normalized ===")
-            print("C:", result.repeatable_groups["system_devices"][2])
-            return result
-
-        def trace_diff(*args, **kwargs):
-            result = original_diff(*args, **kwargs)
-            print("\n=== TRACE normalized -> CREATE ===")
-            for group_diff in result.groups:
-                if group_diff.group.code != "system_devices":
-                    continue
-                for change in group_diff.changes:
-                    if change.action == RowChangeAction.CREATE:
-                        print("CREATE:", change.desired_row.fields)
-            return result
-
-        def trace_create_row(*args, **kwargs):
-            row = original_create_row(*args, **kwargs)
-            instance_device = row.instance_device
-            print("\n=== TRACE DEVICE CREATE APPLY ===")
-            print(
-                "row:",
-                row.pk,
-                "instance_device:",
-                instance_device.pk,
-                "device_id:",
-                instance_device.device_id,
-                "draft_imei:",
-                instance_device.draft_imei,
-            )
-            return row
-
-        def trace_stage(label, original):
-            def wrapper(*args, **kwargs):
-                result = original(*args, **kwargs)
-                rows = list(
-                    RepeatableRow.objects.filter(
-                        instance=self.instance,
-                        group=group,
-                    ).select_related("instance_device").order_by("row_order", "pk")
-                )
-                print(
-                    f"\n=== TRACE AFTER {label} ===",
-                    [
-                        (row.pk, row.instance_device_id, row.instance_device.device_id if row.instance_device_id else None)
-                        for row in rows
-                    ],
-                )
-                return result
-            return wrapper
-
-        with (
-            patch.object(OperatorPanelFormPostAdapter, "adapt", side_effect=trace_adapt),
-            patch.object(FormDraftSaveService, "_normalize_submitted_data", side_effect=trace_normalize),
-            patch.object(FormDraftDiffService, "build", side_effect=trace_diff),
-            patch.object(FormDraftDeviceCreateApplyService, "_create_row", side_effect=trace_create_row),
-            patch.object(FormDraftDeviceCreateApplyService, "apply", side_effect=trace_stage("DEVICE CREATE", original_device_create_apply)),
-            patch.object(FormDraftCreateApplyService, "apply", side_effect=trace_stage("NORMAL CREATE", original_create_apply)),
-            patch.object(FormDraftDeviceUpdateApplyService, "apply", side_effect=trace_stage("DEVICE UPDATE", original_device_update_apply)),
-            patch.object(FormDraftUpdateApplyService, "apply", side_effect=trace_stage("NORMAL UPDATE", original_update_apply)),
-            patch.object(FormDraftDeleteApplyService, "apply", side_effect=trace_stage("DELETE", original_delete_apply)),
-        ):
-            response = self.client.post(
+        response = self.client.post(
                 reverse(
                     "operator_panel:workflow_instance",
                     args=[self.instance.pk],
@@ -1854,14 +1768,26 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             ).select_related("instance_device").order_by("row_order", "pk")
         )
         self.assertEqual(len(device_rows), 3)
+
+        # Existing unresolved rows keep their identifiers as draft data.
+        self.assertEqual(device_rows[0].instance_device.device_id, None)
         self.assertEqual(
-            [
-            row.instance_device.device.identifiers.filter(
+            device_rows[0].instance_device.draft_imei,
+            "896000000000001",
+        )
+        self.assertEqual(device_rows[1].instance_device.device_id, None)
+        self.assertEqual(
+            device_rows[1].instance_device.draft_imei,
+            "896000000000002",
+        )
+
+        # A newly created resolved row owns a persistent Device/IMEI.
+        self.assertIsNotNone(device_rows[2].instance_device.device_id)
+        self.assertEqual(
+            device_rows[2].instance_device.device.identifiers.filter(
                 identifier_type=DeviceIdentifier.IdentifierType.IMEI,
-            ).values_list("value", flat=True).first() or ""
-            for row in device_rows
-        ],
-            ["896000000000001", "896000000000002", "896000000000003"],
+            ).values_list("value", flat=True).first(),
+            "896000000000003",
         )
 
         child_rows = list(
