@@ -919,24 +919,121 @@ class ProcessSummaryServiceTests(TestCase):
         FormData.objects.create(instance=second_instance, data={"shared": "دوم"})
 
         with patch(
-            "workflow.process_summary_services.PermissionContext.build",
+            "workflow.process_summary_services.PermissionContext.build_batch",
             wraps=__import__(
                 "workflow.permission_context",
                 fromlist=["PermissionContext"],
-            ).PermissionContext.build,
-        ) as build:
+            ).PermissionContext.build_batch,
+        ) as build_batch:
             result = ProcessSummaryService.get_for_instances(
                 instances=[self.instance, second_instance],
                 user=self.user,
             )
 
-        self.assertEqual(build.call_count, 1)
+        self.assertEqual(build_batch.call_count, 1)
         self.assertEqual(
             result,
             {
                 self.instance.pk: [{"label": "مشترک", "value": "اول"}],
                 second_instance.pk: [{"label": "مشترک", "value": "دوم"}],
             },
+        )
+
+    def test_batch_summary_batches_permission_rule_reads_across_scopes(self):
+        from workflow.models import FieldAccess, RepeatableGroupAccess, WorkflowMembership
+
+        other_workflow = Workflow.objects.create(
+            name="Permission Batch Other",
+            code="PERMISSION_BATCH_OTHER",
+        )
+        other_step = WorkflowStep.objects.create(
+            workflow=other_workflow,
+            name="Other Step",
+            code="PERMISSION_BATCH_OTHER_STEP",
+            order=1,
+        )
+        WorkflowMembership.objects.create(
+            workflow=other_workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+        other_form = FormDefinition.objects.create(
+            workflow=other_workflow,
+            name="Other Form",
+        )
+        other_section = FormSection.objects.create(
+            form=other_form,
+            name="Other Section",
+            code="OTHER_SECTION",
+            order=1,
+        )
+        other_field = FormField.objects.create(
+            section=other_section,
+            name="Other Field",
+            code="other_field",
+            field_type=FormField.FieldType.TEXT,
+            label="دیگر",
+            show_in_process_summary=True,
+        )
+        other_group = FormRepeatableGroup.objects.create(
+            section=other_section,
+            name="Other Group",
+            code="other_group",
+            order=1,
+        )
+        FieldAccess.objects.create(
+            field=other_field,
+            step=other_step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=other_group,
+            step=other_step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+        other_instance = WorkflowInstance.objects.create(
+            workflow=other_workflow,
+            current_step=other_step,
+        )
+        FormData.objects.create(
+            instance=other_instance,
+            data={"other_field": "سایر"},
+        )
+
+        with CaptureQueriesContext(connection) as queries:
+            result = ProcessSummaryService.get_for_instances(
+                instances=[self.instance, other_instance],
+                user=self.user,
+            )
+
+        sql = [query["sql"].lower() for query in queries.captured_queries]
+        membership_table = WorkflowMembership._meta.db_table.lower()
+        field_access_table = FieldAccess._meta.db_table.lower()
+        group_access_table = RepeatableGroupAccess._meta.db_table.lower()
+
+        self.assertEqual(
+            sum(f'from "{membership_table}"' in query for query in sql),
+            1,
+        )
+        self.assertEqual(
+            sum(f'from "{field_access_table}"' in query for query in sql),
+            1,
+        )
+        self.assertEqual(
+            sum(f'from "{group_access_table}"' in query for query in sql),
+            1,
+        )
+        self.assertEqual(
+            result[self.instance.pk],
+            [],
+        )
+        self.assertEqual(
+            result[other_instance.pk],
+            [{"label": "دیگر", "value": "سایر"}],
         )
 
     def test_batch_summary_reuses_normal_display_lookups_across_instances(self):
