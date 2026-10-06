@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 
 from workflow.models import WorkflowInstance
 from workflow.acceptance_queue_services import PendingAcceptanceQueueService
-from workflow.services import WorkflowExecutionService
+from workflow.services import WorkflowExecutionService\nfrom workflow.process_summary_services import ProcessSummaryService
 
 from .dashboard_enhancements import DashboardEnhancementService
 from .dashboard_services import DashboardService, _can_take_action_q
@@ -172,9 +172,9 @@ def my_processes(request):
 
     paginator = Paginator(instances, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
-    return render(request, "operator_panel/my_processes.html", {
+    page_instances = list(page_obj.object_list)\n    summaries = ProcessSummaryService.get_for_instances(\n        instances=page_instances,\n        user=request.user,\n    )\n    for instance in page_instances:\n        instance.process_summary = summaries.get(instance.pk, [])\n\n    return render(request, "operator_panel/my_processes.html", {
         "page_obj": page_obj,
-        "instances": page_obj.object_list,
+        "instances": page_instances,
         "workflows": workflows,
         "status_choices": WorkflowInstance.Status.choices,
         "search": search,
