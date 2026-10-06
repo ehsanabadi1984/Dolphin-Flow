@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 from .form_field_value_resolution_services import FormFieldValueResolver
+from .formula_services import FormulaService
 from .models import FormData, FormField, FormRepeatableGroup
 from .permission_context import PermissionContext
 from .repeatable_row_read_services import RepeatableRowReadService
@@ -63,6 +64,10 @@ class ProcessSummaryService:
             .first()
         )
         normal_data = form_data.data if form_data else {}
+        normal_data = FormulaService.calculate_context_data(
+            form=form,
+            data=normal_data,
+        )
 
         summary = []
         normal_fields_by_section = {}
