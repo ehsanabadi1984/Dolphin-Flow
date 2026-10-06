@@ -78,9 +78,17 @@ class ProcessSummaryService:
             instance=instance,
             groups=all_groups,
         )
+        model_reference_cache = RepeatableRowReadService.build_model_reference_cache(
+            rows=[
+                row
+                for grouped_rows in rows_by_group_parent.values()
+                for row in grouped_rows
+            ],
+        )
         formula_repeatable_data = cls._build_formula_repeatable_data(
             groups=all_groups,
             rows_by_group_parent=rows_by_group_parent,
+            model_reference_cache=model_reference_cache,
         )
         formula_data = dict(normal_data)
         formula_data.update(formula_repeatable_data)
@@ -137,17 +145,6 @@ class ProcessSummaryService:
                 if group.parent_group_id is None
             ]
 
-            rows = [
-                row
-                for grouped_rows in rows_by_group_parent.values()
-                for row in grouped_rows
-            ]
-            model_reference_cache = (
-                RepeatableRowReadService.build_model_reference_cache(
-                    rows=rows,
-                )
-            )
-
             for group in sorted(
                 groups,
                 key=lambda item: (item.order, item.id),
@@ -166,7 +163,12 @@ class ProcessSummaryService:
         return summary
 
     @staticmethod
-    def _build_formula_repeatable_data(*, groups, rows_by_group_parent):
+    def _build_formula_repeatable_data(
+        *,
+        groups,
+        rows_by_group_parent,
+        model_reference_cache,
+    ):
         children_by_group = defaultdict(list)
         for group in groups:
             if group.parent_group_id is not None:
@@ -190,6 +192,7 @@ class ProcessSummaryService:
                     value, _ = RepeatableRowReadService._custom_value(
                         field=field,
                         value_object=value_object,
+                        model_reference_cache=model_reference_cache,
                     )
                     payload[field.code] = value
 
