@@ -1352,6 +1352,19 @@ class DynamicFormService:
                 for column in columns
             ]
 
+        print(
+            "TRACE DEVICE HISTORY: FLAT ROWS:",
+            [
+                {
+                    "row_group_code": row.get("row_group_code"),
+                    "device_id": row.get("device_id"),
+                    "has_history": row.get("has_history"),
+                    "instance_device_id": row.get("instance_device_id"),
+                }
+                for row in rows
+            ],
+        )
+
         return {
             "columns": columns,
             "rows": rows,
@@ -3080,6 +3093,24 @@ class DynamicFormService:
                                     },
                                 }
                             )
+
+                    print(
+                        "TRACE DEVICE HISTORY: NORMAL GET ITEM:",
+                        [
+                            {
+                                "instance_device_id": item.get(
+                                    "device", {}
+                                ).get("instance_device_id", ""),
+                                "device_id": item.get(
+                                    "device", {}
+                                ).get("device_id", ""),
+                                "has_history": item.get(
+                                    "device", {}
+                                ).get("has_history", False),
+                            }
+                            for item in items
+                        ],
+                    )
 
                     group_context = {
                         "group": group,
