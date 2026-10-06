@@ -103,7 +103,7 @@ class FormFieldValueResolver:
                 cache[
                     (
                         "MODEL",
-                        field.pk,
+                        config,
                         str(obj[field.choice_value_field]),
                     )
                 ] = str(obj[field.choice_label_field])
@@ -134,8 +134,13 @@ class FormFieldValueResolver:
             return label if label is not None else str(value)
 
         if field.choice_source == FormField.ChoiceSource.MODEL:
+            config = (
+                field.choice_model_id,
+                field.choice_value_field,
+                field.choice_label_field,
+            )
             label = display_cache.get(
-                ("MODEL", field.pk, str(value))
+                ("MODEL", config, str(value))
             )
             return label if label is not None else str(value)
 
