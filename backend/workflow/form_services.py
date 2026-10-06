@@ -21,7 +21,6 @@ from .models import (
     DeviceType,
     FormField,
     RepeatableRow,
-    WorkflowMembership,
     WorkflowTransitionExecution,
 )
 
