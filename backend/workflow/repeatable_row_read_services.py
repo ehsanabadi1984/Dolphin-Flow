@@ -58,7 +58,7 @@ class RepeatableRowReadService:
                 "instance_device__draft_device_type",
             )
             .prefetch_related(
-                "group__fields",
+                "group__fields__choice_model",
                 "instance_device__device__identifiers",
                 "values__field__choice_model",
                 "values__static_choice_item",
