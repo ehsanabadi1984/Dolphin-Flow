@@ -1758,6 +1758,15 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             FormDraftDeviceCreateApplyService,
         )
         original_create_row = FormDraftDeviceCreateApplyService._create_row
+        from workflow.form_draft_create_apply_services import FormDraftCreateApplyService
+        from workflow.form_draft_device_update_apply_services import FormDraftDeviceUpdateApplyService
+        from workflow.form_draft_update_apply_services import FormDraftUpdateApplyService
+        from workflow.form_draft_delete_apply_services import FormDraftDeleteApplyService
+        original_device_create_apply = FormDraftDeviceCreateApplyService.apply
+        original_create_apply = FormDraftCreateApplyService.apply
+        original_device_update_apply = FormDraftDeviceUpdateApplyService.apply
+        original_update_apply = FormDraftUpdateApplyService.apply
+        original_delete_apply = FormDraftDeleteApplyService.apply
 
         def trace_adapt(*args, **kwargs):
             result = original_adapt(*args, **kwargs)
@@ -1798,11 +1807,35 @@ class WorkflowInstancePostAdapterIntegrationTests(TestCase):
             )
             return row
 
+        def trace_stage(label, original):
+            def wrapper(*args, **kwargs):
+                result = original(*args, **kwargs)
+                rows = list(
+                    RepeatableRow.objects.filter(
+                        instance=self.instance,
+                        group=group,
+                    ).select_related("instance_device").order_by("row_order", "pk")
+                )
+                print(
+                    f"\n=== TRACE AFTER {label} ===",
+                    [
+                        (row.pk, row.instance_device_id, row.instance_device.device_id if row.instance_device_id else None)
+                        for row in rows
+                    ],
+                )
+                return result
+            return wrapper
+
         with (
             patch.object(OperatorPanelFormPostAdapter, "adapt", side_effect=trace_adapt),
             patch.object(FormDraftSaveService, "_normalize_submitted_data", side_effect=trace_normalize),
             patch.object(FormDraftDiffService, "build", side_effect=trace_diff),
             patch.object(FormDraftDeviceCreateApplyService, "_create_row", side_effect=trace_create_row),
+            patch.object(FormDraftDeviceCreateApplyService, "apply", side_effect=trace_stage("DEVICE CREATE", original_device_create_apply)),
+            patch.object(FormDraftCreateApplyService, "apply", side_effect=trace_stage("NORMAL CREATE", original_create_apply)),
+            patch.object(FormDraftDeviceUpdateApplyService, "apply", side_effect=trace_stage("DEVICE UPDATE", original_device_update_apply)),
+            patch.object(FormDraftUpdateApplyService, "apply", side_effect=trace_stage("NORMAL UPDATE", original_update_apply)),
+            patch.object(FormDraftDeleteApplyService, "apply", side_effect=trace_stage("DELETE", original_delete_apply)),
         ):
             response = self.client.post(
                 reverse(
