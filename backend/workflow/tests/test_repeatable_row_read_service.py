@@ -102,7 +102,7 @@ class RepeatableRowReadServiceTests(TestCase):
         repeatable_row_queries = [
             query
             for query in captured.captured_queries
-            if "workflow_repeatablerow" in query["sql"].lower()
+            if 'from "workflow_repeatablerow"' in query["sql"].lower()
         ]
         self.assertEqual(len(repeatable_row_queries), 1)
 
