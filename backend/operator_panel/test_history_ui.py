@@ -301,6 +301,55 @@ class HistoryTemplateTests(SimpleTestCase):
         )
         filter_devices.assert_called_once_with(device=device)
 
+    def test_device_history_action_is_hidden_inside_device_history_view(self):
+        template = get_template("operator_panel/_repeatable_flat_table.html")
+        group = SimpleNamespace(
+            group=SimpleNamespace(
+                group_type="DEVICE",
+                code="DEVICE_GROUP",
+                label="Devices",
+            ),
+            flat_table=SimpleNamespace(
+                rows=[
+                    SimpleNamespace(
+                        row_group_code="DEVICE_GROUP",
+                        path=[("DEVICE_GROUP", 0)],
+                        path_key="DEVICE_GROUP_0",
+                        row_id=1,
+                        parent_row_id=None,
+                        device_id=7,
+                        has_history=True,
+                        column_cells=[],
+                        id_inputs=[],
+                        device_instance_id_input=None,
+                        add_children=[],
+                        root_delete=None,
+                        can_delete=False,
+                    )
+                ],
+                columns=[],
+                child_templates=[],
+            ),
+        )
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+
+        context = {
+            "request": request,
+            "instance": SimpleNamespace(pk=42),
+            "group": group,
+            "edit_mode": False,
+            "dynamic_form": SimpleNamespace(is_submitted=True),
+            "can_view_device_history": True,
+            "is_device_history_view": True,
+        }
+
+        rendered = template.render(context)
+
+        self.assertNotIn("سوابق", rendered)
+        self.assertNotIn("/operator/workflow-instance/42/device/7/history/", rendered)
+
+
     def test_renders_top_level_zero_and_false_values(self):
         rendered = self._render({
             "fields": [
