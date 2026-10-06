@@ -1813,6 +1813,21 @@ class DynamicFormService:
                         _has_history=Exists(has_history_subquery),
                     )
 
+                    print("=== TRACE DEVICE HISTORY: INSTANCE DEVICES ===")
+                    for _trace_device in instance_devices:
+                        print(
+                            "TRACE:",
+                            {
+                                "instance_device_id": _trace_device.pk,
+                                "device_id": _trace_device.device_id,
+                                "has_history": bool(
+                                    getattr(_trace_device, "_has_history", False)
+                                ),
+                                "instance_id": _trace_device.instance_id,
+                                "workflow_id": instance.workflow_id,
+                            },
+                        )
+
                     # DEVICE row identity is owned by RepeatableRow.
                     # InstanceDevice is only the device-assignment identity.
                     device_row_ids = {
