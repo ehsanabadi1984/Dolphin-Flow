@@ -233,7 +233,7 @@ class ProcessSummaryServiceTests(TestCase):
             name="Child",
             label="فرزند",
             code="child",
-            order=1,
+            order=2,
         )
         parent_field = FormField.objects.create(
             section=self.section,
