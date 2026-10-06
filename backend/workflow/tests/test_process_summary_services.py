@@ -302,7 +302,7 @@ class ProcessSummaryServiceTests(TestCase):
 
         self.assertEqual(
             ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
-            [{"label": "مبلغ نهایی", "value": "15"}],
+            [{"label": "مبلغ نهایی", "value": "15.00"}],
         )
 
     def test_normal_model_select_is_batch_resolved(self):
