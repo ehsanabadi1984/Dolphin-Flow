@@ -59,6 +59,17 @@ class ProcessSummaryBatchContextService:
             instances=instances,
             groups=groups,
         )
+        rows_by_instance = defaultdict(dict)
+        for (instance_id, group_id, parent_row_id), grouped_rows in rows.items():
+            rows_by_instance[instance_id][(group_id, parent_row_id)] = grouped_rows
+
+        model_reference_cache = RepeatableRowReadService.build_model_reference_cache(
+            rows=[
+                row
+                for grouped_rows in rows.values()
+                for row in grouped_rows
+            ],
+        )
 
         return {
             "instances": {instance.pk: instance for instance in instances},
@@ -67,4 +78,6 @@ class ProcessSummaryBatchContextService:
             "groups": dict(groups_by_workflow),
             "form_data": form_data_by_instance,
             "rows": rows,
+            "rows_by_instance": dict(rows_by_instance),
+            "model_reference_cache": model_reference_cache,
         }
