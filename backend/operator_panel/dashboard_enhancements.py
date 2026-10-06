@@ -3,6 +3,7 @@ from django.utils import timezone
 from accounts.models import UserPreference
 
 from .dashboard_services import DashboardService
+from workflow.process_summary_services import ProcessSummaryService
 
 
 NEXT_ACTION_LIMIT = 5
@@ -23,8 +24,16 @@ class DashboardEnhancementService:
         unfinished_processes = list(unfinished_queryset[:UNFINISHED_PROCESSES_LIMIT])
         self.dashboard._attach_dashboard_state(unfinished_processes, now=timezone.now())
 
+        next_best_actions = self._next_best_actions()
+        summaries = ProcessSummaryService.get_for_instances(
+            instances=next_best_actions,
+            user=self.user,
+        )
+        for instance in next_best_actions:
+            instance.process_summary = summaries.get(instance.pk, [])
+
         return {
-            "next_best_actions": self._next_best_actions(),
+            "next_best_actions": next_best_actions,
             "waiting_for_others": list(waiting_queryset[:WAITING_OTHERS_LIMIT]),
             "waiting_for_others_count": waiting_queryset.count(),
             "unfinished_processes": unfinished_processes,
