@@ -105,6 +105,204 @@ class ProcessSummaryServiceTests(TestCase):
             [{"label": "نام", "value": "علی"}],
         )
 
+    def test_normal_textarea_returns_display_value(self):
+        field = FormField.objects.create(
+            section=self.section,
+            name="Notes",
+            code="notes",
+            field_type=FormField.FieldType.TEXTAREA,
+            label="توضیحات",
+            show_in_process_summary=True,
+        )
+        self.allow_field(field)
+        FormData.objects.create(instance=self.instance, data={"notes": "خط اول\nخط دوم"})
+
+        self.assertEqual(
+            ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            [{"label": "توضیحات", "value": "خط اول\nخط دوم"}],
+        )
+
+    def test_normal_number_uses_decimal_display_contract(self):
+        field = FormField.objects.create(
+            section=self.section,
+            name="Amount",
+            code="amount",
+            field_type=FormField.FieldType.NUMBER,
+            label="مبلغ",
+            decimal_places=2,
+            show_in_process_summary=True,
+        )
+        self.allow_field(field)
+        FormData.objects.create(instance=self.instance, data={"amount": "12.50"})
+
+        self.assertEqual(
+            ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            [{"label": "مبلغ", "value": "12.5"}],
+        )
+
+    def test_normal_date_uses_field_calendar_for_display(self):
+        field = FormField.objects.create(
+            section=self.section,
+            name="Date",
+            code="date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.JALALI,
+            label="تاریخ",
+            show_in_process_summary=True,
+        )
+        self.allow_field(field)
+        FormData.objects.create(instance=self.instance, data={"date": "2026-09-27"})
+
+        self.assertEqual(
+            ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            [{"label": "تاریخ", "value": "۱۴۰۵/۰۷/۰۵"}],
+        )
+
+    def test_normal_datetime_uses_field_calendar_for_display(self):
+        field = FormField.objects.create(
+            section=self.section,
+            name="Date Time",
+            code="date_time",
+            field_type=FormField.FieldType.DATETIME,
+            calendar=FormField.Calendar.JALALI,
+            label="تاریخ و زمان",
+            show_in_process_summary=True,
+        )
+        self.allow_field(field)
+        FormData.objects.create(
+            instance=self.instance,
+            data={"date_time": "2026-09-27T14:30:00"},
+        )
+
+        self.assertEqual(
+            ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            [{"label": "تاریخ و زمان", "value": "۱۴۰۵/۰۷/۰۵ 14:30:00"}],
+        )
+
+    def test_normal_boolean_preserves_existing_display_contract(self):
+        true_field = FormField.objects.create(
+            section=self.section,
+            name="Enabled",
+            code="enabled",
+            field_type=FormField.FieldType.BOOLEAN,
+            label="فعال",
+            show_in_process_summary=True,
+            order=1,
+        )
+        false_field = FormField.objects.create(
+            section=self.section,
+            name="Disabled",
+            code="disabled",
+            field_type=FormField.FieldType.BOOLEAN,
+            label="غیرفعال",
+            show_in_process_summary=True,
+            order=2,
+        )
+        self.allow_field(true_field)
+        self.allow_field(false_field)
+        FormData.objects.create(
+            instance=self.instance,
+            data={"enabled": True, "disabled": False},
+        )
+
+        self.assertEqual(
+            ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            [
+                {"label": "فعال", "value": "True"},
+                {"label": "غیرفعال", "value": "False"},
+            ],
+        )
+
+    def test_normal_static_select_resolves_label(self):
+        from workflow.models import StaticChoiceItem, StaticChoiceSet
+
+        choice_set = StaticChoiceSet.objects.create(name="Status Choices")
+        field = FormField.objects.create(
+            section=self.section,
+            name="Status",
+            code="status",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.STATIC,
+            choice_static_set=choice_set,
+            label="وضعیت",
+            show_in_process_summary=True,
+        )
+        self.allow_field(field)
+        StaticChoiceItem.objects.create(
+            choice_set=choice_set,
+            value="OPEN",
+            label="باز",
+        )
+        FormData.objects.create(instance=self.instance, data={"status": "OPEN"})
+
+        self.assertEqual(
+            ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            [{"label": "وضعیت", "value": "باز"}],
+        )
+
+    def test_normal_lookup_select_resolves_label(self):
+        from workflow.models import LookupItem, LookupList
+
+        lookup_list = LookupList.objects.create(name="Status Lookup", code="SUMMARY_STATUS")
+        field = FormField.objects.create(
+            section=self.section,
+            name="Lookup Status",
+            code="lookup_status",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.LOOKUP,
+            choice_lookup_list=lookup_list,
+            label="وضعیت مرجع",
+            show_in_process_summary=True,
+        )
+        self.allow_field(field)
+        LookupItem.objects.create(
+            lookup_list=lookup_list,
+            value="OPEN",
+            label="باز",
+        )
+        FormData.objects.create(instance=self.instance, data={"lookup_status": "OPEN"})
+
+        self.assertEqual(
+            ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            [{"label": "وضعیت مرجع", "value": "باز"}],
+        )
+
+    def test_normal_formula_uses_calculated_display_value(self):
+        number_field = FormField.objects.create(
+            section=self.section,
+            name="Base Amount",
+            code="base_amount",
+            field_type=FormField.FieldType.NUMBER,
+            label="مبلغ پایه",
+            decimal_places=2,
+            order=1,
+        )
+        formula_field = FormField.objects.create(
+            section=self.section,
+            name="Final Amount",
+            code="final_amount",
+            field_type=FormField.FieldType.FORMULA,
+            label="مبلغ نهایی",
+            decimal_places=2,
+            show_in_process_summary=True,
+            choices={
+                "tokens": [
+                    {"type": "field", "field_id": number_field.pk},
+                    {"type": "operator", "value": "*"},
+                    {"type": "number", "value": "1.5"},
+                ]
+            },
+            order=2,
+        )
+        self.allow_field(number_field)
+        self.allow_field(formula_field)
+        FormData.objects.create(instance=self.instance, data={"base_amount": "10"})
+
+        self.assertEqual(
+            ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            [{"label": "مبلغ نهایی", "value": "15"}],
+        )
+
     def test_normal_model_select_is_batch_resolved(self):
         from workflow.models import DeviceModel, DeviceType
 
