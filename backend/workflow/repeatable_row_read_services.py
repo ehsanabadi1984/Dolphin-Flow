@@ -60,7 +60,7 @@ class RepeatableRowReadService:
             .prefetch_related(
                 "group__fields",
                 "instance_device__device__identifiers",
-                "values__field",
+                "values__field__choice_model",
                 "values__static_choice_item",
                 "values__lookup_item",
             )
@@ -319,7 +319,68 @@ class RepeatableRowReadService:
         }
 
     @staticmethod
-    def _custom_value(*, field, value_object):
+    def build_model_reference_cache(*, rows):
+        """Resolve MODEL SELECT references in batches for prefetched rows."""
+        rows = list(rows)
+        references_by_config = defaultdict(set)
+        fields_by_config = {}
+
+        for row in rows:
+            values_by_field_id = {
+                item.field_id: item
+                for item in row.values.all()
+            }
+            for field in row.group.fields.all():
+                if (
+                    not field.is_active
+                    or field.field_type != FormField.FieldType.SELECT
+                    or field.choice_source != FormField.ChoiceSource.MODEL
+                    or not field.choice_model_id
+                ):
+                    continue
+
+                value_object = values_by_field_id.get(field.pk)
+                reference_id = (
+                    value_object.reference_id
+                    if value_object is not None
+                    else None
+                )
+                if not reference_id:
+                    continue
+
+                config = (
+                    field.choice_model_id,
+                    field.choice_value_field,
+                    field.choice_label_field,
+                )
+                references_by_config[config].add(reference_id)
+                fields_by_config[config] = field
+
+        cache = {}
+
+        for config, reference_ids in references_by_config.items():
+            field = fields_by_config[config]
+            model_class = field.choice_model.model_class()
+            if model_class is None:
+                continue
+
+            value_field = field.choice_value_field
+            label_field = field.choice_label_field
+            objects = (
+                model_class.objects
+                .filter(**{f"{value_field}__in": reference_ids})
+                .order_by("pk")
+                .values(value_field, label_field)
+            )
+
+            for obj in objects:
+                key = (field.pk, obj[value_field])
+                cache.setdefault(key, str(obj[label_field]))
+
+        return cache
+
+    @staticmethod
+    def _custom_value(*, field, value_object, model_reference_cache=None):
         if value_object is None:
             return None, ""
 
@@ -394,6 +455,7 @@ class RepeatableRowReadService:
                     RepeatableRowReadService._model_reference_value(
                         field=field,
                         reference_id=value_object.reference_id,
+                        model_reference_cache=model_reference_cache,
                     )
                 )
 
@@ -402,9 +464,18 @@ class RepeatableRowReadService:
         )
 
     @staticmethod
-    def _model_reference_value(*, field, reference_id):
+    def _model_reference_value(
+        *,
+        field,
+        reference_id,
+        model_reference_cache=None,
+    ):
         if not reference_id or not field.choice_model_id:
             return reference_id, ""
+
+        if model_reference_cache is not None:
+            label = model_reference_cache.get((field.pk, reference_id))
+            return reference_id, label or ""
 
         model_class = field.choice_model.model_class()
         if model_class is None:
