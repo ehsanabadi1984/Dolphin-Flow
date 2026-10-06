@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError
+from django.db.models import Exists, OuterRef, Q
 from .permission_context import PermissionContext
 from .operator_form_serializer import OperatorFormSerializer
 from .repeatable_row_read_services import RepeatableRowReadService
@@ -20,8 +21,8 @@ from .models import (
     DeviceType,
     FormField,
     RepeatableRow,
-
-    
+    WorkflowMembership,
+    WorkflowTransitionExecution,
 )
 
 class DynamicFormService:
@@ -1153,6 +1154,10 @@ class DynamicFormService:
                         "device_id",
                         item.get("device", {}).get("device_id", ""),
                     ),
+                    "has_history": item.get(
+                        "has_history",
+                        item.get("device", {}).get("has_history", False),
+                    ),
                     "path": path,
                     "path_row_ids": path_row_ids,
                     "id_input_name": (
@@ -1276,6 +1281,15 @@ class DynamicFormService:
                     == FormRepeatableGroup.GroupType.DEVICE
                     and root_instance_device_ids.get(root_index)
                 ):
+                    root_item = group_context["items"][root_index]
+                    row["device_id"] = root_item.get(
+                        "device_id",
+                        root_item.get("device", {}).get("device_id", ""),
+                    )
+                    row["has_history"] = root_item.get(
+                        "has_history",
+                        root_item.get("device", {}).get("has_history", False),
+                    )
                     row["device_instance_id_input"] = {
                         "name": (
                             f"{group_context['group'].code}_"
@@ -1767,6 +1781,39 @@ class DynamicFormService:
                         )
                     )
 
+                    # History availability uses the membership-based
+                    # "My Processes" population without importing
+                    # operator_panel into the workflow layer.
+                    my_processes = (
+                        WorkflowInstance.objects
+                        .filter(
+                            workflow__is_active=True,
+                            workflow__memberships__user=user,
+                            workflow__memberships__is_active=True,
+                        )
+                        .exclude(pk=instance.pk)
+                        .filter(
+                            Q(Exists(FormData.objects.filter(
+                                instance_id=OuterRef("pk"),
+                            )))
+                            | Q(Exists(InstanceDevice.objects.filter(
+                                instance_id=OuterRef("pk"),
+                            )))
+                            | Q(Exists(
+                                WorkflowTransitionExecution.objects.filter(
+                                    instance_id=OuterRef("pk"),
+                                )
+                            ))
+                        )
+                    )
+                    has_history_subquery = InstanceDevice.objects.filter(
+                        device_id=OuterRef("device_id"),
+                        instance_id__in=my_processes.values("pk"),
+                    )
+                    instance_devices = instance_devices.annotate(
+                        _has_history=Exists(has_history_subquery),
+                    )
+
                     # DEVICE row identity is owned by RepeatableRow.
                     # InstanceDevice is only the device-assignment identity.
                     device_row_ids = {
@@ -2177,6 +2224,9 @@ class DynamicFormService:
                                         instance=instance,
                                         is_active=True,
                                     )
+                                    .annotate(
+                                        _has_history=Exists(has_history_subquery),
+                                    )
                                     .select_related(
                                         "device",
                                         "device__device_model",
@@ -2565,8 +2615,12 @@ class DynamicFormService:
                             # button.
                             # -------------------------------------------------
 
-                            item["has_history"] = (
-                                is_existing_device
+                            item["has_history"] = bool(
+                                getattr(
+                                    existing_instance_device,
+                                    "_has_history",
+                                    False,
+                                )
                             )
                             item["child_groups"] = build_device_child_contexts(
                                 submitted_item=submitted_item,
@@ -3002,7 +3056,13 @@ class DynamicFormService:
                                             instance_device.description or ""
                                         ),
                                         "is_existing_device": is_existing_device,
-                                        "has_history": is_existing_device,
+                                        "has_history": bool(
+                                            getattr(
+                                                instance_device,
+                                                "_has_history",
+                                                False,
+                                            )
+                                        ),
                                     },
                                 }
                             )
