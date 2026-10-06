@@ -40,7 +40,7 @@ class ProcessSummaryService:
 
         context = ProcessSummaryBatchContextService.build(instances=instances)
 
-        permission_contexts = {}
+        scopes = []
         fields_by_instance = {}
         for instance in instances:
             step = instance.current_step
@@ -49,15 +49,25 @@ class ProcessSummaryService:
                 fields_by_instance[instance.pk] = []
                 continue
 
-            key = (instance.workflow_id, form.pk, step.pk, user.pk)
-            if key not in permission_contexts:
-                permission_contexts[key] = PermissionContext.build(
-                    workflow=instance.workflow,
-                    form=form,
-                    step=step,
-                    user=user,
-                )
+            scopes.append(
+                {
+                    "workflow": instance.workflow,
+                    "form": form,
+                    "step": step,
+                    "user": user,
+                }
+            )
 
+        permission_contexts = PermissionContext.build_batch(scopes=scopes)
+
+        for instance in instances:
+            step = instance.current_step
+            form = context["forms"].get(instance.workflow_id)
+            if step is None or form is None:
+                fields_by_instance[instance.pk] = []
+                continue
+
+            key = (instance.workflow_id, form.pk, step.pk, user.pk)
             fields_by_instance[instance.pk] = cls._summary_normal_fields(
                 sections=context["sections"].get(instance.workflow_id, []),
                 permission_context=permission_contexts[key],
