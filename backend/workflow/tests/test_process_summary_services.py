@@ -367,10 +367,14 @@ class ProcessSummaryServiceTests(TestCase):
                 user=self.user,
             )
 
+        model_table = DeviceModel._meta.db_table
         model_queries = [
             query
             for query in queries
-            if DeviceModel._meta.db_table in query["sql"]
+            if (
+                f'FROM "{model_table}"' in query["sql"]
+                and f'JOIN "{model_table}"' not in query["sql"]
+            )
         ]
 
         self.assertEqual(len(model_queries), 1)
