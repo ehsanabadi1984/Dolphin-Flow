@@ -367,6 +367,10 @@ class ProcessSummaryServiceTests(TestCase):
                 user=self.user,
             )
 
+        for query in queries:
+            if DeviceModel._meta.db_table in query["sql"]:
+                print("MODEL QUERY:", query["sql"])
+
         model_table = DeviceModel._meta.db_table
         model_queries = [
             query
