@@ -4,6 +4,7 @@ from .form_field_value_resolution_services import FormFieldValueResolver
 from .formula_services import FormulaService
 from .models import FormData, FormField, FormRepeatableGroup
 from .permission_context import PermissionContext
+from .process_summary_batch_context_services import ProcessSummaryBatchContextService
 from .repeatable_row_read_services import RepeatableRowReadService
 
 
@@ -23,7 +24,38 @@ class ProcessSummaryService:
         if step is None:
             return []
 
-        form = getattr(instance.workflow, "form_definition", None)
+        context = ProcessSummaryBatchContextService.build(instances=[instance])
+        return cls._render_instance(
+            instance=instance,
+            user=user,
+            step=step,
+            context=context,
+        )
+
+    @classmethod
+    def get_for_instances(cls, *, instances, user):
+        instances = list(instances)
+        if not instances:
+            return {}
+
+        context = ProcessSummaryBatchContextService.build(instances=instances)
+        return {
+            instance.pk: cls._render_instance(
+                instance=instance,
+                user=user,
+                step=instance.current_step,
+                context=context,
+            )
+            for instance in instances
+            if instance.current_step is not None
+        }
+
+    @classmethod
+    def _render_instance(cls, *, instance, user, step, context):
+        if step is None:
+            return []
+
+        form = context["forms"].get(instance.workflow_id)
         if form is None:
             return []
 
@@ -34,23 +66,9 @@ class ProcessSummaryService:
             user=user,
         )
 
-        sections = list(
-            form.sections.filter(is_active=True)
-            .prefetch_related("fields")
-            .order_by("order", "id")
-        )
-        section_ids = [section.pk for section in sections]
+        sections = context["sections"].get(instance.workflow_id, [])
+        repeatable_groups = context["groups"].get(instance.workflow_id, [])
 
-        repeatable_groups = list(
-            FormRepeatableGroup.objects
-            .filter(
-                section_id__in=section_ids,
-                is_active=True,
-            )
-            .select_related("section", "section__form")
-            .prefetch_related("fields__choice_model")
-            .order_by("section_id", "order", "id")
-        )
         groups_by_section = defaultdict(list)
         children_by_parent = defaultdict(list)
         for group in repeatable_groups:
@@ -58,12 +76,7 @@ class ProcessSummaryService:
             if group.parent_group_id is not None:
                 children_by_parent[group.parent_group_id].append(group)
 
-        form_data = (
-            FormData.objects
-            .filter(instance=instance)
-            .first()
-        )
-        normal_data = form_data.data if form_data else {}
+        normal_data = context["form_data"].get(instance.pk, {})
 
         all_groups = cls._flatten_groups(
             [
@@ -74,10 +87,11 @@ class ProcessSummaryService:
             ],
             children_by_parent=children_by_parent,
         )
-        rows_by_group_parent = RepeatableRowReadService.get_rows_by_group_parent(
-            instance=instance,
-            groups=all_groups,
-        )
+        rows_by_group_parent = {
+            key[1:]: rows
+            for key, rows in context["rows"].items()
+            if key[0] == instance.pk
+        }
         model_reference_cache = RepeatableRowReadService.build_model_reference_cache(
             rows=[
                 row
