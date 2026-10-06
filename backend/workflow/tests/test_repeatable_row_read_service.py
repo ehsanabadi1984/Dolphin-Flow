@@ -3,6 +3,8 @@ from datetime import date, datetime, timezone
 
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
+from django.db import connection
 
 from workflow.models import (
     DeviceModel,
@@ -71,6 +73,38 @@ class RepeatableRowReadServiceTests(TestCase):
             instance=self.instance,
             group=self.group,
         )
+
+    def test_get_rows_by_instance_group_parent_batches_instances(self):
+        second_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+        )
+        first_row = self.make_row()
+        second_row = RepeatableRowService.create_row(
+            instance=second_instance,
+            group=self.group,
+        )
+
+        with CaptureQueriesContext(connection) as captured:
+            rows = RepeatableRowReadService.get_rows_by_instance_group_parent(
+                instances=[self.instance, second_instance],
+                groups=[self.group],
+            )
+
+        self.assertEqual(
+            rows[(self.instance.pk, self.group.pk, None)],
+            [first_row],
+        )
+        self.assertEqual(
+            rows[(second_instance.pk, self.group.pk, None)],
+            [second_row],
+        )
+
+        repeatable_row_queries = [
+            query
+            for query in captured.captured_queries
+            if "workflow_repeatablerow" in query["sql"].lower()
+        ]
+        self.assertEqual(len(repeatable_row_queries), 1)
 
     def test_reconstruct_row_returns_fields_in_definition_order(self):
         name = self.make_field("NAME", FormField.FieldType.TEXT)
