@@ -381,7 +381,12 @@ class ProcessSummaryServiceTests(TestCase):
             )
         ]
 
-        self.assertEqual(len(model_queries), 1)
+        self.assertEqual(
+            len(model_queries),
+            1,
+            "\n--- MODEL QUERIES ---\n"
+            + "\n".join(query["sql"] for query in model_queries),
+        )
         self.assertEqual(
             result[0]["rows"][0]["items"],
             [{"label": "مدل", "value": "Model A"}],
