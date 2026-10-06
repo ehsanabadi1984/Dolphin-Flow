@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from .form_services import DynamicFormService
+from .form_field_value_resolution_services import FormFieldValueResolver
 from .models import FormData, FormField, FormRepeatableGroup
 from .permission_context import PermissionContext
 from .repeatable_row_read_services import RepeatableRowReadService
@@ -65,6 +65,8 @@ class ProcessSummaryService:
         normal_data = form_data.data if form_data else {}
 
         summary = []
+        normal_fields_by_section = {}
+        all_normal_fields = []
 
         for section in sections:
             normal_fields = [
@@ -77,15 +79,22 @@ class ProcessSummaryService:
                     and not permission_context.is_field_hidden(field)
                 )
             ]
+            normal_fields.sort(key=lambda item: (item.order, item.id))
+            normal_fields_by_section[section.pk] = normal_fields
+            all_normal_fields.extend(normal_fields)
 
-            for field in sorted(
-                normal_fields,
-                key=lambda item: (item.order, item.id),
-            ):
+        normal_display_cache = FormFieldValueResolver.build_display_cache(
+            fields=all_normal_fields,
+            data=normal_data,
+        )
+
+        for section in sections:
+            for field in normal_fields_by_section.get(section.pk, []):
                 value = normal_data.get(field.code)
-                display_value = DynamicFormService._get_display_value(
+                display_value = FormFieldValueResolver.get_display_value(
                     field=field,
                     value=value,
+                    display_cache=normal_display_cache,
                 )
                 if display_value in ("", None, []):
                     continue
