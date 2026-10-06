@@ -525,6 +525,34 @@ class AbandonedStartConsistencyTests(DashboardSidebarBase):
         self.assertNotIn(f"<span>#{abandoned_number}</span>", content)
 
 
+class DashboardProcessSummaryTests(DashboardSidebarBase):
+    """Process-card summaries are resolved once for the dashboard action batch."""
+
+    @mock.patch(
+        "operator_panel.dashboard_enhancements.ProcessSummaryService.get_for_instances"
+    )
+    def test_next_best_actions_attach_batch_process_summary(self, get_summaries):
+        self.grant_role_action_permissions()
+        instance = self.create_active_instance(started_by=self.other)
+        FormData.objects.create(instance=instance, data={"note": "x"})
+        get_summaries.return_value = {
+            instance.pk: [
+                {"label": "اولویت", "value": "بالا"},
+            ],
+        }
+
+        from operator_panel.dashboard_enhancements import DashboardEnhancementService
+
+        context = DashboardEnhancementService(self.user).get_context()
+
+        get_summaries.assert_called_once()
+        called_instances = get_summaries.call_args.kwargs["instances"]
+        self.assertEqual([item.pk for item in called_instances], [instance.pk])
+        self.assertEqual(
+            context["next_best_actions"][0].process_summary,
+            [{"label": "اولویت", "value": "بالا"}],
+        )
+
 class LimitBeforeFilterTests(DashboardSidebarBase):
     """D: counts come from the full population, never from a list slice."""
 
