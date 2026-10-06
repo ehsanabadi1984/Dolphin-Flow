@@ -1378,6 +1378,10 @@ class FormField(models.Model):
         default=False,
     )
 
+    show_in_process_summary = models.BooleanField(
+        default=False,
+    )
+
     # Number fields store up to six decimal places, while each form field
     # controls how many decimal places are presented/accepted in the UI.
     # Two places is the default so ordinary numeric fields do not render
