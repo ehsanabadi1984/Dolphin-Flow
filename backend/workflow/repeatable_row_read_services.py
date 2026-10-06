@@ -119,6 +119,72 @@ class RepeatableRowReadService:
         return dict(rows_by_group_parent)
 
     @staticmethod
+    def get_rows_by_instance_group_parent(*, instances, groups):
+        """Load repeatable rows for multiple instances and groups in one query."""
+        instances = list(instances)
+        groups = list(groups)
+        if not instances or not groups:
+            return {}
+
+        instance_ids = []
+        workflow_ids = set()
+        for instance in instances:
+            if instance is None or instance.pk is None:
+                raise ValidationError("WorkflowInstance معتبر نیست.")
+            instance_ids.append(instance.pk)
+            workflow_ids.add(instance.workflow_id)
+
+        group_ids = []
+        for group in groups:
+            if group is None or group.pk is None:
+                raise ValidationError("RepeatableGroup معتبر نیست.")
+            group_workflow_id = group.section.form.workflow_id
+            if group_workflow_id not in workflow_ids:
+                raise ValidationError(
+                    "گروه تکرارشونده و WorkflowInstance باید متعلق به همان Workflow باشند."
+                )
+            group_ids.append(group.pk)
+
+        rows = (
+            RepeatableRow.objects
+            .filter(
+                instance_id__in=instance_ids,
+                group_id__in=group_ids,
+            )
+            .select_related(
+                "group",
+                "instance_device",
+                "instance_device__device",
+                "instance_device__device__device_model",
+                "instance_device__device__device_model__device_type",
+                "instance_device__draft_device_model",
+                "instance_device__draft_device_type",
+            )
+            .prefetch_related(
+                "group__fields__choice_model",
+                "instance_device__device__identifiers",
+                "values__field__choice_model",
+                "values__static_choice_item",
+                "values__lookup_item",
+            )
+            .order_by(
+                "instance_id",
+                "group_id",
+                "parent_row_id",
+                "row_order",
+                "id",
+            )
+        )
+
+        rows_by_instance_group_parent = defaultdict(list)
+        for row in rows:
+            rows_by_instance_group_parent[
+                (row.instance_id, row.group_id, row.parent_row_id)
+            ].append(row)
+
+        return dict(rows_by_instance_group_parent)
+
+    @staticmethod
     def reconstruct_row(*, row):
         if row is None or row.pk is None:
             raise ValidationError("RepeatableRow معتبر نیست.")
