@@ -39,19 +39,67 @@ class ProcessSummaryService:
             return {}
 
         context = ProcessSummaryBatchContextService.build(instances=instances)
-        return {
-            instance.pk: cls._render_instance(
+
+        permission_contexts = {}
+        fields_by_instance = {}
+        for instance in instances:
+            step = instance.current_step
+            form = context["forms"].get(instance.workflow_id)
+            if step is None or form is None:
+                fields_by_instance[instance.pk] = []
+                continue
+
+            key = (instance.workflow_id, form.pk, step.pk, user.pk)
+            if key not in permission_contexts:
+                permission_contexts[key] = PermissionContext.build(
+                    workflow=instance.workflow,
+                    form=form,
+                    step=step,
+                    user=user,
+                )
+
+            fields_by_instance[instance.pk] = cls._summary_normal_fields(
+                sections=context["sections"].get(instance.workflow_id, []),
+                permission_context=permission_contexts[key],
+            )
+
+        normal_display_cache = FormFieldValueResolver.build_display_cache_batch(
+            fields_by_instance=fields_by_instance,
+            data_by_instance=context["form_data"],
+        )
+
+        summaries = {}
+        for instance in instances:
+            form = context["forms"].get(instance.workflow_id)
+            step = instance.current_step
+            permission_context = None
+            if form is not None and step is not None:
+                permission_context = permission_contexts[
+                    (instance.workflow_id, form.pk, step.pk, user.pk)
+                ]
+
+            summaries[instance.pk] = cls._render_instance(
                 instance=instance,
                 user=user,
-                step=instance.current_step,
+                step=step,
                 context=context,
+                permission_context=permission_context,
+                normal_display_cache=normal_display_cache,
             )
-            for instance in instances
-            if instance.current_step is not None
-        }
+
+        return summaries
 
     @classmethod
-    def _render_instance(cls, *, instance, user, step, context):
+    def _render_instance(
+        cls,
+        *,
+        instance,
+        user,
+        step,
+        context,
+        permission_context=None,
+        normal_display_cache=None,
+    ):
         if step is None:
             return []
 
@@ -59,12 +107,13 @@ class ProcessSummaryService:
         if form is None:
             return []
 
-        permission_context = PermissionContext.build(
-            workflow=instance.workflow,
-            form=form,
-            step=step,
-            user=user,
-        )
+        if permission_context is None:
+            permission_context = PermissionContext.build(
+                workflow=instance.workflow,
+                form=form,
+                step=step,
+                user=user,
+            )
 
         sections = context["sections"].get(instance.workflow_id, [])
         repeatable_groups = context["groups"].get(instance.workflow_id, [])
@@ -87,18 +136,11 @@ class ProcessSummaryService:
             ],
             children_by_parent=children_by_parent,
         )
-        rows_by_group_parent = {
-            key[1:]: rows
-            for key, rows in context["rows"].items()
-            if key[0] == instance.pk
-        }
-        model_reference_cache = RepeatableRowReadService.build_model_reference_cache(
-            rows=[
-                row
-                for grouped_rows in rows_by_group_parent.values()
-                for row in grouped_rows
-            ],
+        rows_by_group_parent = context["rows_by_instance"].get(
+            instance.pk,
+            {},
         )
+        model_reference_cache = context["model_reference_cache"]
         formula_repeatable_data = cls._build_formula_repeatable_data(
             groups=all_groups,
             rows_by_group_parent=rows_by_group_parent,
@@ -130,10 +172,11 @@ class ProcessSummaryService:
             normal_fields_by_section[section.pk] = normal_fields
             all_normal_fields.extend(normal_fields)
 
-        normal_display_cache = FormFieldValueResolver.build_display_cache(
-            fields=all_normal_fields,
-            data=normal_data,
-        )
+        if normal_display_cache is None:
+            normal_display_cache = FormFieldValueResolver.build_display_cache(
+                fields=all_normal_fields,
+                data=normal_data,
+            )
 
         for section in sections:
             for field in normal_fields_by_section.get(section.pk, []):
@@ -175,6 +218,23 @@ class ProcessSummaryService:
                     summary.append(rendered)
 
         return summary
+
+    @staticmethod
+    def _summary_normal_fields(*, sections, permission_context):
+        fields = []
+        for section in sections:
+            fields.extend(
+                field
+                for field in section.fields.all()
+                if (
+                    field.is_active
+                    and field.repeatable_group_id is None
+                    and field.show_in_process_summary
+                    and not permission_context.is_field_hidden(field)
+                )
+            )
+        fields.sort(key=lambda item: (item.order, item.id))
+        return fields
 
     @staticmethod
     def _build_formula_repeatable_data(
