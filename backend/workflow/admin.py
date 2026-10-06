@@ -3055,6 +3055,7 @@ class FormFieldAdmin(admin.ModelAdmin):
                     "system_key",
                     "help_text",
                     "is_required",
+                    "show_in_process_summary",
                     "decimal_places",
                     "order",
                     "is_active",
