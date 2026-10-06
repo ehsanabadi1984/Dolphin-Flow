@@ -93,6 +93,16 @@ class ProcessSummaryService:
                 instance=instance,
                 groups=cls._flatten_groups(groups),
             )
+            rows = [
+                row
+                for grouped_rows in rows_by_group_parent.values()
+                for row in grouped_rows
+            ]
+            model_reference_cache = (
+                RepeatableRowReadService.build_model_reference_cache(
+                    rows=rows,
+                )
+            )
 
             for group in sorted(
                 groups,
@@ -103,6 +113,7 @@ class ProcessSummaryService:
                     parent_row_id=None,
                     rows_by_group_parent=rows_by_group_parent,
                     permission_context=permission_context,
+                    model_reference_cache=model_reference_cache,
                 )
                 if rendered is not None:
                     summary.append(rendered)
@@ -133,6 +144,7 @@ class ProcessSummaryService:
         parent_row_id,
         rows_by_group_parent,
         permission_context,
+        model_reference_cache,
     ):
         if permission_context.is_group_hidden(group):
             return None
@@ -183,6 +195,7 @@ class ProcessSummaryService:
                         RepeatableRowReadService._custom_value(
                             field=field,
                             value_object=value_object,
+                            model_reference_cache=model_reference_cache,
                         )
                     )
 
@@ -203,6 +216,7 @@ class ProcessSummaryService:
                     parent_row_id=row.pk,
                     rows_by_group_parent=rows_by_group_parent,
                     permission_context=permission_context,
+                    model_reference_cache=model_reference_cache,
                 )
                 if rendered_child is not None:
                     children.append(rendered_child)
