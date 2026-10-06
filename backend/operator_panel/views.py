@@ -785,6 +785,7 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
             "dynamic_form": dynamic_form,
             "edit_mode": edit_mode,
             "can_view_device_history": can_view_device_history,
+            "is_device_history_view": source == "history_device",
             "current_step_execution": current_step_execution,
             "has_saved_data": has_saved_data,
             "page_title": instance.workflow.name,
