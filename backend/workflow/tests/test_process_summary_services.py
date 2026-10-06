@@ -105,6 +105,99 @@ class ProcessSummaryServiceTests(TestCase):
             [{"label": "نام", "value": "علی"}],
         )
 
+    def test_normal_model_select_is_batch_resolved(self):
+        from workflow.models import DeviceModel, DeviceType
+
+        field_a = FormField.objects.create(
+            section=self.section,
+            name="Model A",
+            code="model_a",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.MODEL,
+            choice_model=ContentType.objects.get_for_model(DeviceModel),
+            choice_value_field="code",
+            choice_label_field="name",
+            label="مدل A",
+            show_in_process_summary=True,
+            order=1,
+        )
+        field_b = FormField.objects.create(
+            section=self.section,
+            name="Model B",
+            code="model_b",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.MODEL,
+            choice_model=ContentType.objects.get_for_model(DeviceModel),
+            choice_value_field="code",
+            choice_label_field="name",
+            label="مدل B",
+            show_in_process_summary=True,
+            order=2,
+        )
+        self.allow_field(field_a)
+        self.allow_field(field_b)
+
+        device_type = DeviceType.objects.create(
+            name="Phone",
+            code="NORMAL_SUMMARY_PHONE",
+        )
+        DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Brand",
+            name="Model A",
+            code="NORMAL_SUMMARY_MODEL_A",
+        )
+        DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Brand",
+            name="Model B",
+            code="NORMAL_SUMMARY_MODEL_B",
+        )
+        DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Brand",
+            name="Unrelated",
+            code="NORMAL_SUMMARY_UNRELATED",
+        )
+
+        FormData.objects.create(
+            instance=self.instance,
+            data={
+                "model_a": "NORMAL_SUMMARY_MODEL_A",
+                "model_b": "NORMAL_SUMMARY_MODEL_B",
+            },
+        )
+
+        with CaptureQueriesContext(connection) as queries:
+            result = ProcessSummaryService.get_for_instance(
+                instance=self.instance,
+                user=self.user,
+            )
+
+        model_table = DeviceModel._meta.db_table
+        model_queries = [
+            query["sql"]
+            for query in queries
+            if (
+                f'FROM "{model_table}"' in query["sql"]
+                and f'JOIN "{model_table}"' not in query["sql"]
+            )
+        ]
+
+        self.assertEqual(
+            len(model_queries),
+            1,
+            "\n--- ALL DEVICEMODEL SQL ---\n"
+            + "\n".join(model_queries),
+        )
+        self.assertEqual(
+            result,
+            [
+                {"label": "مدل A", "value": "Model A"},
+                {"label": "مدل B", "value": "Model B"},
+            ],
+        )
+
     def test_disabled_summary_flag_is_excluded(self):
         field = FormField.objects.create(
             section=self.section,
