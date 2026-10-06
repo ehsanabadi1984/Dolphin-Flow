@@ -375,6 +375,92 @@ class ProcessSummaryServiceTests(TestCase):
             [{"label": "جمع مبالغ", "value": "25.00"}],
         )
 
+    def test_normal_formula_aggregate_uses_nested_repeatable_rows(self):
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Orders",
+            label="سفارش‌ها",
+            code="orders",
+            order=1,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="Items",
+            label="اقلام",
+            code="items",
+            order=2,
+        )
+        amount_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Amount",
+            code="amount",
+            field_type=FormField.FieldType.NUMBER,
+            label="مبلغ",
+            decimal_places=2,
+        )
+        formula_field = FormField.objects.create(
+            section=self.section,
+            name="Total Nested Amount",
+            code="total_nested_amount",
+            field_type=FormField.FieldType.FORMULA,
+            label="جمع اقلام",
+            decimal_places=2,
+            show_in_process_summary=True,
+            choices={
+                "version": FormulaService.VERSION,
+                "tokens": [
+                    {"type": "function", "value": "SUM"},
+                    {"type": "paren", "value": "("},
+                    {"type": "field", "field_id": amount_field.pk},
+                    {"type": "paren", "value": ")"},
+                ],
+            },
+            order=3,
+        )
+        self.allow_group(parent_group)
+        self.allow_group(child_group)
+        self.allow_field(amount_field)
+        self.allow_field(formula_field)
+
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent_group,
+            row_order=0,
+        )
+        child_row_one = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        child_row_two = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=1,
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row_one,
+            field=amount_field,
+            decimal_value="10",
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row_two,
+            field=amount_field,
+            decimal_value="15",
+        )
+        FormData.objects.create(instance=self.instance, data={})
+
+        self.assertEqual(
+            ProcessSummaryService.get_for_instance(
+                instance=self.instance,
+                user=self.user,
+            ),
+            [{"label": "جمع اقلام", "value": "25.00"}],
+        )
+
     def test_normal_model_select_is_batch_resolved(self):
         from workflow.models import DeviceModel, DeviceType
 
