@@ -897,3 +897,197 @@ class ProcessSummaryServiceTests(TestCase):
             result[0]["rows"][0]["items"],
             [{"label": "IMEI", "value": "123456"}],
         )
+
+
+    def test_batch_summary_matches_single_instance_summaries(self):
+        second_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            name="Batch Name",
+            code="batch_name",
+            field_type=FormField.FieldType.TEXT,
+            label="نام",
+            show_in_process_summary=True,
+        )
+        self.allow_field(field)
+        FormData.objects.create(instance=self.instance, data={"batch_name": "اول"})
+        FormData.objects.create(instance=second_instance, data={"batch_name": "دوم"})
+
+        expected = {
+            self.instance.pk: ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            second_instance.pk: ProcessSummaryService.get_for_instance(instance=second_instance, user=self.user),
+        }
+        actual = ProcessSummaryService.get_for_instances(
+            instances=[self.instance, second_instance],
+            user=self.user,
+        )
+        self.assertEqual(actual, expected)
+
+    def test_batch_summary_keeps_different_workflows_separate(self):
+        other_workflow = Workflow.objects.create(
+            name="Other Process Summary Test",
+            code="OTHER_PROCESS_SUMMARY_TEST",
+        )
+        other_step = WorkflowStep.objects.create(
+            workflow=other_workflow,
+            name="Other Step",
+            code="OTHER_SUMMARY_STEP",
+            order=1,
+        )
+        WorkflowMembership.objects.create(
+            workflow=other_workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+        other_form = FormDefinition.objects.create(
+            workflow=other_workflow,
+            name="Other Summary Form",
+        )
+        other_section = FormSection.objects.create(
+            form=other_form,
+            name="Other Main",
+            code="OTHER_MAIN",
+            order=1,
+        )
+        other_field = FormField.objects.create(
+            section=other_section,
+            name="Other Name",
+            code="other_name",
+            field_type=FormField.FieldType.TEXT,
+            label="نام دیگر",
+            show_in_process_summary=True,
+        )
+        FieldAccess.objects.create(
+            field=other_field,
+            step=other_step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+        other_instance = WorkflowInstance.objects.create(
+            workflow=other_workflow,
+            current_step=other_step,
+        )
+        FormData.objects.create(instance=other_instance, data={"other_name": "سایر"})
+        FormData.objects.create(instance=self.instance, data={"other_name": "نباید دیده شود"})
+
+        expected = {
+            self.instance.pk: ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            other_instance.pk: ProcessSummaryService.get_for_instance(instance=other_instance, user=self.user),
+        }
+        actual = ProcessSummaryService.get_for_instances(
+            instances=[self.instance, other_instance],
+            user=self.user,
+        )
+        self.assertEqual(actual, expected)
+
+    def test_batch_summary_preserves_nested_repeatable_output(self):
+        second_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+        )
+        parent = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Batch Parent",
+            label="والد",
+            code="batch_parent",
+            order=1,
+        )
+        child = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent,
+            name="Batch Child",
+            label="فرزند",
+            code="batch_child",
+            order=2,
+        )
+        parent_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent,
+            name="Parent Value",
+            code="parent_value",
+            field_type=FormField.FieldType.TEXT,
+            label="والد",
+            show_in_process_summary=True,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child,
+            name="Child Value",
+            code="child_value",
+            field_type=FormField.FieldType.TEXT,
+            label="فرزند",
+            show_in_process_summary=True,
+        )
+        self.allow_group(parent)
+        self.allow_group(child)
+        self.allow_field(parent_field)
+        self.allow_field(child_field)
+
+        parent_row = RepeatableRow.objects.create(instance=self.instance, group=parent, row_order=0)
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance, group=child, parent_row=parent_row, row_order=0
+        )
+        RepeatableRowValue.objects.create(row=parent_row, field=parent_field, text_value="A")
+        RepeatableRowValue.objects.create(row=child_row, field=child_field, text_value="A-child")
+
+        other_parent_row = RepeatableRow.objects.create(
+            instance=second_instance, group=parent, row_order=0
+        )
+        other_child_row = RepeatableRow.objects.create(
+            instance=second_instance, group=child, parent_row=other_parent_row, row_order=0
+        )
+        RepeatableRowValue.objects.create(row=other_parent_row, field=parent_field, text_value="B")
+        RepeatableRowValue.objects.create(row=other_child_row, field=child_field, text_value="B-child")
+
+        expected = {
+            self.instance.pk: ProcessSummaryService.get_for_instance(instance=self.instance, user=self.user),
+            second_instance.pk: ProcessSummaryService.get_for_instance(instance=second_instance, user=self.user),
+        }
+        actual = ProcessSummaryService.get_for_instances(
+            instances=[self.instance, second_instance],
+            user=self.user,
+        )
+        self.assertEqual(actual, expected)
+
+    def test_batch_summary_reads_form_data_and_rows_once(self):
+        second_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            name="Batch Value",
+            code="batch_value",
+            field_type=FormField.FieldType.TEXT,
+            label="مقدار",
+            show_in_process_summary=True,
+        )
+        self.allow_field(field)
+        FormData.objects.create(instance=self.instance, data={"batch_value": "A"})
+        FormData.objects.create(instance=second_instance, data={"batch_value": "B"})
+
+        with CaptureQueriesContext(connection) as queries:
+            result = ProcessSummaryService.get_for_instances(
+                instances=[self.instance, second_instance],
+                user=self.user,
+            )
+
+        form_data_table = FormData._meta.db_table
+        form_data_queries = [
+            query["sql"] for query in queries
+            if f'FROM "{form_data_table}"' in query["sql"]
+        ]
+        row_table = RepeatableRow._meta.db_table
+        row_queries = [
+            query["sql"] for query in queries
+            if f'FROM "{row_table}"' in query["sql"]
+        ]
+
+        self.assertEqual(result[self.instance.pk], [{"label": "مقدار", "value": "A"}])
+        self.assertEqual(result[second_instance.pk], [{"label": "مقدار", "value": "B"}])
+        self.assertEqual(len(form_data_queries), 1)
+        self.assertEqual(len(row_queries), 1)
