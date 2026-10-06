@@ -899,6 +899,223 @@ class ProcessSummaryServiceTests(TestCase):
         )
 
 
+    def test_batch_summary_reuses_permission_context_for_same_scope(self):
+        from unittest.mock import patch
+
+        second_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            name="Shared",
+            code="shared",
+            field_type=FormField.FieldType.TEXT,
+            label="مشترک",
+            show_in_process_summary=True,
+        )
+        self.allow_field(field)
+        FormData.objects.create(instance=self.instance, data={"shared": "اول"})
+        FormData.objects.create(instance=second_instance, data={"shared": "دوم"})
+
+        with patch(
+            "workflow.process_summary_services.PermissionContext.build",
+            wraps=__import__(
+                "workflow.permission_context",
+                fromlist=["PermissionContext"],
+            ).PermissionContext.build,
+        ) as build:
+            result = ProcessSummaryService.get_for_instances(
+                instances=[self.instance, second_instance],
+                user=self.user,
+            )
+
+        self.assertEqual(build.call_count, 1)
+        self.assertEqual(
+            result,
+            {
+                self.instance.pk: [{"label": "مشترک", "value": "اول"}],
+                second_instance.pk: [{"label": "مشترک", "value": "دوم"}],
+            },
+        )
+
+    def test_batch_summary_reuses_normal_display_lookups_across_instances(self):
+        from workflow.models import LookupItem, LookupList, StaticChoiceItem, StaticChoiceSet
+
+        second_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+        )
+        choice_set = StaticChoiceSet.objects.create(name="Batch Summary Choices")
+        lookup_list = LookupList.objects.create(
+            name="Batch Summary Lookup",
+            code="BATCH_SUMMARY_LOOKUP",
+        )
+        static_field = FormField.objects.create(
+            section=self.section,
+            name="Static",
+            code="static",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.STATIC,
+            choice_static_set=choice_set,
+            label="ثابت",
+            show_in_process_summary=True,
+            order=1,
+        )
+        lookup_field = FormField.objects.create(
+            section=self.section,
+            name="Lookup",
+            code="lookup",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.LOOKUP,
+            choice_lookup_list=lookup_list,
+            label="مرجع",
+            show_in_process_summary=True,
+            order=2,
+        )
+        self.allow_field(static_field)
+        self.allow_field(lookup_field)
+        StaticChoiceItem.objects.create(
+            choice_set=choice_set,
+            value="OPEN",
+            label="باز",
+        )
+        LookupItem.objects.create(
+            lookup_list=lookup_list,
+            value="OPEN",
+            label="باز",
+        )
+        FormData.objects.create(
+            instance=self.instance,
+            data={"static": "OPEN", "lookup": "OPEN"},
+        )
+        FormData.objects.create(
+            instance=second_instance,
+            data={"static": "OPEN", "lookup": "OPEN"},
+        )
+
+        with CaptureQueriesContext(connection) as queries:
+            result = ProcessSummaryService.get_for_instances(
+                instances=[self.instance, second_instance],
+                user=self.user,
+            )
+
+        sql = [query["sql"].lower() for query in queries.captured_queries]
+        static_table = StaticChoiceItem._meta.db_table.lower()
+        lookup_table = LookupItem._meta.db_table.lower()
+        self.assertEqual(
+            sum(f'from "{static_table}"' in query for query in sql),
+            1,
+        )
+        self.assertEqual(
+            sum(f'from "{lookup_table}"' in query for query in sql),
+            1,
+        )
+        self.assertEqual(
+            result,
+            {
+                self.instance.pk: [
+                    {"label": "ثابت", "value": "باز"},
+                    {"label": "مرجع", "value": "باز"},
+                ],
+                second_instance.pk: [
+                    {"label": "ثابت", "value": "باز"},
+                    {"label": "مرجع", "value": "باز"},
+                ],
+            },
+        )
+
+    def test_batch_summary_reuses_repeatable_model_lookup_across_instances(self):
+        from workflow.models import DeviceModel, DeviceType
+
+        second_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+        )
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Models",
+            code="models",
+            order=1,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Model",
+            code="model",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.MODEL,
+            choice_model=ContentType.objects.get_for_model(DeviceModel),
+            choice_value_field="code",
+            choice_label_field="name",
+            label="مدل",
+            show_in_process_summary=True,
+        )
+        self.allow_group(group)
+        self.allow_field(field)
+        device_type = DeviceType.objects.create(
+            name="Phone",
+            code="BATCH_SUMMARY_PHONE",
+        )
+        model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Brand",
+            name="Model",
+            code="BATCH_SUMMARY_MODEL",
+        )
+
+        for instance in (self.instance, second_instance):
+            row = RepeatableRow.objects.create(
+                instance=instance,
+                group=group,
+                row_order=0,
+            )
+            RepeatableRowValue.objects.create(
+                row=row,
+                field=field,
+                reference_id=model.code,
+            )
+
+        with CaptureQueriesContext(connection) as queries:
+            result = ProcessSummaryService.get_for_instances(
+                instances=[self.instance, second_instance],
+                user=self.user,
+            )
+
+        model_table = DeviceModel._meta.db_table
+        model_queries = [
+            query["sql"]
+            for query in queries.captured_queries
+            if (
+                f'FROM "{model_table}"' in query["sql"]
+                and f'JOIN "{model_table}"' not in query["sql"]
+            )
+        ]
+        self.assertEqual(len(model_queries), 1)
+        self.assertEqual(
+            result[self.instance.pk][0]["rows"][0]["items"],
+            [{"label": "مدل", "value": "Model"}],
+        )
+        self.assertEqual(
+            result[second_instance.pk][0]["rows"][0]["items"],
+            [{"label": "مدل", "value": "Model"}],
+        )
+
+    def test_batch_summary_includes_instances_without_current_step(self):
+        no_step_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=None,
+        )
+
+        result = ProcessSummaryService.get_for_instances(
+            instances=[self.instance, no_step_instance],
+            user=self.user,
+        )
+
+        self.assertIn(self.instance.pk, result)
+        self.assertIn(no_step_instance.pk, result)
+        self.assertEqual(result[no_step_instance.pk], [])
+
     def test_batch_summary_matches_single_instance_summaries(self):
         second_instance = WorkflowInstance.objects.create(
             workflow=self.workflow,
