@@ -64,9 +64,29 @@ class ProcessSummaryService:
             .first()
         )
         normal_data = form_data.data if form_data else {}
+
+        all_groups = cls._flatten_groups(
+            [
+                group
+                for section in sections
+                for group in groups_by_section.get(section.pk, [])
+                if group.parent_group_id is None
+            ],
+            children_by_parent=children_by_parent,
+        )
+        rows_by_group_parent = RepeatableRowReadService.get_rows_by_group_parent(
+            instance=instance,
+            groups=all_groups,
+        )
+        formula_repeatable_data = cls._build_formula_repeatable_data(
+            groups=all_groups,
+            rows_by_group_parent=rows_by_group_parent,
+        )
+        formula_data = dict(normal_data)
+        formula_data.update(formula_repeatable_data)
         normal_data = FormulaService.calculate_context_data(
             form=form,
-            data=normal_data,
+            data=formula_data,
         )
 
         summary = []
@@ -117,13 +137,6 @@ class ProcessSummaryService:
                 if group.parent_group_id is None
             ]
 
-            rows_by_group_parent = RepeatableRowReadService.get_rows_by_group_parent(
-                instance=instance,
-                groups=cls._flatten_groups(
-                    groups,
-                    children_by_parent=children_by_parent,
-                ),
-            )
             rows = [
                 row
                 for grouped_rows in rows_by_group_parent.values()
@@ -151,6 +164,56 @@ class ProcessSummaryService:
                     summary.append(rendered)
 
         return summary
+
+    @staticmethod
+    def _build_formula_repeatable_data(*, groups, rows_by_group_parent):
+        children_by_group = defaultdict(list)
+        for group in groups:
+            if group.parent_group_id is not None:
+                children_by_group[group.parent_group_id].append(group)
+
+        def build_group(group, parent_row_id=None):
+            rows = rows_by_group_parent.get((group.pk, parent_row_id), [])
+            items = []
+            for row in rows:
+                values_by_field_id = {
+                    item.field_id: item
+                    for item in row.values.all()
+                }
+                payload = {}
+                for field in group.fields.all():
+                    if field.system_key != FormField.SystemKey.NONE:
+                        continue
+                    value_object = values_by_field_id.get(field.pk)
+                    value, _ = RepeatableRowReadService._custom_value(
+                        field=field,
+                        value_object=value_object,
+                    )
+                    payload[field.code] = value
+
+                child_payloads = []
+                for child_group in children_by_group.get(group.pk, []):
+                    child_payloads.append(
+                        build_group(
+                            child_group,
+                            parent_row_id=row.pk,
+                        )
+                    )
+                if child_payloads:
+                    payload["child_groups"] = child_payloads
+
+                items.append(payload)
+
+            return {
+                "code": group.code,
+                "items": items,
+            }
+
+        return {
+            group.code: build_group(group)
+            for group in groups
+            if group.parent_group_id is None
+        }
 
     @staticmethod
     def _flatten_groups(groups, *, children_by_parent):
