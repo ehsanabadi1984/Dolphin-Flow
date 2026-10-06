@@ -35,13 +35,27 @@ class ProcessSummaryService:
 
         sections = list(
             form.sections.filter(is_active=True)
-            .prefetch_related(
-                "fields",
-                "repeatable_groups__fields",
-                "repeatable_groups__child_groups__fields",
-            )
+            .prefetch_related("fields")
             .order_by("order", "id")
         )
+        section_ids = [section.pk for section in sections]
+
+        repeatable_groups = list(
+            FormRepeatableGroup.objects
+            .filter(
+                section_id__in=section_ids,
+                is_active=True,
+            )
+            .select_related("section", "section__form")
+            .prefetch_related("fields__choice_model")
+            .order_by("section_id", "order", "id")
+        )
+        groups_by_section = defaultdict(list)
+        children_by_parent = defaultdict(list)
+        for group in repeatable_groups:
+            groups_by_section[group.section_id].append(group)
+            if group.parent_group_id is not None:
+                children_by_parent[group.parent_group_id].append(group)
 
         form_data = (
             FormData.objects
@@ -85,13 +99,16 @@ class ProcessSummaryService:
 
             groups = [
                 group
-                for group in section.repeatable_groups.all()
-                if group.is_active and group.parent_group_id is None
+                for group in groups_by_section.get(section.pk, [])
+                if group.parent_group_id is None
             ]
 
             rows_by_group_parent = RepeatableRowReadService.get_rows_by_group_parent(
                 instance=instance,
-                groups=cls._flatten_groups(groups),
+                groups=cls._flatten_groups(
+                    groups,
+                    children_by_parent=children_by_parent,
+                ),
             )
             rows = [
                 row
@@ -114,6 +131,7 @@ class ProcessSummaryService:
                     rows_by_group_parent=rows_by_group_parent,
                     permission_context=permission_context,
                     model_reference_cache=model_reference_cache,
+                    children_by_parent=children_by_parent,
                 )
                 if rendered is not None:
                     summary.append(rendered)
@@ -121,14 +139,12 @@ class ProcessSummaryService:
         return summary
 
     @staticmethod
-    def _flatten_groups(groups):
+    def _flatten_groups(groups, *, children_by_parent):
         result = []
 
         def visit(group):
             result.append(group)
-            for child in group.child_groups.filter(is_active=True).order_by(
-                "order", "id"
-            ):
+            for child in children_by_parent.get(group.pk, []):
                 visit(child)
 
         for group in groups:
@@ -145,6 +161,7 @@ class ProcessSummaryService:
         rows_by_group_parent,
         permission_context,
         model_reference_cache,
+        children_by_parent,
     ):
         if permission_context.is_group_hidden(group):
             return None
@@ -160,12 +177,7 @@ class ProcessSummaryService:
         ]
         fields.sort(key=lambda item: (item.order, item.id))
 
-        child_groups = [
-            child
-            for child in group.child_groups.all()
-            if child.is_active
-        ]
-        child_groups.sort(key=lambda item: (item.order, item.id))
+        child_groups = list(children_by_parent.get(group.pk, []))
 
         rows = rows_by_group_parent.get(
             (group.pk, parent_row_id),
@@ -217,6 +229,7 @@ class ProcessSummaryService:
                     rows_by_group_parent=rows_by_group_parent,
                     permission_context=permission_context,
                     model_reference_cache=model_reference_cache,
+                    children_by_parent=children_by_parent,
                 )
                 if rendered_child is not None:
                     children.append(rendered_child)
