@@ -19,6 +19,7 @@ from workflow.models import (
     WorkflowMembership,
     WorkflowStep,
 )
+from workflow.formula_services import FormulaService
 from workflow.process_summary_services import ProcessSummaryService
 
 
@@ -286,11 +287,12 @@ class ProcessSummaryServiceTests(TestCase):
             decimal_places=2,
             show_in_process_summary=True,
             choices={
+                "version": FormulaService.VERSION,
                 "tokens": [
                     {"type": "field", "field_id": number_field.pk},
                     {"type": "operator", "value": "*"},
                     {"type": "number", "value": "1.5"},
-                ]
+                ],
             },
             order=2,
         )
