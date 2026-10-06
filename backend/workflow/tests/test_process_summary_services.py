@@ -305,6 +305,76 @@ class ProcessSummaryServiceTests(TestCase):
             [{"label": "مبلغ نهایی", "value": "15.00"}],
         )
 
+    def test_normal_formula_aggregate_uses_repeatable_rows(self):
+        amount_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Amounts",
+            label="مبالغ",
+            code="amounts",
+            order=1,
+        )
+        amount_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=amount_group,
+            name="Amount",
+            code="amount",
+            field_type=FormField.FieldType.NUMBER,
+            label="مبلغ",
+            decimal_places=2,
+        )
+        formula_field = FormField.objects.create(
+            section=self.section,
+            name="Total Amount",
+            code="total_amount",
+            field_type=FormField.FieldType.FORMULA,
+            label="جمع مبالغ",
+            decimal_places=2,
+            show_in_process_summary=True,
+            choices={
+                "version": FormulaService.VERSION,
+                "tokens": [
+                    {"type": "function", "value": "SUM"},
+                    {"type": "paren", "value": "("},
+                    {"type": "field", "field_id": amount_field.pk},
+                    {"type": "paren", "value": ")"},
+                ],
+            },
+            order=2,
+        )
+        self.allow_group(amount_group)
+        self.allow_field(amount_field)
+        self.allow_field(formula_field)
+
+        row_one = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=amount_group,
+            row_order=0,
+        )
+        row_two = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=amount_group,
+            row_order=1,
+        )
+        RepeatableRowValue.objects.create(
+            row=row_one,
+            field=amount_field,
+            decimal_value="10",
+        )
+        RepeatableRowValue.objects.create(
+            row=row_two,
+            field=amount_field,
+            decimal_value="15",
+        )
+        FormData.objects.create(instance=self.instance, data={})
+
+        self.assertEqual(
+            ProcessSummaryService.get_for_instance(
+                instance=self.instance,
+                user=self.user,
+            ),
+            [{"label": "جمع مبالغ", "value": "25.00"}],
+        )
+
     def test_normal_model_select_is_batch_resolved(self):
         from workflow.models import DeviceModel, DeviceType
 
