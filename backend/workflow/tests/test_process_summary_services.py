@@ -1,5 +1,8 @@
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from workflow.models import (
     FieldAccess,
@@ -292,6 +295,92 @@ class ProcessSummaryServiceTests(TestCase):
         self.assertEqual(
             result[0]["rows"][0]["children"][0]["rows"][0]["items"],
             [{"label": "فرزند", "value": "C"}],
+        )
+
+    def test_repeatable_model_select_is_batch_resolved(self):
+        from workflow.models import DeviceModel, DeviceType
+
+        group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Models",
+            label="مدل‌ها",
+            code="models",
+            order=1,
+        )
+        field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Model",
+            code="model",
+            field_type=FormField.FieldType.SELECT,
+            choice_source=FormField.ChoiceSource.MODEL,
+            choice_model=ContentType.objects.get_for_model(DeviceModel),
+            choice_value_field="code",
+            choice_label_field="name",
+            label="مدل",
+            show_in_process_summary=True,
+        )
+        self.allow_group(group)
+        self.allow_field(field)
+
+        device_type = DeviceType.objects.create(
+            name="Phone",
+            code="SUMMARY_MODEL_PHONE",
+        )
+        model_a = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Brand",
+            name="Model A",
+            code="SUMMARY_MODEL_A",
+        )
+        model_b = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Brand",
+            name="Model B",
+            code="SUMMARY_MODEL_B",
+        )
+
+        row_a = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=0,
+        )
+        row_b = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=group,
+            row_order=1,
+        )
+        RepeatableRowValue.objects.create(
+            row=row_a,
+            field=field,
+            reference_id=model_a.code,
+        )
+        RepeatableRowValue.objects.create(
+            row=row_b,
+            field=field,
+            reference_id=model_b.code,
+        )
+
+        with CaptureQueriesContext(connection) as queries:
+            result = ProcessSummaryService.get_for_instance(
+                instance=self.instance,
+                user=self.user,
+            )
+
+        model_queries = [
+            query
+            for query in queries
+            if DeviceModel._meta.db_table in query["sql"]
+        ]
+
+        self.assertEqual(len(model_queries), 1)
+        self.assertEqual(
+            result[0]["rows"][0]["items"],
+            [{"label": "مدل", "value": "Model A"}],
+        )
+        self.assertEqual(
+            result[0]["rows"][1]["items"],
+            [{"label": "مدل", "value": "Model B"}],
         )
 
     def test_repeatable_device_system_field_uses_read_service(self):
