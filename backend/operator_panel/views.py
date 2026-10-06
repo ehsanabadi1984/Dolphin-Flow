@@ -389,16 +389,6 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
         action=HISTORY_ACTION,
     )
 
-    print(
-        "=== TRACE DEVICE HISTORY: VIEW PERMISSION ===",
-        {
-            "user_id": request.user.pk,
-            "instance_id": instance.pk,
-            "workflow_id": instance.workflow_id,
-            "can_view_device_history": can_view_device_history,
-        },
-    )
-
     # =========================================================
     # EDIT MODE
     # =========================================================
