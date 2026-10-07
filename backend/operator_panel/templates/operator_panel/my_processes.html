@@ -19,10 +19,11 @@
 .df-process-list-panel { overflow:hidden; }
 .df-process-count { color:var(--muted); font-size:10px; }
 .df-process-list { max-height:620px; overflow-y:auto; scrollbar-width:thin; }
-.df-process-row { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:17px 20px; border-bottom:1px solid var(--border); }
+.df-process-row { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:17px 20px; border-bottom:1px solid var(--border); }
+.df-process-row-main { flex:1; min-width:0; }
+.df-process-summary { margin-top:11px; padding:10px 12px; border:1px solid var(--border); border-radius:9px; background:var(--surface-2); }
 .df-process-row:last-child { border-bottom:0; }
-.df-process-row-main { min-width:0; }
-.df-process-summary { display:flex; flex-direction:column; gap:6px; margin-top:10px; padding-top:9px; border-top:1px solid var(--border); font-size:10px; }
+.df-process-summary { display:flex; flex-direction:column; gap:6px; font-size:10px; }
 .df-process-summary-item { line-height:1.7; }
 .df-process-summary-label { color:var(--muted); }
 .df-process-summary-group { display:flex; flex-direction:column; gap:4px; }
