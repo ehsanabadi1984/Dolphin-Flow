@@ -4,7 +4,13 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from workflow.models import Workflow, WorkflowInstance, WorkflowStep
+from workflow.models import (
+    FormData,
+    Workflow,
+    WorkflowInstance,
+    WorkflowMembership,
+    WorkflowStep,
+)
 
 
 User = get_user_model()
@@ -21,6 +27,12 @@ class MyProcessesSummaryWiringTests(TestCase):
             code="SUMMARY_WF",
             is_active=True,
         )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
         self.step = WorkflowStep.objects.create(
             workflow=self.workflow,
             name="Summary Step",
@@ -33,6 +45,10 @@ class MyProcessesSummaryWiringTests(TestCase):
             current_step=self.step,
             started_by=self.user,
             status=WorkflowInstance.Status.ACTIVE,
+        )
+        FormData.objects.create(
+            instance=self.instance,
+            data={"note": "summary"},
         )
 
     def test_my_processes_attaches_batch_summary_to_page_instances(self):
@@ -62,12 +78,8 @@ class MyProcessesSummaryWiringTests(TestCase):
                 ],
             },
         ]
-        queryset = WorkflowInstance.objects.filter(pk=self.instance.pk)
 
         with patch(
-            "operator_panel.process_views.DashboardService.my_processes_queryset",
-            return_value=queryset,
-        ), patch(
             "operator_panel.process_views.ProcessSummaryService.get_for_instances",
             return_value={self.instance.pk: summary},
         ) as get_summaries:
@@ -88,3 +100,7 @@ class MyProcessesSummaryWiringTests(TestCase):
         self.assertContains(response, "Laptop")
         self.assertContains(response, "Details")
         self.assertContains(response, "SN-42")
+        self.assertContains(response, '<select id="process-workflow" name="workflow">')
+        self.assertContains(response, "</select>")
+        self.assertContains(response, '<div class="df-process-row">')
+        self.assertContains(response, "Summary WF")
