@@ -59,28 +59,7 @@
 {% for group in snapshot.repeatable_groups %}
 <div class="module">
     <h2>{{ group.name }}</h2>
-
-    {% for item in group.items %}
-        <div style="margin:1rem 0 1.5rem;">
-            <h3>آیتم {{ forloop.counter }}</h3>
-            <table>
-                <thead>
-                    <tr>
-                        {% for field in item.fields %}
-                            <th>{{ field.display_label|default:field.label }}</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        {% for field in item.fields %}
-                            <td>{% if field.display_value %}{{ field.display_value }}{% elif field.value %}{{ field.value }}{% else %}—{% endif %}</td>
-                        {% endfor %}
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    {% endfor %}
+    {% include "admin/workflow/_history_group.html" with group=group only %}
 </div>
 {% endfor %}
 
