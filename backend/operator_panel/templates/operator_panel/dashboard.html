@@ -77,7 +77,6 @@
                         <div class="df-next-action-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}{% if instance.dashboard_sla.configured %}{{ instance.dashboard_sla.label }}{% else %}بدون SLA{% endif %}</div>
                         {% if instance.process_summary %}
                             <div class="df-next-action-summary">
-                                <div class="df-next-action-summary-header">خلاصه فرم · {{ instance.workflow.name }}</div>
                                 {% include "operator_panel/_process_summary.html" with summary=instance.process_summary only %}
                             </div>
                         {% endif %}
