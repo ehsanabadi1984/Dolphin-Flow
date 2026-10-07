@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db.models import Prefetch
 
 from .form_file_models import FormFile
@@ -277,6 +279,22 @@ class HistoryService:
         }
 
     @staticmethod
+    def _json_safe_value(value):
+        if isinstance(value, Decimal):
+            return float(value)
+        if isinstance(value, dict):
+            return {
+                key: HistoryService._json_safe_value(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, (list, tuple)):
+            return [
+                HistoryService._json_safe_value(item)
+                for item in value
+            ]
+        return value
+
+    @staticmethod
     def _serialize_field(
         *,
         field,
@@ -291,14 +309,13 @@ class HistoryService:
             "display_label": display_label,
             "display_order": display_order,
             "field_type": field.field_type,
-            "value": value,
+            "value": HistoryService._json_safe_value(value),
             "display_value": DynamicFormService._get_display_value(
                 field=field,
                 value=value,
             ),
             "history_field_id": history_field_id,
         }
-
     @staticmethod
     def _build_normal_items(
         *,
