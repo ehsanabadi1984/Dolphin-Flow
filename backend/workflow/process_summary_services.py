@@ -22,7 +22,7 @@ class ProcessSummaryService:
     def get_for_instance(cls, *, instance, user, step=None):
         step = step or instance.current_step
         if step is None:
-            step = cls._summary_step_for_instance(instance)
+            step = cls._summary_step_for_instance(instance, user=user)
         if step is None:
             return []
 
@@ -42,7 +42,7 @@ class ProcessSummaryService:
 
         context = ProcessSummaryBatchContextService.build(instances=instances)
 
-        summary_steps = cls._summary_steps_for_instances(instances)
+        summary_steps = cls._summary_steps_for_instances(instances, user=user)
         scopes = []
         fields_by_instance = {}
         for instance in instances:
@@ -103,10 +103,13 @@ class ProcessSummaryService:
         return summaries
 
     @staticmethod
-    def _summary_step_for_instance(instance):
+    def _summary_step_for_instance(instance, *, user):
         execution = (
             WorkflowStepExecution.objects
-            .filter(instance_id=instance.pk)
+            .filter(
+                instance_id=instance.pk,
+                performed_by_id=user.pk,
+            )
             .select_related("workflow_step")
             .order_by("-performed_at", "-pk")
             .first()
@@ -114,7 +117,7 @@ class ProcessSummaryService:
         return execution.workflow_step if execution else None
 
     @staticmethod
-    def _summary_steps_for_instances(instances):
+    def _summary_steps_for_instances(instances, *, user):
         instance_ids = [instance.pk for instance in instances]
         if not instance_ids:
             return {}
@@ -122,7 +125,10 @@ class ProcessSummaryService:
         steps_by_instance = {}
         executions = (
             WorkflowStepExecution.objects
-            .filter(instance_id__in=instance_ids)
+            .filter(
+                instance_id__in=instance_ids,
+                performed_by_id=user.pk,
+            )
             .select_related("workflow_step")
             .order_by("instance_id", "-performed_at", "-pk")
         )
