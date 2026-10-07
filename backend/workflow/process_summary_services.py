@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from .form_field_value_resolution_services import FormFieldValueResolver
 from .formula_services import FormulaService
-from .models import FormData, FormField, FormRepeatableGroup, WorkflowStepExecution
+from .models import FormData, FormField, FormRepeatableGroup, WorkflowStep, WorkflowStepExecution
 from .permission_context import PermissionContext
 from .process_summary_batch_context_services import ProcessSummaryBatchContextService
 from .repeatable_row_read_services import RepeatableRowReadService
@@ -146,6 +146,39 @@ class ProcessSummaryService:
                 execution.instance_id,
                 execution.workflow_step,
             )
+
+        missing_instance_ids = [
+            instance.pk
+            for instance in instances
+            if instance.pk not in steps_by_instance
+        ]
+        if missing_instance_ids:
+            workflow_ids = {
+                instance.workflow_id
+                for instance in instances
+                if instance.pk in missing_instance_ids
+            }
+            first_steps_by_workflow = {}
+            first_steps = (
+                WorkflowStep.objects
+                .filter(
+                    workflow_id__in=workflow_ids,
+                    is_active=True,
+                )
+                .order_by("workflow_id", "order", "pk")
+            )
+            for step in first_steps:
+                first_steps_by_workflow.setdefault(
+                    step.workflow_id,
+                    step,
+                )
+
+            for instance in instances:
+                if instance.pk in missing_instance_ids:
+                    step = first_steps_by_workflow.get(instance.workflow_id)
+                    if step is not None:
+                        steps_by_instance[instance.pk] = step
+
         return steps_by_instance
 
     @classmethod
