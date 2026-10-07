@@ -115,7 +115,15 @@ class ProcessSummaryService:
             .order_by("-performed_at", "-pk")
             .first()
         )
-        return execution.workflow_step if execution else None
+        if execution is not None:
+            return execution.workflow_step
+
+        return (
+            instance.workflow.steps
+            .filter(is_active=True)
+            .order_by("order", "pk")
+            .first()
+        )
 
     @staticmethod
     def _summary_steps_for_instances(instances, *, user):
