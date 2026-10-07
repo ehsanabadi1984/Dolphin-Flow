@@ -403,18 +403,38 @@ def _inject_formula_context(*, context, calculated_data):
         for group in section.get("repeatable_groups", []):
             inject_group(group)
 
+    def group_has_editable_fields(group):
+        if any(
+            item_field.get("permission_can_edit", False)
+            for item_field in group.get("fields", [])
+        ):
+            return True
+
+        for item in group.get("items", []):
+            if any(
+                item_field.get("permission_can_edit", False)
+                for item_field in item.get("fields", [])
+            ):
+                return True
+            if any(
+                group_has_editable_fields(child_group)
+                for child_group in item.get("child_groups", [])
+            ):
+                return True
+
+        return any(
+            group_has_editable_fields(child_group)
+            for child_group in group.get("child_groups", [])
+        )
+
     context["has_editable_fields"] = any(
         item.get("permission_can_edit", False)
         for section in context.get("sections", [])
         for item in section.get("fields", [])
     ) or any(
-        any(
-            item_field.get("permission_can_edit", False)
-            for item_field in item.get("fields", [])
-        )
+        group_has_editable_fields(group)
         for section in context.get("sections", [])
         for group in section.get("repeatable_groups", [])
-        for item in group.get("items", [])
     )
 
 
