@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from .form_field_value_resolution_services import FormFieldValueResolver
 from .formula_services import FormulaService
-from .models import FormData, FormField, FormRepeatableGroup
+from .models import FormData, FormField, FormRepeatableGroup, WorkflowStepExecution
 from .permission_context import PermissionContext
 from .process_summary_batch_context_services import ProcessSummaryBatchContextService
 from .repeatable_row_read_services import RepeatableRowReadService
@@ -22,6 +22,8 @@ class ProcessSummaryService:
     def get_for_instance(cls, *, instance, user, step=None):
         step = step or instance.current_step
         if step is None:
+            step = cls._summary_step_for_instance(instance)
+        if step is None:
             return []
 
         context = ProcessSummaryBatchContextService.build(instances=[instance])
@@ -40,10 +42,11 @@ class ProcessSummaryService:
 
         context = ProcessSummaryBatchContextService.build(instances=instances)
 
+        summary_steps = cls._summary_steps_for_instances(instances)
         scopes = []
         fields_by_instance = {}
         for instance in instances:
-            step = instance.current_step
+            step = instance.current_step or summary_steps.get(instance.pk)
             form = context["forms"].get(instance.workflow_id)
             if step is None or form is None:
                 fields_by_instance[instance.pk] = []
@@ -61,7 +64,7 @@ class ProcessSummaryService:
         permission_contexts = PermissionContext.build_batch(scopes=scopes)
 
         for instance in instances:
-            step = instance.current_step
+            step = instance.current_step or summary_steps.get(instance.pk)
             form = context["forms"].get(instance.workflow_id)
             if step is None or form is None:
                 fields_by_instance[instance.pk] = []
@@ -81,7 +84,7 @@ class ProcessSummaryService:
         summaries = {}
         for instance in instances:
             form = context["forms"].get(instance.workflow_id)
-            step = instance.current_step
+            step = instance.current_step or summary_steps.get(instance.pk)
             permission_context = None
             if form is not None and step is not None:
                 permission_context = permission_contexts[
@@ -98,6 +101,37 @@ class ProcessSummaryService:
             )
 
         return summaries
+
+    @staticmethod
+    def _summary_step_for_instance(instance):
+        execution = (
+            WorkflowStepExecution.objects
+            .filter(instance_id=instance.pk)
+            .select_related("workflow_step")
+            .order_by("-performed_at", "-pk")
+            .first()
+        )
+        return execution.workflow_step if execution else None
+
+    @staticmethod
+    def _summary_steps_for_instances(instances):
+        instance_ids = [instance.pk for instance in instances]
+        if not instance_ids:
+            return {}
+
+        steps_by_instance = {}
+        executions = (
+            WorkflowStepExecution.objects
+            .filter(instance_id__in=instance_ids)
+            .select_related("workflow_step")
+            .order_by("instance_id", "-performed_at", "-pk")
+        )
+        for execution in executions:
+            steps_by_instance.setdefault(
+                execution.instance_id,
+                execution.workflow_step,
+            )
+        return steps_by_instance
 
     @classmethod
     def _render_instance(
