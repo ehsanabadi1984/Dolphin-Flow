@@ -268,6 +268,192 @@ class PermissionContext:
 
         return result
 
+    @classmethod
+    def build_summary(cls, *, workflow, form, user):
+        """Build process-summary permissions independently of workflow step."""
+        roles = frozenset(
+            workflow.memberships.filter(
+                user=user,
+                is_active=True,
+            ).values_list("role", flat=True)
+        )
+        normal_fields = {}
+        repeatable_fields = {}
+        groups = {}
+        configured_fields = set()
+        configured_groups = set()
+
+        sections = form.sections.filter(
+            is_active=True,
+        ).prefetch_related(
+            "fields__access_rules",
+            "repeatable_groups__access_rules",
+            "repeatable_groups__fields__access_rules",
+        )
+
+        for section in sections:
+            for field in section.fields.all():
+                if not field.is_active:
+                    continue
+                rules = list(field.access_rules.all())
+                if rules:
+                    configured_fields.add(field.pk)
+                permission = cls._field_permission_from_rules(
+                    rules=rules,
+                    user=user,
+                    roles=roles,
+                )
+                if field.repeatable_group_id is None:
+                    normal_fields[field.pk] = permission
+                else:
+                    repeatable_fields[field.pk] = permission
+
+            for group in section.repeatable_groups.all():
+                if not group.is_active:
+                    continue
+                rules = list(group.access_rules.all())
+                if rules:
+                    configured_groups.add(group.pk)
+                groups[group.pk] = cls._group_permission_from_rules(
+                    rules=rules,
+                    user=user,
+                    roles=roles,
+                )
+
+        return cls(
+            roles=roles,
+            normal_fields=normal_fields,
+            repeatable_fields=repeatable_fields,
+            groups=groups,
+            configured_fields=frozenset(configured_fields),
+            configured_groups=frozenset(configured_groups),
+        )
+
+    @classmethod
+    def build_summary_batch(cls, *, scopes):
+        """Build process-summary permissions keyed independently of step."""
+        scopes = list(scopes)
+        if not scopes:
+            return {}
+
+        workflow_ids = {scope["workflow"].pk for scope in scopes}
+        user_ids = {scope["user"].pk for scope in scopes}
+        if len(user_ids) != 1:
+            raise ValueError("Batch PermissionContext requires one user.")
+
+        user_id = next(iter(user_ids))
+
+        from .models import WorkflowMembership
+
+        roles_by_workflow = {
+            workflow_id: frozenset(
+                membership["role"]
+                for membership in memberships
+            )
+            for workflow_id, memberships in _group_queryset(
+                WorkflowMembership.objects.filter(
+                    workflow_id__in=workflow_ids,
+                    user_id=user_id,
+                    is_active=True,
+                ).values("workflow_id", "role"),
+                "workflow_id",
+            ).items()
+        }
+
+        forms = {scope["form"].pk: scope["form"] for scope in scopes}
+        section_ids_by_form = {}
+        field_ids = set()
+        for form in forms.values():
+            section_ids = [
+                section.pk
+                for section in form.sections.all()
+                if section.is_active
+            ]
+            section_ids_by_form[form.pk] = section_ids
+            for section in form.sections.all():
+                if section.is_active:
+                    field_ids.update(
+                        field.pk
+                        for field in section.fields.all()
+                        if field.is_active
+                    )
+
+        groups = list(
+            FormRepeatableGroup.objects.filter(
+                section_id__in=[
+                    section_id
+                    for ids in section_ids_by_form.values()
+                    for section_id in ids
+                ],
+                is_active=True,
+            )
+        )
+        group_ids = {group.pk for group in groups}
+
+        field_rules = _group_rules(
+            FieldAccess.objects.filter(field_id__in=field_ids),
+            "field_id",
+        )
+        group_rules = _group_rules(
+            RepeatableGroupAccess.objects.filter(group_id__in=group_ids),
+            "group_id",
+        )
+
+        result = {}
+        for scope in scopes:
+            workflow = scope["workflow"]
+            form = scope["form"]
+            user = scope["user"]
+            roles = roles_by_workflow.get(workflow.pk, frozenset())
+
+            normal_fields = {}
+            repeatable_fields = {}
+            groups_permissions = {}
+            configured_fields = set()
+            configured_groups = set()
+
+            for section in form.sections.all():
+                if not section.is_active:
+                    continue
+                for field in section.fields.all():
+                    if not field.is_active:
+                        continue
+                    rules = field_rules.get(field.pk, [])
+                    if rules:
+                        configured_fields.add(field.pk)
+                    permission = cls._field_permission_from_rules(
+                        rules=rules,
+                        user=user,
+                        roles=roles,
+                    )
+                    if field.repeatable_group_id is None:
+                        normal_fields[field.pk] = permission
+                    else:
+                        repeatable_fields[field.pk] = permission
+
+            for group in groups:
+                if group.section_id not in section_ids_by_form.get(form.pk, []):
+                    continue
+                rules = group_rules.get(group.pk, [])
+                if rules:
+                    configured_groups.add(group.pk)
+                groups_permissions[group.pk] = cls._group_permission_from_rules(
+                    rules=rules,
+                    user=user,
+                    roles=roles,
+                )
+
+            result[(workflow.pk, form.pk, user.pk)] = cls(
+                roles=roles,
+                normal_fields=normal_fields,
+                repeatable_fields=repeatable_fields,
+                groups=groups_permissions,
+                configured_fields=frozenset(configured_fields),
+                configured_groups=frozenset(configured_groups),
+            )
+
+        return result
+
     @staticmethod
     def _field_permission_from_rules(*, rules, user, roles):
         user_rule = next(
