@@ -21,7 +21,7 @@
 .df-process-list { max-height:620px; overflow-y:auto; scrollbar-width:thin; }
 .df-process-row { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:17px 20px; border-bottom:1px solid var(--border); }
 .df-process-row:last-child { border-bottom:0; }
-.df-process-row-main { min-width:0; }
+.df-process-row-main { min-width:0; }\n.df-process-summary { display:flex; flex-direction:column; gap:6px; margin-top:10px; padding-top:9px; border-top:1px solid var(--border); font-size:10px; }\n.df-process-summary-item { line-height:1.7; }\n.df-process-summary-label { color:var(--muted); }\n.df-process-summary-group { display:flex; flex-direction:column; gap:4px; }\n.df-process-summary-group-label { font-weight:600; }\n.df-process-summary-row { display:flex; flex-wrap:wrap; gap:8px; padding-right:8px; }\n.df-process-summary-children { margin-right:12px; padding-right:10px; border-right:1px solid var(--border); }
 .df-process-row-title { font-size:12px; font-weight:600; }
 .df-process-row-title span { color:var(--muted); font-weight:500; }
 .df-process-row-meta { display:flex; flex-wrap:wrap; gap:7px; margin-top:7px; color:var(--muted); font-size:9px; }
@@ -81,6 +81,11 @@
                             {% if instance.current_step %}<span>·</span><span>مرحله: {{ instance.current_step.name }}</span>{% endif %}
                             <span>·</span><span>{{ instance.get_status_display }}</span><span>·</span><span>تاریخ ایجاد: {{ instance.started_at|date:"Y/m/d - H:i" }}</span>
                         </div>
+                        {% if instance.process_summary %}
+                            <div class="df-process-summary">
+                                {% include "operator_panel/_process_summary.html" with summary=instance.process_summary only %}
+                            </div>
+                        {% endif %}
                     </div>
                     <a href="{% url 'operator_panel:workflow_instance' instance.pk %}?source=my_processes"
                         class="df-status df-status-success">مشاهده</a>
