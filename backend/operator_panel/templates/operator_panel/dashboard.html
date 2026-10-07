@@ -32,7 +32,9 @@
 .df-next-action-main { flex:1; min-width:0; }
 .df-next-action-title { font-weight:700; }
 .df-next-action-meta { margin-top:5px; font-size:12px; opacity:.68; }
-.df-next-action-summary { display:flex; flex-direction:column; gap:5px; margin-top:9px; padding-top:8px; border-top:1px solid var(--border); font-size:10px; }
+ .df-next-action-summary { display:flex; flex-direction:column; gap:5px; margin-top:9px; padding:9px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface-muted,#f8fafc); font-size:10px; }
+.df-next-action-summary-header { display:flex; align-items:center; gap:6px; font-size:10px; font-weight:700; opacity:.72; }
+.df-next-action-summary-header::before { content:""; width:5px; height:5px; flex:0 0 5px; border-radius:50%; background:var(--accent); }
 .df-next-action-summary .df-process-summary-row { gap:7px; padding-right:6px; }
 .df-next-action-summary .df-process-summary-children { margin-right:10px; padding-right:8px; }
 .df-next-action-badge { flex:0 0 auto; font-size:11px; font-weight:700; }
@@ -75,6 +77,7 @@
                         <div class="df-next-action-meta">{% if instance.current_step %}مرحله: {{ instance.current_step.name }} · {% endif %}{% if instance.dashboard_sla.configured %}{{ instance.dashboard_sla.label }}{% else %}بدون SLA{% endif %}</div>
                         {% if instance.process_summary %}
                             <div class="df-next-action-summary">
+                                <div class="df-next-action-summary-header">خلاصه فرم · {{ instance.workflow.name }}</div>
                                 {% include "operator_panel/_process_summary.html" with summary=instance.process_summary only %}
                             </div>
                         {% endif %}
