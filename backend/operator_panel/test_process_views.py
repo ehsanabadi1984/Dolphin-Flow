@@ -50,7 +50,9 @@ class MyProcessesSummaryWiringTests(TestCase):
                                 "group_label": "Details",
                                 "rows": [
                                     {
-                                        "items": [{"label": "Serial", "value": "SN-42"}],
+                                        "items": [
+                                            {"label": "Serial", "value": "SN-42"}
+                                        ],
                                         "children": [],
                                     }
                                 ],
@@ -79,4 +81,10 @@ class MyProcessesSummaryWiringTests(TestCase):
 
         context_instance = response.context["instances"][0]
         self.assertEqual(context_instance.pk, self.instance.pk)
-        self.assertEqual(context_instance.process_summary, summary)\n        self.assertContains(response, "Customer")\n        self.assertContains(response, "Alice")\n        self.assertContains(response, "Devices")\n        self.assertContains(response, "Laptop")\n        self.assertContains(response, "Details")\n        self.assertContains(response, "SN-42")
+        self.assertEqual(context_instance.process_summary, summary)
+        self.assertContains(response, "Customer")
+        self.assertContains(response, "Alice")
+        self.assertContains(response, "Devices")
+        self.assertContains(response, "Laptop")
+        self.assertContains(response, "Details")
+        self.assertContains(response, "SN-42")
