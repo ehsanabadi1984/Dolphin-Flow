@@ -20,9 +20,10 @@ class ProcessSummaryService:
 
     @classmethod
     def get_for_instance(cls, *, instance, user, step=None):
-        step = step or instance.current_step
         if step is None:
             step = cls._summary_step_for_instance(instance, user=user)
+        if step is None:
+            step = instance.current_step
         if step is None:
             return []
 
@@ -46,7 +47,7 @@ class ProcessSummaryService:
         scopes = []
         fields_by_instance = {}
         for instance in instances:
-            step = instance.current_step or summary_steps.get(instance.pk)
+            step = summary_steps.get(instance.pk) or instance.current_step
             form = context["forms"].get(instance.workflow_id)
             if step is None or form is None:
                 fields_by_instance[instance.pk] = []
