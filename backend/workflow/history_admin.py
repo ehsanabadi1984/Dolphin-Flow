@@ -25,6 +25,14 @@ class HistoryGroupChoiceField(forms.ModelMultipleChoiceField):
 
 
 class HistoryConfigurationForm(forms.ModelForm):
+    history_groups = HistoryGroupChoiceField(
+        queryset=FormRepeatableGroup.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label="گروه‌های ثبت در تاریخچه",
+        help_text="با انتخاب یک گروه، تمام فیلدهای آن گروه و همه گروه‌های child و nested آن در History ثبت می‌شوند.",
+    )
+
     history_fields = HistoryFieldChoiceField(
         queryset=FormField.objects.none(),
         widget=forms.CheckboxSelectMultiple,
@@ -39,6 +47,7 @@ class HistoryConfigurationForm(forms.ModelForm):
             "form",
             "name",
             "is_active",
+            "history_groups",
             "history_fields",
         )
 
