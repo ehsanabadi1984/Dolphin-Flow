@@ -6,7 +6,8 @@ from django.test.utils import CaptureQueriesContext
 from accounts.models import User
 
 from workflow.form_file_models import FormFile
-from workflow.history_models import HistoryConfiguration, HistoryField\nfrom workflow.history_admin import HistoryConfigurationForm
+from workflow.history_models import HistoryConfiguration, HistoryField
+from workflow.history_admin import HistoryConfigurationForm
 from workflow.history_permissions import HISTORY_ACTION
 from workflow.history_services import HistoryService
 from workflow.models import (
