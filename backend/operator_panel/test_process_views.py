@@ -38,7 +38,7 @@ class MyProcessesSummaryWiringTests(TestCase):
     def test_my_processes_attaches_batch_summary_to_page_instances(self):
         client = Client()
         client.force_login(self.user)
-        summary = [{"label": "Customer", "value": "Alice"}]
+        summary = [\n            {"label": "Customer", "value": "Alice"},\n            {\n                "group_label": "Devices",\n                "rows": [\n                    {\n                        "items": [{"label": "Model", "value": "Laptop"}],\n                        "children": [\n                            {\n                                "group_label": "Details",\n                                "rows": [\n                                    {\n                                        "items": [{"label": "Serial", "value": "SN-42"}],\n                                        "children": [],\n                                    }\n                                ],\n                            }\n                        ],\n                    }\n                ],\n            },\n        ]
         queryset = WorkflowInstance.objects.filter(pk=self.instance.pk)
 
         with patch(
@@ -58,4 +58,4 @@ class MyProcessesSummaryWiringTests(TestCase):
 
         context_instance = response.context["instances"][0]
         self.assertEqual(context_instance.pk, self.instance.pk)
-        self.assertEqual(context_instance.process_summary, summary)
+        self.assertEqual(context_instance.process_summary, summary)\n        self.assertContains(response, "Customer")\n        self.assertContains(response, "Alice")\n        self.assertContains(response, "Devices")\n        self.assertContains(response, "Laptop")\n        self.assertContains(response, "Details")\n        self.assertContains(response, "SN-42")
