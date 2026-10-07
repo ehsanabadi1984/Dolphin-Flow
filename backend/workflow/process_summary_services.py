@@ -85,7 +85,7 @@ class ProcessSummaryService:
         summaries = {}
         for instance in instances:
             form = context["forms"].get(instance.workflow_id)
-            step = instance.current_step or summary_steps.get(instance.pk)
+            step = summary_steps.get(instance.pk) or instance.current_step
             permission_context = None
             if form is not None and step is not None:
                 permission_context = permission_contexts[
