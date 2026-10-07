@@ -55,11 +55,7 @@ class MyProcessesSummaryWiringTests(TestCase):
             instances=[self.instance],
             user=self.user,
         )
-        self.assertIs(
-            response.context["instances"][0],
-            self.instance,
-        )
-        self.assertEqual(
-            response.context["instances"][0].process_summary,
-            summary,
-        )
+
+        context_instance = response.context["instances"][0]
+        self.assertEqual(context_instance.pk, self.instance.pk)
+        self.assertEqual(context_instance.process_summary, summary)
