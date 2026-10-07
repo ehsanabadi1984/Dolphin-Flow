@@ -67,6 +67,7 @@
                 <select id="process-workflow" name="workflow">
                     <option value="">همه فرآیندها</option>
                     {% for item in workflows %}<option value="{{ item.workflow_id }}" {% if selected_workflow == item.workflow_id|stringformat:"s" %}selected{% endif %}>{{ item.workflow__name }}</option>{% endfor %}
+                </select>
             </div>
             <div class="df-filter-actions">
                 <button type="submit" class="df-button">جستجو</button>
