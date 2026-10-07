@@ -1,0 +1,21 @@
+{% for item in summary %}
+    {% if item.group_label %}
+        <div class="df-process-summary-group">
+            <div class="df-process-summary-group-label">{{ item.group_label }}</div>
+            {% for row in item.rows %}
+                <div class="df-process-summary-row">
+                    {% for value in row.items %}
+                        <span class="df-process-summary-item"><span class="df-process-summary-label">{{ value.label }}:</span> {{ value.value }}</span>
+                    {% endfor %}
+                </div>
+                {% if row.children %}
+                    <div class="df-process-summary-children">
+                        {% include "operator_panel/_process_summary.html" with summary=row.children only %}
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <span class="df-process-summary-item"><span class="df-process-summary-label">{{ item.label }}:</span> {{ item.value }}</span>
+    {% endif %}
+{% endfor %}
