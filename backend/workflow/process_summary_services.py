@@ -89,7 +89,7 @@ class ProcessSummaryService:
             permission_context = None
             if form is not None and step is not None:
                 permission_context = permission_contexts[
-                    (instance.workflow_id, form.pk, step.pk, user.pk)
+                    (instance.workflow_id, form.pk, user.pk)
                 ]
 
             summaries[instance.pk] = cls._render_instance(
