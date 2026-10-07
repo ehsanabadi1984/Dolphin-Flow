@@ -553,6 +553,86 @@ class DashboardProcessSummaryTests(DashboardSidebarBase):
             [{"label": "اولویت", "value": "بالا"}],
         )
 
+    @mock.patch(
+        "operator_panel.dashboard_enhancements.ProcessSummaryService.get_for_instances"
+    )
+    def test_next_best_actions_render_recursive_summary_and_skip_empty_wrapper(
+        self,
+        get_summaries,
+    ):
+        self.grant_role_action_permissions()
+        first = self.create_active_instance(started_by=self.other)
+        second = self.create_active_instance(started_by=self.other)
+        FormData.objects.create(instance=first, data={"note": "summary"})
+        FormData.objects.create(instance=second, data={"note": "empty"})
+
+        get_summaries.return_value = {
+            first.pk: [
+                {"label": "Customer", "value": "Alice"},
+                {
+                    "group_label": "Devices",
+                    "rows": [
+                        {
+                            "items": [{"label": "Model", "value": "Laptop"}],
+                            "children": [
+                                {
+                                    "group_label": "Details",
+                                    "rows": [
+                                        {
+                                            "items": [
+                                                {
+                                                    "label": "Serial",
+                                                    "value": "SN-42",
+                                                }
+                                            ],
+                                            "children": [
+                                                {
+                                                    "group_label": "Warranty",
+                                                    "rows": [
+                                                        {
+                                                            "items": [
+                                                                {
+                                                                    "label": "Status",
+                                                                    "value": "Valid",
+                                                                }
+                                                            ],
+                                                            "children": [],
+                                                        }
+                                                    ],
+                                                }
+                                            ],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                },
+            ],
+            second.pk: [],
+        }
+
+        response = self.get_client().get(reverse("operator_panel:dashboard"))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+
+        self.assertIn("Customer", content)
+        self.assertIn("Alice", content)
+        self.assertIn("Devices", content)
+        self.assertIn("Laptop", content)
+        self.assertIn("Details", content)
+        self.assertIn("SN-42", content)
+        self.assertIn("Warranty", content)
+        self.assertIn("Valid", content)
+        self.assertEqual(content.count('class="df-next-action-summary"'), 1)
+
+        get_summaries.assert_called_once()
+        called_instances = get_summaries.call_args.kwargs["instances"]
+        self.assertEqual(
+            {instance.pk for instance in called_instances},
+            {first.pk, second.pk},
+        )
+
 class LimitBeforeFilterTests(DashboardSidebarBase):
     """D: counts come from the full population, never from a list slice."""
 
