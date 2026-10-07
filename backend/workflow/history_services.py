@@ -377,11 +377,43 @@ class HistoryService:
 
                 value = value_data["value"]
                 if FormulaService.is_formula(field):
-                    calculated_rows = (
-                        formula_data.get(group.code, [])
-                        if isinstance(formula_data, dict)
-                        else []
-                    )
+                    calculated_rows = []
+                    if isinstance(formula_data, dict):
+                        direct_rows = formula_data.get(group.code)
+                        if isinstance(direct_rows, list):
+                            calculated_rows.extend(
+                                candidate
+                                for candidate in direct_rows
+                                if isinstance(candidate, dict)
+                            )
+
+                        def collect_nested_rows(payload):
+                            if not isinstance(payload, list):
+                                return
+                            for parent_row in payload:
+                                if not isinstance(parent_row, dict):
+                                    continue
+                                for child_group in (
+                                    parent_row.get("child_groups", []) or []
+                                ):
+                                    if not isinstance(child_group, dict):
+                                        continue
+                                    if child_group.get("code") == group.code:
+                                        items = child_group.get("items", [])
+                                        if isinstance(items, list):
+                                            calculated_rows.extend(
+                                                candidate
+                                                for candidate in items
+                                                if isinstance(candidate, dict)
+                                            )
+                                    collect_nested_rows(
+                                        child_group.get("items", [])
+                                    )
+
+                        for payload in formula_data.values():
+                            if isinstance(payload, list):
+                                collect_nested_rows(payload)
+
                     calculated_row = next(
                         (
                             candidate
