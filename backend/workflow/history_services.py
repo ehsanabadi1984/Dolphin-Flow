@@ -9,6 +9,7 @@ from .models import (
     FormField,
     FormRepeatableGroup,
     InstanceDevice,
+    RepeatableRow,
     WorkflowStepExecution,
 )
 from .history_models import HistoryConfiguration, HistoryField
@@ -137,17 +138,16 @@ class HistoryService:
                 ),
             )
 
-        non_device_groups = [
+        repeatable_groups = [
             bucket["group"]
             for bucket in groups.values()
-            if bucket["group"].group_type != FormRepeatableGroup.GroupType.DEVICE
         ]
         rows_by_group_parent = (
             RepeatableRowReadService.get_rows_by_group_parent(
                 instance=instance,
-                groups=non_device_groups,
+                groups=repeatable_groups,
             )
-            if non_device_groups
+            if repeatable_groups
             else {}
         )
 
@@ -196,7 +196,9 @@ class HistoryService:
             if group.group_type == FormRepeatableGroup.GroupType.DEVICE:
                 items = HistoryService._build_device_items(
                     instance=instance,
+                    group=group,
                     fields=fields,
+                    rows=rows_by_group_parent.get((group.pk, None), []),
                 )
             else:
                 items = HistoryService._build_normal_items(
@@ -388,7 +390,7 @@ class HistoryService:
         return items
 
     @staticmethod
-    def _build_device_items(*, instance, fields):
+    def _build_device_items(*, instance, group, fields, rows=None):
         instance_devices = (
             InstanceDevice.objects
             .filter(instance=instance, is_active=True)
@@ -410,6 +412,12 @@ class HistoryService:
                 )
             )
         )
+
+        rows_by_instance_device_id = {
+            row.instance_device_id: row
+            for row in (rows or [])
+            if row.instance_device_id is not None
+        }
 
         items = []
         for instance_device in instance_devices:
@@ -496,8 +504,10 @@ class HistoryService:
                 item_fields[-1]["display_value"] = display_value
 
             if item_fields:
+                row = rows_by_instance_device_id.get(instance_device.pk)
                 items.append(
                     {
+                        "row_id": row.pk if row is not None else None,
                         "device_id": instance_device.device_id,
                         "instance_device_id": instance_device.pk,
                         "fields": item_fields,
