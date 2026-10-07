@@ -6,7 +6,7 @@ from django.test.utils import CaptureQueriesContext
 from accounts.models import User
 
 from workflow.form_file_models import FormFile
-from workflow.history_models import HistoryConfiguration, HistoryField
+from workflow.history_models import HistoryConfiguration, HistoryField\nfrom workflow.history_admin import HistoryConfigurationForm
 from workflow.history_permissions import HISTORY_ACTION
 from workflow.history_services import HistoryService
 from workflow.models import (
@@ -109,6 +109,73 @@ class HistoryServiceTests(TestCase):
             data=data or {},
         )
         return instance
+
+    def test_history_group_selection_enables_all_descendant_group_fields(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Part Details",
+            code="part_details_config",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=3,
+        )
+        nested_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Part Detail Metadata",
+            code="part_detail_metadata_config",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=4,
+        )
+        child_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Detail",
+            code="detail_config",
+            label="Detail",
+            field_type=FormField.FieldType.TEXT,
+            order=4,
+        )
+        nested_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=nested_group,
+            name="Metadata",
+            code="metadata_config",
+            label="Metadata",
+            field_type=FormField.FieldType.TEXT,
+            order=5,
+        )
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+
+        form = HistoryConfigurationForm(
+            instance=configuration,
+            data={
+                "form": self.form.pk,
+                "name": "Nested History",
+                "is_active": "on",
+                "history_groups": [self.group.pk],
+                "history_fields": [],
+            },
+        )
+
+        self.assertTrue(form.is_valid(), form.errors.as_text())
+        form.save()
+        form.sync_history_fields(configuration)
+
+        enabled_codes = set(
+            HistoryField.objects.filter(
+                configuration=configuration,
+                is_enabled=True,
+            ).values_list("form_field__code", flat=True)
+        )
+        self.assertEqual(
+            enabled_codes,
+            {
+                "part_name",
+                "detail_config",
+                "metadata_config",
+            },
+        )
 
     def test_active_configuration_is_the_primary_selection_source(self):
         configuration = HistoryConfiguration.objects.create(
