@@ -38,7 +38,28 @@ class MyProcessesSummaryWiringTests(TestCase):
     def test_my_processes_attaches_batch_summary_to_page_instances(self):
         client = Client()
         client.force_login(self.user)
-        summary = [\n            {"label": "Customer", "value": "Alice"},\n            {\n                "group_label": "Devices",\n                "rows": [\n                    {\n                        "items": [{"label": "Model", "value": "Laptop"}],\n                        "children": [\n                            {\n                                "group_label": "Details",\n                                "rows": [\n                                    {\n                                        "items": [{"label": "Serial", "value": "SN-42"}],\n                                        "children": [],\n                                    }\n                                ],\n                            }\n                        ],\n                    }\n                ],\n            },\n        ]
+        summary = [
+            {"label": "Customer", "value": "Alice"},
+            {
+                "group_label": "Devices",
+                "rows": [
+                    {
+                        "items": [{"label": "Model", "value": "Laptop"}],
+                        "children": [
+                            {
+                                "group_label": "Details",
+                                "rows": [
+                                    {
+                                        "items": [{"label": "Serial", "value": "SN-42"}],
+                                        "children": [],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
         queryset = WorkflowInstance.objects.filter(pk=self.instance.pk)
 
         with patch(
