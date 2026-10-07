@@ -184,14 +184,11 @@ class HistoryService:
                 ),
             )
 
-            rows = None
-            rows_by_id = {}
-            if group.group_type != FormRepeatableGroup.GroupType.DEVICE:
-                rows = rows_by_group_parent.get(
-                    (group.pk, getattr(parent_row, "pk", None)),
-                    [],
-                )
-                rows_by_id = {row.pk: row for row in rows}
+            rows = rows_by_group_parent.get(
+                (group.pk, getattr(parent_row, "pk", None)),
+                [],
+            )
+            rows_by_id = {row.pk: row for row in rows}
 
             if group.group_type == FormRepeatableGroup.GroupType.DEVICE:
                 items = HistoryService._build_device_items(
