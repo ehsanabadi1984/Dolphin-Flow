@@ -65,7 +65,7 @@ class ProcessSummaryService:
         permission_contexts = PermissionContext.build_batch(scopes=scopes)
 
         for instance in instances:
-            step = instance.current_step or summary_steps.get(instance.pk)
+            step = summary_steps.get(instance.pk) or instance.current_step
             form = context["forms"].get(instance.workflow_id)
             if step is None or form is None:
                 fields_by_instance[instance.pk] = []
