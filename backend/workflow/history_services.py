@@ -153,6 +153,20 @@ class HistoryService:
             else {}
         )
 
+        formula_repeatable_data = None
+        if any(
+            FormulaService.is_formula(item["form_field"])
+            for bucket in groups.values()
+            for item in bucket["fields"]
+        ):
+            formula_repeatable_data = FormulaService.calculate_context_data(
+                form=form,
+                data=_build_context_data(
+                    instance=instance,
+                    submitted_data=None,
+                ),
+            )
+
         history_fields = []
         for item in sorted(
             top_level,
@@ -207,6 +221,7 @@ class HistoryService:
                     parent_row=parent_row,
                     rows=rows,
                     form_files_by_key=form_files_by_key,
+                    formula_data=formula_repeatable_data,
                 )
 
             child_buckets = [
@@ -325,6 +340,7 @@ class HistoryService:
         parent_row=None,
         rows=None,
         form_files_by_key=None,
+        formula_data=None,
     ):
         if not fields:
             return []
@@ -359,14 +375,40 @@ class HistoryService:
                 if value_data is None:
                     continue
 
+                value = value_data["value"]
+                if FormulaService.is_formula(field):
+                    calculated_rows = (
+                        formula_data.get(group.code, [])
+                        if isinstance(formula_data, dict)
+                        else []
+                    )
+                    calculated_row = next(
+                        (
+                            candidate
+                            for candidate in calculated_rows
+                            if str(candidate.get("row_id") or candidate.get("_id") or "")
+                            == str(row.pk)
+                        ),
+                        None,
+                    )
+                    if calculated_row is not None:
+                        value = calculated_row.get(field.code)
+
                 serialized = HistoryService._serialize_field(
                     field=field,
-                    value=value_data["value"],
+                    value=value,
                     display_label=config["display_label"],
                     display_order=config["display_order"],
                     history_field_id=config["history_field_id"],
                 )
-                serialized["display_value"] = value_data["display_value"]
+                serialized["display_value"] = (
+                    DynamicFormService._get_display_value(
+                        field=field,
+                        value=value,
+                    )
+                    if FormulaService.is_formula(field)
+                    else value_data["display_value"]
+                )
 
                 if field.field_type == FormField.FieldType.FILE:
                     form_file = (
