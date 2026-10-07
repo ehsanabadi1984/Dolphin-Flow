@@ -7,7 +7,7 @@ from django.utils.html import format_html
 
 from .admin import dolphin_admin_site
 from .history_models import HistoryConfiguration, HistoryField, HistoryRecord
-from .models import Device, FormField
+from .models import Device, FormField, FormRepeatableGroup
 
 
 class HistoryFieldChoiceField(forms.ModelMultipleChoiceField):
@@ -17,6 +17,11 @@ class HistoryFieldChoiceField(forms.ModelMultipleChoiceField):
             parts.append(obj.repeatable_group.name)
         parts.append(obj.label)
         return " → ".join(parts)
+
+
+class HistoryGroupChoiceField(forms.ModelMultipleChoiceField):
+    def label_from_instance(self, obj):
+        return f"{obj.section.name} → {obj.label or obj.name}"
 
 
 class HistoryConfigurationForm(forms.ModelForm):
@@ -57,8 +62,24 @@ class HistoryConfigurationForm(forms.ModelForm):
                     "id",
                 )
             )
+            groups = (
+                FormRepeatableGroup.objects
+                .filter(
+                    section__form_id=form_id,
+                    section__is_active=True,
+                    is_active=True,
+                )
+                .select_related("section", "parent_group")
+                .order_by(
+                    "section__order",
+                    "order",
+                    "id",
+                )
+            )
+            self.fields["history_groups"].queryset = groups
             self.fields["history_fields"].queryset = fields
-            self.initial["history_fields"] = list(
+
+            enabled_field_ids = set(
                 HistoryField.objects
                 .filter(
                     configuration=self.instance,
@@ -69,6 +90,42 @@ class HistoryConfigurationForm(forms.ModelForm):
                 )
                 .values_list("form_field_id", flat=True)
             )
+            self.initial["history_fields"] = enabled_field_ids
+
+            group_ids = {group.pk for group in groups}
+            group_parent_ids = {
+                group.pk: group.parent_group_id
+                for group in groups
+            }
+            group_field_ids = {}
+            for form_field in fields:
+                if form_field.repeatable_group_id:
+                    group_field_ids.setdefault(
+                        form_field.repeatable_group_id,
+                        set(),
+                    ).add(form_field.pk)
+
+            def descendants(group_id):
+                result = {group_id}
+                changed = True
+                while changed:
+                    changed = False
+                    for candidate_id, parent_id in group_parent_ids.items():
+                        if parent_id in result and candidate_id not in result:
+                            result.add(candidate_id)
+                            changed = True
+                return result
+
+            selected_group_ids = []
+            for group_id in group_ids:
+                descendant_ids = descendants(group_id)
+                field_ids = set().union(
+                    *(group_field_ids.get(descendant_id, set()) for descendant_id in descendant_ids)
+                )
+                if field_ids and field_ids.issubset(enabled_field_ids):
+                    selected_group_ids.append(group_id)
+
+            self.initial["history_groups"] = selected_group_ids
 
     def save(self, commit=True):
         return super().save(commit=commit)
@@ -79,8 +136,35 @@ class HistoryConfigurationForm(forms.ModelForm):
             for field in self.cleaned_data.get("history_fields", FormField.objects.none())
         }
 
+        selected_group_ids = {
+            group.pk
+            for group in self.cleaned_data.get(
+                "history_groups",
+                FormRepeatableGroup.objects.none(),
+            )
+        }
+        groups = list(self.fields["history_groups"].queryset)
+        group_parent_ids = {
+            group.pk: group.parent_group_id
+            for group in groups
+        }
+
+        expanded_group_ids = set(selected_group_ids)
+        changed = True
+        while changed:
+            changed = False
+            for group_id, parent_id in group_parent_ids.items():
+                if parent_id in expanded_group_ids and group_id not in expanded_group_ids:
+                    expanded_group_ids.add(group_id)
+                    changed = True
+
         form_fields = list(
             self.fields["history_fields"].queryset
+        )
+        selected_ids.update(
+            field.pk
+            for field in form_fields
+            if field.repeatable_group_id in expanded_group_ids
         )
 
         for display_order, form_field in enumerate(form_fields):
