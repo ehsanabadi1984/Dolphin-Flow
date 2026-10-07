@@ -21,7 +21,14 @@
 .df-process-list { max-height:620px; overflow-y:auto; scrollbar-width:thin; }
 .df-process-row { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:17px 20px; border-bottom:1px solid var(--border); }
 .df-process-row:last-child { border-bottom:0; }
-.df-process-row-main { min-width:0; }\n.df-process-summary { display:flex; flex-direction:column; gap:6px; margin-top:10px; padding-top:9px; border-top:1px solid var(--border); font-size:10px; }\n.df-process-summary-item { line-height:1.7; }\n.df-process-summary-label { color:var(--muted); }\n.df-process-summary-group { display:flex; flex-direction:column; gap:4px; }\n.df-process-summary-group-label { font-weight:600; }\n.df-process-summary-row { display:flex; flex-wrap:wrap; gap:8px; padding-right:8px; }\n.df-process-summary-children { margin-right:12px; padding-right:10px; border-right:1px solid var(--border); }
+.df-process-row-main { min-width:0; }
+.df-process-summary { display:flex; flex-direction:column; gap:6px; margin-top:10px; padding-top:9px; border-top:1px solid var(--border); font-size:10px; }
+.df-process-summary-item { line-height:1.7; }
+.df-process-summary-label { color:var(--muted); }
+.df-process-summary-group { display:flex; flex-direction:column; gap:4px; }
+.df-process-summary-group-label { font-weight:600; }
+.df-process-summary-row { display:flex; flex-wrap:wrap; gap:8px; padding-right:8px; }
+.df-process-summary-children { margin-right:12px; padding-right:10px; border-right:1px solid var(--border); }
 .df-process-row-title { font-size:12px; font-weight:600; }
 .df-process-row-title span { color:var(--muted); font-weight:500; }
 .df-process-row-meta { display:flex; flex-wrap:wrap; gap:7px; margin-top:7px; color:var(--muted); font-size:9px; }
@@ -60,7 +67,6 @@
                 <select id="process-workflow" name="workflow">
                     <option value="">همه فرآیندها</option>
                     {% for item in workflows %}<option value="{{ item.workflow_id }}" {% if selected_workflow == item.workflow_id|stringformat:"s" %}selected{% endif %}>{{ item.workflow__name }}</option>{% endfor %}
-                </select>
             </div>
             <div class="df-filter-actions">
                 <button type="submit" class="df-button">جستجو</button>
