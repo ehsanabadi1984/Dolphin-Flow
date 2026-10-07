@@ -1100,6 +1100,51 @@ def _get_edit_mode(*, instance, request):
         .first()
     )
 
+    # Determine the latest persisted form state across every storage
+    # backing the current dynamic form. Repeatable values are canonical
+    # persisted data too, so FormData.updated_at alone cannot tell us
+    # whether the current step has already been saved.
+    timestamps = []
+
+    if form_data is not None:
+        timestamps.append(form_data.updated_at)
+
+    latest_repeatable_row = (
+        RepeatableRow.objects
+        .filter(instance=instance)
+        .aggregate(latest=Max("updated_at"))
+        ["latest"]
+    )
+    if latest_repeatable_row is not None:
+        timestamps.append(latest_repeatable_row)
+
+    latest_repeatable_value = (
+        RepeatableRowValue.objects
+        .filter(row__instance=instance)
+        .aggregate(latest=Max("updated_at"))
+        ["latest"]
+    )
+    if latest_repeatable_value is not None:
+        timestamps.append(latest_repeatable_value)
+
+    latest_instance_device = (
+        InstanceDevice.objects
+        .filter(instance=instance, is_active=True)
+        .aggregate(latest=Max("updated_at"))
+        ["latest"]
+    )
+    if latest_instance_device is not None:
+        timestamps.append(latest_instance_device)
+
+    # If the current step was activated after the latest persisted data,
+    # the operator has not saved anything in this step yet.
+    if current_step_execution is not None:
+        if (
+            not timestamps
+            or max(timestamps) <= current_step_execution.performed_at
+        ):
+            return True
+
     form_data_has_data = (
         form_data is not None
         and bool(form_data.data)
