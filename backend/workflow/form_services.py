@@ -873,6 +873,14 @@ class DynamicFormService:
                 }
             )
 
+            # Editable fields in nested groups must make the parent group
+            # editable too, so the form-level edit action stays available.
+            if any(
+                child_group_context.get("has_editable_fields", False)
+                for child_group_context in child_contexts
+            ):
+                group_has_editable_fields = True
+
         context = {
             "group": group,
             "fields": group_fields,
@@ -1991,6 +1999,16 @@ class DynamicFormService:
                         )
                         if child_context is not None:
                             device_child_group_contexts.append(child_context)
+
+                    # DEVICE groups must inherit editability from their
+                    # configured child groups.
+                    group_has_editable_fields = (
+                        group_has_editable_fields
+                        or any(
+                            child_context.get("has_editable_fields", False)
+                            for child_context in device_child_group_contexts
+                        )
+                    )
 
                     # Persisted DEVICE rows are reconstructed once so their
                     # canonical child rows can be attached to each item.
