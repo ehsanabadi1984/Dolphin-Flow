@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
+from django.utils import timezone
 from django.urls import reverse
 
 from workflow.models import (
@@ -104,3 +105,32 @@ class MyProcessesSummaryWiringTests(TestCase):
         self.assertContains(response, "</select>")
         self.assertContains(response, '<div class="df-process-row">')
         self.assertContains(response, "Summary WF")
+
+    def test_my_processes_searches_by_unpadded_id_then_date(self):
+        client = Client()
+        client.force_login(self.user)
+        form_date = timezone.localtime(self.instance.started_at).strftime("%y%m%d")
+
+        response = client.get(
+            reverse("operator_panel:my_processes"),
+            {"q": f"{self.instance.pk}-{form_date}"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_obj"].paginator.count, 1)
+        self.assertContains(
+            response,
+            f"شماره فرم: {self.instance.pk}-{form_date}",
+        )
+
+    def test_my_processes_invalid_form_date_does_not_raise_server_error(self):
+        client = Client()
+        client.force_login(self.user)
+
+        response = client.get(
+            reverse("operator_panel:my_processes"),
+            {"q": f"{self.instance.pk}-991399"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_obj"].paginator.count, 0)
