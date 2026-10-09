@@ -123,6 +123,13 @@ class MyProcessesSummaryWiringTests(TestCase):
             f"شماره فرم: {self.instance.pk}-{form_date}",
         )
 
+        legacy_response = client.get(
+            reverse("operator_panel:my_processes"),
+            {"q": f"{form_date}-{self.instance.pk:06d}"},
+        )
+        self.assertEqual(legacy_response.status_code, 200)
+        self.assertEqual(legacy_response.context["page_obj"].paginator.count, 1)
+
     def test_my_processes_invalid_form_date_does_not_raise_server_error(self):
         client = Client()
         client.force_login(self.user)
