@@ -82,7 +82,10 @@ class ProcessFormSearchService:
                 for field in section.fields.all():
                     if not field.is_active:
                         continue
-                    if field.field_type == FormField.FieldType.FORMULA:
+                    if (
+                        field.field_type == FormField.FieldType.FORMULA
+                        and not permission.is_field_hidden(field)
+                    ):
                         has_formula = True
                     if (
                         field.repeatable_group_id is None
