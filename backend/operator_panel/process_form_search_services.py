@@ -4,6 +4,7 @@ from workflow.form_field_value_resolution_services import FormFieldValueResolver
 from workflow.formula_services import FormulaService
 from workflow.models import FormField
 from workflow.permission_context import PermissionContext
+from workflow.process_summary_services import ProcessSummaryService
 from workflow.process_summary_batch_context_services import (
     ProcessSummaryBatchContextService,
 )
@@ -26,48 +27,37 @@ class ProcessFormSearchService:
             return set()
 
         context = ProcessSummaryBatchContextService.build(instances=instances)
+        summary_steps = ProcessSummaryService._summary_steps_for_instances(
+            instances,
+            user=user,
+        )
         scopes = []
         for instance in instances:
             form = context["forms"].get(instance.workflow_id)
-            if form is None or instance.current_step_id is None:
+            step = instance.current_step or summary_steps.get(instance.pk)
+            if form is None or step is None:
                 continue
             scopes.append({
                 "workflow": instance.workflow,
                 "form": form,
-                "step": instance.current_step,
+                "step": step,
                 "user": user,
             })
 
         step_permissions = PermissionContext.build_batch(scopes=scopes)
-        no_step_scopes = []
-        for instance in instances:
-            form = context["forms"].get(instance.workflow_id)
-            if form is not None and instance.current_step_id is None:
-                no_step_scopes.append({
-                    "workflow": instance.workflow,
-                    "form": form,
-                    "user": user,
-                })
-        no_step_permissions = PermissionContext.build_summary_batch(
-            scopes=no_step_scopes,
-        )
-
         permissions_by_instance = {}
         for instance in instances:
             form = context["forms"].get(instance.workflow_id)
-            if form is None:
+            step = instance.current_step or summary_steps.get(instance.pk)
+            if form is None or step is None:
                 continue
-            if instance.current_step_id is not None:
-                key = (
-                    instance.workflow_id,
-                    form.pk,
-                    instance.current_step_id,
-                    user.pk,
-                )
-                permissions_by_instance[instance.pk] = step_permissions.get(key)
-            else:
-                key = (instance.workflow_id, form.pk, user.pk)
-                permissions_by_instance[instance.pk] = no_step_permissions.get(key)
+            key = (
+                instance.workflow_id,
+                form.pk,
+                step.pk,
+                user.pk,
+            )
+            permissions_by_instance[instance.pk] = step_permissions.get(key)
 
         fields_by_instance = {}
         search_data_by_instance = {}
