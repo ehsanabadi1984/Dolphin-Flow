@@ -919,11 +919,11 @@ class ProcessSummaryServiceTests(TestCase):
         FormData.objects.create(instance=second_instance, data={"shared": "دوم"})
 
         with patch(
-            "workflow.process_summary_services.PermissionContext.build_batch",
+            "workflow.process_summary_services.PermissionContext.build_summary_batch",
             wraps=__import__(
                 "workflow.permission_context",
                 fromlist=["PermissionContext"],
-            ).PermissionContext.build_batch,
+            ).PermissionContext.build_summary_batch,
         ) as build_batch:
             result = ProcessSummaryService.get_for_instances(
                 instances=[self.instance, second_instance],
