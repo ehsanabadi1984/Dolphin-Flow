@@ -163,8 +163,8 @@ PG_DUMP_PATH = env("PG_DUMP_PATH", default="pg_dump")
 # pg_restore binary; override with an absolute path when it is not on PATH.
 PG_RESTORE_PATH = env("PG_RESTORE_PATH", default="pg_restore")
 
-# # Optional n8n notification integration. When the webhook URL is empty,
-# # Dolphin notifications continue to work exactly as before.
+# PARKED: Optional n8n notification integration. Keep disabled until approved
+# for inclusion in the main product.
 # N8N_NOTIFICATION_WEBHOOK_URL = env(
 #     "N8N_NOTIFICATION_WEBHOOK_URL",
 #     default="",
