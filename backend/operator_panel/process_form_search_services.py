@@ -68,18 +68,56 @@ class ProcessFormSearchService:
                 continue
 
             data = dict(context["form_data"].get(instance.pk, {}) or {})
-            data = FormulaService.calculate_context_data(form=form, data=data)
-            search_data_by_instance[instance.pk] = data
-
+            sections = context["sections"].get(instance.workflow_id, [])
             fields = []
-            for section in context["sections"].get(instance.workflow_id, []):
+            has_normal_formula = False
+            groups_by_section = defaultdict(list)
+            children_by_parent = defaultdict(list)
+            for group in context["groups"].get(instance.workflow_id, []):
+                groups_by_section[group.section_id].append(group)
+                if group.parent_group_id is not None:
+                    children_by_parent[group.parent_group_id].append(group)
+
+            for section in sections:
                 for field in section.fields.all():
+                    if not field.is_active:
+                        continue
                     if (
-                        field.is_active
-                        and field.repeatable_group_id is None
+                        field.repeatable_group_id is None
                         and not permission.is_field_hidden(field)
                     ):
                         fields.append(field)
+                        if field.field_type == FormField.FieldType.FORMULA:
+                            has_normal_formula = True
+
+            if has_normal_formula:
+                root_groups = [
+                    group
+                    for section in sections
+                    for group in groups_by_section.get(section.pk, [])
+                    if group.parent_group_id is None
+                ]
+                all_groups = ProcessSummaryService._flatten_groups(
+                    root_groups,
+                    children_by_parent=children_by_parent,
+                )
+                formula_repeatable_data = (
+                    ProcessSummaryService._build_formula_repeatable_data(
+                        groups=all_groups,
+                        rows_by_group_parent=context["rows_by_instance"].get(
+                            instance.pk, {}
+                        ),
+                        model_reference_cache=context["model_reference_cache"],
+                    )
+                )
+                formula_data = dict(data)
+                formula_data.update(formula_repeatable_data)
+                data = FormulaService.calculate_context_data(
+                    form=form,
+                    data=formula_data,
+                )
+
+            search_data_by_instance[instance.pk] = data
             fields_by_instance[instance.pk] = fields
 
         display_cache = FormFieldValueResolver.build_display_cache_batch(
