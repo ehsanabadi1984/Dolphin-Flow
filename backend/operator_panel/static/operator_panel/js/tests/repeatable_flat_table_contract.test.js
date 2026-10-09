@@ -1700,7 +1700,7 @@ test("flat TABLE root deletion without child rows preserves remaining edited val
         extractFunction(appJs, "escapeRegExp") +
             "\n" +
             extractFunction(appJs, "reindexFlatTableRootRows") +
-            "\\nreturn reindexFlatTableRootRows;",
+            "\nreturn reindexFlatTableRootRows;",
     )();
 
     rows.splice(rows.indexOf(removedRoot), 1);
