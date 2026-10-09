@@ -14,6 +14,7 @@ from workflow.models import WorkflowInstance
 from workflow.acceptance_queue_services import PendingAcceptanceQueueService
 from workflow.services import WorkflowExecutionService
 from workflow.process_summary_services import ProcessSummaryService
+from .process_form_search_services import ProcessFormSearchService
 
 from .dashboard_enhancements import DashboardEnhancementService
 from .dashboard_services import DashboardService, _can_take_action_q
@@ -152,6 +153,11 @@ def my_processes(request):
         .distinct().order_by("workflow__name")
     )
 
+    if status:
+        instances = instances.filter(status=status)
+    if workflow_id.isdigit():
+        instances = instances.filter(workflow_id=int(workflow_id))
+
     if search:
         search_filter = (
             Q(workflow__name__icontains=search)
@@ -180,12 +186,14 @@ def my_processes(request):
             break
         if not form_number_parsed and search.isdigit():
             search_filter |= Q(pk=int(search))
-        instances = instances.filter(search_filter)
-
-    if status:
-        instances = instances.filter(status=status)
-    if workflow_id.isdigit():
-        instances = instances.filter(workflow_id=int(workflow_id))
+        matching_form_ids = ProcessFormSearchService.matching_instance_ids(
+            queryset=instances,
+            user=request.user,
+            term=search,
+        )
+        instances = instances.filter(
+            search_filter | Q(pk__in=matching_form_ids)
+        )
 
     paginator = Paginator(instances, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
