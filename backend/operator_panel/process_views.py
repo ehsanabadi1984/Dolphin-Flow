@@ -20,7 +20,7 @@ from .dashboard_services import DashboardService, _can_take_action_q
 
 
 FORM_NUMBER_PATTERN = re.compile(r"^(?P<pk>\d+)-(?P<date>\d{6})$")
-LEGACY_FORM_NUMBER_PATTERN = re.compile(r"^(?P<date>\d{6})-(?P<pk>\d{6})$")
+LEGACY_FORM_NUMBER_PATTERN = re.compile(r"^(?P<date>\d{6})-(?P<pk>\d{6,})$")
 
 
 @login_required
