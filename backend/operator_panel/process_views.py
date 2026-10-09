@@ -160,18 +160,22 @@ def my_processes(request):
         )
         form_number_match = FORM_NUMBER_PATTERN.fullmatch(search)
         legacy_form_number_match = LEGACY_FORM_NUMBER_PATTERN.fullmatch(search)
-        if form_number_match or legacy_form_number_match:
-            matched_number = form_number_match or legacy_form_number_match
+        matched_numbers = (
+            match
+            for match in (form_number_match, legacy_form_number_match)
+            if match
+        )
+        for matched_number in matched_numbers:
             try:
                 form_date = datetime.strptime(
                     matched_number.group("date"), "%y%m%d"
                 ).date()
             except ValueError:
-                # A malformed form date must not turn a search into a 500.
-                pass
-            else:
-                form_pk = int(matched_number.group("pk"))
-                search_filter |= Q(pk=form_pk, started_at__date=form_date)
+                # Try the other supported format before treating the date as invalid.
+                continue
+            form_pk = int(matched_number.group("pk"))
+            search_filter |= Q(pk=form_pk, started_at__date=form_date)
+            break
         elif search.isdigit():
             search_filter |= Q(pk=int(search))
         instances = instances.filter(search_filter)
