@@ -19,6 +19,7 @@ from workflow.models import (
     WorkflowInstance,
     WorkflowMembership,
     WorkflowStep,
+    WorkflowStepExecution,
 )
 
 
@@ -222,6 +223,54 @@ class MyProcessesFormSearchTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         return response.context["page_obj"].paginator.count
+
+    def test_search_uses_operator_step_permissions_after_process_moves_on(self):
+        other_user = User.objects.create_user(
+            username="later_step_operator",
+            password="test-password",
+        )
+        later_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Later Step",
+            code="LATER_SEARCH_STEP",
+            assigned_to=other_user,
+            order=2,
+            is_active=True,
+        )
+        customer_field = FormField.objects.create(
+            section=self.section,
+            name="Customer",
+            code="customer",
+            label="Customer",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+        )
+        # The value was visible to this operator at their step, but hidden
+        # at the later step now assigned to somebody else.
+        FieldAccess.objects.create(
+            field=customer_field,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+        FieldAccess.objects.create(
+            field=customer_field,
+            step=later_step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=False,
+            can_edit=False,
+        )
+        self.instance.current_step = later_step
+        self.instance.save(update_fields=["current_step"])
+        WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step,
+            performed_by=self.user,
+            is_submitted=True,
+        )
+
+        self.assertEqual(self.search_count("Customer-Blue-193"), 1)
 
     def test_searches_normal_nested_and_device_fields_but_not_hidden_fields(self):
         FormField.objects.create(
