@@ -56,12 +56,13 @@ class NotificationService:
             )
         transaction.on_commit(publish_notification)
 
+        # PARKED: n8n delivery is intentionally disabled.
         # if getattr(settings, "N8N_NOTIFICATION_WEBHOOK_URL", ""):
-            # from .tasks import dispatch_n8n_notification
-#
-            # transaction.on_commit(
-                # lambda: dispatch_n8n_notification.delay(notification.id)
-            # )
+        #     from .tasks import dispatch_n8n_notification
+        #
+        #     transaction.on_commit(
+        #         lambda: dispatch_n8n_notification.delay(notification.id)
+        #     )
 
         return notification
 
