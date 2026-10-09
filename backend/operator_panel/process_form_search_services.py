@@ -70,7 +70,7 @@ class ProcessFormSearchService:
             data = dict(context["form_data"].get(instance.pk, {}) or {})
             sections = context["sections"].get(instance.workflow_id, [])
             fields = []
-            has_normal_formula = False
+            has_formula = False
             groups_by_section = defaultdict(list)
             children_by_parent = defaultdict(list)
             for group in context["groups"].get(instance.workflow_id, []):
@@ -82,15 +82,15 @@ class ProcessFormSearchService:
                 for field in section.fields.all():
                     if not field.is_active:
                         continue
+                    if field.field_type == FormField.FieldType.FORMULA:
+                        has_formula = True
                     if (
                         field.repeatable_group_id is None
                         and not permission.is_field_hidden(field)
                     ):
                         fields.append(field)
-                        if field.field_type == FormField.FieldType.FORMULA:
-                            has_normal_formula = True
 
-            if has_normal_formula:
+            if has_formula:
                 root_groups = [
                     group
                     for section in sections
@@ -164,6 +164,11 @@ class ProcessFormSearchService:
                 instance.pk, {}
             )
             model_reference_cache = context["model_reference_cache"]
+            formula_rows_by_group_row = cls._formula_rows_by_group_row(
+                data=data,
+                groups=groups,
+                rows_by_group_parent=rows_by_group_parent,
+            )
 
             def search_group(group, parent_row_id=None, parent_hidden=False):
                 if parent_hidden or permission.is_group_hidden(group):
@@ -189,6 +194,11 @@ class ProcessFormSearchService:
                                     field=field,
                                 )
                             )
+                        elif field.field_type == FormField.FieldType.FORMULA:
+                            raw_value = formula_rows_by_group_row.get(
+                                (group.pk, row.pk), {}
+                            ).get(field.code)
+                            display_value = raw_value or ""
                         else:
                             raw_value, display_value = (
                                 RepeatableRowReadService._custom_value(
@@ -214,6 +224,52 @@ class ProcessFormSearchService:
                 matched.add(instance.pk)
 
         return matched
+
+    @classmethod
+    def _formula_rows_by_group_row(cls, *, data, groups, rows_by_group_parent):
+        """Pair calculated repeatable formula payloads with their persisted rows."""
+        children_by_parent = defaultdict(list)
+        for group in groups:
+            if group.parent_group_id is not None:
+                children_by_parent[group.parent_group_id].append(group)
+
+        result = {}
+
+        def visit(group, parent_row_id=None, group_payload=None):
+            if group_payload is None:
+                group_payload = data.get(group.code, {})
+            if not isinstance(group_payload, dict):
+                return
+            payload_rows = group_payload.get("items", [])
+            rows = rows_by_group_parent.get((group.pk, parent_row_id), [])
+            if not isinstance(payload_rows, list):
+                return
+
+            for row, payload_row in zip(rows, payload_rows):
+                if not isinstance(payload_row, dict):
+                    continue
+                result[(group.pk, row.pk)] = payload_row
+                child_payloads = payload_row.get("child_groups", [])
+                for child in children_by_parent.get(group.pk, []):
+                    child_payload = next(
+                        (
+                            item for item in child_payloads
+                            if isinstance(item, dict)
+                            and item.get("code") == child.code
+                        ),
+                        None,
+                    )
+                    if child_payload is not None:
+                        visit(
+                            child,
+                            parent_row_id=row.pk,
+                            group_payload=child_payload,
+                        )
+
+        for group in groups:
+            if group.parent_group_id is None:
+                visit(group)
+        return result
 
     @classmethod
     def _field_matches(cls, *, field, raw_value, display_value, term):
