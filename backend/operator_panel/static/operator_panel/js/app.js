@@ -160,6 +160,51 @@ function reindexFlatTableRootRows(container, rootGroupCode) {
     });
 }
 
+function copyLiveFormControlState(sourceCell, targetCell) {
+    const sourceControls = Array.from(
+        sourceCell.querySelectorAll("input, textarea, select")
+    );
+    const targetControls = Array.from(
+        targetCell.querySelectorAll("input, textarea, select")
+    );
+
+    sourceControls.forEach((sourceControl, index) => {
+        const targetControl = targetControls[index];
+        if (!targetControl) return;
+
+        if (sourceControl instanceof HTMLInputElement) {
+            if (sourceControl.type === "file") {
+                return;
+            }
+
+            if (
+                sourceControl.type === "checkbox" ||
+                sourceControl.type === "radio"
+            ) {
+                targetControl.checked = sourceControl.checked;
+            }
+
+            targetControl.value = sourceControl.value;
+            return;
+        }
+
+        if (sourceControl instanceof HTMLTextAreaElement) {
+            targetControl.value = sourceControl.value;
+            return;
+        }
+
+        if (sourceControl instanceof HTMLSelectElement) {
+            Array.from(sourceControl.options).forEach((sourceOption, optionIndex) => {
+                const targetOption = targetControl.options[optionIndex];
+                if (targetOption) {
+                    targetOption.selected = sourceOption.selected;
+                }
+            });
+            targetControl.selectedIndex = sourceControl.selectedIndex;
+        }
+    });
+}
+
 function preserveFlatTableRootOnChildDelete(container, childRow, rootGroupCode) {
     const rootRowId = childRow.dataset.parentRowId;
     const rootIndex = childRow.dataset.rootIndex;
@@ -201,6 +246,7 @@ function preserveFlatTableRootOnChildDelete(container, childRow, rootGroupCode) 
             Array.from(sourceCell.childNodes).forEach((node) => {
                 targetCell.appendChild(node.cloneNode(true));
             });
+            copyLiveFormControlState(sourceCell, targetCell);
         });
 
         if (rootIdInput) {
