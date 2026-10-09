@@ -6,7 +6,15 @@ from django.utils import timezone
 from django.urls import reverse
 
 from workflow.models import (
+    FieldAccess,
     FormData,
+    FormDefinition,
+    FormField,
+    FormRepeatableGroup,
+    FormSection,
+    InstanceDevice,
+    RepeatableRow,
+    RepeatableRowValue,
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
@@ -151,3 +159,170 @@ class MyProcessesSummaryWiringTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["page_obj"].paginator.count, 0)
+
+
+class MyProcessesFormSearchTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="my_processes_form_search_user",
+            password="test-password",
+        )
+        self.workflow = Workflow.objects.create(
+            name="Form Search WF",
+            code="FORM_SEARCH_WF",
+            is_active=True,
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        self.step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Form Search Step",
+            code="FORM_SEARCH_STEP",
+            order=1,
+            is_active=True,
+        )
+        self.instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+            started_by=self.user,
+            status=WorkflowInstance.Status.ACTIVE,
+        )
+        self.form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="Searchable Form",
+        )
+        self.section = FormSection.objects.create(
+            form=self.form,
+            name="Main",
+            code="SEARCH_MAIN",
+            order=1,
+        )
+        self.other_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+            started_by=self.user,
+            status=WorkflowInstance.Status.ACTIVE,
+        )
+        FormData.objects.create(
+            instance=self.instance,
+            data={"customer": "Customer-Blue-193"},
+        )
+        FormData.objects.create(instance=self.other_instance, data={})
+
+    def search_count(self, term):
+        client = Client()
+        client.force_login(self.user)
+        response = client.get(
+            reverse("operator_panel:my_processes"),
+            {"q": term},
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.context["page_obj"].paginator.count
+
+    def test_searches_normal_nested_and_device_fields_but_not_hidden_fields(self):
+        FormField.objects.create(
+            section=self.section,
+            name="Customer",
+            code="customer",
+            label="Customer",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+        )
+
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Assets",
+            label="Assets",
+            code="assets",
+            order=1,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="Asset details",
+            label="Asset details",
+            code="asset_details",
+            order=2,
+        )
+        nested_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Serial",
+            code="serial",
+            label="Serial",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+        )
+        parent_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=parent_group,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=self.instance,
+            group=child_group,
+            parent_row=parent_row,
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=nested_field,
+            text_value="nested-serial-X91",
+        )
+
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Devices",
+            label="Devices",
+            code="devices",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=3,
+        )
+        device_description = FormField.objects.create(
+            section=self.section,
+            repeatable_group=device_group,
+            name="Description",
+            code="device_description",
+            label="Device description",
+            field_type=FormField.FieldType.TEXT,
+            system_key=FormField.SystemKey.DESCRIPTION,
+            order=1,
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=self.instance,
+            description="device-problem-Z77",
+        )
+        RepeatableRow.objects.create(
+            instance=self.instance,
+            group=device_group,
+            instance_device=instance_device,
+        )
+
+        hidden_field = FormField.objects.create(
+            section=self.section,
+            name="Private note",
+            code="private_note",
+            label="Private note",
+            field_type=FormField.FieldType.TEXT,
+            order=2,
+        )
+        FieldAccess.objects.create(
+            field=hidden_field,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=False,
+            can_edit=False,
+        )
+        FormData.objects.filter(instance=self.instance).update(
+            data={
+                "customer": "Customer-Blue-193",
+                "private_note": "hidden-SECRET-55",
+            }
+        )
+
+        self.assertEqual(self.search_count("Customer-Blue-193"), 1)
+        self.assertEqual(self.search_count("nested-serial-X91"), 1)
+        self.assertEqual(self.search_count("device-problem-Z77"), 1)
+        self.assertEqual(self.search_count("hidden-SECRET-55"), 0)
