@@ -83,9 +83,9 @@
             {% for instance in instances %}
                 <div class="df-process-row">
                     <div class="df-process-row-main">
-                        <div class="df-process-row-title">{{ instance.workflow.name }} <span>#{{ instance.started_at|date:"ymd" }}-{{ instance.pk|stringformat:"06d" }}</span></div>
+                        <div class="df-process-row-title">{{ instance.workflow.name }} <span>#{{ instance.pk }}-{{ instance.started_at|date:"ymd" }}</span></div>
                         <div class="df-process-row-meta">
-                            <span>شماره فرم: {{ instance.started_at|date:"ymd" }}-{{ instance.pk|stringformat:"06d" }}</span>
+                            <span>شماره فرم: {{ instance.pk }}-{{ instance.started_at|date:"ymd" }}</span>
                             {% if instance.current_step %}<span>·</span><span>مرحله: {{ instance.current_step.name }}</span>{% endif %}
                             <span>·</span><span>{{ instance.get_status_display }}</span><span>·</span><span>تاریخ ایجاد: {{ instance.started_at|date:"Y/m/d - H:i" }}</span>
                         </div>
