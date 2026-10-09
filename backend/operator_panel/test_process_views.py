@@ -272,6 +272,24 @@ class MyProcessesFormSearchTests(TestCase):
 
         self.assertEqual(self.search_count("Customer-Blue-193"), 1)
 
+    def test_search_finds_form_values_after_process_is_completed(self):
+        customer_field = FormField.objects.create(
+            section=self.section,
+            name="Customer",
+            code="customer",
+            label="Customer",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+        )
+        FormData.objects.filter(instance=self.instance).update(
+            data={customer_field.code: "Elon Musk"}
+        )
+        self.instance.current_step = None
+        self.instance.status = WorkflowInstance.Status.COMPLETED
+        self.instance.save(update_fields=["current_step", "status"])
+
+        self.assertEqual(self.search_count("Elon Musk"), 1)
+
     def test_searches_normal_nested_and_device_fields_but_not_hidden_fields(self):
         FormField.objects.create(
             section=self.section,
