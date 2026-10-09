@@ -20,6 +20,7 @@ from .dashboard_services import DashboardService, _can_take_action_q
 
 
 FORM_NUMBER_PATTERN = re.compile(r"^(?P<pk>\d+)-(?P<date>\d{6})$")
+LEGACY_FORM_NUMBER_PATTERN = re.compile(r"^(?P<date>\d{6})-(?P<pk>\d{6})$")
 
 
 @login_required
@@ -158,16 +159,18 @@ def my_processes(request):
             | Q(current_step__name__icontains=search)
         )
         form_number_match = FORM_NUMBER_PATTERN.fullmatch(search)
-        if form_number_match:
+        legacy_form_number_match = LEGACY_FORM_NUMBER_PATTERN.fullmatch(search)
+        if form_number_match or legacy_form_number_match:
+            matched_number = form_number_match or legacy_form_number_match
             try:
                 form_date = datetime.strptime(
-                    form_number_match.group("date"), "%y%m%d"
+                    matched_number.group("date"), "%y%m%d"
                 ).date()
             except ValueError:
                 # A malformed form date must not turn a search into a 500.
                 pass
             else:
-                form_pk = int(form_number_match.group("pk"))
+                form_pk = int(matched_number.group("pk"))
                 search_filter |= Q(pk=form_pk, started_at__date=form_date)
         elif search.isdigit():
             search_filter |= Q(pk=int(search))
