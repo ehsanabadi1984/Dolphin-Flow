@@ -32,9 +32,25 @@ class ProcessFormSearchService:
             user=user,
         )
         scopes = []
+        # Search against the permission scope of the form this operator
+        # could work with: the current step when it is assigned to them,
+        # otherwise their most recent step execution. Only fall back to the
+        # current step when no personal execution scope exists, preserving
+        # behavior for instances without execution history.
+        steps_by_instance = {}
+        for instance in instances:
+            current_step = instance.current_step
+            if current_step is not None and current_step.assigned_to_id == user.pk:
+                steps_by_instance[instance.pk] = current_step
+            elif summary_steps.get(instance.pk) is not None:
+                steps_by_instance[instance.pk] = summary_steps[instance.pk]
+            elif current_step is not None:
+                steps_by_instance[instance.pk] = current_step
+
+        scopes = []
         for instance in instances:
             form = context["forms"].get(instance.workflow_id)
-            step = instance.current_step or summary_steps.get(instance.pk)
+            step = steps_by_instance.get(instance.pk)
             if form is None or step is None:
                 continue
             scopes.append({
@@ -48,7 +64,7 @@ class ProcessFormSearchService:
         permissions_by_instance = {}
         for instance in instances:
             form = context["forms"].get(instance.workflow_id)
-            step = instance.current_step or summary_steps.get(instance.pk)
+            step = steps_by_instance.get(instance.pk)
             if form is None or step is None:
                 continue
             key = (
