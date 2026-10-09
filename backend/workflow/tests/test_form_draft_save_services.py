@@ -3205,3 +3205,346 @@ class FormDraftSaveServiceContractTests(TestCase):
             ["فرزند آقایی", "فرزند صمدی"],
         )
 
+    def test_ten_device_lifecycle_round_trip_is_idempotent(self):
+        """Exercise mixed device identities through create, edit, delete and resave."""
+        group, fields = self._create_device_system_fields_for_identity_tests(
+            "TEN_DEVICE_LIFECYCLE",
+        )
+        device_type = DeviceType.objects.create(
+            name="Ten Device Lifecycle Type",
+            code="TEN_DEVICE_LIFECYCLE_TYPE",
+            is_active=True,
+        )
+        device_model = DeviceModel.objects.create(
+            device_type=device_type,
+            brand="Test",
+            name="Ten Device Lifecycle Model",
+            code="TEN_DEVICE_LIFECYCLE_MODEL",
+            is_active=True,
+        )
+
+        problem_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Lifecycle Problem",
+            code="ten_device_lifecycle_problem",
+            label="Lifecycle Problem",
+            field_type=FormField.FieldType.TEXT,
+            system_key=FormField.SystemKey.REPORTED_PROBLEM,
+            order=3,
+        )
+        color_field = FormField.objects.create(
+            section=self.section,
+            repeatable_group=group,
+            name="Lifecycle Marker",
+            code="ten_device_lifecycle_marker",
+            label="Lifecycle Marker",
+            field_type=FormField.FieldType.TEXT,
+            system_key=FormField.SystemKey.NONE,
+            order=4,
+        )
+        self.grant_repeatable_write_permissions(group, problem_field)
+        self.grant_repeatable_write_permissions(group, color_field)
+
+        existing_imeis = {
+            "existing-keep": "810000000000001",
+            "existing-delete": "810000000000002",
+        }
+        existing_devices = {}
+        for marker, imei in existing_imeis.items():
+            device = Device.objects.create(device_model=device_model)
+            DeviceIdentifier.objects.create(
+                device=device,
+                identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+                value=imei,
+            )
+            existing_devices[marker] = device
+
+        def payload_row(marker, imei, *, has_model=True, row_id=None, problem=None):
+            row = {
+                "ten_device_lifecycle_imei": imei,
+                "ten_device_lifecycle_device_type": device_type.pk,
+                "ten_device_lifecycle_device_model": (
+                    device_model.pk if has_model else ""
+                ),
+                "ten_device_lifecycle_problem": problem or f"Problem {marker}",
+                "ten_device_lifecycle_marker": marker,
+            }
+            if row_id is not None:
+                row["row_id"] = row_id
+            return row
+
+        initial_rows = [
+            payload_row("existing-keep", existing_imeis["existing-keep"]),
+            payload_row("existing-delete", existing_imeis["existing-delete"]),
+            payload_row("new-imei-keep", "820000000000001"),
+            payload_row("new-imei-delete", "820000000000002"),
+            payload_row("new-blank-keep", ""),
+            payload_row("new-blank-delete", ""),
+            payload_row(
+                "unresolved-imei-keep",
+                "830000000000001",
+                has_model=False,
+            ),
+            payload_row(
+                "unresolved-imei-delete",
+                "830000000000002",
+                has_model=False,
+            ),
+            payload_row(
+                "unresolved-blank-keep",
+                "",
+                has_model=False,
+            ),
+            payload_row(
+                "unresolved-blank-delete",
+                "",
+                has_model=False,
+            ),
+        ]
+        first_result = self.call(
+            submitted_data={group.code: initial_rows},
+        )
+        self.assertTrue(first_result.saved)
+
+        def rows_by_marker():
+            result = {}
+            rows = (
+                RepeatableRow.objects.filter(
+                    instance=self.instance,
+                    group=group,
+                )
+                .select_related("instance_device")
+                .order_by("row_order", "pk")
+            )
+            for row in rows:
+                marker_value = row.values.get(field=color_field)
+                result[marker_value.text_value] = row
+            return result
+
+        first_rows = rows_by_marker()
+        self.assertEqual(set(first_rows), {
+            "existing-keep",
+            "existing-delete",
+            "new-imei-keep",
+            "new-imei-delete",
+            "new-blank-keep",
+            "new-blank-delete",
+            "unresolved-imei-keep",
+            "unresolved-imei-delete",
+            "unresolved-blank-keep",
+            "unresolved-blank-delete",
+        })
+        self.assertEqual(
+            first_rows["existing-keep"].instance_device.device_id,
+            existing_devices["existing-keep"].pk,
+        )
+        self.assertEqual(
+            first_rows["existing-delete"].instance_device.device_id,
+            existing_devices["existing-delete"].pk,
+        )
+        for marker in ("new-imei-keep", "new-imei-delete",
+                       "new-blank-keep", "new-blank-delete"):
+            self.assertIsNotNone(first_rows[marker].instance_device.device_id)
+            self.assertEqual(
+                first_rows[marker].instance_device.device_origin,
+                InstanceDevice.DeviceOrigin.NEW,
+            )
+        for marker in (
+            "unresolved-imei-keep",
+            "unresolved-imei-delete",
+            "unresolved-blank-keep",
+            "unresolved-blank-delete",
+        ):
+            self.assertIsNone(first_rows[marker].instance_device.device_id)
+
+        # Return to edit mode: keep one representative of every identity
+        # category, edit it, and omit its paired row to exercise deletion.
+        second_rows = [
+            payload_row(
+                "existing-keep",
+                existing_imeis["existing-keep"],
+                row_id=first_rows["existing-keep"].pk,
+                problem="Updated existing device",
+            ),
+            payload_row(
+                "new-imei-keep",
+                "820000000000101",
+                row_id=first_rows["new-imei-keep"].pk,
+                problem="Updated new IMEI device",
+            ),
+            payload_row(
+                "new-blank-keep",
+                "820000000000102",
+                row_id=first_rows["new-blank-keep"].pk,
+                problem="Updated formerly blank-IMEI device",
+            ),
+            payload_row(
+                "unresolved-imei-keep",
+                "830000000000101",
+                has_model=False,
+                row_id=first_rows["unresolved-imei-keep"].pk,
+                problem="Updated unresolved IMEI device",
+            ),
+            payload_row(
+                "unresolved-blank-keep",
+                "",
+                has_model=False,
+                row_id=first_rows["unresolved-blank-keep"].pk,
+                problem="Updated unresolved blank-IMEI device",
+            ),
+        ]
+        second_result = self.call(
+            submitted_data={group.code: second_rows},
+            edit_mode=True,
+        )
+        self.assertTrue(second_result.saved)
+
+        retained_rows = rows_by_marker()
+        self.assertEqual(
+            set(retained_rows),
+            {
+                "existing-keep",
+                "new-imei-keep",
+                "new-blank-keep",
+                "unresolved-imei-keep",
+                "unresolved-blank-keep",
+            },
+        )
+        self.assertEqual(
+            RepeatableRow.objects.filter(instance=self.instance, group=group).count(),
+            5,
+        )
+        self.assertEqual(
+            InstanceDevice.objects.filter(instance=self.instance, is_active=True).count(),
+            5,
+        )
+        self.assertEqual(
+            InstanceDevice.objects.filter(instance=self.instance, is_active=False).count(),
+            5,
+        )
+
+        for marker in (
+            "existing-delete",
+            "new-imei-delete",
+            "new-blank-delete",
+            "unresolved-imei-delete",
+            "unresolved-blank-delete",
+        ):
+            self.assertFalse(
+                RepeatableRow.objects.filter(pk=first_rows[marker].pk).exists(),
+                marker,
+            )
+            deleted_instance_device = InstanceDevice.objects.get(
+                pk=first_rows[marker].instance_device_id,
+            )
+            self.assertFalse(deleted_instance_device.is_active, marker)
+
+        existing_keep = retained_rows["existing-keep"].instance_device
+        self.assertEqual(existing_keep.device_id, existing_devices["existing-keep"].pk)
+        self.assertEqual(
+            existing_keep.device.identifiers.get(
+                identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            ).value,
+            existing_imeis["existing-keep"],
+        )
+        self.assertEqual(existing_keep.reported_problem, "Updated existing device")
+
+        new_imei_keep = retained_rows["new-imei-keep"].instance_device
+        self.assertEqual(new_imei_keep.device_origin, InstanceDevice.DeviceOrigin.NEW)
+        self.assertEqual(
+            new_imei_keep.device.identifiers.get(
+                identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            ).value,
+            "820000000000101",
+        )
+        self.assertEqual(new_imei_keep.reported_problem, "Updated new IMEI device")
+
+        new_blank_keep = retained_rows["new-blank-keep"].instance_device
+        self.assertEqual(new_blank_keep.device_origin, InstanceDevice.DeviceOrigin.NEW)
+        self.assertEqual(
+            new_blank_keep.device.identifiers.get(
+                identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+            ).value,
+            "820000000000102",
+        )
+        self.assertEqual(
+            new_blank_keep.reported_problem,
+            "Updated formerly blank-IMEI device",
+        )
+
+        unresolved_imei_keep = retained_rows["unresolved-imei-keep"].instance_device
+        self.assertIsNone(unresolved_imei_keep.device_id)
+        self.assertEqual(unresolved_imei_keep.draft_imei, "830000000000101")
+        self.assertEqual(
+            unresolved_imei_keep.draft_device_type_id,
+            device_type.pk,
+        )
+        self.assertEqual(unresolved_imei_keep.draft_device_model_id, None)
+        self.assertEqual(
+            unresolved_imei_keep.reported_problem,
+            "Updated unresolved IMEI device",
+        )
+
+        unresolved_blank_keep = retained_rows["unresolved-blank-keep"].instance_device
+        self.assertIsNone(unresolved_blank_keep.device_id)
+        self.assertEqual(unresolved_blank_keep.draft_imei, "")
+        self.assertEqual(
+            unresolved_blank_keep.draft_device_type_id,
+            device_type.pk,
+        )
+        self.assertEqual(unresolved_blank_keep.draft_device_model_id, None)
+        self.assertEqual(
+            unresolved_blank_keep.reported_problem,
+            "Updated unresolved blank-IMEI device",
+        )
+
+        # Re-submit the exact edit payload. The second save must be idempotent:
+        # no duplicate rows/devices/identifiers and no changes to persisted values.
+        def snapshot():
+            instance_devices = list(
+                InstanceDevice.objects.filter(instance=self.instance)
+                .order_by("pk")
+                .values_list(
+                    "pk", "device_id", "device_origin", "draft_imei",
+                    "draft_device_model_id", "draft_device_type_id", "is_active",
+                    "reported_problem", "description", "warranty_status", "status",
+                )
+            )
+            device_ids = {
+                device_id
+                for _, device_id, *_ in instance_devices
+                if device_id is not None
+            }
+            devices = list(
+                Device.objects.filter(pk__in=device_ids)
+                .order_by("pk")
+                .values_list("pk", "device_model_id", "description")
+            )
+            identifiers = list(
+                DeviceIdentifier.objects.filter(device_id__in=device_ids)
+                .order_by("pk")
+                .values_list("pk", "device_id", "identifier_type", "value")
+            )
+            rows = list(
+                RepeatableRow.objects.filter(instance=self.instance, group=group)
+                .order_by("pk")
+                .values_list("pk", "instance_device_id", "parent_row_id", "row_order")
+            )
+            values = list(
+                RepeatableRowValue.objects.filter(row__in=[
+                    row[0] for row in rows
+                ])
+                .order_by("pk")
+                .values_list("pk", "row_id", "field_id", "text_value")
+            )
+            return instance_devices, devices, identifiers, rows, values
+
+        before_resave = snapshot()
+        third_result = self.call(
+            submitted_data={group.code: second_rows},
+            edit_mode=True,
+        )
+        self.assertTrue(third_result.saved)
+        self.assertEqual(snapshot(), before_resave)
+
