@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -57,12 +56,12 @@ class NotificationService:
             )
         transaction.on_commit(publish_notification)
 
-        if getattr(settings, "N8N_NOTIFICATION_WEBHOOK_URL", ""):
-            from .tasks import dispatch_n8n_notification
-
-            transaction.on_commit(
-                lambda: dispatch_n8n_notification.delay(notification.id)
-            )
+        # if getattr(settings, "N8N_NOTIFICATION_WEBHOOK_URL", ""):
+            # from .tasks import dispatch_n8n_notification
+#
+            # transaction.on_commit(
+                # lambda: dispatch_n8n_notification.delay(notification.id)
+            # )
 
         return notification
 
