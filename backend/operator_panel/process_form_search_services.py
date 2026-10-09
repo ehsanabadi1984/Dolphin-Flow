@@ -27,53 +27,30 @@ class ProcessFormSearchService:
             return set()
 
         context = ProcessSummaryBatchContextService.build(instances=instances)
-        summary_steps = ProcessSummaryService._summary_steps_for_instances(
-            instances,
-            user=user,
-        )
-        scopes = []
-        # Search against the permission scope of the form this operator
-        # could work with: the current step when it is assigned to them,
-        # otherwise their most recent step execution. Only fall back to the
-        # current step when no personal execution scope exists, preserving
-        # behavior for instances without execution history.
-        steps_by_instance = {}
-        for instance in instances:
-            current_step = instance.current_step
-            if current_step is not None and current_step.assigned_to_id == user.pk:
-                steps_by_instance[instance.pk] = current_step
-            elif summary_steps.get(instance.pk) is not None:
-                steps_by_instance[instance.pk] = summary_steps[instance.pk]
-            elif current_step is not None:
-                steps_by_instance[instance.pk] = current_step
-
+        # Search the same step-independent, field-level visibility scope used
+        # by process summaries. Completed instances have no current step, and
+        # their persisted values must remain searchable from "My Processes".
         scopes = []
         for instance in instances:
             form = context["forms"].get(instance.workflow_id)
-            step = steps_by_instance.get(instance.pk)
-            if form is None or step is None:
+            if form is None:
                 continue
             scopes.append({
                 "workflow": instance.workflow,
                 "form": form,
-                "step": step,
                 "user": user,
             })
 
-        step_permissions = PermissionContext.build_batch(scopes=scopes)
+        summary_permissions = PermissionContext.build_summary_batch(
+            scopes=scopes,
+        )
         permissions_by_instance = {}
         for instance in instances:
             form = context["forms"].get(instance.workflow_id)
-            step = steps_by_instance.get(instance.pk)
-            if form is None or step is None:
+            if form is None:
                 continue
-            key = (
-                instance.workflow_id,
-                form.pk,
-                step.pk,
-                user.pk,
-            )
-            permissions_by_instance[instance.pk] = step_permissions.get(key)
+            key = (instance.workflow_id, form.pk, user.pk)
+            permissions_by_instance[instance.pk] = summary_permissions.get(key)
 
         fields_by_instance = {}
         search_data_by_instance = {}
