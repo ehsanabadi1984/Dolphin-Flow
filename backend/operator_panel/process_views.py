@@ -165,6 +165,7 @@ def my_processes(request):
             for match in (form_number_match, legacy_form_number_match)
             if match
         )
+        form_number_parsed = False
         for matched_number in matched_numbers:
             try:
                 form_date = datetime.strptime(
@@ -175,8 +176,9 @@ def my_processes(request):
                 continue
             form_pk = int(matched_number.group("pk"))
             search_filter |= Q(pk=form_pk, started_at__date=form_date)
+            form_number_parsed = True
             break
-        elif search.isdigit():
+        if not form_number_parsed and search.isdigit():
             search_filter |= Q(pk=int(search))
         instances = instances.filter(search_filter)
 
