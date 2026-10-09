@@ -102,8 +102,11 @@ class ProcessFormSearchService:
                     value=raw_value,
                     display_cache=display_cache,
                 )
-                if cls._contains_term(raw_value, term) or cls._contains_term(
-                    display_value, term
+                if cls._field_matches(
+                    field=field,
+                    raw_value=raw_value,
+                    display_value=display_value,
+                    term=term,
                 ):
                     matched.add(instance.pk)
                     break
@@ -156,8 +159,11 @@ class ProcessFormSearchService:
                                     model_reference_cache=model_reference_cache,
                                 )
                             )
-                        if cls._contains_term(raw_value, term) or cls._contains_term(
-                            display_value, term
+                        if cls._field_matches(
+                            field=field,
+                            raw_value=raw_value,
+                            display_value=display_value,
+                            term=term,
                         ):
                             return True
 
@@ -172,8 +178,21 @@ class ProcessFormSearchService:
         return matched
 
     @classmethod
+    def _field_matches(cls, *, field, raw_value, display_value, term):
+        if cls._contains_term(display_value, term):
+            return True
+        if field.field_type == FormField.FieldType.SELECT:
+            return False
+        if field.system_key in (
+            FormField.SystemKey.DEVICE_TYPE,
+            FormField.SystemKey.DEVICE_MODEL,
+        ):
+            return False
+        return cls._contains_term(raw_value, term)
+
+    @classmethod
     def _contains_term(cls, value, term):
-        if value in (None, ""):
+        if value is None or value == "":
             return False
         if isinstance(value, dict):
             value = " ".join(str(item) for item in value.values())
@@ -183,7 +202,7 @@ class ProcessFormSearchService:
 
     @staticmethod
     def _normalize(value):
-        value = str(value or "").strip().casefold()
+        value = str("" if value is None else value).strip().casefold()
         translation = str.maketrans({
             "ي": "ی",
             "ى": "ی",
