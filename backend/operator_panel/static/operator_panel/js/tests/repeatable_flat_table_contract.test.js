@@ -1633,3 +1633,83 @@ test("DEVICE no longer exposes per-row edit/save/cancel lifecycle", () => {
     assert.doesNotMatch(appJs, /className = "df-button df-button-secondary df-device-cancel"/);
     assert.doesNotMatch(appJs, /function setDeviceRowEditing/);
 });
+
+
+test("flat TABLE child deletion preserves live root field values when moving them", () => {
+    const transferFunction = appJs.slice(
+        appJs.indexOf("function preserveFlatTableRootOnChildDelete("),
+    );
+    assert.match(
+        transferFunction,
+        /copyLiveFormControlState\(\s*sourceCell,\s*targetCell\s*\)/,
+        "moving root controls must preserve their current live values, not only clone markup",
+    );
+    assert.match(
+        appJs,
+        /function copyLiveFormControlState\(sourceCell, targetCell\)/,
+        "the live-control transfer contract must be implemented centrally",
+    );
+});
+
+test("flat TABLE root deletion without child rows preserves remaining edited values", () => {
+    const extractFunction = (source, functionName) => {
+        const start = source.indexOf("function " + functionName + "(");
+        assert.notEqual(start, -1, functionName + " must exist");
+        let depth = 0;
+        let opened = false;
+        for (let index = source.indexOf("{", start); index < source.length; index += 1) {
+            if (source[index] === "{") {
+                depth += 1;
+                opened = true;
+            } else if (source[index] === "}") {
+                depth -= 1;
+                if (opened && depth === 0) return source.slice(start, index + 1);
+            }
+        }
+        throw new Error("Could not extract " + functionName);
+    };
+
+    const makeField = (name, value) => ({
+        name,
+        value,
+        getAttribute(attribute) {
+            return attribute === "name" ? this.name : null;
+        },
+    });
+    const makeRow = (rootIndex, field) => ({
+        dataset: {
+            rootIndex: String(rootIndex),
+            rowPath: `devices_${rootIndex}`,
+        },
+        field,
+        querySelectorAll(selector) {
+            return selector === "input, textarea, select" ? [this.field] : [];
+        },
+    });
+
+    const removedRoot = makeRow(0, makeField("devices_0_Name", "removed"));
+    const remainingRoot = makeRow(2, makeField("devices_2_Name", "edited value"));
+    const rows = [removedRoot, remainingRoot];
+    const container = {
+        querySelectorAll(selector) {
+            return selector === "[data-repeatable-item]" ? rows : [];
+        },
+    };
+
+    const invoke = new Function(
+        extractFunction(appJs, "escapeRegExp") +
+            "\\n" +
+            extractFunction(appJs, "reindexFlatTableRootRows") +
+            "\\nreturn reindexFlatTableRootRows;",
+    )();
+
+    rows.splice(rows.indexOf(removedRoot), 1);
+    invoke(container, "devices");
+
+    assert.equal(remainingRoot.field.name, "devices_0_Name");
+    assert.equal(
+        remainingRoot.field.value,
+        "edited value",
+        "reindexing a plain root row must not reset its live field value",
+    );
+});
