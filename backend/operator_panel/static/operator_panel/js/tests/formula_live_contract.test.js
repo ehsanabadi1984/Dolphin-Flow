@@ -17,7 +17,8 @@ test("live Formula recalculation listens to editable form changes", () => {
     assert.match(formulaJs, /form\.addEventListener\("input", scheduleRecalculate\);/);
     assert.match(formulaJs, /form\.addEventListener\("change", scheduleRecalculate\);/);
     assert.match(formulaJs, /method: "POST"/);
-    assert.match(formulaJs, /body: new FormData\(form\)/);
+    assert.match(formulaJs, /const formData = new FormData\(form\);/);
+    assert.match(formulaJs, /body: formData/);
 });
 
 test("live Formula response is applied to the visible Formula DOM", () => {
