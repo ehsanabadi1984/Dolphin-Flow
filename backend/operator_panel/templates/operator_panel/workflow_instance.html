@@ -15,7 +15,7 @@
   </div>
   {% endif %}
 
-  <p>شماره فرم: {{ instance.form_number }}</p>
+  <p>شماره فرم: {{ instance.pk }}-{{ instance.started_at|date:"ymd" }}</p>
   <p>تاریخ ایجاد: {{ instance.started_at|date:"Y/m/d - H:i" }}</p>
 
   <p>وضعیت: {{ instance.get_status_display }}</p>
