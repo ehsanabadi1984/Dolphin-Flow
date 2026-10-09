@@ -123,6 +123,16 @@ class MyProcessesSummaryWiringTests(TestCase):
             f"شماره فرم: {self.instance.pk}-{form_date}",
         )
 
+        # The search box should accept the date-first order users type naturally,
+        # with an unpadded instance ID after the hyphen.
+        date_first_response = client.get(
+            reverse("operator_panel:my_processes"),
+            {"q": f"{form_date}-{self.instance.pk}"},
+        )
+        self.assertEqual(date_first_response.status_code, 200)
+        self.assertEqual(date_first_response.context["page_obj"].paginator.count, 1)
+
+        # Keep accepting the old zero-padded date-first form number too.
         legacy_response = client.get(
             reverse("operator_panel:my_processes"),
             {"q": f"{form_date}-{self.instance.pk:06d}"},
