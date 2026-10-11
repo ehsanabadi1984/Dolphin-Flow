@@ -189,6 +189,7 @@
                                               type="text"
                                               id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              value="{{ template_field.value|default:'' }}"
                                               step="{{ template_field.field.number_step }}"
                                               class="df-table-input"
                                             />
@@ -197,7 +198,7 @@
                                               id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                                               name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
                                               class="df-table-input df-table-textarea"
-                                            ></textarea>
+                                            >{{ template_field.value|default:'' }}</textarea>
                                           {% elif template_field.field.field_type == "NUMBER" %}
                                             <input
                                               type="number"
