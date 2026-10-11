@@ -1713,3 +1713,11 @@ test("flat TABLE root deletion without child rows preserves remaining edited val
         "reindexing a plain root row must not reset its live field value",
     );
 });
+
+
+test("newly cloned repeatable row IDs are discoverable by live row formulas", () => {
+    assert.match(appJs, /field\\.value = rootRowId;\\s*field\\.dataset\\.repeatableRootRowId = \"\";/s);
+    assert.match(appJs, /field\\.value = childRowId;\\s*field\\.dataset\\.repeatableRowId = \"\";/s);
+    assert.match(appJs, /if \\(isChildRowId\\) \\{[\\s\\S]*?field\\.value = newRowId;\\s*field\\.dataset\\.repeatableRowId = \"\";/s);
+    assert.match(appJs, /field\\.value = newRowId;\\s*field\\.dataset\\.repeatableRowId = \"\";/s);
+});
