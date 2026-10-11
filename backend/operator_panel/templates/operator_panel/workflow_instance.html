@@ -577,6 +577,7 @@
                             type="text"
                             id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                             name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                            value="{{ template_field.value|default:'' }}"
                             step="{{ template_field.field.number_step }}"
                           />
 
@@ -584,7 +585,7 @@
                           <textarea
                             id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
                             name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
-                          ></textarea>
+                          >{{ template_field.value|default:'' }}</textarea>
                         {% elif template_field.field.field_type == "NUMBER" %}
                           <input
                             type="number"
@@ -744,6 +745,7 @@
                 data-device-modal-field="{{ field_info.field.code }}"
                 data-field-code="{{ field_info.field.code }}"
                 data-system-key="IMEI"
+                value="{{ field_info.value|default:'' }}"
             >
 
             <div class="df-device-modal-error"></div>
@@ -808,7 +810,7 @@
                 <textarea
                     data-device-modal-field="{{ field_info.field.code }}"
                     data-field-code="{{ field_info.field.code }}"
-                ></textarea>
+                >{{ field_info.value|default:'' }}</textarea>
 
             {% elif field_info.field.field_type == "SELECT" %}
 
@@ -831,6 +833,7 @@
                     type="{% if field_info.field.field_type == 'NUMBER' %}number{% elif field_info.field.field_type == 'DATE' and field_info.field.calendar == 'JALALI' %}text{% elif field_info.field.field_type == 'DATE' %}date{% elif field_info.field.field_type == 'DATETIME' and field_info.field.calendar == 'JALALI' %}text{% elif field_info.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
                     data-device-modal-field="{{ field_info.field.code }}"
                     data-field-code="{{ field_info.field.code }}"
+                    value="{{ field_info.value|default:'' }}"
                 >
 
             {% endif %}
@@ -872,7 +875,7 @@
                                     data-device-modal-child-field="{{ field_info.field.code }}"
                                     data-field-code="{{ field_info.field.code }}"
                                     data-field-type="{{ field_info.field.field_type }}"
-                                  ></textarea>
+                                  >{{ field_info.value|default:'' }}</textarea>
                                 {% elif field_info.field.field_type == "SELECT" %}
                                   <select
                                     data-device-modal-child-field="{{ field_info.field.code }}"
