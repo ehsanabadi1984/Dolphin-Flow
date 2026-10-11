@@ -2555,6 +2555,7 @@ class RepeatableFieldInline(admin.TabularInline):
         "field_type",
         "label",
         "help_text",
+        "default_value",
         "is_required",
         "order",
         "is_active",
