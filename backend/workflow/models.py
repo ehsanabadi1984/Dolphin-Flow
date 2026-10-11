@@ -1374,6 +1374,12 @@ class FormField(models.Model):
         blank=True,
     )
 
+    default_value = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="متن پیش‌فرض",
+    )
+
     is_required = models.BooleanField(
         default=False,
     )
