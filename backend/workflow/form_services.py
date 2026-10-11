@@ -131,6 +131,15 @@ class DynamicFormService:
 
      
     @staticmethod
+    def _default_text_value(field):
+        if field.field_type in (
+            FormField.FieldType.TEXT,
+            FormField.FieldType.TEXTAREA,
+        ):
+            return field.default_value or ""
+        return ""
+
+    @staticmethod
     def _get_input_value(*, field, value, submitted_data=None):
         """Return the value presented to the operator for form input.
 
@@ -774,7 +783,7 @@ class DynamicFormService:
                     "field": field,
                     "can_edit": effective_can_edit,
                     "permission_can_edit": field_permission.can_edit,
-                    "value": "",
+                    "value": DynamicFormService._default_text_value(field),
                     "display_value": "",
                     "choices": (
                         DynamicFormService._get_field_choices(field)
@@ -971,7 +980,7 @@ class DynamicFormService:
                         and can_edit
                     ),
                     "permission_can_edit": field_permission.can_edit,
-                    "value": "",
+                    "value": DynamicFormService._default_text_value(field),
                     "display_value": "",
                     "choices": (
                         DynamicFormService._get_field_choices(field)
@@ -1559,9 +1568,10 @@ class DynamicFormService:
                     and not is_submitted
                 )
 
-                persisted_value = data.get(
-                    field.code,
-                    "",
+                persisted_value = (
+                    data[field.code]
+                    if field.code in data
+                    else DynamicFormService._default_text_value(field)
                 )
                 value = DynamicFormService._get_input_value(
                     field=field,
@@ -1703,6 +1713,8 @@ class DynamicFormService:
                     field_data = {
                         "field": field,
                         "can_edit": effective_can_edit,
+                        "value": DynamicFormService._default_text_value(field),
+                        "display_value": DynamicFormService._default_text_value(field),
                         "choices": (
                             DynamicFormService._dependent_choices(
                                 field,
