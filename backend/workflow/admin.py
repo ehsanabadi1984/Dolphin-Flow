@@ -3054,6 +3054,7 @@ class FormFieldAdmin(admin.ModelAdmin):
                     "calendar",
                     "system_key",
                     "help_text",
+                    "default_value",
                     "is_required",
                     "show_in_process_summary",
                     "decimal_places",
