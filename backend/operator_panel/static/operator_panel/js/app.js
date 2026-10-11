@@ -1085,6 +1085,8 @@ const submitNewDevice = (modal, groupCode) => {
         if (oldName.endsWith("__id")) {
             field.name = `${groupCode}_${newIndex}__id`;
             field.value = rootRowId;
+            field.dataset.repeatableRootRowId = "";
+            field.removeAttribute("data-repeatable-row-id");
             return;
         }
 
@@ -1179,6 +1181,8 @@ const submitNewDevice = (modal, groupCode) => {
                 field.name =
                     `${groupCode}_${newIndex}_${childGroupCode}_0__id`;
                 field.value = childRowId;
+                field.dataset.repeatableRowId = "";
+                field.removeAttribute("data-repeatable-root-row-id");
                 return;
             }
 
@@ -2724,6 +2728,8 @@ document.addEventListener("click", (event) => {
             if (isChildRowId) {
                 field.name = `${parentPath}_${childGroupCode}_${childIndex}__id`;
                 field.value = newRowId;
+                field.dataset.repeatableRowId = "";
+                field.removeAttribute("data-repeatable-root-row-id");
                 return;
             }
 
@@ -3262,6 +3268,8 @@ document.addEventListener("click", (event) => {
                 `${groupPrefix}${newIndex}__id`;
 
             field.value = newRowId;
+            field.dataset.repeatableRowId = "";
+            field.removeAttribute("data-repeatable-root-row-id");
 
             return;
         }
