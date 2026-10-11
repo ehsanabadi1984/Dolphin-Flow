@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const filter = document.getElementById("id_choice_filter_field");
     const fieldType = document.getElementById("id_field_type");
     const calendar = document.getElementById("id_calendar");
+    const defaultValue = document.getElementById("id_default_value");
 
     function getFieldRow(field) {
         if (!field) return null;
@@ -27,6 +28,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (row) {
             row.style.display = visible ? "" : "none";
         }
+    }
+
+    function updateDefaultValueVisibility() {
+        if (!fieldType || !defaultValue) return;
+        setVisible(defaultValue, fieldType.value === "TEXT" || fieldType.value === "TEXTAREA");
     }
 
     function updateCalendarVisibility() {
@@ -138,6 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
             "change",
             updateCalendarVisibility
         );
+        fieldType.addEventListener("change", updateDefaultValueVisibility);
     }
 
     if (model) {
@@ -149,6 +156,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     updateChoiceSourceVisibility();
     updateCalendarVisibility();
+    updateDefaultValueVisibility();
 
     if (model && model.value) {
         loadFields();
