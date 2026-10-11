@@ -7,7 +7,7 @@
     style="display:none;"
   >
     {% for column in flat_columns %}
-      <td data-column-group="{{ column.group_code }}">
+      <td data-column-group="{{ column.group_code }}" data-field-code="{{ column.field_context.field.code }}">
         {% if column.group_code == child_template.group.code %}
           {% with field_context=column.field_context %}
             {% if field_context.field.field_type == "TEXT" %}
