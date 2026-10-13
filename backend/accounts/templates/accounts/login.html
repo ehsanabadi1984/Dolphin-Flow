@@ -243,6 +243,41 @@
 
         button:active { transform: translateY(0); }
 
+        .login-submit {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .login-submit:disabled {
+            cursor: wait;
+            opacity: .88;
+            transform: none;
+            box-shadow: 0 8px 18px rgba(23,105,224,.14);
+        }
+
+        .login-spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            flex: 0 0 18px;
+            border: 2px solid rgba(255,255,255,.38);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: login-spin .75s linear infinite;
+        }
+
+        .login-submit.is-loading .login-spinner { display: inline-block; }
+
+        @keyframes login-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .login-spinner { animation-duration: 1.5s; }
+        }
+
         .footer {
             margin-top: 30px;
             text-align: center;
@@ -299,7 +334,10 @@
                     </div>
 
                     <div class="actions">
-                        <button type="submit">ورود به سامانه</button>
+                        <button type="submit" class="login-submit" aria-live="polite">
+                            <span class="login-spinner" aria-hidden="true"></span>
+                            <span class="login-submit-label">ورود به سامانه</span>
+                        </button>
                     </div>
                 </form>
 
@@ -307,5 +345,28 @@
             </div>
         </section>
     </main>
+    <script>
+        (() => {
+            const form = document.querySelector(".form-content form");
+            const button = form && form.querySelector(".login-submit");
+            const label = button && button.querySelector(".login-submit-label");
+
+            if (!form || !button || !label) return;
+
+            let submitting = false;
+            form.addEventListener("submit", (event) => {
+                if (submitting) {
+                    event.preventDefault();
+                    return;
+                }
+
+                submitting = true;
+                button.disabled = true;
+                button.classList.add("is-loading");
+                button.setAttribute("aria-busy", "true");
+                label.textContent = "در حال ورود...";
+            });
+        })();
+    </script>
 </body>
 </html>
