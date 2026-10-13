@@ -59,6 +59,7 @@ class FormPrintDataService:
             (item.field_id, item.repeatable_group_id): item
             for item in FormPrintFieldSettings.objects.filter(
                 Q(field__section__form=form)
+                | Q(field__repeatable_group__section__form=form)
                 | Q(repeatable_group__section__form=form)
             )
         }
