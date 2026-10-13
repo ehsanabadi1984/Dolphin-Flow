@@ -85,13 +85,13 @@ class FormPrintDataService:
                         continue
                     if item_type in ("field", "group"):
                         model = context["field"] if item_type == "field" else context["group"]
-                        fallback_order = (
-                            model.layout_order
-                            if model.layout_order is not None
-                            else model.order
-                        )
+                        # layout_items is already sorted by the same
+                        # canonical key used by the live form. Use its index
+                        # as the fallback position for BOTH fields and groups;
+                        # model.order/layout_order are not interchangeable with
+                        # this final mixed sequence.
                         ordered_contexts.append(
-                            (item_type, context, fallback_order, layout_index)
+                            (item_type, context, layout_index, layout_index)
                         )
             else:
                 # Compatibility fallback for contexts without layout metadata.
@@ -99,9 +99,7 @@ class FormPrintDataService:
                     (
                         "field",
                         context,
-                        context["field"].layout_order
-                        if context["field"].layout_order is not None
-                        else context["field"].order,
+                        index,
                         index,
                     )
                     for index, context in enumerate(
@@ -113,9 +111,7 @@ class FormPrintDataService:
                     (
                         "group",
                         context,
-                        context["group"].layout_order
-                        if context["group"].layout_order is not None
-                        else context["group"].order,
+                        group_offset + index,
                         group_offset + index,
                     )
                     for index, context in enumerate(
@@ -157,7 +153,7 @@ class FormPrintDataService:
                     item["sort_order"] = (
                         group_setting.print_order
                         if group_setting and group_setting.print_order > 0
-                        else layout_index
+                        else fallback_order
                     )
                 items.append(item)
 
