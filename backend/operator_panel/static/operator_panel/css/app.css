@@ -2963,3 +2963,53 @@ body.df-modal-open {
     font-size: 17px;
     line-height: 1;
 }
+
+
+/* ---------------------------------------------------------
+   Global loading indicator for full-page navigation/submits
+   --------------------------------------------------------- */
+.df-global-loading {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(8, 15, 28, .38);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+.df-global-loading.is-visible {
+    display: flex;
+}
+.df-global-loading-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 100%;
+    padding: 18px 24px;
+    border: 1px solid var(--border, #d1d5db);
+    border-radius: 14px;
+    background: var(--surface, #fff);
+    color: var(--text, #111827);
+    box-shadow: var(--df-shadow-lg, 0 12px 36px rgba(0, 0, 0, .2));
+    font-size: 14px;
+    font-weight: 600;
+}
+.df-global-loading-spinner {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    border: 3px solid var(--border-strong, #cbd5e1);
+    border-top-color: var(--accent, #2563eb);
+    border-radius: 50%;
+    animation: df-global-loading-spin .75s linear infinite;
+}
+@keyframes df-global-loading-spin {
+    to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .df-global-loading-spinner { animation-duration: 1.8s; }
+}
