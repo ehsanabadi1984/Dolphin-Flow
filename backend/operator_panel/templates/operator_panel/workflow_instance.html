@@ -9,7 +9,6 @@
 <div class="workflow-instance">
   <h1>{{ instance.workflow.name }}</h1>
 
-  {% if dynamic_form %}
   <div class="df-print-preview-toolbar">
     <a
       href="{% url 'operator_panel:form_print_preview' instance.pk %}"
@@ -21,7 +20,6 @@
       پیش‌نمایش چاپ فرم
     </a>
   </div>
-  {% endif %}
 
   {% if pending_acceptance %}
   <div class="df-message df-message-info">
