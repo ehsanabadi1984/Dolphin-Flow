@@ -2579,3 +2579,203 @@ class WorkflowStepSLA(models.Model):
     updated_at = models.DateTimeField(
         auto_now=True,
     )
+
+
+class FormPrintSettings(models.Model):
+    """Document-level print settings, kept separate from the form definition."""
+
+    class PageSize(models.TextChoices):
+        A4 = "A4", "A4"
+        A5 = "A5", "A5"
+
+    class Orientation(models.TextChoices):
+        PORTRAIT = "PORTRAIT", "عمودی"
+        LANDSCAPE = "LANDSCAPE", "افقی"
+
+    form = models.OneToOneField(
+        FormDefinition,
+        on_delete=models.CASCADE,
+        related_name="print_settings",
+        verbose_name="فرم",
+    )
+    document_title = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="عنوان سند چاپی",
+    )
+    subtitle = models.CharField(
+        max_length=250,
+        blank=True,
+        default="",
+        verbose_name="زیرعنوان سند",
+    )
+    header_text = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="متن سربرگ",
+    )
+    footer_text = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="متن پابرگ",
+    )
+    page_size = models.CharField(
+        max_length=2,
+        choices=PageSize.choices,
+        default=PageSize.A4,
+        verbose_name="اندازه کاغذ",
+    )
+    orientation = models.CharField(
+        max_length=10,
+        choices=Orientation.choices,
+        default=Orientation.PORTRAIT,
+        verbose_name="جهت صفحه",
+    )
+    show_workflow_name = models.BooleanField(
+        default=True,
+        verbose_name="نمایش نام فرایند",
+    )
+    show_instance_number = models.BooleanField(
+        default=True,
+        verbose_name="نمایش شماره فرایند",
+    )
+    show_created_at = models.BooleanField(
+        default=True,
+        verbose_name="نمایش تاریخ ایجاد",
+    )
+    show_empty_values = models.BooleanField(
+        default=False,
+        verbose_name="نمایش فیلدهای خالی",
+    )
+    show_signatures = models.BooleanField(
+        default=False,
+        verbose_name="نمایش محل امضا",
+    )
+    signature_count = models.PositiveSmallIntegerField(
+        default=2,
+        verbose_name="تعداد محل امضا",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="آخرین ویرایش",
+    )
+
+    class Meta:
+        verbose_name = "تنظیمات چاپ فرم"
+        verbose_name_plural = "تنظیمات چاپ فرم"
+
+    def __str__(self):
+        return f"تنظیمات چاپ - {self.form}"
+
+
+class FormPrintSectionSettings(models.Model):
+    """Print visibility, title and ordering for an individual form section."""
+
+    section = models.OneToOneField(
+        FormSection,
+        on_delete=models.CASCADE,
+        related_name="print_settings",
+        verbose_name="بخش فرم",
+    )
+    is_enabled = models.BooleanField(
+        default=True,
+        verbose_name="چاپ این بخش",
+    )
+    title_override = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="عنوان جایگزین در چاپ",
+    )
+    print_order = models.PositiveIntegerField(
+        default=0,
+        verbose_name="ترتیب چاپ",
+    )
+
+    class Meta:
+        ordering = ["print_order", "pk"]
+        verbose_name = "تنظیمات چاپ بخش"
+        verbose_name_plural = "تنظیمات چاپ بخش"
+
+    def __str__(self):
+        return f"تنظیمات چاپ بخش - {self.section}"
+
+
+class FormPrintFieldSettings(models.Model):
+    """Print settings for either one normal field or one repeatable group."""
+
+    class GroupLayout(models.TextChoices):
+        TABLE = "TABLE", "جدول"
+        BLOCKS = "BLOCKS", "بلوک‌های جداگانه"
+
+    field = models.ForeignKey(
+        FormField,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="print_settings",
+        verbose_name="فیلد",
+    )
+    repeatable_group = models.ForeignKey(
+        FormRepeatableGroup,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="print_settings",
+        verbose_name="گروه تکرارشونده",
+    )
+    is_enabled = models.BooleanField(
+        default=True,
+        verbose_name="چاپ شود",
+    )
+    title_override = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="عنوان جایگزین در چاپ",
+    )
+    print_order = models.PositiveIntegerField(
+        default=0,
+        verbose_name="ترتیب چاپ",
+    )
+    group_layout = models.CharField(
+        max_length=10,
+        choices=GroupLayout.choices,
+        default=GroupLayout.TABLE,
+        verbose_name="نحوه نمایش گروه",
+    )
+
+    class Meta:
+        ordering = ["print_order", "pk"]
+        verbose_name = "تنظیمات چاپ فیلد یا گروه"
+        verbose_name_plural = "تنظیمات چاپ فیلدها و گروه‌ها"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(field__isnull=False, repeatable_group__isnull=True)
+                    | models.Q(field__isnull=True, repeatable_group__isnull=False)
+                ),
+                name="print_field_or_group_exactly_one",
+            ),
+            models.UniqueConstraint(
+                fields=["field"],
+                name="unique_print_settings_field",
+            ),
+            models.UniqueConstraint(
+                fields=["repeatable_group"],
+                name="unique_print_settings_group",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if (self.field_id is None) == (self.repeatable_group_id is None):
+            raise ValidationError(
+                "تنظیمات چاپ باید دقیقاً به یک فیلد یا یک گروه تکرارشونده متصل باشد."
+            )
+
+    def __str__(self):
+        target = self.field or self.repeatable_group
+        return f"تنظیمات چاپ - {target}"
+
