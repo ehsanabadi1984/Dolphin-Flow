@@ -992,7 +992,7 @@
 
     {% if transitions %}
       {% for transition in transitions %}
-      <form method="post" action="{% url 'operator_panel:execute_transition' instance.pk transition.pk %}">
+      <form method="post" data-workflow-transition action="{% url 'operator_panel:execute_transition' instance.pk transition.pk %}">
         {% csrf_token %}
         <button type="submit" class="df-button df-button-secondary"{% if edit_mode %} disabled{% endif %}>{{ transition.name }}</button>
         {% if transition.description %}<p>{{ transition.description }}</p>{% endif %}
@@ -1012,14 +1012,14 @@
     </div>
 
     {% if pending_acceptance_can_accept %}
-    <form method="post" action="{% url 'operator_panel:accept_pending_acceptance' request.resolver_match.kwargs.transition_execution_id %}">
+    <form method="post" data-workflow-transition action="{% url 'operator_panel:accept_pending_acceptance' request.resolver_match.kwargs.transition_execution_id %}">
       {% csrf_token %}
       <button type="submit" class="df-button df-button-primary">تأیید دریافت</button>
     </form>
     {% endif %}
 
     {% if pending_acceptance_can_reject %}
-    <form method="post" action="{% url 'operator_panel:reject_pending_acceptance' request.resolver_match.kwargs.transition_execution_id %}">
+    <form method="post" data-workflow-transition action="{% url 'operator_panel:reject_pending_acceptance' request.resolver_match.kwargs.transition_execution_id %}">
       {% csrf_token %}
       <button type="submit" class="df-button df-button-secondary">رد دریافت</button>
     </form>
