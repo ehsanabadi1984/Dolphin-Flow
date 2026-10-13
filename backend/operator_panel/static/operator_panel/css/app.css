@@ -2946,11 +2946,9 @@ body.df-modal-open {
     direction: ltr;
     justify-content: flex-start;
     margin: 0 0 18px;
-    padding: 12px 14px;
-    border: 1px solid var(--border-strong);
-    border-inline-start: 4px solid var(--accent);
-    border-radius: 10px;
-    background: var(--surface-2);
+    padding: 0;
+    border: 0;
+    background: transparent;
 }
 
 .workflow-instance .df-print-preview-button {
