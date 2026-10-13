@@ -7,7 +7,6 @@ from .models import (
     FormPrintFieldSettings,
     FormPrintSectionSettings,
     FormPrintSettings,
-    FormRepeatableGroup,
     WorkflowPermission,
 )
 
@@ -212,10 +211,6 @@ class FormPrintDataService:
                 field_contexts_by_id.setdefault(field.pk, field_context)
                 by_id[field.pk] = field_context
             row_field_contexts.append(by_id)
-
-        def has_value(context):
-            value = context.get("display_value", context.get("value", ""))
-            return value not in (None, "", [], ())
 
         columns = []
         for field_id, field_context in field_contexts_by_id.items():
