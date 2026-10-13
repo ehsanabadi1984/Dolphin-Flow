@@ -23,6 +23,7 @@ from .views import (
 )
 from .history_views import device_history, workflow_history
 from .history_list_views import history_list
+from workflow.form_print_views import form_print_preview
 from workflow.form_file_services import (
     file_field_definitions,
     open_form_file,
@@ -51,6 +52,7 @@ urlpatterns = [
     path("pending-acceptances/<int:transition_execution_id>/reject/", reject_pending_acceptance, name="reject_pending_acceptance"),
     path("workflow/<int:workflow_id>/start/", start_workflow, name="start_workflow"),
     path("workflow-instance/<int:instance_id>/", workflow_instance_with_files, name="workflow_instance"),
+    path("workflow-instance/<int:instance_id>/print-preview/", form_print_preview, name="form_print_preview"),
     path("workflow-instance/<int:instance_id>/history/", workflow_history, name="workflow_history"),
     path("workflow-instance/<int:instance_id>/device-group/<str:group_code>/device/<int:row_id>/delete/", views.delete_device, name="delete_device"),
     path("workflow-instance/<int:instance_id>/device/<int:device_id>/history/", device_history, name="device_history"),
