@@ -39,6 +39,9 @@ from .models import (
     FormField,
     FieldAccess,
     FormData,
+    FormPrintSettings,
+    FormPrintSectionSettings,
+    FormPrintFieldSettings,
 
     BusinessCalendar,
     WeeklySchedule,
@@ -2047,6 +2050,85 @@ class StaticChoiceItemAdmin(admin.ModelAdmin):
 
 #---------------------
 #---------------------
+class FormPrintSettingsInline(admin.StackedInline):
+    model = FormPrintSettings
+    extra = 0
+    max_num = 1
+    can_delete = False
+    fieldsets = (
+        (
+            "عنوان و سربرگ سند",
+            {
+                "fields": (
+                    "document_title",
+                    "subtitle",
+                    "header_text",
+                    "footer_text",
+                ),
+            },
+        ),
+        (
+            "صفحه و اطلاعات فرایند",
+            {
+                "fields": (
+                    "page_size",
+                    "orientation",
+                    "show_workflow_name",
+                    "show_instance_number",
+                    "show_created_at",
+                    "show_empty_values",
+                ),
+            },
+        ),
+        (
+            "امضاها",
+            {
+                "fields": (
+                    "show_signatures",
+                    "signature_count",
+                ),
+            },
+        ),
+    )
+
+
+class FormPrintSectionSettingsInline(admin.StackedInline):
+    model = FormPrintSectionSettings
+    extra = 0
+    max_num = 1
+    can_delete = False
+    fields = (
+        "is_enabled",
+        "title_override",
+        "print_order",
+    )
+
+
+class FormPrintFieldSettingsInline(admin.StackedInline):
+    model = FormPrintFieldSettings
+    fk_name = "field"
+    extra = 0
+    max_num = 1
+    fields = (
+        "is_enabled",
+        "title_override",
+        "print_order",
+    )
+
+
+class RepeatableGroupPrintSettingsInline(admin.StackedInline):
+    model = FormPrintFieldSettings
+    fk_name = "repeatable_group"
+    extra = 0
+    max_num = 1
+    fields = (
+        "is_enabled",
+        "title_override",
+        "print_order",
+        "group_layout",
+    )
+
+
 @admin.register(
     FormDefinition,
     site=dolphin_admin_site,
@@ -2070,6 +2152,8 @@ class FormDefinitionAdmin(admin.ModelAdmin):
         "name",
         "workflow__name",
     )
+
+    inlines = (FormPrintSettingsInline,)
 
 class FormFieldInline(admin.TabularInline):
     model = FormField
@@ -2175,6 +2259,7 @@ class FormSectionAdmin(admin.ModelAdmin):
     inlines = (
         FormFieldInline,
         FormRepeatableGroupInline,
+        FormPrintSectionSettingsInline,
     )
 
     class Media:
@@ -2635,6 +2720,7 @@ class FormRepeatableGroupAdmin(admin.ModelAdmin):
     inlines = (
         RepeatableFieldInline,
         RepeatableGroupAccessInline,
+        RepeatableGroupPrintSettingsInline,
     )
 
     def get_form(self, request, obj=None, **kwargs):
@@ -3128,6 +3214,7 @@ class FormFieldAdmin(admin.ModelAdmin):
 
     inlines = (
         FieldAccessInline,
+        FormPrintFieldSettingsInline,
     )
 
 @admin.register(
