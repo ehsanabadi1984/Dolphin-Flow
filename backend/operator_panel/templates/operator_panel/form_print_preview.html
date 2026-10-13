@@ -9,9 +9,13 @@
     @page { size: {{ print_data.page_size }} {% if print_data.orientation == "LANDSCAPE" %}landscape{% else %}portrait{% endif %}; margin: {% if print_data.page_size == "A5" %}7mm{% else %}10mm{% endif %}; }
     * { box-sizing: border-box; }
     body { margin: 0; background: #f1f3f5; color: #20242a; font-family: Tahoma, Arial, sans-serif; font-size: 12px; line-height: 1.55; }
-    .toolbar { max-width: 960px; margin: 18px auto; display: flex; gap: 10px; justify-content: flex-start; }
+    .toolbar { max-width: 960px; margin: 18px auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: flex-start; }
     .toolbar a { color: #263238; text-decoration: none; padding: 8px 14px; background: white; border: 1px solid #cbd0d5; border-radius: 6px; }
+    .print-spec { display: inline-flex; align-items: center; gap: 5px; padding: 7px 11px; color: #343a40; background: #fff; border: 1px solid #cbd0d5; border-radius: 6px; font-size: 12px; }
     .sheet { width: min(960px, calc(100% - 28px)); min-height: 700px; margin: 0 auto 28px; padding: 36px 42px; background: white; box-shadow: 0 2px 14px #00000012; }
+    /* Keep A4's existing layout unchanged; size the on-screen A5 preview to its paper ratio. */
+    .sheet.page-a5.orientation-portrait { width: min(560px, calc(100% - 28px)); min-height: 792px; }
+    .sheet.page-a5.orientation-landscape { width: min(792px, calc(100% - 28px)); min-height: 560px; }
     header { border-bottom: 1px solid #343a40; padding-bottom: 8px; margin-bottom: 10px; }
     .header-text, .footer-text { white-space: pre-line; color: #555; }
     h1 { font-size: 19px; margin: 2px 0; }
@@ -20,7 +24,24 @@
     .section { margin: 12px 0; }
     h2 { font-size: 13px; background: #f4f5f6; padding: 4px 7px; border-right: 2px solid #555; margin: 0 0 5px; }
     h3 { font-size: 12px; margin: 7px 0 3px; }
-    .section-items { display: grid; grid-template-columns: repeat({% if print_data.page_size == "A5" %}2{% else %}3{% endif %}, minmax(0, 1fr)); gap: 2px 8px; }
+    .section-items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 8px; }
+    /* A5 portrait is narrow: one readable field column. Landscape can use two. */
+    .sheet.page-a5.orientation-portrait .section-items { grid-template-columns: minmax(0, 1fr); gap: 1px 5px; }
+    .sheet.page-a5.orientation-landscape .section-items { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 6px; }
+    .sheet.page-a5 { font-size: 11px; line-height: 1.45; padding: 24px 26px; }
+    .sheet.page-a5 h1 { font-size: 16px; }
+    .sheet.page-a5 .subtitle { font-size: 10.5px; }
+    .sheet.page-a5 .metadata { gap: 3px 9px; padding: 4px 0 6px; font-size: 10.5px; }
+    .sheet.page-a5 .section { margin: 8px 0; }
+    .sheet.page-a5 h2 { font-size: 11.5px; padding: 3px 5px; margin-bottom: 4px; }
+    .sheet.page-a5 h3 { font-size: 10.5px; margin: 5px 0 2px; }
+    .sheet.page-a5 .field { column-gap: 4px; padding: 2px 1px; }
+    .sheet.page-a5 table { margin: 5px 0 8px; }
+    .sheet.page-a5 th, .sheet.page-a5 td { padding: 2px 3px; }
+    .sheet.page-a5 .group-block { margin: 4px 0; padding: 4px 5px; }
+    .sheet.page-a5 .signatures { gap: 8px; margin-top: 16px; }
+    .sheet.page-a5 .signature { min-height: 42px; }
+    .sheet.page-a5 footer { margin-top: 10px; }
     .group-block { grid-column: 1 / -1; }
     .field { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; column-gap: 5px; border: 0; border-bottom: 1px solid #e5e7e9; padding: 3px 2px; min-width: 0; break-inside: avoid; }
     .field-label { display: inline; font-weight: bold; color: #555; margin: 0; }
@@ -55,8 +76,10 @@
   <nav class="toolbar">
     <a href="{% url 'operator_panel:workflow_instance' instance.pk %}">بازگشت به فرایند</a>
     <a href="#" onclick="window.print(); return false;">چاپ از مرورگر</a>
+    <span class="print-spec"><strong>اندازه کاغذ:</strong> {{ print_data.page_size }}</span>
+    <span class="print-spec"><strong>جهت صفحه:</strong> {% if print_data.orientation == "LANDSCAPE" %}افقی{% else %}عمودی{% endif %}</span>
   </nav>
-  <main class="sheet">
+  <main class="sheet page-{{ print_data.page_size|lower }} orientation-{{ print_data.orientation|lower }}">
     <header>
       {% if print_data.header_text %}<div class="header-text">{{ print_data.header_text }}</div>{% endif %}
       <h1>{{ print_data.title }}</h1>
