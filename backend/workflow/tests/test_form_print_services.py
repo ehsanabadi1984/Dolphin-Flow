@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.core.exceptions import PermissionDenied
 from django.test import SimpleTestCase
 
 from workflow.form_print_services import FormPrintDataService
@@ -98,6 +99,28 @@ class FormPrintDataServiceTests(SimpleTestCase):
         result = self._prepare(field_settings=[print_setting])
 
         self.assertEqual(result["sections"], [])
+
+    def test_denied_workflow_view_permission_stops_before_form_data_is_built(self):
+        with (
+            patch(
+                "workflow.form_print_services.WorkflowAuthorizationService.has_permission",
+                return_value=False,
+            ),
+            patch(
+                "workflow.form_print_services.DynamicFormService.get_form_for_step",
+            ) as build_form,
+        ):
+            with self.assertRaises(PermissionDenied):
+                FormPrintDataService.prepare(
+                    instance=self.instance,
+                    user=SimpleNamespace(
+                        pk=99,
+                        is_authenticated=True,
+                        is_active=True,
+                    ),
+                )
+
+        build_form.assert_not_called()
 
     def test_disabled_print_section_is_omitted(self):
         print_setting = SimpleNamespace(
