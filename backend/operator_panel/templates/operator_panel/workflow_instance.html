@@ -9,8 +9,18 @@
 <div class="workflow-instance">
   <h1>{{ instance.workflow.name }}</h1>
 
-  {% if dynamic_form and not no_longer_my_task %}
-  <p><a href="{% url 'operator_panel:form_print_preview' instance.pk %}" target="_blank" rel="noopener">پیش‌نمایش چاپ فرم</a></p>
+  {% if dynamic_form %}
+  <div class="df-print-preview-toolbar">
+    <a
+      href="{% url 'operator_panel:form_print_preview' instance.pk %}"
+      class="df-button df-button-primary df-print-preview-button"
+      target="_blank"
+      rel="noopener"
+    >
+      <span aria-hidden="true">⎙</span>
+      پیش‌نمایش چاپ فرم
+    </a>
+  </div>
   {% endif %}
 
   {% if pending_acceptance %}
