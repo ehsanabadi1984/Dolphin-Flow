@@ -46,6 +46,8 @@
     .field { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; column-gap: 5px; border: 0; border-bottom: 1px solid #e5e7e9; padding: 3px 2px; min-width: 0; break-inside: avoid; }
     .field-label { display: inline; font-weight: bold; color: #555; margin: 0; }
     .field-value { min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
+    .boolean-mark { display: inline-block; width: 11px; height: 11px; border: 1px solid #20242a; vertical-align: -1px; text-align: center; line-height: 10px; }
+    .boolean-mark.is-checked::after { content: "✓"; font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; }
     table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; }
     th, td { border: 1px solid #cfd4d9; padding: 3px 5px; text-align: right; vertical-align: top; overflow-wrap: anywhere; }
     th { background: #f3f4f5; }
@@ -102,7 +104,7 @@
             {% if item.type == "field" %}
               <div class="field">
                 <span class="field-label">{{ item.label }}</span>
-                <div class="field-value">{% if item.value != "" and item.value != None %}{{ item.value }}{% else %}<span class="empty">—</span>{% endif %}</div>
+                <div class="field-value">{% if item.value != "" and item.value != None %}{% if item.is_boolean %}<span class="boolean-mark{% if item.boolean_checked %} is-checked{% endif %}" role="img" aria-label="{% if item.boolean_checked %}بله{% else %}خیر{% endif %}"></span>{% else %}{{ item.value }}{% endif %}{% else %}<span class="empty">—</span>{% endif %}</div>
               </div>
             {% elif item.type == "group" %}
               {% include "operator_panel/partials/print_group.html" with item=item %}
