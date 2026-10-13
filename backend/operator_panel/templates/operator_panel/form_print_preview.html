@@ -44,6 +44,8 @@
     .sheet.page-a5 footer { margin-top: 10px; }
     .group-block { grid-column: 1 / -1; }
     .field { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; column-gap: 5px; border: 0; border-bottom: 1px solid #e5e7e9; padding: 3px 2px; min-width: 0; break-inside: avoid; }
+    /* Give long numeric/formula values the full section width so they cannot run into adjacent fields. */
+    .field.field-wide-number { grid-column: 1 / -1; }
     .field-label { display: inline; font-weight: bold; color: #555; margin: 0; }
     .field-value { min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
     /* Numeric and formula results should not split across lines when printed. */
@@ -104,7 +106,7 @@
         <div class="section-items">
           {% for item in section.items %}
             {% if item.type == "field" %}
-              <div class="field">
+              <div class="field{% if item.keep_value_together %} field-wide-number{% endif %}">
                 <span class="field-label">{{ item.label }}</span>
                 <div class="field-value{% if item.keep_value_together %} keep-value-together{% endif %}">{% if item.value != "" and item.value != None %}{% if item.is_boolean %}<span class="boolean-mark{% if item.boolean_checked %} is-checked{% endif %}" role="img" aria-label="{% if item.boolean_checked %}بله{% else %}خیر{% endif %}"></span>{% else %}{{ item.value }}{% endif %}{% else %}<span class="empty">—</span>{% endif %}</div>
               </div>
