@@ -165,7 +165,7 @@ class FormPrintDataService:
     def _field_item(field_context, *, setting, show_empty_values):
         field = field_context["field"]
         value = field_context.get("display_value", field_context.get("value", ""))
-        if value in (None, "") and not show_empty_values:
+        if value in (None, "", [], ()) and not show_empty_values:
             return None
         return {
             "type": "field",
