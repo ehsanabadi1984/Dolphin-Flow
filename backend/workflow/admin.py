@@ -2052,7 +2052,7 @@ class StaticChoiceItemAdmin(admin.ModelAdmin):
 #---------------------
 class FormPrintSettingsInline(admin.StackedInline):
     model = FormPrintSettings
-    extra = 0
+    extra = 1
     max_num = 1
     can_delete = False
     fieldsets = (
@@ -2094,7 +2094,7 @@ class FormPrintSettingsInline(admin.StackedInline):
 
 class FormPrintSectionSettingsInline(admin.StackedInline):
     model = FormPrintSectionSettings
-    extra = 0
+    extra = 1
     max_num = 1
     can_delete = False
     fields = (
@@ -2107,7 +2107,7 @@ class FormPrintSectionSettingsInline(admin.StackedInline):
 class FormPrintFieldSettingsInline(admin.StackedInline):
     model = FormPrintFieldSettings
     fk_name = "field"
-    extra = 0
+    extra = 1
     max_num = 1
     fields = (
         "is_enabled",
@@ -2119,7 +2119,7 @@ class FormPrintFieldSettingsInline(admin.StackedInline):
 class RepeatableGroupPrintSettingsInline(admin.StackedInline):
     model = FormPrintFieldSettings
     fk_name = "repeatable_group"
-    extra = 0
+    extra = 1
     max_num = 1
     fields = (
         "is_enabled",
