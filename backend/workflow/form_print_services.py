@@ -3,7 +3,9 @@ from django.db.models import Q
 
 from .authorization import WorkflowAuthorizationService
 from .form_services import DynamicFormService
+from .permission_context import PermissionContext
 from .models import (
+    FormDefinition,
     FormPrintFieldSettings,
     FormPrintSectionSettings,
     FormPrintSettings,
@@ -22,8 +24,93 @@ class FormPrintDataService:
     """
 
     @classmethod
+    def _step_has_print_visibility(cls, *, instance, user, form, step):
+        if step is None or form is None:
+            return False
+
+        if not WorkflowAuthorizationService.has_permission(
+            user=user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.VIEW,
+            step=step,
+            instance=instance,
+        ):
+            return False
+
+        permission_context = PermissionContext.build(
+            workflow=instance.workflow,
+            form=form,
+            step=step,
+            user=user,
+        )
+        return (
+            any(
+                permission.can_view
+                for permission in permission_context.normal_fields.values()
+            )
+            or any(
+                permission.can_view
+                for permission in permission_context.repeatable_fields.values()
+            )
+            or any(
+                permission.can_view
+                for permission in permission_context.groups.values()
+            )
+        )
+
+    @classmethod
     def prepare(cls, *, instance, user, step=None):
-        step = step or instance.current_step
+        # The print endpoint may be opened from a historical/read-only
+        # process view. In that case, the current workflow step is not
+        # necessarily the step whose data this user is allowed to read.
+        # Prefer the current step when visible; otherwise resolve the newest
+        # submitted historical step that grants both workflow VIEW access
+        # and at least one visible form field/group.
+        if step is None:
+            form_for_visibility = (
+                FormDefinition.objects
+                .filter(
+                    workflow=instance.workflow,
+                    is_active=True,
+                )
+                .first()
+            )
+            candidate_steps = []
+            if instance.current_step is not None:
+                candidate_steps.append(instance.current_step)
+
+            seen_step_ids = {
+                candidate.pk for candidate in candidate_steps
+            }
+            executions = (
+                instance.step_executions
+                .filter(is_submitted=True)
+                .order_by("-submitted_at", "-performed_at")
+                .select_related("workflow_step")
+            )
+            for execution in executions:
+                historical_step = execution.workflow_step
+                if (
+                    historical_step is not None
+                    and historical_step.pk not in seen_step_ids
+                ):
+                    candidate_steps.append(historical_step)
+                    seen_step_ids.add(historical_step.pk)
+
+            step = next(
+                (
+                    candidate
+                    for candidate in candidate_steps
+                    if cls._step_has_print_visibility(
+                        instance=instance,
+                        user=user,
+                        form=form_for_visibility,
+                        step=candidate,
+                    )
+                ),
+                None,
+            )
+
         if step is None:
             raise PermissionDenied("برای چاپ، مرحلهٔ قابل مشاهده‌ای از فرایند مشخص نیست.")
 
