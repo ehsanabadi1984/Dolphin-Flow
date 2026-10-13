@@ -322,6 +322,10 @@ class FormPrintDataService:
             "value": value if value is not None else "",
             "is_boolean": is_boolean,
             "boolean_checked": boolean_checked,
+            "keep_value_together": field.field_type in (
+                field.FieldType.NUMBER,
+                field.FieldType.FORMULA,
+            ),
         }
 
     @classmethod
@@ -405,6 +409,13 @@ class FormPrintDataService:
                     "value": value if value is not None else "",
                     "is_boolean": is_boolean,
                     "boolean_checked": boolean_checked,
+                    "keep_value_together": bool(
+                        field
+                        and field.field_type in (
+                            field.FieldType.NUMBER,
+                            field.FieldType.FORMULA,
+                        )
+                    ),
                 })
 
             child_groups = []
