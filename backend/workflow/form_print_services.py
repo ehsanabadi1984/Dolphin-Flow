@@ -84,7 +84,15 @@ class FormPrintDataService:
                 )
                 if item is not None:
                     item["sort_order"] = (
-                        setting.print_order if setting else (field.layout_order if field.layout_order is not None else field.order)
+                        (
+                        setting.print_order
+                        if setting and setting.print_order > 0
+                        else (
+                            field.layout_order
+                            if field.layout_order is not None
+                            else field.order
+                        )
+                    )
                     )
                     items.append(item)
 
@@ -102,7 +110,7 @@ class FormPrintDataService:
                 if item is not None:
                     item["sort_order"] = (
                         group_setting.print_order
-                        if group_setting
+                        if group_setting and group_setting.print_order > 0
                         else (
                             group.layout_order
                             if group.layout_order is not None
@@ -114,7 +122,7 @@ class FormPrintDataService:
             if not items:
                 continue
 
-            items.sort(key=lambda item: (item["sort_order"], item["label"].casefold()))
+            items.sort(key=lambda item: item["sort_order"])
             sections.append({
                 "title": (
                     section_setting.title_override
