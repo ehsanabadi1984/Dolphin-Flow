@@ -84,26 +84,46 @@ class FormPrintDataService:
                     if not context:
                         continue
                     if item_type in ("field", "group"):
+                        model = context["field"] if item_type == "field" else context["group"]
+                        fallback_order = (
+                            model.layout_order
+                            if model.layout_order is not None
+                            else model.order
+                        )
                         ordered_contexts.append(
-                            (item_type, context, layout_index)
+                            (item_type, context, fallback_order, layout_index)
                         )
             else:
                 # Compatibility fallback for contexts without layout metadata.
                 ordered_contexts.extend(
-                    ("field", context, index)
+                    (
+                        "field",
+                        context,
+                        context["field"].layout_order
+                        if context["field"].layout_order is not None
+                        else context["field"].order,
+                        index,
+                    )
                     for index, context in enumerate(
                         section_context.get("fields", [])
                     )
                 )
                 group_offset = len(ordered_contexts)
                 ordered_contexts.extend(
-                    ("group", context, group_offset + index)
+                    (
+                        "group",
+                        context,
+                        context["group"].layout_order
+                        if context["group"].layout_order is not None
+                        else context["group"].order,
+                        group_offset + index,
+                    )
                     for index, context in enumerate(
                         section_context.get("repeatable_groups", [])
                     )
                 )
 
-            for item_type, context, layout_index in ordered_contexts:
+            for item_type, context, fallback_order, layout_index in ordered_contexts:
                 if item_type == "field":
                     field = context["field"]
                     setting = field_settings.get((field.pk, None))
@@ -119,7 +139,7 @@ class FormPrintDataService:
                     item["sort_order"] = (
                         setting.print_order
                         if setting and setting.print_order > 0
-                        else layout_index
+                        else fallback_order
                     )
                 else:
                     group = context["group"]
