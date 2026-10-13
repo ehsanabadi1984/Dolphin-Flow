@@ -84,7 +84,7 @@ class FormPrintDataService:
                 )
                 if item is not None:
                     item["sort_order"] = (
-                        setting.print_order if setting else field.order
+                        setting.print_order if setting else (field.layout_order if field.layout_order is not None else field.order)
                     )
                     items.append(item)
 
@@ -103,7 +103,11 @@ class FormPrintDataService:
                     item["sort_order"] = (
                         group_setting.print_order
                         if group_setting
-                        else group.order
+                        else (
+                            group.layout_order
+                            if group.layout_order is not None
+                            else group.order
+                        )
                     )
                     items.append(item)
 
