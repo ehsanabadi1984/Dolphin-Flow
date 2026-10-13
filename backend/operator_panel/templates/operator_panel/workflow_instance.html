@@ -9,6 +9,10 @@
 <div class="workflow-instance">
   <h1>{{ instance.workflow.name }}</h1>
 
+  {% if dynamic_form and not no_longer_my_task %}
+  <p><a href="{% url 'operator_panel:form_print_preview' instance.pk %}" target="_blank" rel="noopener">پیش‌نمایش چاپ فرم</a></p>
+  {% endif %}
+
   {% if pending_acceptance %}
   <div class="df-message df-message-info">
     این فرآیند در انتظار تأیید دریافت است. اطلاعات زیر فقط برای بررسی مورد نمایش داده می‌شود.
