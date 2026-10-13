@@ -70,7 +70,15 @@
     </main>
 </div>
 
+<div id="df-global-loading" class="df-global-loading" role="status" aria-live="polite" aria-hidden="true">
+    <div class="df-global-loading-card">
+        <span class="df-global-loading-spinner" aria-hidden="true"></span>
+        <span>لطفاً منتظر بمانید...</span>
+    </div>
+</div>
+
 <script src="{% static 'operator_panel/js/repeatable-naming.js' %}"></script>
+<script src="{% static 'operator_panel/js/global-loading.js' %}"></script>
 <script src="{% static 'operator_panel/js/app.js' %}"></script>
 <script src="{% static 'operator_panel/js/user-menu.js' %}"></script>
 <script src="{% static 'operator_panel/js/workflow-realtime.js' %}"></script>
