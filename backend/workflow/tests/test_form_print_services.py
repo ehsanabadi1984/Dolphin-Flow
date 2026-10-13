@@ -100,6 +100,43 @@ class FormPrintDataServiceTests(SimpleTestCase):
 
         self.assertEqual(result["sections"], [])
 
+    def test_disabled_field_inside_repeatable_group_is_omitted(self):
+        group = SimpleNamespace(pk=20, label="Devices", name="Devices", order=1)
+        repeatable_field = SimpleNamespace(pk=31, label="Serial number")
+        field_setting = SimpleNamespace(
+            field_id=repeatable_field.pk,
+            repeatable_group_id=None,
+            is_enabled=False,
+            title_override="",
+            print_order=0,
+            group_layout="TABLE",
+        )
+        group_context = {
+            "group": group,
+            "fields": [{"field": repeatable_field, "value": "", "display_value": ""}],
+            "items": [
+                {
+                    "fields": [
+                        {
+                            "field": repeatable_field,
+                            "value": "SN-123",
+                            "display_value": "SN-123",
+                        }
+                    ],
+                    "child_groups": [],
+                }
+            ],
+        }
+
+        result = FormPrintDataService._group_item(
+            group_context,
+            setting=None,
+            field_settings={(repeatable_field.pk, None): field_setting},
+            show_empty_values=False,
+        )
+
+        self.assertIsNone(result)
+
     def test_denied_workflow_view_permission_stops_before_form_data_is_built(self):
         with (
             patch(
