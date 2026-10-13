@@ -304,6 +304,14 @@ class FormPrintDataService:
         value = field_context.get("display_value", field_context.get("value", ""))
         if value in (None, "", [], ()) and not show_empty_values:
             return None
+        is_boolean = field.field_type == field.FieldType.BOOLEAN
+        boolean_checked = (
+            value is True
+            or (
+                isinstance(value, str)
+                and value.strip().lower() in ("true", "1", "yes", "on")
+            )
+        )
         return {
             "type": "field",
             "label": (
@@ -312,6 +320,8 @@ class FormPrintDataService:
                 else field.label
             ),
             "value": value if value is not None else "",
+            "is_boolean": is_boolean,
+            "boolean_checked": boolean_checked,
         }
 
     @classmethod
@@ -378,9 +388,23 @@ class FormPrintDataService:
                     "display_value",
                     context.get("value", ""),
                 )
+                field = context.get("field")
+                is_boolean = bool(
+                    field
+                    and field.field_type == field.FieldType.BOOLEAN
+                )
+                boolean_checked = (
+                    value is True
+                    or (
+                        isinstance(value, str)
+                        and value.strip().lower() in ("true", "1", "yes", "on")
+                    )
+                )
                 values.append({
                     "label": column["label"],
                     "value": value if value is not None else "",
+                    "is_boolean": is_boolean,
+                    "boolean_checked": boolean_checked,
                 })
 
             child_groups = []
