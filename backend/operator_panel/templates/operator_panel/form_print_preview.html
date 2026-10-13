@@ -20,7 +20,8 @@
     .section { margin: 12px 0; }
     h2 { font-size: 13px; background: #f4f5f6; padding: 4px 7px; border-right: 2px solid #555; margin: 0 0 5px; }
     h3 { font-size: 12px; margin: 7px 0 3px; }
-    .field-list { display: grid; grid-template-columns: repeat({% if print_data.page_size == "A5" %}2{% else %}3{% endif %}, minmax(0, 1fr)); gap: 2px 8px; }
+    .section-items { display: grid; grid-template-columns: repeat({% if print_data.page_size == "A5" %}2{% else %}3{% endif %}, minmax(0, 1fr)); gap: 2px 8px; }
+    .group-block { grid-column: 1 / -1; }
     .field { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; column-gap: 5px; border: 0; border-bottom: 1px solid #e5e7e9; padding: 3px 2px; min-width: 0; break-inside: avoid; }
     .field-label { display: inline; font-weight: bold; color: #555; margin: 0; }
     .field-value { min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
@@ -46,7 +47,7 @@
     }
     @media (max-width: 640px) {
       .sheet { padding: 20px 16px; }
-      .field-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .section-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -71,21 +72,18 @@
     {% for section in print_data.sections %}
       <section class="section">
         <h2>{{ section.title }}</h2>
-        <div class="field-list">
+        <div class="section-items">
           {% for item in section.items %}
             {% if item.type == "field" %}
               <div class="field">
                 <span class="field-label">{{ item.label }}</span>
                 <div class="field-value">{% if item.value != "" and item.value != None %}{{ item.value }}{% else %}<span class="empty">—</span>{% endif %}</div>
               </div>
+            {% elif item.type == "group" %}
+              {% include "operator_panel/partials/print_group.html" with item=item %}
             {% endif %}
           {% endfor %}
         </div>
-        {% for item in section.items %}
-          {% if item.type == "group" %}
-            {% include "operator_panel/partials/print_group.html" with item=item %}
-          {% endif %}
-        {% endfor %}
       </section>
     {% empty %}
       <p class="empty">هیچ فیلد قابل چاپی برای این کاربر و این فرایند وجود ندارد.</p>
