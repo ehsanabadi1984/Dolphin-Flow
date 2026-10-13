@@ -36,7 +36,13 @@
       body { background: white; }
       .toolbar { display: none; }
       .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
-      .section, .field, .group-block, tr { break-inside: avoid; }
+      /* Let long sections and tables flow across pages. */
+      .section, .group-block { break-inside: auto; page-break-inside: auto; }
+      /* Repeat table headings and keep individual rows together where possible. */
+      thead { display: table-header-group; }
+      tfoot { display: table-footer-group; }
+      tr { break-inside: avoid; page-break-inside: avoid; }
+      .field { break-inside: avoid; page-break-inside: avoid; }
     }
     @media (max-width: 640px) {
       .sheet { padding: 20px 16px; }
