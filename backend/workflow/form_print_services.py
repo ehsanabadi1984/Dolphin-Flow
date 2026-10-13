@@ -215,7 +215,7 @@ class FormPrintDataService:
         columns = []
         for field_id, field_context in field_contexts_by_id.items():
             if not show_empty_values and not any(
-                has_value(row_fields[field_id])
+                _has_value(row_fields[field_id])
                 for row_fields in row_field_contexts
                 if field_id in row_fields
             ):
@@ -288,3 +288,13 @@ class FormPrintDataService:
             "columns": [item["label"] for item in columns],
             "rows": rows,
         }
+
+
+
+def _has_value(field_context):
+    """Return whether a prepared field context contains a meaningful value."""
+    value = field_context.get(
+        "display_value",
+        field_context.get("value", ""),
+    )
+    return value not in (None, "", [], ())
