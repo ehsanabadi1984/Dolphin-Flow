@@ -1,0 +1,27 @@
+<section class="group-block">
+  <h3>{{ item.label }}</h3>
+  {% if item.layout == "TABLE" and item.columns %}
+    <table>
+      <thead><tr>{% for column in item.columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in item.rows %}
+          <tr>{% for field in row.fields %}<td>{% if field.value != "" and field.value != None %}{{ field.value }}{% else %}<span class="empty">—</span>{% endif %}</td>{% endfor %}</tr>
+          {% if row.child_groups %}
+            <tr><td colspan="{{ item.columns|length }}">
+              {% for child in row.child_groups %}{% include "operator_panel/partials/print_group.html" with item=child %}{% endfor %}
+            </td></tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    {% for row in item.rows %}
+      <div class="group-block">
+        {% for field in row.fields %}
+          <div><strong>{{ field.label }}:</strong> {{ field.value|default:"—" }}</div>
+        {% endfor %}
+        {% for child in row.child_groups %}{% include "operator_panel/partials/print_group.html" with item=child %}{% endfor %}
+      </div>
+    {% empty %}<p class="empty">داده‌ای ثبت نشده است.</p>{% endfor %}
+  {% endif %}
+</section>
