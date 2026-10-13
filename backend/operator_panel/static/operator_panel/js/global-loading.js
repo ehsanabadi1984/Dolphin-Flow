@@ -20,6 +20,32 @@
     }
 
     /*
+     * Workflow transitions are important POST actions. Handle them in
+     * capture phase so another submit listener cannot hide the loading
+     * indicator by preventing the event later in the bubble phase.
+     * Prevent repeated clicks while the server executes the transition.
+     */
+    document.addEventListener("submit", function (event) {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (!form.matches("[data-workflow-transition]")) return;
+        if (form.dataset.transitionSubmitting === "1") {
+            event.preventDefault();
+            return;
+        }
+
+        form.dataset.transitionSubmitting = "1";
+        form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function (button) {
+            button.disabled = true;
+            if (button instanceof HTMLButtonElement) {
+                button.setAttribute("aria-busy", "true");
+            }
+        });
+
+        showLoading();
+    }, true);
+
+    /*
      * Standard form submits: native browser validation runs before
      * the submit event. Skip AJAX/opt-out forms and submissions targeted
      * at another browsing context.
