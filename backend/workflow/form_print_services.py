@@ -72,52 +72,74 @@ class FormPrintDataService:
                 continue
 
             items = []
-            for field_context in section_context.get("fields", []):
-                field = field_context["field"]
-                setting = field_settings.get((field.pk, None))
-                if setting and not setting.is_enabled:
-                    continue
-                item = cls._field_item(
-                    field_context,
-                    setting=setting,
-                    show_empty_values=show_empty_values,
+            layout_items = section_context.get("layout_items") or []
+            ordered_contexts = []
+
+            if layout_items:
+                # DynamicFormService provides the canonical mixed order for
+                # fields and repeatable groups in this section.
+                for layout_index, layout_item in enumerate(layout_items):
+                    item_type = layout_item.get("type")
+                    context = layout_item.get("item")
+                    if not context:
+                        continue
+                    if item_type in ("field", "group"):
+                        ordered_contexts.append(
+                            (item_type, context, layout_index)
+                        )
+            else:
+                # Compatibility fallback for contexts without layout metadata.
+                ordered_contexts.extend(
+                    ("field", context, index)
+                    for index, context in enumerate(
+                        section_context.get("fields", [])
+                    )
                 )
-                if item is not None:
+                group_offset = len(ordered_contexts)
+                ordered_contexts.extend(
+                    ("group", context, group_offset + index)
+                    for index, context in enumerate(
+                        section_context.get("repeatable_groups", [])
+                    )
+                )
+
+            for item_type, context, layout_index in ordered_contexts:
+                if item_type == "field":
+                    field = context["field"]
+                    setting = field_settings.get((field.pk, None))
+                    if setting and not setting.is_enabled:
+                        continue
+                    item = cls._field_item(
+                        context,
+                        setting=setting,
+                        show_empty_values=show_empty_values,
+                    )
+                    if item is None:
+                        continue
                     item["sort_order"] = (
-                        (
                         setting.print_order
                         if setting and setting.print_order > 0
-                        else (
-                            field.layout_order
-                            if field.layout_order is not None
-                            else field.order
-                        )
+                        else layout_index
                     )
+                else:
+                    group = context["group"]
+                    group_setting = field_settings.get((None, group.pk))
+                    if group_setting and not group_setting.is_enabled:
+                        continue
+                    item = cls._group_item(
+                        context,
+                        setting=group_setting,
+                        field_settings=field_settings,
+                        show_empty_values=show_empty_values,
                     )
-                    items.append(item)
-
-            for group_context in section_context.get("repeatable_groups", []):
-                group = group_context["group"]
-                group_setting = field_settings.get((None, group.pk))
-                if group_setting and not group_setting.is_enabled:
-                    continue
-                item = cls._group_item(
-                    group_context,
-                    setting=group_setting,
-                    field_settings=field_settings,
-                    show_empty_values=show_empty_values,
-                )
-                if item is not None:
+                    if item is None:
+                        continue
                     item["sort_order"] = (
                         group_setting.print_order
                         if group_setting and group_setting.print_order > 0
-                        else (
-                            group.layout_order
-                            if group.layout_order is not None
-                            else group.order
-                        )
+                        else layout_index
                     )
-                    items.append(item)
+                items.append(item)
 
             if not items:
                 continue
