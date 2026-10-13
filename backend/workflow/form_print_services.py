@@ -143,9 +143,21 @@ class FormPrintDataService:
             "show_created_at": settings.show_created_at if settings else True,
             "show_signatures": settings.show_signatures if settings else False,
             "signature_count": settings.signature_count if settings else 2,
-            "workflow_name": instance.workflow.name,
-            "instance_number": instance.pk,
-            "created_at": instance.started_at,
+            "workflow_name": (
+                instance.workflow.name
+                if settings is None or settings.show_workflow_name
+                else None
+            ),
+            "instance_number": (
+                instance.pk
+                if settings is None or settings.show_instance_number
+                else None
+            ),
+            "created_at": (
+                instance.started_at
+                if settings is None or settings.show_created_at
+                else None
+            ),
             "sections": sections,
         }
 
@@ -175,42 +187,68 @@ class FormPrintDataService:
         show_empty_values,
     ):
         group = group_context["group"]
-        visible_fields = []
+        row_contexts = group_context.get("items", [])
+
+        # A group's header field contexts usually contain metadata only;
+        # actual values are attached to each row. Collect the visible field
+        # definitions first, then retain columns with at least one value
+        # unless the administrator asked to print empty values as well.
+        field_contexts_by_id = {}
         for field_context in group_context.get("fields", []):
             field = field_context["field"]
             field_setting = field_settings.get((field.pk, None))
             if field_setting and not field_setting.is_enabled:
                 continue
-            item = cls._field_item(
-                field_context,
-                setting=field_setting,
-                show_empty_values=show_empty_values,
-            )
-            if item is not None or show_empty_values:
-                visible_fields.append({
-                    "field": field,
-                    "label": (
-                        field_setting.title_override
-                        if field_setting and field_setting.title_override
-                        else field.label
-                    ),
-                })
+            field_contexts_by_id[field.pk] = field_context
 
-        rows = []
-        for row in group_context.get("items", []):
-            row_fields = []
+        row_field_contexts = []
+        for row in row_contexts:
+            by_id = {}
             for field_context in row.get("fields", []):
                 field = field_context["field"]
                 field_setting = field_settings.get((field.pk, None))
                 if field_setting and not field_setting.is_enabled:
                     continue
-                item = cls._field_item(
-                    field_context,
-                    setting=field_setting,
-                    show_empty_values=show_empty_values,
+                field_contexts_by_id.setdefault(field.pk, field_context)
+                by_id[field.pk] = field_context
+            row_field_contexts.append(by_id)
+
+        def has_value(context):
+            value = context.get("display_value", context.get("value", ""))
+            return value not in (None, "", [], ())
+
+        columns = []
+        for field_id, field_context in field_contexts_by_id.items():
+            if not show_empty_values and not any(
+                has_value(row_fields[field_id])
+                for row_fields in row_field_contexts
+                if field_id in row_fields
+            ):
+                continue
+            field = field_context["field"]
+            field_setting = field_settings.get((field.pk, None))
+            columns.append({
+                "field_id": field.pk,
+                "label": (
+                    field_setting.title_override
+                    if field_setting and field_setting.title_override
+                    else field.label
+                ),
+            })
+
+        rows = []
+        for row, row_fields in zip(row_contexts, row_field_contexts):
+            values = []
+            for column in columns:
+                context = row_fields.get(column["field_id"], {})
+                value = context.get(
+                    "display_value",
+                    context.get("value", ""),
                 )
-                if item is not None:
-                    row_fields.append(item)
+                values.append({
+                    "label": column["label"],
+                    "value": value if value is not None else "",
+                })
 
             child_groups = []
             for child_context in row.get("child_groups", []):
@@ -227,13 +265,17 @@ class FormPrintDataService:
                 if child_item is not None:
                     child_groups.append(child_item)
 
-            if row_fields or child_groups or show_empty_values:
+            row_has_value = any(
+                item["value"] not in (None, "", [], ())
+                for item in values
+            )
+            if row_has_value or child_groups or show_empty_values:
                 rows.append({
-                    "fields": row_fields,
+                    "fields": values,
                     "child_groups": child_groups,
                 })
 
-        if not visible_fields and not rows and not show_empty_values:
+        if not columns and not rows:
             return None
 
         return {
@@ -248,6 +290,6 @@ class FormPrintDataService:
                 if setting
                 else FormPrintFieldSettings.GroupLayout.TABLE
             ),
-            "columns": [item["label"] for item in visible_fields],
+            "columns": [item["label"] for item in columns],
             "rows": rows,
         }
