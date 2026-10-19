@@ -340,3 +340,88 @@ class CalendarModelTests(TestCase):
 
         with self.assertRaises(ValidationError):
             overlapping.full_clean()
+
+    # ---------------------------------------------------------
+    # Direct-save regression tests (save must enforce clean())
+    # ---------------------------------------------------------
+
+    def test_working_interval_direct_save_rejects_invalid_time_range(self):
+        schedule = WeeklySchedule.objects.create(
+            calendar=self.calendar,
+            weekday=WeeklySchedule.Weekday.SATURDAY,
+            is_working=True,
+        )
+
+        with self.assertRaises(ValidationError):
+            WorkingInterval.objects.create(
+                weekly_schedule=schedule,
+                start_time=time(13, 0),
+                end_time=time(8, 0),
+            )
+
+    def test_working_interval_direct_save_rejects_overlap(self):
+        schedule = WeeklySchedule.objects.create(
+            calendar=self.calendar,
+            weekday=WeeklySchedule.Weekday.SATURDAY,
+            is_working=True,
+        )
+        WorkingInterval.objects.create(
+            weekly_schedule=schedule,
+            start_time=time(8, 0),
+            end_time=time(13, 0),
+        )
+
+        with self.assertRaises(ValidationError):
+            WorkingInterval.objects.create(
+                weekly_schedule=schedule,
+                start_time=time(12, 0),
+                end_time=time(16, 0),
+            )
+
+    def test_exception_interval_direct_save_rejects_invalid_time_range(self):
+        exception = CalendarException.objects.create(
+            calendar=self.calendar,
+            date=date(2026, 8, 22),
+            status=CalendarException.Status.WORKING,
+        )
+
+        with self.assertRaises(ValidationError):
+            CalendarExceptionInterval.objects.create(
+                exception=exception,
+                start_time=time(13, 0),
+                end_time=time(8, 0),
+            )
+
+    def test_exception_interval_direct_save_rejects_overlap(self):
+        exception = CalendarException.objects.create(
+            calendar=self.calendar,
+            date=date(2026, 8, 22),
+            status=CalendarException.Status.WORKING,
+        )
+        CalendarExceptionInterval.objects.create(
+            exception=exception,
+            start_time=time(8, 0),
+            end_time=time(13, 0),
+        )
+
+        with self.assertRaises(ValidationError):
+            CalendarExceptionInterval.objects.create(
+                exception=exception,
+                start_time=time(12, 0),
+                end_time=time(16, 0),
+            )
+
+    def test_exception_interval_direct_save_rejects_non_working_exception(self):
+        exception = CalendarException.objects.create(
+            calendar=self.calendar,
+            date=date(2026, 8, 21),
+            status=CalendarException.Status.NON_WORKING,
+        )
+
+        with self.assertRaises(ValidationError):
+            CalendarExceptionInterval.objects.create(
+                exception=exception,
+                start_time=time(8, 0),
+                end_time=time(13, 0),
+            )
+
