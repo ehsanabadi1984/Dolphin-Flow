@@ -2458,6 +2458,10 @@ class WorkingInterval(models.Model):
                 "بازه زمانی با یک بازه دیگر هم‌پوشانی دارد."
             )
 
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.start_time} - {self.end_time}"
 
@@ -2525,6 +2529,9 @@ class CalendarExceptionInterval(models.Model):
                 "زمان شروع باید قبل از زمان پایان باشد."
             )
 
+        if not self.exception_id:
+            return
+
         if self.exception.status != CalendarException.Status.WORKING:
             raise ValidationError(
                 "برای یک Exception غیرکاری نمی‌توان بازه زمانی تعریف کرد."
@@ -2544,6 +2551,9 @@ class CalendarExceptionInterval(models.Model):
                 "بازه زمانی با یک بازه دیگر هم‌پوشانی دارد."
             )
 
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.start_time} - {self.end_time}"
