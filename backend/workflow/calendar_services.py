@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
 
@@ -8,6 +9,12 @@ from workflow.models import (
     CalendarException,
     WeeklySchedule,
 )
+
+
+@dataclass(frozen=True)
+class _WorkingInterval:
+    start_time: object
+    end_time: object
 
 
 class CalendarService:
@@ -25,36 +32,63 @@ class CalendarService:
             .first()
         )
 
-        if exception is not None:
+        # A non-working exception closes the entire date, regardless of
+        # the regular weekly schedule.
+        if (
+            exception is not None
+            and exception.status == CalendarException.Status.NON_WORKING
+        ):
+            return []
 
-            if (
-                exception.status
-                == CalendarException.Status.NON_WORKING
-            ):
-                return []
+        intervals = []
 
-            return list(
-                exception.intervals.all()
-            )
-
-        weekday = value.weekday()
-
+        # A WORKING exception adds intervals to the regular schedule.
+        # If the weekday is normally non-working, this naturally leaves
+        # only the exception intervals.
         schedule = (
             calendar.weekly_schedules
             .filter(
-                weekday=weekday,
+                weekday=value.weekday(),
                 is_working=True,
             )
             .prefetch_related("intervals")
             .first()
         )
 
-        if schedule is None:
-            return []
+        if schedule is not None:
+            intervals.extend(
+                (item.start_time, item.end_time)
+                for item in schedule.intervals.all()
+            )
 
-        return list(
-            schedule.intervals.all()
-        )
+        if (
+            exception is not None
+            and exception.status == CalendarException.Status.WORKING
+        ):
+            intervals.extend(
+                (item.start_time, item.end_time)
+                for item in exception.intervals.all()
+            )
+
+        # Sort and merge overlapping or directly adjacent intervals. This
+        # is important because an exception can overlap the regular schedule.
+        intervals.sort(key=lambda item: (item[0], item[1]))
+        merged = []
+
+        for interval_start, interval_end in intervals:
+            if merged and interval_start <= merged[-1][1]:
+                previous_start, previous_end = merged[-1]
+                merged[-1] = (
+                    previous_start,
+                    max(previous_end, interval_end),
+                )
+            else:
+                merged.append((interval_start, interval_end))
+
+        return [
+            _WorkingInterval(start_time=start, end_time=end)
+            for start, end in merged
+        ]
 
     @staticmethod
     def is_working_datetime(
@@ -201,12 +235,24 @@ class CalendarService:
         start,
         end,
     ):
-        if start >= end:
+        calendar_tz = ZoneInfo(calendar.timezone)
+
+        if timezone.is_naive(start):
+            start_local = timezone.make_aware(start, calendar_tz)
+        else:
+            start_local = start.astimezone(calendar_tz)
+
+        if timezone.is_naive(end):
+            end_local = timezone.make_aware(end, calendar_tz)
+        else:
+            end_local = end.astimezone(calendar_tz)
+
+        if start_local >= end_local:
             return timedelta(0)
 
         total = timedelta(0)
-        current_date = start.date()
-        end_date = end.date()
+        current_date = start_local.date()
+        end_date = end_local.date()
 
         while current_date <= end_date:
             intervals = CalendarService.get_working_intervals(
@@ -214,20 +260,18 @@ class CalendarService:
                 value=current_date,
             )
 
-            for interval_start, interval_end in intervals:
-                interval_start_dt = datetime.combine(
-                    current_date,
-                    interval_start,
-                    tzinfo=start.tzinfo,
+            for interval in intervals:
+                interval_start_dt = timezone.make_aware(
+                    datetime.combine(current_date, interval.start_time),
+                    calendar_tz,
                 )
-                interval_end_dt = datetime.combine(
-                    current_date,
-                    interval_end,
-                    tzinfo=start.tzinfo,
+                interval_end_dt = timezone.make_aware(
+                    datetime.combine(current_date, interval.end_time),
+                    calendar_tz,
                 )
 
-                effective_start = max(start, interval_start_dt)
-                effective_end = min(end, interval_end_dt)
+                effective_start = max(start_local, interval_start_dt)
+                effective_end = min(end_local, interval_end_dt)
 
                 if effective_start < effective_end:
                     total += effective_end - effective_start
