@@ -98,7 +98,7 @@ class SLAMonitorService:
 
                 execution = (
                     WorkflowStepExecution.objects
-                    .select_for_update()
+                    .select_for_update(of=("self",))
                     .select_related(
                         "workflow_step",
                         "workflow_step__workflow",
