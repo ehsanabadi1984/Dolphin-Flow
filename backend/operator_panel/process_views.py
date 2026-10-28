@@ -14,12 +14,14 @@ from workflow.models import WorkflowInstance
 from workflow.acceptance_queue_services import PendingAcceptanceQueueService
 from workflow.services import WorkflowExecutionService
 from workflow.process_summary_services import ProcessSummaryService
+from .process_form_search_services import ProcessFormSearchService
 
 from .dashboard_enhancements import DashboardEnhancementService
 from .dashboard_services import DashboardService, _can_take_action_q
 
 
-FORM_NUMBER_PATTERN = re.compile(r"^(?P<date>\d{6})-(?P<pk>\d{6})$")
+FORM_NUMBER_PATTERN = re.compile(r"^(?P<pk>\d+)-(?P<date>\d{6})$")
+LEGACY_FORM_NUMBER_PATTERN = re.compile(r"^(?P<date>\d{6})-(?P<pk>\d+)$")
 
 
 @login_required
@@ -151,6 +153,11 @@ def my_processes(request):
         .distinct().order_by("workflow__name")
     )
 
+    if status:
+        instances = instances.filter(status=status)
+    if workflow_id.isdigit():
+        instances = instances.filter(workflow_id=int(workflow_id))
+
     if search:
         search_filter = (
             Q(workflow__name__icontains=search)
@@ -158,18 +165,35 @@ def my_processes(request):
             | Q(current_step__name__icontains=search)
         )
         form_number_match = FORM_NUMBER_PATTERN.fullmatch(search)
-        if form_number_match:
-            form_date = datetime.strptime(form_number_match.group("date"), "%y%m%d").date()
-            form_pk = int(form_number_match.group("pk"))
+        legacy_form_number_match = LEGACY_FORM_NUMBER_PATTERN.fullmatch(search)
+        matched_numbers = (
+            match
+            for match in (form_number_match, legacy_form_number_match)
+            if match
+        )
+        form_number_parsed = False
+        for matched_number in matched_numbers:
+            try:
+                form_date = datetime.strptime(
+                    matched_number.group("date"), "%y%m%d"
+                ).date()
+            except ValueError:
+                # Try the other supported format before treating the date as invalid.
+                continue
+            form_pk = int(matched_number.group("pk"))
             search_filter |= Q(pk=form_pk, started_at__date=form_date)
-        elif search.isdigit():
+            form_number_parsed = True
+            break
+        if not form_number_parsed and search.isdigit():
             search_filter |= Q(pk=int(search))
-        instances = instances.filter(search_filter)
-
-    if status:
-        instances = instances.filter(status=status)
-    if workflow_id.isdigit():
-        instances = instances.filter(workflow_id=int(workflow_id))
+        matching_form_ids = ProcessFormSearchService.matching_instance_ids(
+            queryset=instances,
+            user=request.user,
+            term=search,
+        )
+        instances = instances.filter(
+            search_filter | Q(pk__in=matching_form_ids)
+        )
 
     paginator = Paginator(instances, 20)
     page_obj = paginator.get_page(request.GET.get("page"))

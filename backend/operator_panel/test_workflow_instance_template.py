@@ -1,3 +1,4 @@
+from datetime import datetime
 from types import SimpleNamespace
 
 from django.template.loader import get_template
@@ -271,6 +272,21 @@ class WorkflowInstanceRepeatableDisplayTypeTemplateTests(SimpleTestCase):
             'type="submit" class="df-button df-button-secondary" disabled',
             rendered,
         )
+
+    def test_form_number_uses_unpadded_instance_pk_and_started_date(self):
+        context = self._context("LIST", "LIST")
+        context["instance"].pk = 14
+        context["instance"].started_at = datetime(2026, 10, 9, 12, 0)
+
+        template = get_template(self.template_name)
+        request = RequestFactory().get("/operator/workflow/14/")
+        request.user = AnonymousUser()
+        context["request"] = request
+
+        rendered = template.render(context)
+
+        self.assertIn("شماره فرم: 14-261009", rendered)
+        self.assertNotIn("شماره فرم: 000014-261009", rendered)
 
     def test_repeatable_group_uses_label_not_internal_name(self):
         rendered = self._render("LIST", "LIST")
