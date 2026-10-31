@@ -11,6 +11,7 @@ from django.urls import reverse
 from .acceptance_queue_services import PendingAcceptanceQueueService
 from .authorization import WorkflowAuthorizationService
 from .form_file_models import FormFile
+from .file_share_authorization import can_share_file_field
 from .file_lifecycle_services import FileLifecycleService
 from .form_services import DynamicFormService
 from .models import RepeatableRow
@@ -665,6 +666,7 @@ def file_field_definitions(request, instance_id):
                 "label": field.label,
                 "scope": "FORM",
                 "editable": permission_context.field(field).can_edit,
+                "shareable": can_share_file_field(user=request.user, field=field),
                 "required": bool(field.is_required),
                 "input_name": field.code,
                 "file": existing.get((field.pk, "")),
@@ -719,6 +721,7 @@ def file_field_definitions(request, instance_id):
                         permission_context.field(field).can_edit
                         and permission_context.group(group).can_edit
                     ),
+                    "shareable": can_share_file_field(user=request.user, field=field),
                     "required": bool(field.is_required),
                     "column_index": column_index,
                 })

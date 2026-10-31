@@ -6,6 +6,8 @@ document.addEventListener("DOMContentLoaded", () => {
     form.encoding = "multipart/form-data";
 
     const instanceId = form.dataset.instanceId;
+    const stepId = form.dataset.stepId || "";
+    const shareUrl = form.dataset.shareUrl || "";
     const pendingAcceptanceId = form.dataset.pendingAcceptanceId || "";
     const endpoint = new URL("file-field-definitions/", form.action);
     if (pendingAcceptanceId) {
@@ -27,19 +29,172 @@ document.addEventListener("DOMContentLoaded", () => {
         return "";
     }
 
-    function renderExistingFile(container, file) {
+    function shareDialog(field, file) {
+        if (!shareUrl || !stepId || !file || !file.id) return;
+        const existing = document.getElementById("df-file-share-dialog");
+        if (existing) existing.remove();
+
+        const overlay = document.createElement("div");
+        overlay.id = "df-file-share-dialog";
+        overlay.className = "df-share-overlay";
+        const dialog = document.createElement("section");
+        dialog.className = "df-share-dialog";
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        dialog.setAttribute("aria-labelledby", "df-share-title");
+
+        const heading = document.createElement("h2");
+        heading.id = "df-share-title";
+        heading.textContent = "اشتراک‌گذاری فایل";
+        const fileLabel = document.createElement("p");
+        fileLabel.className = "df-share-file-name";
+        fileLabel.textContent = field.label + " — " + file.name;
+        const recipientLabel = document.createElement("label");
+        recipientLabel.textContent = "گیرندگان";
+        const recipientList = document.createElement("div");
+        recipientList.className = "df-share-recipient-list";
+        recipientList.textContent = "در حال دریافت اعضای فرآیند...";
+        const typeLabel = document.createElement("label");
+        typeLabel.textContent = "نوع تعامل";
+        const type = document.createElement("select");
+        [
+            ["VIEW", "اشتراک‌گذاری برای مشاهده"],
+            ["RESPONSE", "درخواست پاسخ یا دریافت اطلاعات"],
+            ["ACTION", "درخواست انجام اقدام"],
+            ["REVIEW", "درخواست بررسی یا تأیید فایل"],
+        ].forEach(([value, label]) => {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = label;
+            type.appendChild(option);
+        });
+        const subjectLabel = document.createElement("label");
+        subjectLabel.textContent = "موضوع";
+        const subject = document.createElement("input");
+        subject.type = "text";
+        subject.maxLength = 200;
+        subject.placeholder = "موضوع پیام (اختیاری)";
+        const bodyLabel = document.createElement("label");
+        bodyLabel.textContent = "توضیحات";
+        const body = document.createElement("textarea");
+        body.rows = 3;
+        body.placeholder = "توضیحات یا درخواست خود را بنویسید...";
+        const feedback = document.createElement("div");
+        feedback.className = "df-share-feedback";
+        const actions = document.createElement("div");
+        actions.className = "df-share-actions";
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "df-button df-button-secondary";
+        cancel.textContent = "انصراف";
+        cancel.addEventListener("click", () => overlay.remove());
+        const submit = document.createElement("button");
+        submit.type = "button";
+        submit.className = "df-button df-button-primary";
+        submit.textContent = "ثبت اشتراک‌گذاری";
+        actions.append(cancel, submit);
+        dialog.append(heading, fileLabel, recipientLabel, recipientList,
+            typeLabel, type, subjectLabel, subject, bodyLabel, body, feedback, actions);
+        overlay.appendChild(dialog);
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) overlay.remove();
+        });
+        document.body.appendChild(overlay);
+
+        fetch(shareUrl + "?instance_id=" + encodeURIComponent(instanceId), {
+            credentials: "same-origin",
+            headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json" },
+        }).then(async (response) => {
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || "دریافت گیرندگان ناموفق بود.");
+            recipientList.replaceChildren();
+            if (!(payload.available_recipients || []).length) {
+                recipientList.textContent = "عضو دیگری برای دریافت پیام وجود ندارد.";
+                submit.disabled = true;
+                return;
+            }
+            payload.available_recipients.forEach((recipient) => {
+                const label = document.createElement("label");
+                label.className = "df-share-recipient";
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.value = recipient.id;
+                const name = document.createElement("span");
+                name.textContent = recipient.label;
+                label.append(checkbox, name);
+                recipientList.appendChild(label);
+            });
+        }).catch((error) => {
+            recipientList.textContent = error.message;
+            submit.disabled = true;
+        });
+
+        submit.addEventListener("click", async () => {
+            const recipientIds = Array.from(
+                recipientList.querySelectorAll('input[type="checkbox"]:checked')
+            ).map((input) => Number(input.value));
+            if (!recipientIds.length) {
+                feedback.textContent = "حداقل یک گیرنده انتخاب کنید.";
+                return;
+            }
+            submit.disabled = true;
+            feedback.textContent = "در حال ثبت...";
+            try {
+                const response = await fetch(shareUrl, {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": getCookie("csrftoken"),
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Accept": "application/json",
+                    },
+                    body: JSON.stringify({
+                        instance_id: Number(instanceId),
+                        step_id: Number(stepId),
+                        form_file_id: Number(file.id),
+                        recipient_ids: recipientIds,
+                        interaction_type: type.value,
+                        subject: subject.value,
+                        body: body.value,
+                    }),
+                });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.error || "ثبت اشتراک‌گذاری انجام نشد.");
+                feedback.textContent = "پیش‌نویس اشتراک‌گذاری برای " + payload.draft_ids.length + " گیرنده ثبت شد. پیام‌ها پس از ارسال فرم نهایی می‌شوند.";
+                submit.textContent = "ثبت شد";
+                window.setTimeout(() => overlay.remove(), 1800);
+            } catch (error) {
+                feedback.textContent = error.message || "خطا در ثبت اشتراک‌گذاری.";
+                submit.disabled = false;
+            }
+        });
+    }
+
+    function addShareButton(target, field, file) {
+        if (!target || !file || !field.shareable || !file.id || target.querySelector(".df-file-share")) return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "df-button df-button-secondary df-file-share";
+        button.textContent = "اشتراک‌گذاری";
+        button.addEventListener("click", () => shareDialog(field, file));
+        target.appendChild(button);
+    }
+
+    function renderExistingFile(container, file, field) {
         if (!container || !file) return;
         const target = container.querySelector(".df-form-value, .df-table-value") || container;
-        if (target.dataset.fileRendered === "1") return;
-
-        target.replaceChildren();
-        const link = document.createElement("a");
-        link.href = file.url;
-        link.textContent = file.name;
-        link.target = "_blank";
-        link.rel = "noopener";
-        target.appendChild(link);
-        target.dataset.fileRendered = "1";
+        if (target.dataset.fileRendered !== "1") {
+            target.replaceChildren();
+            const link = document.createElement("a");
+            link.href = file.url;
+            link.textContent = file.name;
+            link.target = "_blank";
+            link.rel = "noopener";
+            target.appendChild(link);
+            target.dataset.fileRendered = "1";
+        }
+        addShareButton(target, field, file);
     }
 
     async function deleteFile(file, wrapper, input) {
@@ -98,7 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!container) return;
 
         if (!field.editable) {
-            renderExistingFile(container, file);
+            renderExistingFile(container, file, field);
             return;
         }
 
@@ -143,6 +298,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             current.appendChild(deleteButton);
 
+            addShareButton(current, field, file);
             wrapper.appendChild(current);
             wrapper.dataset.fileId = String(file.id || "");
         }

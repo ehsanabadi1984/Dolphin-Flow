@@ -51,6 +51,8 @@
     method="post"
     action="{% url 'operator_panel:workflow_instance' instance.pk %}{% if edit_mode %}?edit=1{% endif %}"
     data-instance-id="{{ instance.pk }}"
+    data-step-id="{{ instance.current_step_id|default:'' }}"
+    data-share-url="{% url 'operator_panel:file_share_inbox' %}"
     data-edit-mode="{{ edit_mode|yesno:'1,0' }}"
     {% if pending_acceptance %}data-pending-acceptance-id="{{ request.resolver_match.kwargs.transition_execution_id }}"{% endif %}
   >
