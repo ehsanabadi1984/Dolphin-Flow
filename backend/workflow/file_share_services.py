@@ -247,9 +247,9 @@ class FileShareDraftService:
         from .permission_context import PermissionContext
 
         from .models import WorkflowInstance
-        locked_instance = WorkflowInstance.objects.select_for_update().select_related(
-            "workflow", "current_step"
-        ).get(pk=instance.pk)
+        locked_instance = WorkflowInstance.objects.select_for_update().get(
+            pk=instance.pk
+        )
         if locked_instance.current_step_id != step.pk:
             raise ValidationError("مرحله فرآیند پیش از نهایی‌سازی پیش‌نویس‌ها تغییر کرده است.")
         instance = locked_instance
@@ -265,7 +265,7 @@ class FileShareDraftService:
         for draft in drafts:
             if not draft.form_file_id:
                 continue
-            form_file = FormFile.objects.select_for_update().select_related("field", "form_data").get(pk=draft.form_file_id)
+            form_file = FormFile.objects.select_for_update().get(pk=draft.form_file_id)
             if form_file.form_data.instance_id != instance.pk:
                 raise ValidationError("فایل پیش‌نویس دیگر متعلق به این فرآیند نیست.")
             if not WorkflowMembership.objects.filter(
