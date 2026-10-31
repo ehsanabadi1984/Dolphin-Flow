@@ -2,11 +2,13 @@ from datetime import timedelta
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.core.files.storage import default_storage
 from django.test import TestCase
 from django.utils import timezone
 
 from accounts.models import User
 from workflow.form_file_models import FormFile, SharedFileAsset
+from workflow.file_lifecycle_services import FileLifecycleService
 from workflow.models import (
     FileShareMessage, FileShareMessageEvent, FormData, FormDefinition,
     FormField, FormSection, Workflow, WorkflowInstance, WorkflowStep,
@@ -127,6 +129,54 @@ class FileShareModelTests(TestCase):
 
         message.refresh_from_db()
         self.assertEqual(message.status, FileShareMessage.Status.CANCELLED)
+
+    def test_cleanup_pending_asset_rejects_new_messages_after_storage_cleanup(self):
+        asset = self.make_asset()
+        message = self.make_message(self.recipient_one)
+        FormFile.objects.filter(pk=self.form_file.pk).delete()
+
+        message.status = FileShareMessage.Status.CANCELLED
+        message.cancelled_at = timezone.now()
+        with self.captureOnCommitCallbacks(execute=True):
+            message.save()
+
+        asset.refresh_from_db()
+        self.assertTrue(asset.cleanup_pending)
+        self.assertIsNotNone(asset.storage_deleted_at)
+
+        with self.assertRaises(ValidationError):
+            self.make_message(self.recipient_two)
+
+        with self.assertRaises(ValidationError):
+            FileShareMessage.objects.create(
+                asset=asset,
+                sender=self.sender,
+                recipient=self.recipient_two,
+                workflow_instance=self.instance,
+                workflow_step=self.step,
+            )
+
+    def test_failed_storage_cleanup_can_be_retried(self):
+        asset = self.make_asset()
+        FormFile.objects.filter(pk=self.form_file.pk).delete()
+
+        with patch.object(default_storage, "delete", side_effect=[OSError("storage unavailable"), None]):
+            with self.assertRaises(OSError):
+                FileLifecycleService._delete_if_unreferenced(
+                    storage=default_storage,
+                    file_name=asset.storage_name,
+                    storage_backend=asset.storage_backend,
+                )
+
+            asset.refresh_from_db()
+            self.assertTrue(asset.cleanup_pending)
+            self.assertIsNone(asset.storage_deleted_at)
+
+            results = FileLifecycleService.retry_pending_asset_cleanups()
+            self.assertEqual(results, [True])
+
+        asset.refresh_from_db()
+        self.assertIsNotNone(asset.storage_deleted_at)
 
     def test_cancelled_message_and_its_events_are_preserved(self):
         message = self.make_message(self.recipient_one)
