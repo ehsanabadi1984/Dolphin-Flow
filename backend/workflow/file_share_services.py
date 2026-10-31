@@ -142,9 +142,11 @@ class FileShareDraftService:
         from .models import WorkflowInstance, WorkflowMembership
         from .permission_context import PermissionContext
 
-        locked_instance = WorkflowInstance.objects.select_for_update().select_related(
-            "workflow", "current_step"
-        ).get(pk=instance.pk)
+        # Lock only the WorkflowInstance row. Joining nullable relations
+        # while using FOR UPDATE is not supported by PostgreSQL.
+        locked_instance = WorkflowInstance.objects.select_for_update().get(
+            pk=instance.pk
+        )
         if locked_instance.status != WorkflowInstance.Status.ACTIVE or locked_instance.current_step_id != step.pk:
             raise ValidationError("مرحله فعلی فرآیند تغییر کرده یا فعال نیست.")
         if not WorkflowMembership.objects.filter(
