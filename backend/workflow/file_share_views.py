@@ -153,6 +153,12 @@ def file_share_message_respond(request, message_id):
             raise ValidationError("متن پاسخ نمی‌تواند خالی باشد.")
         if message.interaction_type == FileShareMessage.InteractionType.VIEW:
             raise ValidationError("برای این پیام امکان ارسال پاسخ تعریف نشده است.")
+        if message.status == FileShareMessage.Status.PENDING:
+            FileShareMessageService.transition_status(
+                message=message,
+                to_status=FileShareMessage.Status.READ,
+                actor=request.user,
+            )
         FileShareMessageService.transition_status(
             message=message,
             to_status=FileShareMessage.Status.RESPONDED,

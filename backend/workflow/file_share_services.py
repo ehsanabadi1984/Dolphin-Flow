@@ -74,6 +74,21 @@ class FileShareMessageService:
             FileShareMessage.objects.select_for_update()
             .get(pk=message_id)
         )
+        if actor is not None:
+            if (
+                to_status in {
+                    FileShareMessage.Status.READ,
+                    FileShareMessage.Status.RESPONDED,
+                    FileShareMessage.Status.COMPLETED,
+                }
+                and actor.pk != locked_message.recipient_id
+            ):
+                raise ValidationError("فقط گیرنده پیام می‌تواند آن را مشاهده یا تعیین تکلیف کند.")
+            if (
+                to_status == FileShareMessage.Status.CANCELLED
+                and actor.pk != locked_message.sender_id
+            ):
+                raise ValidationError("فقط فرستنده پیام می‌تواند آن را لغو کند.")
         allowed = cls.ALLOWED_TRANSITIONS.get(locked_message.status)
         if allowed is None or to_status not in allowed:
             raise ValidationError(
@@ -104,7 +119,14 @@ class FileShareDraftService:
     @staticmethod
     def available_recipients(*, instance, sender):
         from django.contrib.auth import get_user_model
-        from .models import WorkflowMembership
+        from .models import WorkflowMembership, WorkflowInstance
+        if (
+            instance.status != WorkflowInstance.Status.ACTIVE
+            or not WorkflowMembership.objects.filter(
+                workflow_id=instance.workflow_id, user=sender, is_active=True
+            ).exists()
+        ):
+            raise ValidationError("فقط عضو فعال می‌تواند گیرندگان این فرآیند را مشاهده کند.")
         return get_user_model().objects.filter(
             workflow_memberships__workflow_id=instance.workflow_id,
             workflow_memberships__is_active=True,

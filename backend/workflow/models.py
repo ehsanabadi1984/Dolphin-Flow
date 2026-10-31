@@ -1115,7 +1115,9 @@ class FileShareDraft(models.Model):
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        if self.status == self.Status.CONVERTED:
+        if self.pk and type(self).objects.filter(
+            pk=self.pk, status=self.Status.CONVERTED
+        ).exists():
             raise ValidationError("سابقه پیش‌نویس تبدیل‌شده قابل حذف نیست.")
         return super().delete(*args, **kwargs)
 
