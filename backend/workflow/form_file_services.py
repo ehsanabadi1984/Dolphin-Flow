@@ -253,6 +253,9 @@ def _replace_file(*, form_data, field, row_id, upload, user, storage_files=None)
     if not _upload_present(upload):
         return
 
+    # Keep the global lock order: WorkflowInstance, then FormFile, then Draft/Asset.
+    WorkflowInstance.objects.select_for_update().get(pk=form_data.instance_id)
+
     old = (
         FormFile.objects
         .select_for_update()

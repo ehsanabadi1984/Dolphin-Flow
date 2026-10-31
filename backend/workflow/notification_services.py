@@ -130,6 +130,7 @@ class NotificationService:
             .select_related(
                 "workflow_instance",
                 "workflow_step",
+                "file_share_message",
                 "transition_execution__transition__reject_to_step",
             )
             .order_by("-created_at")

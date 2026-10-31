@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from .models import FileShareMessage, FileShareMessageEvent
+from .models import FileShareDraft, FileShareMessage, FileShareMessageEvent
 
 
 class FileShareMessageService:
@@ -129,6 +129,10 @@ class FileShareDraftService:
             workflow_id=locked_instance.workflow_id, user=sender, is_active=True
         ).exists():
             raise ValidationError("فرستنده عضو فعال این فرآیند نیست.")
+        from .form_file_models import FormFile
+        form_file = FormFile.objects.select_for_update().select_related(
+            "field", "field__section", "field__section__form", "form_data"
+        ).get(pk=form_file.pk)
         if form_file.form_data.instance_id != locked_instance.pk:
             raise ValidationError("فایل متعلق به این فرآیند نیست.")
         if form_file.field.section.form.workflow_id != locked_instance.workflow_id:

@@ -8,7 +8,7 @@ form and internal-sharing references.
 from django.db import transaction
 
 from .form_file_models import FormFile, SharedFileAsset
-from .models import FileShareMessage
+from .models import FileShareMessage, WorkflowInstance
 
 
 ACTIVE_SHARE_STATUSES = (
@@ -27,6 +27,15 @@ class FileLifecycleService:
         if not form_file or not form_file.pk or not form_file.file or not form_file.file.name:
             raise ValueError("A saved FormFile with a stored file is required.")
 
+        instance_id = (
+            FormFile.objects.filter(pk=form_file.pk)
+            .values_list("form_data__instance_id", flat=True)
+            .first()
+        )
+        if instance_id is None:
+            return (0, {})
+        # Serialize file deletion with Submit and file replacement.
+        WorkflowInstance.objects.select_for_update().get(pk=instance_id)
         locked_file = (
             FormFile.objects.select_for_update()
             .select_related("field")

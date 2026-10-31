@@ -1096,6 +1096,10 @@ class FileShareDraft(models.Model):
                 ),
                 name="fshare_draft_state_consistent",
             ),
+            models.CheckConstraint(
+                condition=~models.Q(sender=models.F("recipient")),
+                name="fshare_draft_sender_not_recipient",
+            ),
         ]
 
     def clean(self):

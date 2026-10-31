@@ -7,6 +7,13 @@ class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ("workflow", "0073_shared_file_asset_cleanup_state"),
+        migrations.AddConstraint(
+            model_name="filesharedraft",
+            constraint=models.CheckConstraint(
+                condition=~models.Q(sender=models.F("recipient")),
+                name="fshare_draft_sender_not_recipient",
+            ),
+        ),
     ]
     operations = [
         migrations.CreateModel(
