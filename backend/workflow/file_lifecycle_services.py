@@ -127,13 +127,11 @@ class FileLifecycleService:
             ).exists():
                 return False
 
-            # Storage operations cannot be rolled back with the database.
-            # Defer physical deletion until this reference-check transaction
-            # has committed successfully.
             should_delete = True
-            transaction.on_commit(
-                lambda storage=storage, file_name=file_name:
-                    storage.delete(file_name)
-            )
 
+        # This method is invoked by schedule_storage_delete's on_commit
+        # callback, so the originating transaction has already committed.
+        # Delete only after the reference-check transaction above has exited.
+        if should_delete:
+            storage.delete(file_name)
         return should_delete

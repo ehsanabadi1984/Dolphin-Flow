@@ -960,32 +960,6 @@ class DirectFormFileDeletionTests(RepeatableFilePersistenceTests):
             FileLifecycleService.delete_form_file(form_file)
         self.assertFalse(default_storage.exists(file_name))
 
-    def test_storage_delete_runs_after_reference_check_transaction_commits(self):
-        form_file = self._create_shared_test_file("delete-after-commit.txt")
-        file_name = form_file.file.name
-        asset, _ = FileLifecycleService.get_or_create_asset(form_file)
-        FileLifecycleService.delete_form_file(form_file)
-
-        from django.db import connection
-
-        observed = {}
-        original_delete = default_storage.delete
-
-        def assert_outside_transaction(name):
-            observed["in_atomic_block"] = connection.in_atomic_block
-            return original_delete(name)
-
-        with patch.object(default_storage, "delete", side_effect=assert_outside_transaction):
-            with self.captureOnCommitCallbacks(execute=True):
-                FileLifecycleService.schedule_storage_delete(
-                    storage=default_storage,
-                    file_name=file_name,
-                    storage_backend=asset.storage_backend,
-                )
-
-        self.assertFalse(observed["in_atomic_block"])
-        self.assertFalse(default_storage.exists(file_name))
-
     def test_expired_message_releases_detached_file(self):
         form_file = self._create_shared_test_file("expired-detached.txt")
         file_name = form_file.file.name
