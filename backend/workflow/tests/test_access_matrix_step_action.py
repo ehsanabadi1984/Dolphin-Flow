@@ -133,11 +133,30 @@ class AcceptanceAccessMatrixTests(TestCase):
                 effect=WorkflowPermission.Effect.ALLOW,
             ).exists()
         )
+        # Saving another step must not alter the destination step's permission.
         save_access_matrix(
             workflow=self.workflow,
             subject_type="user",
             subject_value=self.user.pk,
             step=self.source,
+            post_data={},
+        )
+        self.assertTrue(
+            WorkflowPermission.objects.filter(
+                workflow=self.workflow,
+                user=self.user,
+                step=self.destination,
+                action=WorkflowPermission.Action.SHARE_FILES,
+                effect=WorkflowPermission.Effect.ALLOW,
+            ).exists()
+        )
+
+        # Removing the option on the same step must delete that step's permission.
+        save_access_matrix(
+            workflow=self.workflow,
+            subject_type="user",
+            subject_value=self.user.pk,
+            step=self.destination,
             post_data={},
         )
         self.assertFalse(

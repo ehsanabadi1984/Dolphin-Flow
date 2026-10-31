@@ -10,6 +10,7 @@ from workflow.models import (
     FormData, FormDefinition, FormField, FormSection,
     Workflow, WorkflowInstance, WorkflowStep, WorkflowTransition,
     WorkflowTransitionExecution, WorkflowMembership, FieldAccess,
+    WorkflowPermission,
 )
 
 
@@ -31,6 +32,13 @@ class FileShareDraftFinalizationTests(TestCase):
             content_type__model="user",
             codename="share_files",
         ))
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.sender,
+            action=WorkflowPermission.Action.SHARE_FILES,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
         self.form = FormDefinition.objects.create(workflow=self.workflow, name="Draft form")
         self.section = FormSection.objects.create(form=self.form, name="Files", code="FILES")
         self.field = FormField.objects.create(
