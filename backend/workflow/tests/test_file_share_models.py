@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
@@ -110,6 +111,22 @@ class FileShareModelTests(TestCase):
                     self.recipient_one, status=FileShareMessage.Status.COMPLETED,
                     completed_at=timezone.now() - timedelta(days=1),
                 )
+
+    def test_terminal_message_cannot_be_reactivated_from_a_stale_instance(self):
+        message = self.make_message(self.recipient_one)
+        stale_instance = FileShareMessage.objects.get(pk=message.pk)
+
+        message.status = FileShareMessage.Status.CANCELLED
+        message.cancelled_at = timezone.now()
+        message.save()
+
+        stale_instance.status = FileShareMessage.Status.READ
+        stale_instance.read_at = timezone.now()
+        with self.assertRaises(ValidationError):
+            stale_instance.save()
+
+        message.refresh_from_db()
+        self.assertEqual(message.status, FileShareMessage.Status.CANCELLED)
 
     def test_cancelled_message_and_its_events_are_preserved(self):
         message = self.make_message(self.recipient_one)

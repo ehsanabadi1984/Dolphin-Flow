@@ -988,16 +988,37 @@ class FileShareMessage(models.Model):
         )
 
         previous_status = None
-        if self.pk:
-            previous_status = (
-                type(self).objects.filter(pk=self.pk)
-                .values_list("status", flat=True)
-                .first()
-            )
 
         with transaction.atomic():
+            # Serialize all lifecycle transitions for this message. Read the
+            # previous status only after acquiring the row lock; otherwise two
+            # concurrent saves can both make decisions from the same stale
+            # status and schedule cleanup incorrectly.
+            if self.pk:
+                locked_message = (
+                    type(self).objects.select_for_update()
+                    .only("status", "asset_id")
+                    .get(pk=self.pk)
+                )
+                previous_status = locked_message.status
+
             if self.asset_id:
                 SharedFileAsset.objects.select_for_update().get(pk=self.asset_id)
+
+            # A terminal message must never become active again: its storage
+            # dependency may already have been released and the file deleted.
+            terminal_statuses = {
+                self.Status.CANCELLED,
+                self.Status.EXPIRED,
+            }
+            if (
+                previous_status in terminal_statuses
+                and self.status in ACTIVE_SHARE_STATUSES
+            ):
+                raise ValidationError({
+                    "status": "پیام لغو یا منقضی‌شده قابل فعال‌سازی مجدد نیست."
+                })
+
             super().save(*args, **kwargs)
 
             if (

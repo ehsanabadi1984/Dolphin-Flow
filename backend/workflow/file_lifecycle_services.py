@@ -107,6 +107,7 @@ class FileLifecycleService:
     @staticmethod
     def _delete_if_unreferenced(*, storage, file_name, storage_backend):
         """Recheck references under row locks immediately before deleting bytes."""
+        should_delete = False
         with transaction.atomic():
             assets = list(
                 SharedFileAsset.objects.select_for_update()
@@ -126,5 +127,13 @@ class FileLifecycleService:
             ).exists():
                 return False
 
-            storage.delete(file_name)
-            return True
+            # Storage operations cannot be rolled back with the database.
+            # Defer physical deletion until this reference-check transaction
+            # has committed successfully.
+            should_delete = True
+            transaction.on_commit(
+                lambda storage=storage, file_name=file_name:
+                    storage.delete(file_name)
+            )
+
+        return should_delete
