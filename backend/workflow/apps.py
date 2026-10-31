@@ -6,7 +6,7 @@ class WorkflowConfig(AppConfig):
 
     def ready(self):
         from .models import FormField, WorkflowInstance, WorkflowPermission
-        from .form_file_models import FormFile  # noqa: F401
+        from .form_file_models import FormFile, SharedFileAsset  # noqa: F401
         from .history_models import HistoryConfiguration, HistoryField  # noqa: F401
         from .history_permissions import HISTORY_ACTION, HISTORY_ACTION_LABEL
         from .branding_models import SystemBranding  # noqa: F401

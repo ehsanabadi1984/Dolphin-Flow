@@ -855,6 +855,10 @@ class Notification(models.Model):
             "SLA_BREACHED",
             "نقض SLA",
         )
+        FILE_SHARE_MESSAGE = (
+            "FILE_SHARE_MESSAGE",
+            "پیام اشتراک‌گذاری فایل",
+        )
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -897,6 +901,14 @@ class Notification(models.Model):
         related_name="notifications",
     )
 
+    file_share_message = models.ForeignKey(
+        "workflow.FileShareMessage",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+
     is_read = models.BooleanField(
         default=False,
     )
@@ -918,6 +930,84 @@ class Notification(models.Model):
             f"{self.recipient} - "
             f"{self.title}"
         )
+
+class FileShareMessage(models.Model):
+    class InteractionType(models.TextChoices):
+        VIEW = "VIEW", "اشتراک‌گذاری برای مشاهده"
+        RESPONSE = "RESPONSE", "درخواست پاسخ یا دریافت اطلاعات"
+        ACTION = "ACTION", "درخواست انجام اقدام"
+        REVIEW = "REVIEW", "درخواست بررسی یا تأیید فایل"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "در انتظار"
+        READ = "READ", "مشاهده شده"
+        RESPONDED = "RESPONDED", "پاسخ داده شده"
+        COMPLETED = "COMPLETED", "تکمیل شده"
+        CANCELLED = "CANCELLED", "لغو شده"
+        EXPIRED = "EXPIRED", "منقضی شده"
+
+    asset = models.ForeignKey("workflow.SharedFileAsset", on_delete=models.PROTECT, related_name="messages")
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="sent_file_share_messages")
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="received_file_share_messages")
+    workflow_instance = models.ForeignKey(WorkflowInstance, on_delete=models.PROTECT, related_name="file_share_messages")
+    workflow_step = models.ForeignKey(WorkflowStep, on_delete=models.PROTECT, null=True, blank=True, related_name="file_share_messages")
+    transition_execution = models.ForeignKey(WorkflowTransitionExecution, on_delete=models.PROTECT, null=True, blank=True, related_name="file_share_messages")
+    interaction_type = models.CharField(max_length=20, choices=InteractionType.choices, default=InteractionType.VIEW)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    subject = models.CharField(max_length=200, blank=True, default="")
+    body = models.TextField(blank=True, default="")
+    form_snapshot = models.JSONField(default=dict, blank=True)
+    sent_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-sent_at", "-pk"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(status__in=["PENDING", "READ", "RESPONDED", "COMPLETED", "CANCELLED", "EXPIRED"]), name="fshare_msg_status_valid"),
+            models.CheckConstraint(condition=(models.Q(status="CANCELLED", cancelled_at__isnull=False) | (~models.Q(status="CANCELLED") & models.Q(cancelled_at__isnull=True))), name="fshare_msg_cancel_date"),
+            models.CheckConstraint(condition=(models.Q(completed_at__isnull=True) | models.Q(status="COMPLETED")), name="fshare_msg_complete_date"),
+            models.CheckConstraint(condition=(models.Q(responded_at__isnull=True) | models.Q(status__in=["RESPONDED", "COMPLETED"])), name="fshare_msg_response_date"),
+            models.CheckConstraint(condition=(models.Q(read_at__isnull=True) | ~models.Q(status="PENDING")), name="fshare_msg_read_date"),
+            models.CheckConstraint(condition=(models.Q(read_at__isnull=True) | models.Q(read_at__gte=models.F("sent_at"))), name="fshare_msg_read_after_sent"),
+            models.CheckConstraint(condition=(models.Q(responded_at__isnull=True) | models.Q(responded_at__gte=models.F("sent_at"))), name="fshare_msg_response_after_sent"),
+            models.CheckConstraint(condition=(models.Q(completed_at__isnull=True) | models.Q(completed_at__gte=models.F("sent_at"))), name="fshare_msg_complete_after_sent"),
+            models.CheckConstraint(condition=(models.Q(cancelled_at__isnull=True) | models.Q(cancelled_at__gte=models.F("sent_at"))), name="fshare_msg_cancel_after_sent"),
+        ]
+
+    def __str__(self):
+        return f"{self.sender} → {self.recipient} - {self.get_interaction_type_display()}"
+
+
+class FileShareMessageEvent(models.Model):
+    class EventType(models.TextChoices):
+        CREATED = "CREATED", "ایجاد"
+        SENT = "SENT", "ارسال"
+        READ = "READ", "مشاهده"
+        RESPONDED = "RESPONDED", "پاسخ"
+        COMPLETED = "COMPLETED", "تکمیل"
+        CANCELLED = "CANCELLED", "لغو"
+        EXPIRED = "EXPIRED", "انقضا"
+        DOWNLOADED = "DOWNLOADED", "دریافت فایل"
+
+    message = models.ForeignKey(FileShareMessage, on_delete=models.PROTECT, related_name="events")
+    event_type = models.CharField(max_length=20, choices=EventType.choices)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="file_share_message_events")
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        indexes = [models.Index(fields=["message", "created_at"], name="fshare_event_msg_date_idx")]
+
+    def __str__(self):
+        return f"{self.message_id} - {self.get_event_type_display()}"
+
 
 class FormDefinition(models.Model):
     workflow = models.OneToOneField(
