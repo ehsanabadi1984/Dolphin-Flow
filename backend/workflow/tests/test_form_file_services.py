@@ -588,6 +588,7 @@ class RepeatableFilePersistenceTests(TestCase):
                 "code": self.file_field.code,
                 "label": self.file_field.label,
                 "editable": True,
+                "shareable": False,
                 "required": False,
                 "column_index": 0,
             }],
