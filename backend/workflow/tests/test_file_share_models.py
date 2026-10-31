@@ -49,6 +49,17 @@ class FileShareModelTests(TestCase):
         self.assertEqual(asset.form_file_id, self.form_file.pk)
         self.assertEqual(asset.storage_name, self.form_file.file.name)
 
+    def test_asset_keeps_original_storage_path_after_form_file_replacement(self):
+        asset = self.make_asset()
+        original_path = asset.storage_name
+
+        self.form_file.file = "workflow_forms/1/ATTACHMENT/replacement.pdf"
+        self.form_file.save(update_fields=["file"])
+        asset.refresh_from_db()
+
+        self.assertEqual(asset.storage_name, original_path)
+        self.assertNotEqual(asset.storage_name, self.form_file.file.name)
+
     def test_same_physical_file_reuses_one_asset(self):
         first = self.make_asset()
         second, created = SharedFileAsset.get_or_create_for_form_file(self.form_file)
