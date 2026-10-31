@@ -66,7 +66,10 @@ def file_share_inbox(request):
             "drafts": [{
                 "id": d.pk, "recipient": str(d.recipient),
                 "file_name": d.form_file.original_name if d.form_file_id else "",
-                "subject": d.subject, "interaction_type": d.interaction_type,
+                "subject": d.subject, "body": d.body,
+                "interaction_type": d.interaction_type,
+                "update_url": f"/operator/file-shares/drafts/{d.pk}/update/",
+                "delete_url": f"/operator/file-shares/drafts/{d.pk}/delete/",
             } for d in drafts[:100]],
         })
     if request.method != "POST":

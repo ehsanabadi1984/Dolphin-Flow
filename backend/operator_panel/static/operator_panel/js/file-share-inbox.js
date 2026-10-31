@@ -51,6 +51,38 @@ document.addEventListener("DOMContentLoaded", () => {
                 recall.type = "button";
                 recall.addEventListener("click", () => recallMessage(item.recall_url));
                 card.appendChild(recall);
+            } else if (activeTab === "drafts") {
+                const actions = node("div", "df-share-inbox-actions");
+                const edit = node("button", "df-button df-button-secondary", "ویرایش");
+                edit.type = "button";
+                edit.addEventListener("click", async () => {
+                    const subject = window.prompt("موضوع پیش‌نویس:", item.subject || "");
+                    if (subject === null) return;
+                    const body = window.prompt("توضیحات پیش‌نویس:", item.body || "");
+                    if (body === null) return;
+                    try {
+                        await request(item.update_url, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() },
+                            body: JSON.stringify({ subject, body }),
+                        });
+                        await load();
+                    } catch (error) { window.alert(error.message); }
+                });
+                const remove = node("button", "df-button df-button-danger", "حذف پیش‌نویس");
+                remove.type = "button";
+                remove.addEventListener("click", async () => {
+                    if (!window.confirm("این پیش‌نویس حذف شود؟")) return;
+                    try {
+                        await request(item.delete_url, {
+                            method: "POST",
+                            headers: { "X-CSRFToken": csrf() },
+                        });
+                        await load();
+                    } catch (error) { window.alert(error.message); }
+                });
+                actions.append(edit, remove);
+                card.appendChild(actions);
             }
             list.appendChild(card);
         });
