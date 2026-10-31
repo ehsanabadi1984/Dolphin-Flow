@@ -26,7 +26,8 @@ from .history_list_views import history_list
 from workflow.form_print_views import form_print_preview
 from workflow.file_share_views import (
     file_share_inbox, file_share_draft_delete, file_share_draft_update, file_share_message_detail,
-    file_share_message_download, file_share_message_recall,\n    file_share_message_respond, file_share_message_complete,
+    file_share_message_download, file_share_message_recall,
+    file_share_message_respond, file_share_message_complete,
 )
 from workflow.form_file_services import (
     file_field_definitions,
