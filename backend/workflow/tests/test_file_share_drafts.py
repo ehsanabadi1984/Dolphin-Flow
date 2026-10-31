@@ -66,6 +66,23 @@ class FileShareDraftFinalizationTests(TestCase):
             subject="Please review",
         )
 
+    def test_inbox_page_and_draft_api_are_available_to_authenticated_sender(self):
+        draft = self._draft(self.recipient_one)
+        self.client.force_login(self.sender)
+
+        page = self.client.get(reverse("operator_panel:file_share_inbox_page"))
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "صندوق پیام‌ها")
+
+        response = self.client.get(reverse("operator_panel:file_share_inbox"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["drafts"]), 1)
+        self.assertEqual(payload["drafts"][0]["id"], draft.pk)
+        self.assertEqual(payload["drafts"][0]["body"], draft.body)
+        self.assertTrue(payload["drafts"][0]["update_url"])
+        self.assertTrue(payload["drafts"][0]["delete_url"])
+
     def test_create_drafts_creates_independent_recipient_requests(self):
         drafts = FileShareDraftService.create_drafts(
             instance=self.instance,

@@ -55,21 +55,21 @@ def file_share_inbox(request):
                 "id": m.pk, "recipient": str(m.recipient), "subject": m.subject,
                 "status": m.status, "file_name": m.asset.original_name,
                 "sent_at": m.sent_at.isoformat(),
-                "recall_url": f"/operator/file-shares/messages/{m.pk}/recall/",
+                "recall_url": reverse("operator_panel:file_share_message_recall", args=[m.pk]),
             } for m in FileShareMessage.objects.filter(sender=request.user).select_related("recipient", "asset")[:100]],
             "messages": [{
                 "id": m.pk, "sender": str(m.sender), "subject": m.subject,
                 "body": m.body, "status": m.status, "interaction_type": m.interaction_type,
                 "file_name": m.asset.original_name, "sent_at": m.sent_at.isoformat(),
-                "url": f"/operator/file-shares/messages/{m.pk}/",
+                "url": reverse("operator_panel:file_share_message_detail", args=[m.pk]),
             } for m in qs[:100]],
             "drafts": [{
                 "id": d.pk, "recipient": str(d.recipient),
                 "file_name": d.form_file.original_name if d.form_file_id else "",
                 "subject": d.subject, "body": d.body,
                 "interaction_type": d.interaction_type,
-                "update_url": f"/operator/file-shares/drafts/{d.pk}/update/",
-                "delete_url": f"/operator/file-shares/drafts/{d.pk}/delete/",
+                "update_url": reverse("operator_panel:file_share_draft_update", args=[d.pk]),
+                "delete_url": reverse("operator_panel:file_share_draft_delete", args=[d.pk]),
             } for d in drafts[:100]],
         })
     if request.method != "POST":
@@ -139,7 +139,7 @@ def file_share_message_detail(request, message_id):
         "status": message.status, "file_name": message.asset.original_name,
         "file_size": message.asset.file_size, "content_type": message.asset.content_type,
         "form_snapshot": message.form_snapshot,
-        "download_url": f"/operator/file-shares/messages/{message.pk}/download/",
+        "download_url": reverse("operator_panel:file_share_message_download", args=[message.pk]),
     })
 
 
