@@ -109,6 +109,12 @@ def file_share_message_detail(request, message_id):
     if message.status == FileShareMessage.Status.PENDING:
         FileShareMessageService.transition_status(message=message, to_status=FileShareMessage.Status.READ, actor=request.user)
         message.refresh_from_db()
+    from .models import Notification
+    from .notification_services import NotificationService
+    for notification in Notification.objects.filter(
+        file_share_message=message, recipient=request.user, is_read=False
+    ):
+        NotificationService.mark_as_read(notification=notification, user=request.user)
     return JsonResponse({
         "id": message.pk, "sender": str(message.sender), "subject": message.subject,
         "body": message.body, "interaction_type": message.interaction_type,

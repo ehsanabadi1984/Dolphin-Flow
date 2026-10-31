@@ -180,6 +180,21 @@ class FileShareModelTests(TestCase):
         asset.refresh_from_db()
         self.assertIsNotNone(asset.storage_deleted_at)
 
+    def test_message_service_rejects_actions_from_the_wrong_participant(self):
+        message = self.make_message(self.recipient_one)
+        with self.assertRaises(ValidationError):
+            FileShareMessageService.transition_status(
+                message=message,
+                to_status=FileShareMessage.Status.READ,
+                actor=self.sender,
+            )
+        with self.assertRaises(ValidationError):
+            FileShareMessageService.transition_status(
+                message=message,
+                to_status=FileShareMessage.Status.CANCELLED,
+                actor=self.recipient_one,
+            )
+
     def test_message_service_records_each_valid_status_transition(self):
         message = self.make_message(self.recipient_one)
 
