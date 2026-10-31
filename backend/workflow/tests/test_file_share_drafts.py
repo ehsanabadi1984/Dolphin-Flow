@@ -1,13 +1,15 @@
 from django.test import TestCase
+from django.contrib.auth.models import Permission
+from django.urls import reverse
 
 from accounts.models import User
-from workflow.form_file_models import FormFile
+from workflow.form_file_models import FormFile, SharedFileAsset
 from workflow.file_share_services import FileShareDraftService
 from workflow.models import (
     FileShareDraft, FileShareMessage, FileShareMessageEvent,
     FormData, FormDefinition, FormField, FormSection,
     Workflow, WorkflowInstance, WorkflowStep, WorkflowTransition,
-    WorkflowTransitionExecution,
+    WorkflowTransitionExecution, WorkflowMembership, FieldAccess,
 )
 
 
@@ -19,12 +21,26 @@ class FileShareDraftFinalizationTests(TestCase):
         self.workflow = Workflow.objects.create(name="Draft workflow", code="DRAFT_WF")
         self.step = WorkflowStep.objects.create(workflow=self.workflow, name="Current", code="CURRENT", order=1)
         self.instance = WorkflowInstance.objects.create(workflow=self.workflow, current_step=self.step, started_by=self.sender)
+        for member in (self.sender, self.recipient_one, self.recipient_two):
+            WorkflowMembership.objects.create(
+                workflow=self.workflow, user=member,
+                role=WorkflowMembership.Role.EXECUTOR, is_active=True,
+            )
+        self.sender.user_permissions.add(Permission.objects.get(
+            content_type__app_label="accounts",
+            content_type__model="user",
+            codename="share_files",
+        ))
         self.form = FormDefinition.objects.create(workflow=self.workflow, name="Draft form")
         self.section = FormSection.objects.create(form=self.form, name="Files", code="FILES")
         self.field = FormField.objects.create(
             section=self.section, name="Attachment", code="ATTACHMENT",
             label="Attachment", field_type=FormField.FieldType.FILE,
             allow_file_sharing=True,
+        )
+        FieldAccess.objects.create(
+            field=self.field, step=self.step, user=self.sender,
+            can_view=True, can_edit=False,
         )
         self.form_data = FormData.objects.create(instance=self.instance, data={})
         self.form_file = FormFile.objects.create(
@@ -72,6 +88,26 @@ class FileShareDraftFinalizationTests(TestCase):
         self.assertEqual(FileShareMessageEvent.objects.filter(
             event_type=FileShareMessageEvent.EventType.SENT
         ).count(), 2)
+
+    def test_recipient_scoped_message_detail_does_not_grant_sender_access(self):
+        asset = SharedFileAsset.get_or_create_for_form_file(self.form_file)[0]
+        message = FileShareMessage.objects.create(
+            asset=asset, sender=self.sender, recipient=self.recipient_one,
+            workflow_instance=self.instance, workflow_step=self.step,
+        )
+        self.client.force_login(self.sender)
+        denied = self.client.get(reverse(
+            "operator_panel:file_share_message_detail", args=[message.pk]
+        ))
+        self.assertEqual(denied.status_code, 404)
+
+        self.client.force_login(self.recipient_one)
+        allowed = self.client.get(reverse(
+            "operator_panel:file_share_message_detail", args=[message.pk]
+        ))
+        self.assertEqual(allowed.status_code, 200)
+        message.refresh_from_db()
+        self.assertEqual(message.status, FileShareMessage.Status.READ)
 
     def test_file_deletion_cascades_only_unconverted_drafts(self):
         draft = self._draft(self.recipient_one)
