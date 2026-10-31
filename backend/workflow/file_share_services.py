@@ -96,3 +96,299 @@ class FileShareMessageService:
             details=details or {},
         )
         return locked_message, event
+
+
+class FileShareDraftService:
+    """Manage pre-submit share intents and atomically finalize them on Submit."""
+
+    @staticmethod
+    def available_recipients(*, instance, sender):
+        from django.contrib.auth import get_user_model
+        from .models import WorkflowMembership
+        return get_user_model().objects.filter(
+            workflow_memberships__workflow_id=instance.workflow_id,
+            workflow_memberships__is_active=True,
+            is_active=True,
+        ).exclude(pk=sender.pk).distinct().order_by("username")
+
+    @classmethod
+    @transaction.atomic
+    def create_drafts(cls, *, instance, step, sender, form_file, recipient_ids,
+                      interaction_type=FileShareMessage.InteractionType.VIEW,
+                      subject="", body=""):
+        from .file_share_authorization import require_file_share_permission
+        from .models import WorkflowInstance, WorkflowMembership
+        from .permission_context import PermissionContext
+
+        locked_instance = WorkflowInstance.objects.select_for_update().select_related(
+            "workflow", "current_step"
+        ).get(pk=instance.pk)
+        if locked_instance.status != WorkflowInstance.Status.ACTIVE or locked_instance.current_step_id != step.pk:
+            raise ValidationError("مرحله فعلی فرآیند تغییر کرده یا فعال نیست.")
+        if not WorkflowMembership.objects.filter(
+            workflow_id=locked_instance.workflow_id, user=sender, is_active=True
+        ).exists():
+            raise ValidationError("فرستنده عضو فعال این فرآیند نیست.")
+        if form_file.form_data.instance_id != locked_instance.pk:
+            raise ValidationError("فایل متعلق به این فرآیند نیست.")
+        if form_file.field.section.form.workflow_id != locked_instance.workflow_id:
+            raise ValidationError("فیلد فایل متعلق به این فرآیند نیست.")
+        require_file_share_permission(user=sender, field=form_file.field)
+        permission_context = PermissionContext.build(
+            workflow=locked_instance.workflow,
+            form=locked_instance.workflow.form_definition,
+            step=step,
+            user=sender,
+        )
+        if not permission_context.field(form_file.field).can_view:
+            raise ValidationError("فرستنده اجازه مشاهده فایل مبدأ را ندارد.")
+        if form_file.field.repeatable_group_id and not permission_context.group(form_file.field.repeatable_group).can_view:
+            raise ValidationError("فرستنده اجازه مشاهده گروه حاوی فایل را ندارد.")
+        if interaction_type not in FileShareMessage.InteractionType.values:
+            raise ValidationError("نوع تعامل معتبر نیست.")
+        ids = list(dict.fromkeys(int(value) for value in recipient_ids))
+        if not ids:
+            raise ValidationError("حداقل یک گیرنده انتخاب کنید.")
+        if sender.pk in ids:
+            raise ValidationError("فرستنده نمی‌تواند گیرنده پیام خودش باشد.")
+        members = set(WorkflowMembership.objects.select_for_update().filter(
+            workflow_id=locked_instance.workflow_id,
+            user_id__in=ids,
+            is_active=True,
+            user__is_active=True,
+        ).values_list("user_id", flat=True))
+        if set(ids) != members:
+            raise ValidationError("همه گیرندگان باید عضو فعال همین فرآیند باشند.")
+        return [
+            FileShareDraft.objects.create(
+                sender=sender, recipient_id=rid, workflow_instance=locked_instance,
+                workflow_step=step, form_file=form_file, interaction_type=interaction_type,
+                subject=(subject or "")[:200], body=body or "",
+            ) for rid in ids
+        ]
+
+    @staticmethod
+    @transaction.atomic
+    def delete_draft(*, draft_id, sender):
+        draft = FileShareDraft.objects.select_for_update().filter(
+            pk=draft_id, sender=sender, status=FileShareDraft.Status.DRAFT
+        ).first()
+        if draft is None:
+            raise ValidationError("پیش‌نویس قابل حذف پیدا نشد.")
+        draft.delete()
+        return True
+
+    @classmethod
+    @transaction.atomic
+    def finalize_for_submit(cls, *, instance, step, sender, transition_execution, form_snapshot):
+        from django.utils import timezone
+        from .form_file_models import FormFile
+        from .file_lifecycle_services import FileLifecycleService
+        from .models import FileShareDraft, FileShareMessage, FileShareMessageEvent, Notification
+        from .notification_services import NotificationService
+
+        drafts = list(FileShareDraft.objects.select_for_update().filter(
+            workflow_instance=instance, workflow_step=step, sender=sender,
+            status=FileShareDraft.Status.DRAFT,
+        ).order_by("pk"))
+        created = []
+        for draft in drafts:
+            if not draft.form_file_id:
+                continue
+            form_file = FormFile.objects.select_for_update().select_related("field", "form_data").get(pk=draft.form_file_id)
+            if form_file.form_data.instance_id != instance.pk:
+                raise ValidationError("فایل پیش‌نویس دیگر متعلق به این فرآیند نیست.")
+            asset, _ = FileLifecycleService.get_or_create_asset(form_file)
+            sent_at = timezone.now()
+            snapshot = {
+                "form": form_snapshot or {},
+                "file": {
+                    "field_id": form_file.field_id,
+                    "field_code": form_file.field.code,
+                    "field_label": form_file.field.label,
+                    "row_id": form_file.row_id,
+                    "original_name": form_file.original_name,
+                    "file_size": form_file.file_size,
+                    "content_type": form_file.content_type,
+                },
+            }
+            message = FileShareMessage.objects.create(
+                asset=asset, sender=sender, recipient=draft.recipient,
+                workflow_instance=instance, workflow_step=step,
+                transition_execution=transition_execution,
+                interaction_type=draft.interaction_type,
+                status=FileShareMessage.Status.PENDING,
+                subject=draft.subject, body=draft.body, form_snapshot=snapshot,
+            )
+            FileShareMessageEvent.objects.create(
+                message=message, event_type=FileShareMessageEvent.EventType.CREATED,
+                actor=sender, details={"source": "submit"},
+            )
+            FileShareMessageEvent.objects.create(
+                message=message, event_type=FileShareMessageEvent.EventType.SENT,
+                actor=sender, details={"source": "submit"},
+            )
+            draft.form_file = None
+            draft.file_share_message = message
+            draft.status = FileShareDraft.Status.CONVERTED
+            draft.converted_at = sent_at
+            draft.save(update_fields=["form_file", "file_share_message", "status", "converted_at", "updated_at"])
+            NotificationService.create(
+                recipient=draft.recipient,
+                notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+                title="فایل جدیدی برای شما به اشتراک گذاشته شد",
+                message=draft.subject or f"درخواستی از فرآیند «{instance.workflow.name}»",
+                workflow_instance=instance, workflow_step=step,
+                transition_execution=transition_execution,
+                file_share_message=message,
+            )
+            created.append(message)
+        return created
+
+
+class FileShareDraftService:
+    """Manage pre-submit share intents and atomically finalize them on Submit."""
+
+    @staticmethod
+    def available_recipients(*, instance, sender):
+        from django.contrib.auth import get_user_model
+        from .models import WorkflowMembership
+        return get_user_model().objects.filter(
+            workflow_memberships__workflow_id=instance.workflow_id,
+            workflow_memberships__is_active=True,
+            is_active=True,
+        ).exclude(pk=sender.pk).distinct().order_by("username")
+
+    @classmethod
+    @transaction.atomic
+    def create_drafts(cls, *, instance, step, sender, form_file, recipient_ids,
+                      interaction_type=FileShareMessage.InteractionType.VIEW,
+                      subject="", body=""):
+        from .file_share_authorization import require_file_share_permission
+        from .models import WorkflowInstance, WorkflowMembership
+        from .permission_context import PermissionContext
+
+        locked_instance = WorkflowInstance.objects.select_for_update().select_related(
+            "workflow", "current_step"
+        ).get(pk=instance.pk)
+        if locked_instance.status != WorkflowInstance.Status.ACTIVE or locked_instance.current_step_id != step.pk:
+            raise ValidationError("مرحله فعلی فرآیند تغییر کرده یا فعال نیست.")
+        if not WorkflowMembership.objects.filter(
+            workflow_id=locked_instance.workflow_id, user=sender, is_active=True
+        ).exists():
+            raise ValidationError("فرستنده عضو فعال این فرآیند نیست.")
+        if form_file.form_data.instance_id != locked_instance.pk:
+            raise ValidationError("فایل متعلق به این فرآیند نیست.")
+        if form_file.field.section.form.workflow_id != locked_instance.workflow_id:
+            raise ValidationError("فیلد فایل متعلق به این فرآیند نیست.")
+        require_file_share_permission(user=sender, field=form_file.field)
+        permission_context = PermissionContext.build(
+            workflow=locked_instance.workflow,
+            form=locked_instance.workflow.form_definition,
+            step=step,
+            user=sender,
+        )
+        if not permission_context.field(form_file.field).can_view:
+            raise ValidationError("فرستنده اجازه مشاهده فایل مبدأ را ندارد.")
+        if form_file.field.repeatable_group_id and not permission_context.group(form_file.field.repeatable_group).can_view:
+            raise ValidationError("فرستنده اجازه مشاهده گروه حاوی فایل را ندارد.")
+        if interaction_type not in FileShareMessage.InteractionType.values:
+            raise ValidationError("نوع تعامل معتبر نیست.")
+        ids = list(dict.fromkeys(int(value) for value in recipient_ids))
+        if not ids:
+            raise ValidationError("حداقل یک گیرنده انتخاب کنید.")
+        if sender.pk in ids:
+            raise ValidationError("فرستنده نمی‌تواند گیرنده پیام خودش باشد.")
+        members = set(WorkflowMembership.objects.select_for_update().filter(
+            workflow_id=locked_instance.workflow_id,
+            user_id__in=ids,
+            is_active=True,
+            user__is_active=True,
+        ).values_list("user_id", flat=True))
+        if set(ids) != members:
+            raise ValidationError("همه گیرندگان باید عضو فعال همین فرآیند باشند.")
+        return [
+            FileShareDraft.objects.create(
+                sender=sender, recipient_id=rid, workflow_instance=locked_instance,
+                workflow_step=step, form_file=form_file, interaction_type=interaction_type,
+                subject=(subject or "")[:200], body=body or "",
+            ) for rid in ids
+        ]
+
+    @staticmethod
+    @transaction.atomic
+    def delete_draft(*, draft_id, sender):
+        draft = FileShareDraft.objects.select_for_update().filter(
+            pk=draft_id, sender=sender, status=FileShareDraft.Status.DRAFT
+        ).first()
+        if draft is None:
+            raise ValidationError("پیش‌نویس قابل حذف پیدا نشد.")
+        draft.delete()
+        return True
+
+    @classmethod
+    @transaction.atomic
+    def finalize_for_submit(cls, *, instance, step, sender, transition_execution, form_snapshot):
+        from django.utils import timezone
+        from .form_file_models import FormFile
+        from .file_lifecycle_services import FileLifecycleService
+        from .models import FileShareDraft, FileShareMessage, FileShareMessageEvent, Notification
+        from .notification_services import NotificationService
+
+        drafts = list(FileShareDraft.objects.select_for_update().filter(
+            workflow_instance=instance, workflow_step=step, sender=sender,
+            status=FileShareDraft.Status.DRAFT,
+        ).order_by("pk"))
+        created = []
+        for draft in drafts:
+            if not draft.form_file_id:
+                continue
+            form_file = FormFile.objects.select_for_update().select_related("field", "form_data").get(pk=draft.form_file_id)
+            if form_file.form_data.instance_id != instance.pk:
+                raise ValidationError("فایل پیش‌نویس دیگر متعلق به این فرآیند نیست.")
+            asset, _ = FileLifecycleService.get_or_create_asset(form_file)
+            sent_at = timezone.now()
+            snapshot = {
+                "form": form_snapshot or {},
+                "file": {
+                    "field_id": form_file.field_id,
+                    "field_code": form_file.field.code,
+                    "field_label": form_file.field.label,
+                    "row_id": form_file.row_id,
+                    "original_name": form_file.original_name,
+                    "file_size": form_file.file_size,
+                    "content_type": form_file.content_type,
+                },
+            }
+            message = FileShareMessage.objects.create(
+                asset=asset, sender=sender, recipient=draft.recipient,
+                workflow_instance=instance, workflow_step=step,
+                transition_execution=transition_execution,
+                interaction_type=draft.interaction_type,
+                status=FileShareMessage.Status.PENDING,
+                subject=draft.subject, body=draft.body, form_snapshot=snapshot,
+            )
+            FileShareMessageEvent.objects.create(
+                message=message, event_type=FileShareMessageEvent.EventType.CREATED,
+                actor=sender, details={"source": "submit"},
+            )
+            FileShareMessageEvent.objects.create(
+                message=message, event_type=FileShareMessageEvent.EventType.SENT,
+                actor=sender, details={"source": "submit"},
+            )
+            draft.form_file = None
+            draft.file_share_message = message
+            draft.status = FileShareDraft.Status.CONVERTED
+            draft.converted_at = sent_at
+            draft.save(update_fields=["form_file", "file_share_message", "status", "converted_at", "updated_at"])
+            NotificationService.create(
+                recipient=draft.recipient,
+                notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+                title="فایل جدیدی برای شما به اشتراک گذاشته شد",
+                message=draft.subject or f"درخواستی از فرآیند «{instance.workflow.name}»",
+                workflow_instance=instance, workflow_step=step,
+                transition_execution=transition_execution,
+                file_share_message=message,
+            )
+            created.append(message)
+        return created

@@ -520,6 +520,15 @@ class WorkflowExecutionService:
             ),
         )
 
+        from .file_share_services import FileShareDraftService
+        FileShareDraftService.finalize_for_submit(
+            instance=instance,
+            step=instance.current_step,
+            sender=user,
+            transition_execution=transition_execution,
+            form_snapshot=history_snapshot,
+        )
+
         if transition.requires_acceptance:
             acceptance_users = {
                 recipient.pk: recipient

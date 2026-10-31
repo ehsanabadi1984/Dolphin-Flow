@@ -20,6 +20,7 @@ class NotificationService:
         workflow_instance=None,
         workflow_step=None,
         transition_execution=None,
+        file_share_message=None,
     ):
         notification = Notification.objects.create(
             recipient=recipient,
@@ -29,6 +30,7 @@ class NotificationService:
             workflow_instance=workflow_instance,
             workflow_step=workflow_step,
             transition_execution=transition_execution,
+            file_share_message=file_share_message,
         )
 
         notification_payload = {

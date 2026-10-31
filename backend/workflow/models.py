@@ -1066,6 +1066,47 @@ class FileShareMessageEvent(models.Model):
         return f"{self.message_id} - {self.get_event_type_display()}"
 
 
+class FileShareDraft(models.Model):
+    """Sender-owned pre-submit intent; converted rows remain as audit history."""
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "پیش‌نویس"
+        CONVERTED = "CONVERTED", "تبدیل‌شده به پیام"
+
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="file_share_drafts_sent")
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="file_share_drafts_received")
+    workflow_instance = models.ForeignKey(WorkflowInstance, on_delete=models.PROTECT, related_name="file_share_drafts")
+    workflow_step = models.ForeignKey(WorkflowStep, on_delete=models.PROTECT, related_name="file_share_drafts")
+    form_file = models.ForeignKey("workflow.FormFile", on_delete=models.CASCADE, null=True, blank=True, related_name="share_drafts")
+    file_share_message = models.OneToOneField(FileShareMessage, on_delete=models.PROTECT, null=True, blank=True, related_name="source_draft")
+    interaction_type = models.CharField(max_length=20, choices=FileShareMessage.InteractionType.choices, default=FileShareMessage.InteractionType.VIEW)
+    subject = models.CharField(max_length=200, blank=True, default="")
+    body = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    converted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status="DRAFT", form_file__isnull=False, file_share_message__isnull=True, converted_at__isnull=True)
+                    | models.Q(status="CONVERTED", form_file__isnull=True, file_share_message__isnull=False, converted_at__isnull=False)
+                ),
+                name="fshare_draft_state_consistent",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.sender_id and self.recipient_id and self.sender_id == self.recipient_id:
+            raise ValidationError({"recipient": "فرستنده و گیرنده نمی‌توانند یک نفر باشند."})
+
+    def __str__(self):
+        return f"{self.sender} → {self.recipient} - {self.get_status_display()}"
+
+
 class FormDefinition(models.Model):
     workflow = models.OneToOneField(
         Workflow,
