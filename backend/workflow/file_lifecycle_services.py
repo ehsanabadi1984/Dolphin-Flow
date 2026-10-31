@@ -69,6 +69,16 @@ class FileLifecycleService:
         """Remove a FormFile row and schedule safe physical cleanup after commit."""
         if form_file is None or form_file.pk is None:
             return (0, {})
+        instance_id = (
+            FormFile.objects.filter(pk=form_file.pk)
+            .values_list("form_data__instance_id", flat=True)
+            .first()
+        )
+        if instance_id is None:
+            return (0, {})
+        # Submit and every file mutation use the same lock order:
+        # WorkflowInstance -> FormFile -> FileShareDraft/SharedFileAsset.
+        WorkflowInstance.objects.select_for_update().get(pk=instance_id)
         locked_file = (
             FormFile.objects.select_for_update()
             .select_related("field")
