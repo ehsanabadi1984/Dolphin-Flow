@@ -66,6 +66,42 @@ class FileShareDraftFinalizationTests(TestCase):
             subject="Please review",
         )
 
+    def test_create_drafts_creates_independent_recipient_requests(self):
+        drafts = FileShareDraftService.create_drafts(
+            instance=self.instance,
+            step=self.step,
+            sender=self.sender,
+            form_file=self.form_file,
+            recipient_ids=[self.recipient_one.pk, self.recipient_two.pk],
+            interaction_type=FileShareMessage.InteractionType.REVIEW,
+            subject="Please approve",
+            body="Review this attachment",
+        )
+        self.assertEqual(len(drafts), 2)
+        self.assertEqual(
+            {draft.recipient_id for draft in drafts},
+            {self.recipient_one.pk, self.recipient_two.pk},
+        )
+        self.assertEqual(
+            {draft.form_file_id for draft in drafts},
+            {self.form_file.pk},
+        )
+
+    def test_sender_can_update_and_delete_only_unconverted_drafts(self):
+        draft = self._draft(self.recipient_one)
+        updated = FileShareDraftService.update_draft(
+            draft_id=draft.pk,
+            sender=self.sender,
+            subject="Updated subject",
+            body="Updated body",
+            interaction_type=FileShareMessage.InteractionType.ACTION,
+        )
+        self.assertEqual(updated.subject, "Updated subject")
+        self.assertEqual(updated.body, "Updated body")
+        self.assertEqual(updated.interaction_type, FileShareMessage.InteractionType.ACTION)
+        FileShareDraftService.delete_draft(draft_id=draft.pk, sender=self.sender)
+        self.assertFalse(FileShareDraft.objects.filter(pk=draft.pk).exists())
+
     def test_submit_converts_one_draft_per_recipient_without_copying_file(self):
         first = self._draft(self.recipient_one)
         second = self._draft(self.recipient_two)
