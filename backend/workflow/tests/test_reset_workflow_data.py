@@ -332,7 +332,8 @@ class ResetWorkflowDataCommandTests(TestCase):
         )
 
         output = StringIO()
-        call_command("reset_workflow_data", "--yes", stdout=output)
+        with self.captureOnCommitCallbacks(execute=True):
+            call_command("reset_workflow_data", "--yes", stdout=output)
 
         self.assertFalse(FormFile.objects.filter(pk=form_file.pk).exists())
         self.assertEqual(FormData.objects.count(), 0)
