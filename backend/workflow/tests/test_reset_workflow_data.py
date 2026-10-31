@@ -302,6 +302,7 @@ class ResetWorkflowDataCommandTests(TestCase):
             label="Shared attachment",
             field_type=FormField.FieldType.FILE,
             allow_file_sharing=True,
+            order=2,
         )
         form_data = FormData.objects.get(instance=self.instance)
         form_file = FormFile.objects.create(

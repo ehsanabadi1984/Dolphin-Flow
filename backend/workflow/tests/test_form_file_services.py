@@ -644,7 +644,7 @@ class RepeatableFilePersistenceTests(TestCase):
             field=self.file_field,
             step=self.step,
             user=self.user,
-        ).update(can_view=False)
+        ).update(can_view=False, can_edit=False)
 
         self.client.force_login(self.user)
         response = self.client.get(
