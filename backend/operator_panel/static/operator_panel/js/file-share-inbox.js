@@ -34,24 +34,25 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         items.forEach((item) => {
-            const button = node("button", "df-share-inbox-item");
-            button.type = "button";
-            button.appendChild(node("strong", "", item.subject || item.file_name || "بدون موضوع"));
-            button.appendChild(node("span", "df-share-inbox-meta",
-                activeTab === "received" ? "فرستنده: " + item.sender :
-                activeTab === "sent" ? "گیرنده: " + item.recipient :
-                "گیرنده: " + item.recipient));
-            button.appendChild(node("span", "df-share-inbox-meta",
+            const card = node("article", "df-share-inbox-item");
+            card.appendChild(node("strong", "", item.subject || item.file_name || "بدون موضوع"));
+            card.appendChild(node("span", "df-share-inbox-meta",
+                activeTab === "received" ? "فرستنده: " + item.sender : "گیرنده: " + item.recipient));
+            card.appendChild(node("span", "df-share-inbox-meta",
                 "وضعیت: " + (item.status || "پیش‌نویس") + (item.file_name ? " · " + item.file_name : "")));
-            if (activeTab === "received") button.addEventListener("click", () => openMessage(item.url));
-            else if (activeTab === "sent") {
-                if (["PENDING", "READ", "RESPONDED"].includes(item.status)) {
-                    const recall = node("span", "df-share-inbox-meta", "برای لغو، این پیام را انتخاب کنید.");
-                    button.appendChild(recall);
-                    button.addEventListener("click", () => recallMessage(item.recall_url));
-                }
+            if (activeTab === "received") {
+                const open = node("button", "df-button df-button-secondary", "مشاهده پیام");
+                open.type = "button";
+                open.addEventListener("click", () => openMessage(item.url));
+                card.appendChild(open);
+            } else if (activeTab === "sent" &&
+                ["PENDING", "READ", "RESPONDED"].includes(item.status)) {
+                const recall = node("button", "df-button df-button-danger", "لغو پیام");
+                recall.type = "button";
+                recall.addEventListener("click", () => recallMessage(item.recall_url));
+                card.appendChild(recall);
             }
-            list.appendChild(button);
+            list.appendChild(card);
         });
     }
     async function request(url, options) {
