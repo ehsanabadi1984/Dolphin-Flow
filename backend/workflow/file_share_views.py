@@ -4,6 +4,7 @@ from pathlib import Path
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.http import FileResponse, JsonResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET, require_POST
@@ -28,12 +29,15 @@ def file_share_inbox(request):
         recipients = []
         if instance_id and instance_id.isdigit():
             instance = get_object_or_404(WorkflowInstance, pk=int(instance_id))
-            recipients = [{
-                "id": user.pk, "username": user.get_username(),
-                "label": str(user),
-            } for user in FileShareDraftService.available_recipients(
-                instance=instance, sender=request.user
-            )]
+            try:
+                recipients = [{
+                    "id": user.pk, "username": user.get_username(),
+                    "label": str(user),
+                } for user in FileShareDraftService.available_recipients(
+                    instance=instance, sender=request.user
+                )]
+            except ValidationError as exc:
+                return JsonResponse({"error": str(exc)}, status=403)
         return JsonResponse({
             "available_recipients": recipients,
             "sent_messages": [{
@@ -148,6 +152,7 @@ def file_share_message_download(request, message_id):
 
 @login_required
 @require_POST
+@transaction.atomic
 def file_share_message_respond(request, message_id):
     message = get_object_or_404(
         FileShareMessage, pk=message_id, recipient=request.user

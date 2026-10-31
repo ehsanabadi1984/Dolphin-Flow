@@ -42,6 +42,11 @@ class NotificationService:
             "workflow_instance_id": (
                 notification.workflow_instance_id
             ),
+            "file_share_message_id": notification.file_share_message_id,
+            "file_share_message_url": (
+                f"/operator/file-shares/messages/{notification.file_share_message_id}/"
+                if notification.file_share_message_id else None
+            ),
         }
 
         def publish_notification():
