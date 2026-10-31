@@ -1098,7 +1098,7 @@ class FileShareDraft(models.Model):
             ),
             models.CheckConstraint(
                 condition=~models.Q(sender=models.F("recipient")),
-                name="fshare_draft_sender_not_recipient",
+                name="fshare_draft_sender_diff",
             ),
         ]
 

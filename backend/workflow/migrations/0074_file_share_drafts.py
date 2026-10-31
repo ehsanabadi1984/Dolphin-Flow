@@ -3,18 +3,13 @@ from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
 
+
 class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ("workflow", "0073_shared_file_asset_cleanup_state"),
-        migrations.AddConstraint(
-            model_name="filesharedraft",
-            constraint=models.CheckConstraint(
-                condition=~models.Q(sender=models.F("recipient")),
-                name="fshare_draft_sender_not_recipient",
-            ),
-        ),
     ]
+
     operations = [
         migrations.CreateModel(
             name="FileShareDraft",
@@ -41,6 +36,13 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(
                 condition=(models.Q(status="DRAFT", form_file__isnull=False, file_share_message__isnull=True, converted_at__isnull=True) | models.Q(status="CONVERTED", form_file__isnull=True, file_share_message__isnull=False, converted_at__isnull=False)),
                 name="fshare_draft_state_consistent",
+            ),
+        ),
+        migrations.AddConstraint(
+            model_name="filesharedraft",
+            constraint=models.CheckConstraint(
+                condition=~models.Q(sender=models.F("recipient")),
+                name="fshare_draft_sender_diff",
             ),
         ),
     ]

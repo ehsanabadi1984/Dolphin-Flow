@@ -24,7 +24,18 @@ def file_share_inbox(request):
     if request.method == "GET":
         qs = FileShareMessage.objects.filter(recipient=request.user).select_related("sender", "asset")
         drafts = FileShareDraft.objects.filter(sender=request.user, status=FileShareDraft.Status.DRAFT).select_related("recipient", "form_file")
+        instance_id = request.GET.get("instance_id")
+        recipients = []
+        if instance_id and instance_id.isdigit():
+            instance = get_object_or_404(WorkflowInstance, pk=int(instance_id))
+            recipients = [{
+                "id": user.pk, "username": user.get_username(),
+                "label": str(user),
+            } for user in FileShareDraftService.available_recipients(
+                instance=instance, sender=request.user
+            )]
         return JsonResponse({
+            "available_recipients": recipients,
             "messages": [{
                 "id": m.pk, "sender": str(m.sender), "subject": m.subject,
                 "body": m.body, "status": m.status, "interaction_type": m.interaction_type,
