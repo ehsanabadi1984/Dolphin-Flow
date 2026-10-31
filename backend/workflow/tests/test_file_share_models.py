@@ -9,6 +9,7 @@ from django.utils import timezone
 from accounts.models import User
 from workflow.form_file_models import FormFile, SharedFileAsset
 from workflow.file_lifecycle_services import FileLifecycleService
+from workflow.file_share_services import FileShareMessageService
 from workflow.models import (
     FileShareMessage, FileShareMessageEvent, FormData, FormDefinition,
     FormField, FormSection, Workflow, WorkflowInstance, WorkflowStep,
@@ -177,6 +178,59 @@ class FileShareModelTests(TestCase):
 
         asset.refresh_from_db()
         self.assertIsNotNone(asset.storage_deleted_at)
+
+    def test_message_service_records_each_valid_status_transition(self):
+        message = self.make_message(self.recipient_one)
+
+        message, read_event = FileShareMessageService.transition_status(
+            message=message,
+            to_status=FileShareMessage.Status.READ,
+            actor=self.recipient_one,
+            details={"source": "inbox"},
+        )
+        self.assertEqual(message.status, FileShareMessage.Status.READ)
+        self.assertIsNotNone(message.read_at)
+        self.assertEqual(read_event.event_type, FileShareMessageEvent.EventType.READ)
+
+        message, response_event = FileShareMessageService.transition_status(
+            message=message,
+            to_status=FileShareMessage.Status.RESPONDED,
+            actor=self.recipient_one,
+        )
+        self.assertEqual(message.status, FileShareMessage.Status.RESPONDED)
+        self.assertIsNotNone(message.responded_at)
+        self.assertEqual(response_event.event_type, FileShareMessageEvent.EventType.RESPONDED)
+
+        message, completed_event = FileShareMessageService.transition_status(
+            message=message,
+            to_status=FileShareMessage.Status.COMPLETED,
+            actor=self.recipient_one,
+        )
+        self.assertEqual(message.status, FileShareMessage.Status.COMPLETED)
+        self.assertIsNotNone(message.completed_at)
+        self.assertEqual(completed_event.event_type, FileShareMessageEvent.EventType.COMPLETED)
+        self.assertEqual(message.events.count(), 3)
+
+    def test_message_service_rejects_skipped_or_terminal_transitions(self):
+        message = self.make_message(self.recipient_one)
+        with self.assertRaises(ValidationError):
+            FileShareMessageService.transition_status(
+                message=message,
+                to_status=FileShareMessage.Status.COMPLETED,
+                actor=self.recipient_one,
+            )
+
+        FileShareMessageService.transition_status(
+            message=message,
+            to_status=FileShareMessage.Status.CANCELLED,
+            actor=self.sender,
+        )
+        with self.assertRaises(ValidationError):
+            FileShareMessageService.transition_status(
+                message=message,
+                to_status=FileShareMessage.Status.READ,
+                actor=self.recipient_one,
+            )
 
     def test_cancelled_message_and_its_events_are_preserved(self):
         message = self.make_message(self.recipient_one)
