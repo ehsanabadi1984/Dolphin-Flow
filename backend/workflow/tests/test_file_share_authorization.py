@@ -61,6 +61,7 @@ class FileShareAuthorizationTests(TestCase):
             code=f"file_share_field_{suffix}",
             label="Attachment",
             field_type=field_type,
+            order=suffix,
             allow_file_sharing=allow_file_sharing,
         )
 
