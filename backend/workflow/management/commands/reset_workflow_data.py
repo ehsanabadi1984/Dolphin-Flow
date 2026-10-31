@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from workflow.form_file_models import FormFile
+from workflow.file_lifecycle_services import FileLifecycleService
 from workflow.models import (
     FormData,
     InstanceDevice,
@@ -92,7 +93,8 @@ class Command(BaseCommand):
             "  form data, repeatable rows/values, instance-device links"
         )
         self.stdout.write(
-            "  form-file records and physical uploaded-file sidecars"
+            "  form-file records; physical files are removed only when no active "
+            "share message still references them"
         )
         self.stdout.write("  notifications")
 
@@ -111,20 +113,9 @@ class Command(BaseCommand):
         FormData.objects.all().delete()
 
     def _delete_form_files(self):
-        files = list(
-            FormFile.objects.exclude(file="").values_list("file", flat=True)
-        )
-        FormFile.objects.all().delete()
-
-        for file_name in files:
-            if not file_name:
-                continue
-            storage = FormFile._meta.get_field("file").storage
-            transaction.on_commit(
-                lambda file_name=file_name, storage=storage: storage.delete(
-                    file_name
-                )
-            )
+        files = list(FormFile.objects.exclude(file=""))
+        for form_file in files:
+            FileLifecycleService.delete_form_file(form_file)
 
     def _delete_repeatable_rows(self):
         # parent_row is PROTECT, so children have to be removed first.

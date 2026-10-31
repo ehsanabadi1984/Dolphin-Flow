@@ -3,9 +3,12 @@ from io import StringIO
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.files.storage import default_storage
 from django.test import TestCase
 
-from workflow.form_file_models import FormFile
+from workflow.form_file_models import FormFile, SharedFileAsset
+from workflow.file_lifecycle_services import FileLifecycleService
 from workflow.history_models import HistoryConfiguration, HistoryField
 from workflow.models import (
     BusinessCalendar,
@@ -15,6 +18,7 @@ from workflow.models import (
     DeviceType,
     FieldAccess,
     FormData,
+    FileShareMessage,
     FormDefinition,
     FormField,
     FormRepeatableGroup,
@@ -289,6 +293,52 @@ class ResetWorkflowDataCommandTests(TestCase):
 
         self.assertEqual(before, after)
         self.assertIn("DRY RUN", output.getvalue())
+
+    def test_reset_preserves_file_for_active_share_message(self):
+        file_field = FormField.objects.create(
+            section=self.section,
+            name="Shared attachment",
+            code="SHARED-ATTACHMENT",
+            label="Shared attachment",
+            field_type=FormField.FieldType.FILE,
+            allow_file_sharing=True,
+        )
+        form_data = FormData.objects.get(instance=self.instance)
+        form_file = FormFile.objects.create(
+            form_data=form_data,
+            field=file_field,
+            file=SimpleUploadedFile(
+                "reset-shared.txt",
+                b"shared-content",
+                content_type="text/plain",
+            ),
+            original_name="reset-shared.txt",
+            file_size=len(b"shared-content"),
+            content_type="text/plain",
+            uploaded_by=self.user,
+        )
+        file_name = form_file.file.name
+        asset, _ = FileLifecycleService.get_or_create_asset(form_file)
+        recipient = get_user_model().objects.create_user(
+            username="reset-share-recipient",
+            password="password",
+        )
+        message = FileShareMessage.objects.create(
+            asset=asset,
+            sender=self.user,
+            recipient=recipient,
+            workflow_instance=self.instance,
+            workflow_step=self.step1,
+        )
+
+        output = StringIO()
+        call_command("reset_workflow_data", "--yes", stdout=output)
+
+        self.assertFalse(FormFile.objects.filter(pk=form_file.pk).exists())
+        self.assertEqual(FormData.objects.count(), 0)
+        self.assertTrue(default_storage.exists(file_name))
+        self.assertTrue(FileShareMessage.objects.filter(pk=message.pk).exists())
+        self.assertEqual(SharedFileAsset.objects.get(pk=asset.pk).storage_name, file_name)
 
     def test_reset_deletes_runtime_data_but_preserves_configuration_and_history(self):
         output = StringIO()
