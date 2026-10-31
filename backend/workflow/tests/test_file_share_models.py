@@ -112,10 +112,13 @@ class FileShareModelTests(TestCase):
                 )
 
     def test_cancelled_message_and_its_events_are_preserved(self):
-        message = self.make_message(
-            self.recipient_one, status=FileShareMessage.Status.CANCELLED,
-            cancelled_at=timezone.now(),
+        message = self.make_message(self.recipient_one)
+        cancelled_at = timezone.now()
+        FileShareMessage.objects.filter(pk=message.pk).update(
+            status=FileShareMessage.Status.CANCELLED,
+            cancelled_at=cancelled_at,
         )
+        message.refresh_from_db()
         event = FileShareMessageEvent.objects.create(
             message=message, event_type=FileShareMessageEvent.EventType.CANCELLED,
             actor=self.sender, details={"reason": "sender_cancelled"},
