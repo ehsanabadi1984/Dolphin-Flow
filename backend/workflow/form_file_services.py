@@ -242,13 +242,11 @@ def _track_storage_file(files, *, storage, file_name):
 
 
 def _schedule_storage_delete(*, storage, file_name):
-    if file_name:
-        transaction.on_commit(
-            lambda storage=storage, file_name=file_name: _delete_storage_file(
-                storage=storage,
-                file_name=file_name,
-            )
-        )
+    FileLifecycleService.schedule_storage_delete(
+        storage=storage,
+        file_name=file_name,
+        storage_backend="default",
+    )
 
 
 def _replace_file(*, form_data, field, row_id, upload, user, storage_files=None):
