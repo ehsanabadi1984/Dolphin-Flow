@@ -33,6 +33,9 @@
         <div class="df-access-layout">
             <aside class="df-access-nav"><h3>مراحل فرآیند</h3>{% for step in steps %}<a class="df-access-step {% if selected_step_id == step.pk %}active{% endif %}" href="?subject_type={{ subject_type }}&amp;subject={{ subject }}&amp;step={{ step.pk }}">{{ step.name }}<small>مرحله {{ forloop.counter }}</small></a>{% empty %}<div class="df-access-empty">مرحله فعالی وجود ندارد.</div>{% endfor %}</aside>
             <main class="df-access-panel">
+                {% if subject_type == "user" %}
+                <div class="df-access-section"><div class="df-access-section-head"><div><h2>مجوز عمومی سیستم</h2><p>مستقل از گردش‌کار و مرحله انتخاب‌شده</p></div></div><table class="df-access-table"><tbody><tr><td>Share Files — اجازه عمومی اشتراک‌گذاری فایل</td><td class="center"><input class="df-access-check" type="checkbox" name="system_share_files" value="1" {% if global_share_files_permission %}checked{% endif %}></td></tr></tbody></table></div>
+                {% endif %}
                 <div class="df-access-section">
                     <div class="df-access-section-head"><div><h2>دسترسی Workflow</h2><p>این دسترسی‌ها مستقل از Step انتخاب‌شده هستند.</p></div></div>
                     <table class="df-access-table"><thead><tr><th>Action</th><th class="center">دسترسی</th></tr></thead><tbody>{% for row in matrix.workflow_permission_rows %}<tr><td>{{ row.label }}</td><td class="center"><input class="df-access-check" type="checkbox" name="workflow_{{ row.value }}" value="1" {% if row.enabled %}checked{% endif %}></td></tr>{% endfor %}</tbody></table>
@@ -40,6 +43,7 @@
 
                 <div class="df-access-section">
                     <div class="df-access-section-head"><div><h2>دسترسی مرحله: {{ selected_step.name }}</h2><p>مجوزهای مستقیم مربوط به همین Step.</p></div></div>
+                    {% if subject_type == "user" %}<table class="df-access-table"><tbody><tr><td>File Sharing — اجازه اشتراک‌گذاری فایل در این مرحله</td><td class="center"><input class="df-access-check" type="checkbox" name="step_share_files" value="1" {% if matrix.step_share_files_permission %}checked{% endif %}></td></tr></tbody></table>{% endif %}
                     <table class="df-access-table"><thead><tr><th>Action</th><th class="center">دسترسی</th></tr></thead><tbody>{% for row in matrix.step_permission_rows %}<tr><td>{{ row.label }}</td><td class="center"><input class="df-access-check" type="checkbox" name="step_{{ row.value }}" value="1" {% if row.enabled %}checked{% endif %}></td></tr>{% endfor %}</tbody></table>
                 </div>
 

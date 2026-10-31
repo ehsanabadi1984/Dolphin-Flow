@@ -7,6 +7,7 @@ from workflow.admin import RepeatableFieldInline
 from workflow.file_share_authorization import (
     can_share_file_field,
     has_direct_share_files_permission,
+    has_step_share_files_permission,
     require_file_share_permission,
 )
 from workflow.form_workspace import FormFieldWorkspaceForm
@@ -16,6 +17,8 @@ from workflow.models import (
     FormRepeatableGroup,
     FormSection,
     Workflow,
+    WorkflowPermission,
+    WorkflowStep,
 )
 
 
@@ -34,6 +37,7 @@ class FileShareAuthorizationTests(TestCase):
             name="File Sharing Workflow",
             code="FILE_SHARING",
         )
+        self.step = WorkflowStep.objects.create(workflow=self.workflow, name="Share Step", order=1)
         self.form = FormDefinition.objects.create(
             workflow=self.workflow,
             name="File Sharing Form",
@@ -116,10 +120,55 @@ class FileShareAuthorizationTests(TestCase):
         self.assertEqual(field.repeatable_group_id, self.repeatable_group.pk)
         self.assertTrue(can_share_file_field(user=self.user, field=field))
 
+    def test_step_permission_is_required_in_addition_to_global_permission(self):
+        self.user.user_permissions.add(self.permission)
+        self.assertFalse(
+            has_step_share_files_permission(
+                user=self.user, workflow=self.workflow, step=self.step
+            )
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=WorkflowPermission.Action.SHARE_FILES,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        self.assertTrue(
+            has_step_share_files_permission(
+                user=self.user, workflow=self.workflow, step=self.step
+            )
+        )
+        other_step = WorkflowStep.objects.create(
+            workflow=self.workflow, name="Other Step", order=2
+        )
+        self.assertFalse(
+            has_step_share_files_permission(
+                user=self.user, workflow=self.workflow, step=other_step
+            )
+        )
+
+    def test_step_deny_overrides_step_allow(self):
+        WorkflowPermission.objects.create(
+            workflow=self.workflow, step=self.step, user=self.user,
+            action=WorkflowPermission.Action.SHARE_FILES,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow, step=self.step, user=self.user,
+            action=WorkflowPermission.Action.SHARE_FILES,
+            effect=WorkflowPermission.Effect.DENY,
+        )
+        self.assertFalse(
+            has_step_share_files_permission(
+                user=self.user, workflow=self.workflow, step=self.step
+            )
+        )
+
     def test_permission_is_required_by_guard(self):
         field = self.make_field()
         with self.assertRaises(PermissionDenied):
-            require_file_share_permission(user=self.user, field=field)
+            require_file_share_permission(user=self.user, field=field, workflow=self.workflow, step=self.step)
 
     def test_workspace_hides_and_disables_option_for_non_file_fields(self):
         text_field = self.make_field(

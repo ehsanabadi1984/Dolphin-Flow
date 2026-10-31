@@ -717,6 +717,7 @@ class WorkflowPermission(models.Model):
         TRANSITION = "TRANSITION", "تغییر مرحله"
         MANAGE = "MANAGE", "مدیریت"
         STEP_ACTION = "STEP_ACTION", "عملیات مرحله"
+        SHARE_FILES = "SHARE_FILES", "اشتراک‌گذاری فایل"
 
     class Effect(models.TextChoices):
         ALLOW = "ALLOW", "مجاز"

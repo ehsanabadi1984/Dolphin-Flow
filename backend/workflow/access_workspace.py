@@ -1,10 +1,12 @@
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.contrib.auth.models import Permission
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .access_matrix import STEP_ACTION_SUBTYPES, STEP_ACTIONS, WORKFLOW_ACTIONS, save_access_matrix
+from .file_share_authorization import has_direct_share_files_permission
 from .models import (
     FieldAccess,
     FormField,
@@ -219,7 +221,13 @@ def _matrix_context(workflow, subject_type, subject, step, role=None):
     field_rules = _effective_field_access(FieldAccess.objects.filter(field__in=fields, step=step), subject_type, subject, role)
     group_rules = _effective_group_access(RepeatableGroupAccess.objects.filter(group__in=groups, step=step), subject_type, subject, role)
 
+    step_share_files_permission = False
+    if subject_type == "user":
+        direct_rules = WorkflowPermission.objects.filter(workflow=workflow, step=step, user_id=subject, action=WorkflowPermission.Action.SHARE_FILES, action_code__isnull=True, transition__isnull=True)
+        step_share_files_permission = not direct_rules.filter(effect=WorkflowPermission.Effect.DENY).exists() and direct_rules.filter(effect=WorkflowPermission.Effect.ALLOW).exists()
+
     return {
+        "step_share_files_permission": step_share_files_permission,
         "workflow_permission_rows": [{"value": action, "label": label, "enabled": workflow_permissions[action]} for action, label in WORKFLOW_ACTIONS],
         "step_permission_rows": [{"value": action, "label": label, "enabled": step_permissions[action]} for action, label in STEP_ACTIONS],
         "step_action_enabled": acceptance_enabled,
@@ -257,6 +265,13 @@ def access_security_workspace(request, workflow_id):
         else:
             try:
                 save_access_matrix(workflow=workflow, subject_type=post_subject_type, subject_value=post_subject, step=step, post_data=request.POST)
+                if post_subject_type == "user":
+                    target_user = memberships.get(user_id=post_subject).user
+                    permission = Permission.objects.get(content_type__app_label=target_user._meta.app_label, content_type__model=target_user._meta.model_name, codename="share_files")
+                    if request.POST.get("system_share_files") == "1":
+                        target_user.user_permissions.add(permission)
+                    else:
+                        target_user.user_permissions.remove(permission)
                 messages.success(request, "دسترسی‌ها با موفقیت ذخیره شدند.")
             except (TypeError, ValueError):
                 messages.error(request, "اطلاعات دسترسی معتبر نیست.")
@@ -274,6 +289,7 @@ def access_security_workspace(request, workflow_id):
         "subject_type": subject_type,
         "subject": subject,
         "selected_user": selected_user,
+        "global_share_files_permission": has_direct_share_files_permission(selected_user) if selected_user else False,
         "role_choices": WorkflowMembership.Role.choices,
         "workflow_actions": WORKFLOW_ACTIONS,
         "step_actions": STEP_ACTIONS,

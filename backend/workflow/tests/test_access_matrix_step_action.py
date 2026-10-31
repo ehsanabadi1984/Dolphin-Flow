@@ -116,6 +116,39 @@ class AcceptanceAccessMatrixTests(TestCase):
             ).exists()
         )
 
+    def test_file_share_permission_is_saved_for_user_and_selected_step(self):
+        save_access_matrix(
+            workflow=self.workflow,
+            subject_type="user",
+            subject_value=self.user.pk,
+            step=self.destination,
+            post_data={"step_share_files": "1"},
+        )
+        self.assertTrue(
+            WorkflowPermission.objects.filter(
+                workflow=self.workflow,
+                user=self.user,
+                step=self.destination,
+                action=WorkflowPermission.Action.SHARE_FILES,
+                effect=WorkflowPermission.Effect.ALLOW,
+            ).exists()
+        )
+        save_access_matrix(
+            workflow=self.workflow,
+            subject_type="user",
+            subject_value=self.user.pk,
+            step=self.source,
+            post_data={},
+        )
+        self.assertFalse(
+            WorkflowPermission.objects.filter(
+                workflow=self.workflow,
+                user=self.user,
+                step=self.destination,
+                action=WorkflowPermission.Action.SHARE_FILES,
+            ).exists()
+        )
+
     def test_workspace_reads_acceptance_action_permissions(self):
         WorkflowPermission.objects.create(
             workflow=self.workflow,

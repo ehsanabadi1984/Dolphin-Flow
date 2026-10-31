@@ -154,6 +154,8 @@ def save_access_matrix(*, workflow, subject_type, subject_value, step, post_data
     for action, _label in STEP_ACTIONS:
         _set_permission(workflow, subject_type, subject_value, action=action, step=step, enabled=post_data.get(f"step_{action}") == "1")
 
+    _set_permission(workflow, subject_type, subject_value, action=WorkflowPermission.Action.SHARE_FILES, step=step, enabled=(subject_type == "user" and post_data.get("step_share_files") == "1"))
+
     acceptance_enabled = WorkflowTransition.objects.filter(
         workflow=workflow,
         to_step=step,

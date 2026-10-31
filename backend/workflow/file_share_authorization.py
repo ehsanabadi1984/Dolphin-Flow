@@ -1,6 +1,6 @@
 from django.core.exceptions import PermissionDenied
 
-from .models import FormField
+from .models import FormField, WorkflowPermission
 
 
 SHARE_FILES_PERMISSION = "share_files"
@@ -31,6 +31,16 @@ def has_direct_share_files_permission(user):
     ).exists()
 
 
+def has_step_share_files_permission(*, user, workflow, step):
+    if not user or not getattr(user, "is_authenticated", False) or not getattr(user, "is_active", False):
+        return False
+    if not workflow or not step or step.workflow_id != workflow.pk:
+        return False
+    rules = WorkflowPermission.objects.filter(workflow=workflow, step=step, user=user, action=WorkflowPermission.Action.SHARE_FILES, action_code__isnull=True, transition__isnull=True)
+    if rules.filter(effect=WorkflowPermission.Effect.DENY).exists():
+        return False
+    return rules.filter(effect=WorkflowPermission.Effect.ALLOW).exists()
+
 def can_share_file_field(*, user, field):
     """Check the phase-one permission and field-level sharing switch."""
     return bool(
@@ -41,9 +51,9 @@ def can_share_file_field(*, user, field):
     )
 
 
-def require_file_share_permission(*, user, field):
-    """Raise PermissionDenied unless the user may share this file field."""
-    if not can_share_file_field(user=user, field=field):
+def require_file_share_permission(*, user, field, workflow, step):
+    """Require global, step-level, and field-level file-sharing permission."""
+    if not (has_direct_share_files_permission(user) and has_step_share_files_permission(user=user, workflow=workflow, step=step) and field and field.field_type == FormField.FieldType.FILE and field.allow_file_sharing):
         raise PermissionDenied(
             "کاربر اجازه اشتراک‌گذاری فایل این فیلد را ندارد."
         )

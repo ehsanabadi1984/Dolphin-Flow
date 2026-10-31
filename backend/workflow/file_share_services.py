@@ -161,7 +161,7 @@ class FileShareDraftService:
             raise ValidationError("فایل متعلق به این فرآیند نیست.")
         if form_file.field.section.form.workflow_id != locked_instance.workflow_id:
             raise ValidationError("فیلد فایل متعلق به این فرآیند نیست.")
-        require_file_share_permission(user=sender, field=form_file.field)
+        require_file_share_permission(user=sender, field=form_file.field, workflow=locked_instance.workflow, step=step)
         permission_context = PermissionContext.build(
             workflow=locked_instance.workflow,
             form=locked_instance.workflow.form_definition,
@@ -273,7 +273,7 @@ class FileShareDraftService:
                 is_active=True, user__is_active=True,
             ).exists():
                 raise ValidationError("گیرنده دیگر عضو فعال این فرآیند نیست.")
-            require_file_share_permission(user=sender, field=form_file.field)
+            require_file_share_permission(user=sender, field=form_file.field, workflow=locked_instance.workflow, step=step)
             permission_context = PermissionContext.build(
                 workflow=instance.workflow, form=instance.workflow.form_definition,
                 step=step, user=sender,
