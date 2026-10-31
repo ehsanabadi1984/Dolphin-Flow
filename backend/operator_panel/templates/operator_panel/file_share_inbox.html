@@ -1,0 +1,26 @@
+{% extends "operator_panel/base.html" %}
+{% block content %}
+<section class="df-page">
+  <div class="df-page-heading">
+    <h1>صندوق پیام‌ها</h1>
+    <p>پیام‌ها و درخواست‌های مرتبط با فایل‌های به‌اشتراک‌گذاشته‌شده را مدیریت کنید.</p>
+  </div>
+  <div class="df-share-inbox" id="df-share-inbox"
+       data-api-url="{{ file_share_api_url }}">
+    <section class="df-share-inbox-list">
+      <div class="df-share-inbox-tabs" role="tablist" aria-label="دسته‌بندی پیام‌ها">
+        <button type="button" class="df-share-inbox-tab" data-share-tab="received" aria-pressed="true">دریافتی</button>
+        <button type="button" class="df-share-inbox-tab" data-share-tab="sent" aria-pressed="false">ارسالی</button>
+        <button type="button" class="df-share-inbox-tab" data-share-tab="drafts" aria-pressed="false">پیش‌نویس‌ها</button>
+      </div>
+      <div class="df-share-inbox-items" id="df-share-inbox-items">
+        <div class="df-share-inbox-empty">در حال دریافت پیام‌ها...</div>
+      </div>
+    </section>
+    <section class="df-share-inbox-detail" id="df-share-inbox-detail" aria-live="polite">
+      <h2>جزئیات پیام</h2>
+      <p class="df-share-inbox-empty">برای مشاهده جزئیات، یک پیام را انتخاب کنید.</p>
+    </section>
+  </div>
+</section>
+{% endblock %}

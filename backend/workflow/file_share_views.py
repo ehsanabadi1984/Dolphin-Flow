@@ -6,11 +6,21 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.http import FileResponse, JsonResponse, Http404
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET, require_POST
 from .file_share_services import FileShareDraftService, FileShareMessageService
 from .models import FileShareDraft, FileShareMessage, FileShareMessageEvent, WorkflowInstance, WorkflowStep
 from .form_file_models import FormFile
+
+
+@login_required
+@require_GET
+def file_share_inbox_page(request):
+    return render(request, "operator_panel/file_share_inbox.html", {
+        "page_title": "صندوق پیام‌ها",
+        "page_breadcrumb": "صندوق پیام‌ها",
+        "file_share_api_url": "/operator/file-shares/",
+    })
 
 
 def _payload(request):

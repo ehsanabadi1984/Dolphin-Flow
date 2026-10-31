@@ -25,7 +25,7 @@ from .history_views import device_history, workflow_history
 from .history_list_views import history_list
 from workflow.form_print_views import form_print_preview
 from workflow.file_share_views import (
-    file_share_inbox, file_share_draft_delete, file_share_draft_update, file_share_message_detail,
+    file_share_inbox, file_share_inbox_page, file_share_draft_delete, file_share_draft_update, file_share_message_detail,
     file_share_message_download, file_share_message_recall,
     file_share_message_respond, file_share_message_complete,
 )
@@ -71,6 +71,7 @@ urlpatterns = [
     path("workflow-file/<int:file_id>/download/", open_form_file, name="download_form_file"),
     path("pending-acceptances/<int:transition_execution_id>/files/<int:file_id>/download/", open_pending_acceptance_file, name="download_pending_acceptance_file"),
     path("workflow-file/<int:file_id>/delete/", delete_form_file, name="delete_form_file"),
+    path("file-shares/inbox/", file_share_inbox_page, name="file_share_inbox_page"),
     path("file-shares/", file_share_inbox, name="file_share_inbox"),
     path("file-shares/drafts/<int:draft_id>/update/", file_share_draft_update, name="file_share_draft_update"),
     path("file-shares/drafts/<int:draft_id>/delete/", file_share_draft_delete, name="file_share_draft_delete"),

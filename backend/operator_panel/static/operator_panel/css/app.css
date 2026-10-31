@@ -3028,3 +3028,23 @@ body.df-modal-open {
 .df-share-recipient input { accent-color: var(--accent); }
 .df-share-feedback { min-height: 20px; color: var(--info); font-size: 12px; }
 .df-share-actions { display: flex; gap: 8px; justify-content: flex-start; margin-top: 4px; }
+
+
+/* Internal file-share inbox */
+.df-share-inbox { display:grid; grid-template-columns:minmax(280px, 38%) minmax(0, 1fr); gap:16px; align-items:start; }
+.df-share-inbox-list,.df-share-inbox-detail { min-width:0; padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.df-share-inbox-tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.df-share-inbox-tab { border:1px solid var(--border); border-radius:8px; padding:7px 12px; background:var(--surface-2); color:var(--text); cursor:pointer; font:inherit; font-size:12px; }
+.df-share-inbox-tab[aria-pressed="true"] { border-color:var(--accent); background:var(--accent-soft); }
+.df-share-inbox-items { display:flex; flex-direction:column; gap:8px; max-height:70vh; overflow:auto; }
+.df-share-inbox-item { display:flex; flex-direction:column; gap:5px; width:100%; padding:11px; border:1px solid var(--border); border-radius:9px; background:var(--surface-2); color:var(--text); text-align:right; cursor:pointer; font:inherit; }
+.df-share-inbox-item:hover { border-color:var(--border-strong); background:var(--surface-hover); }
+.df-share-inbox-item strong { font-size:13px; }
+.df-share-inbox-meta,.df-share-inbox-empty { color:var(--text-secondary); font-size:11px; }
+.df-share-inbox-detail h2 { margin-top:0; font-size:18px; }
+.df-share-inbox-detail p { white-space:pre-wrap; overflow-wrap:anywhere; }
+.df-share-inbox-file { display:inline-flex; margin:8px 0; padding:9px 12px; border:1px solid var(--border); border-radius:8px; color:var(--text); }
+.df-share-inbox-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.df-share-inbox-response { display:block; width:100%; min-height:90px; margin-top:10px; padding:10px; border:1px solid var(--border-strong); border-radius:8px; background:var(--surface-input); color:var(--text); font:inherit; }
+.df-share-inbox-snapshot { max-height:260px; overflow:auto; padding:10px; border-radius:8px; background:var(--surface-2); direction:ltr; text-align:left; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
+@media(max-width:800px) { .df-share-inbox { grid-template-columns:1fr; } .df-share-inbox-items { max-height:40vh; } }
