@@ -127,11 +127,51 @@ class FileLifecycleService:
             ).exists():
                 return False
 
+            # Mark the asset as unavailable while holding its row lock. Any
+            # concurrent attempt to create/reactivate a message must acquire
+            # the same lock and will be rejected once this flag is visible.
+            if asset_ids:
+                SharedFileAsset.objects.filter(pk__in=asset_ids).update(
+                    cleanup_pending=True,
+                )
+
             should_delete = True
 
         # This method is invoked by schedule_storage_delete's on_commit
         # callback, so the originating transaction has already committed.
-        # Delete only after the reference-check transaction above has exited.
+        # The durable cleanup_pending marker closes the gap between releasing
+        # the row lock and deleting bytes from storage.
         if should_delete:
             storage.delete(file_name)
+            if asset_ids:
+                from django.utils import timezone
+
+                SharedFileAsset.objects.filter(
+                    pk__in=asset_ids,
+                    cleanup_pending=True,
+                    storage_deleted_at__isnull=True,
+                ).update(storage_deleted_at=timezone.now())
         return should_delete
+
+    @classmethod
+    def retry_pending_asset_cleanups(cls, *, limit=100):
+        """Retry storage deletions that previously failed after DB commit."""
+        pending = list(
+            SharedFileAsset.objects.filter(
+                cleanup_pending=True,
+                storage_deleted_at__isnull=True,
+            ).order_by("pk").values_list(
+                "storage_backend", "storage_name"
+            )[:limit]
+        )
+        storage = FormFile._meta.get_field("file").storage
+        results = []
+        for storage_backend, storage_name in pending:
+            results.append(
+                cls._delete_if_unreferenced(
+                    storage=storage,
+                    file_name=storage_name,
+                    storage_backend=storage_backend,
+                )
+            )
+        return results

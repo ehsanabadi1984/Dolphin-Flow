@@ -2,7 +2,8 @@ import os
 import uuid
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
+from django.core.exceptions import ValidationError
 
 
 def workflow_form_file_upload_to(instance, filename):
@@ -83,6 +84,8 @@ class SharedFileAsset(models.Model):
     file_size = models.PositiveBigIntegerField(default=0)
     content_type = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
+    cleanup_pending = models.BooleanField(default=False, db_index=True)
+    storage_deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-pk"]
@@ -91,10 +94,11 @@ class SharedFileAsset(models.Model):
         ]
 
     @classmethod
+    @transaction.atomic
     def get_or_create_for_form_file(cls, form_file):
         if not form_file.file or not form_file.file.name:
             raise ValueError("FormFile must reference an existing stored file.")
-        return cls.objects.get_or_create(
+        asset, created = cls.objects.get_or_create(
             storage_backend="default",
             storage_name=form_file.file.name,
             defaults={
@@ -104,6 +108,12 @@ class SharedFileAsset(models.Model):
                 "content_type": form_file.content_type,
             },
         )
+        asset = cls.objects.select_for_update().get(pk=asset.pk)
+        if asset.cleanup_pending or asset.storage_deleted_at is not None:
+            raise ValidationError(
+                "این فایل در حال پاک‌سازی است و دیگر قابل اشتراک‌گذاری نیست."
+            )
+        return asset, created
 
     def __str__(self):
         return self.original_name or self.storage_name.rsplit("/", 1)[-1]

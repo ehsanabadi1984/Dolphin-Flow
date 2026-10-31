@@ -1003,7 +1003,17 @@ class FileShareMessage(models.Model):
                 previous_status = locked_message.status
 
             if self.asset_id:
-                SharedFileAsset.objects.select_for_update().get(pk=self.asset_id)
+                locked_asset = SharedFileAsset.objects.select_for_update().get(pk=self.asset_id)
+                if (
+                    self.status in ACTIVE_SHARE_STATUSES
+                    and (
+                        locked_asset.cleanup_pending
+                        or locked_asset.storage_deleted_at is not None
+                    )
+                ):
+                    raise ValidationError({
+                        "asset": "فایل در حال پاک‌سازی است و امکان فعال‌کردن پیام آن وجود ندارد."
+                    })
 
             # A terminal message must never become active again: its storage
             # dependency may already have been released and the file deleted.
