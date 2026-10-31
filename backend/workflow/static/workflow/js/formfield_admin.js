@@ -35,6 +35,18 @@ document.addEventListener("DOMContentLoaded", () => {
         setVisible(defaultValue, fieldType.value === "TEXT" || fieldType.value === "TEXTAREA");
     }
 
+    function updateFileSharingVisibility() {
+        // Covers the main FormField form and all Repeatable inline rows.
+        document.querySelectorAll("#id_field_type, [id$='-field_type']").forEach((type) => {
+            const prefix = type.id.slice(0, -"field_type".length);
+            const sharing = document.getElementById(prefix + "allow_file_sharing");
+            if (!sharing) return;
+            const isFile = type.value === "FILE";
+            setVisible(sharing, isFile);
+            sharing.disabled = !isFile;
+        });
+    }
+
     function updateCalendarVisibility() {
         if (!fieldType || !calendar) return;
 
@@ -145,6 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
             updateCalendarVisibility
         );
         fieldType.addEventListener("change", updateDefaultValueVisibility);
+        fieldType.addEventListener("change", updateFileSharingVisibility);
     }
 
     if (model) {
@@ -157,6 +170,14 @@ document.addEventListener("DOMContentLoaded", () => {
     updateChoiceSourceVisibility();
     updateCalendarVisibility();
     updateDefaultValueVisibility();
+    updateFileSharingVisibility();
+
+    document.addEventListener("change", (event) => {
+        if (event.target && /(?:^|-)field_type$/.test(event.target.id || "")) {
+            updateFileSharingVisibility();
+        }
+    });
+    document.addEventListener("formset:added", updateFileSharingVisibility);
 
     if (model && model.value) {
         loadFields();

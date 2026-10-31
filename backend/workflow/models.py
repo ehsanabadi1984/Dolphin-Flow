@@ -1384,6 +1384,12 @@ class FormField(models.Model):
         default=False,
     )
 
+    allow_file_sharing = models.BooleanField(
+        default=False,
+        verbose_name="اجازه اشتراک‌گذاری فایل",
+        help_text="فقط برای فیلدهای بارگذاری فایل قابل استفاده است.",
+    )
+
     show_in_process_summary = models.BooleanField(
         default=False,
     )
@@ -1433,6 +1439,10 @@ class FormField(models.Model):
 
     def clean(self):
         super().clean()
+
+        # File sharing is meaningful only for uploaded-file fields.
+        if self.field_type != self.FieldType.FILE:
+            self.allow_file_sharing = False
 
         # --------------------------------------------------
         # General Validation
@@ -1930,6 +1940,13 @@ class FormField(models.Model):
                     repeatable_group__isnull=False,
                 ),
                 name="unique_repeatable_field_order",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(field_type="FILE")
+                    | models.Q(allow_file_sharing=False)
+                ),
+                name="formfield_share_only_file",
             ),
         ]
 

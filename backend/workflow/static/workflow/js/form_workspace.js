@@ -159,6 +159,10 @@
 
             const isSelect = type.value === "SELECT";
             const isFormula = type.value === "FORMULA";
+            const isFile = type.value === "FILE";
+
+            setVisible(controls.allow_file_sharing, isFile);
+            setDisabled(controls.allow_file_sharing, !isFile);
 
             setVisible(controls.system_key, !isFormula);
             setVisible(controls.is_required, !isFormula);
@@ -216,6 +220,7 @@
         forms.forEach(function (form) {
             const controls = {
                 field_type: findInput(form, "field_type"),
+                allow_file_sharing: findInput(form, "allow_file_sharing"),
                 choice_source: findInput(form, "choice_source"),
                 choice_model: findInput(form, "choice_model"),
                 choice_static_set: findInput(form, "choice_static_set"),

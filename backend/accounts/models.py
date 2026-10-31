@@ -37,6 +37,11 @@ class Job(models.Model):
 
 
 class User(AbstractUser):
+    class Meta(AbstractUser.Meta):
+        permissions = [
+            ("share_files", "اشتراک‌گذاری فایل"),
+        ]
+
     job = models.ForeignKey(
         Job,
         on_delete=models.PROTECT,

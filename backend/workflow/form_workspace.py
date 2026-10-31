@@ -130,6 +130,25 @@ class FormFieldWorkspaceForm(FormulaFieldAdminForm):
 
         self.fields.pop("is_history_enabled", None)
 
+        sharing_field = self.fields.get("allow_file_sharing")
+        if sharing_field:
+            sharing_field.label = "اجازه اشتراک‌گذاری فایل"
+            sharing_field.help_text = (
+                "در صورت فعال‌سازی، فایل این فیلد می‌تواند در صندوق پیام‌ها "
+                "با کاربران مجاز به اشتراک گذاشته شود."
+            )
+            sharing_field.widget.attrs["data-file-sharing-toggle"] = "1"
+
+            raw_field_type = (
+                self.data.get(self.add_prefix("field_type"))
+                if self.is_bound
+                else getattr(self.instance, "field_type", None)
+            )
+            is_file_field = raw_field_type == FormField.FieldType.FILE
+            sharing_field.disabled = not is_file_field
+            if not is_file_field:
+                sharing_field.initial = False
+
         self.fields["section"].queryset = (
             FormSection.objects.filter(form=form_definition).order_by("order", "name")
             if form_definition else FormSection.objects.none()

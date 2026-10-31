@@ -2632,6 +2632,9 @@ class RepeatableFieldInline(admin.TabularInline):
     model = FormField
     formset = RepeatableFieldInlineFormSet
 
+    class Media:
+        js = ("workflow/js/formfield_admin.js",)
+
     extra = 0
 
     fields = (
@@ -2642,6 +2645,7 @@ class RepeatableFieldInline(admin.TabularInline):
         "help_text",
         "default_value",
         "is_required",
+        "allow_file_sharing",
         "order",
         "is_active",
         "choices",
@@ -3143,6 +3147,7 @@ class FormFieldAdmin(admin.ModelAdmin):
                     "help_text",
                     "default_value",
                     "is_required",
+                    "allow_file_sharing",
                     "show_in_process_summary",
                     "decimal_places",
                     "order",
