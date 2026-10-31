@@ -1,7 +1,7 @@
 import re
 import uuid
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.core.exceptions import ValidationError
 
 
@@ -979,6 +979,32 @@ class FileShareMessage(models.Model):
             models.CheckConstraint(condition=(models.Q(completed_at__isnull=True) | models.Q(completed_at__gte=models.F("sent_at"))), name="fshare_msg_complete_after_sent"),
             models.CheckConstraint(condition=(models.Q(cancelled_at__isnull=True) | models.Q(cancelled_at__gte=models.F("sent_at"))), name="fshare_msg_cancel_after_sent"),
         ]
+
+    def save(self, *args, **kwargs):
+        from .form_file_models import SharedFileAsset
+        from .file_lifecycle_services import (
+            ACTIVE_SHARE_STATUSES,
+            FileLifecycleService,
+        )
+
+        previous_status = None
+        if self.pk:
+            previous_status = (
+                type(self).objects.filter(pk=self.pk)
+                .values_list("status", flat=True)
+                .first()
+            )
+
+        with transaction.atomic():
+            if self.asset_id:
+                SharedFileAsset.objects.select_for_update().get(pk=self.asset_id)
+            super().save(*args, **kwargs)
+
+            if (
+                previous_status in ACTIVE_SHARE_STATUSES
+                and self.status not in ACTIVE_SHARE_STATUSES
+            ):
+                FileLifecycleService.schedule_asset_cleanup(self.asset_id)
 
     def __str__(self):
         return f"{self.sender} → {self.recipient} - {self.get_interaction_type_display()}"

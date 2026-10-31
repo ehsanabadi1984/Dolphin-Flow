@@ -11,6 +11,7 @@ from django.urls import reverse
 from .acceptance_queue_services import PendingAcceptanceQueueService
 from .authorization import WorkflowAuthorizationService
 from .form_file_models import FormFile
+from .file_lifecycle_services import FileLifecycleService
 from .form_services import DynamicFormService
 from .models import RepeatableRow
 from .permission_context import PermissionContext
@@ -256,6 +257,7 @@ def _replace_file(*, form_data, field, row_id, upload, user, storage_files=None)
 
     old = (
         FormFile.objects
+        .select_for_update()
         .filter(form_data=form_data, field=field, row_id=row_id)
         .first()
     )
@@ -263,6 +265,8 @@ def _replace_file(*, form_data, field, row_id, upload, user, storage_files=None)
     if old:
         old_file_name = old.file.name if old.file else ""
         old_storage = old.file.storage if old.file else None
+
+        FileLifecycleService.detach_asset_source(old)
 
         old.file = upload
         old.original_name = os.path.basename(upload.name)
@@ -297,9 +301,10 @@ def _replace_file(*, form_data, field, row_id, upload, user, storage_files=None)
             )
 
         if old_storage and old_file_name and old_file_name != old.file.name:
-            _schedule_storage_delete(
+            FileLifecycleService.schedule_storage_delete(
                 storage=old_storage,
                 file_name=old_file_name,
+                storage_backend="default",
             )
         return
 
@@ -810,15 +815,7 @@ def delete_form_file(request, file_id):
     if form_file.field.repeatable_group_id and not permission_context.group(form_file.field.repeatable_group).can_edit:
         return JsonResponse({"error": "شما اجازه حذف این فایل را ندارید."}, status=403)
 
-    file_name = form_file.file.name if form_file.file else ""
-    storage = form_file.file.storage if form_file.file else None
-
-    form_file.delete()
-
-    if file_name and storage:
-        transaction.on_commit(
-            lambda file_name=file_name, storage=storage: storage.delete(file_name)
-        )
+    FileLifecycleService.delete_form_file(form_file)
 
     return JsonResponse({"success": True, "file_id": file_id})
 

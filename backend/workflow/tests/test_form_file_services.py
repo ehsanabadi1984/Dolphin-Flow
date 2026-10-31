@@ -3,11 +3,13 @@ from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.test import TestCase
+from django.utils import timezone
 from unittest.mock import patch
 from django.urls import reverse
 
 from workflow.form_draft_save_services import FormDraftSaveService
-from workflow.form_file_models import FormFile
+from workflow.form_file_models import FormFile, SharedFileAsset
+from workflow.file_lifecycle_services import FileLifecycleService
 from workflow.form_file_services import _replace_file, save_uploaded_form_files
 import workflow.form_file_services as form_file_services
 from workflow.models import (
@@ -24,6 +26,7 @@ from workflow.models import (
     WorkflowMembership,
     WorkflowStep,
     WorkflowStepExecution,
+    FileShareMessage,
 )
 from django.contrib.auth import get_user_model
 
@@ -873,6 +876,141 @@ class DirectFormFileDeletionTests(RepeatableFilePersistenceTests):
 
         self.assertTrue(FormFile.objects.filter(pk=form_file.pk).exists())
         self.assertTrue(default_storage.exists(file_name))
+
+    def _make_shared_message(self, form_file, recipient_suffix):
+        recipient = get_user_model().objects.create_user(
+            username=f"share-retention-{recipient_suffix}",
+            password="password",
+        )
+        asset, _ = FileLifecycleService.get_or_create_asset(form_file)
+        return FileShareMessage.objects.create(
+            asset=asset,
+            sender=self.user,
+            recipient=recipient,
+            workflow_instance=self.instance,
+            workflow_step=self.step,
+        )
+
+    def _create_shared_test_file(self, name, row_id="lifecycle-row"):
+        return FormFile.objects.create(
+            form_data=self.form_data,
+            field=self.file_field,
+            row_id=row_id,
+            file=self._upload(name),
+            original_name=name,
+            file_size=len(b"file-content"),
+            content_type="text/plain",
+            uploaded_by=self.user,
+        )
+
+    def test_three_recipients_share_one_file_until_all_active_messages_end(self):
+        form_file = self._create_shared_test_file("three-recipients.txt")
+        file_name = form_file.file.name
+        messages = [
+            self._make_shared_message(form_file, suffix)
+            for suffix in ("one", "two", "three")
+        ]
+        self.assertEqual(SharedFileAsset.objects.count(), 1)
+        self.assertEqual(FileShareMessage.objects.count(), 3)
+
+        messages[0].status = FileShareMessage.Status.CANCELLED
+        messages[0].cancelled_at = timezone.now()
+        with self.captureOnCommitCallbacks(execute=True):
+            messages[0].save()
+        self.assertTrue(default_storage.exists(file_name))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            FileLifecycleService.delete_form_file(form_file)
+        self.assertTrue(default_storage.exists(file_name))
+
+        for message in messages[1:]:
+            message.status = FileShareMessage.Status.CANCELLED
+            message.cancelled_at = timezone.now()
+            with self.captureOnCommitCallbacks(execute=True):
+                message.save()
+
+        self.assertFalse(default_storage.exists(file_name))
+
+    def test_completed_message_keeps_file_after_form_reference_is_removed(self):
+        form_file = self._create_shared_test_file("completed-shared.txt")
+        file_name = form_file.file.name
+        message = self._make_shared_message(form_file, "completed")
+        message.status = FileShareMessage.Status.COMPLETED
+        message.completed_at = timezone.now()
+        message.save()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            FileLifecycleService.delete_form_file(form_file)
+
+        self.assertTrue(default_storage.exists(file_name))
+        self.assertEqual(message.asset.messages.get().status, FileShareMessage.Status.COMPLETED)
+
+    def test_last_cancelled_message_keeps_file_while_form_still_references_it(self):
+        form_file = self._create_shared_test_file("cancelled-still-in-form.txt")
+        file_name = form_file.file.name
+        message = self._make_shared_message(form_file, "still-in-form")
+
+        message.status = FileShareMessage.Status.CANCELLED
+        message.cancelled_at = timezone.now()
+        with self.captureOnCommitCallbacks(execute=True):
+            message.save()
+
+        self.assertTrue(default_storage.exists(file_name))
+        with self.captureOnCommitCallbacks(execute=True):
+            FileLifecycleService.delete_form_file(form_file)
+        self.assertFalse(default_storage.exists(file_name))
+
+    def test_expired_message_releases_detached_file(self):
+        form_file = self._create_shared_test_file("expired-detached.txt")
+        file_name = form_file.file.name
+        message = self._make_shared_message(form_file, "expired")
+        with self.captureOnCommitCallbacks(execute=True):
+            FileLifecycleService.delete_form_file(form_file)
+        self.assertTrue(default_storage.exists(file_name))
+
+        message.status = FileShareMessage.Status.EXPIRED
+        message.expires_at = timezone.now()
+        with self.captureOnCommitCallbacks(execute=True):
+            message.save()
+
+        self.assertFalse(default_storage.exists(file_name))
+
+    def test_repeatable_row_file_deletion_preserves_active_share(self):
+        form_file = self._create_shared_test_file("repeatable-shared.txt", row_id="row-shared")
+        file_name = form_file.file.name
+        self._make_shared_message(form_file, "repeatable")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            FormFile.delete_for_row(
+                form_data=self.form_data,
+                row_id="row-shared",
+            )
+
+        self.assertFalse(FormFile.objects.filter(pk=form_file.pk).exists())
+        self.assertTrue(default_storage.exists(file_name))
+
+    def test_replacing_form_file_preserves_original_shared_object(self):
+        old = self._create_shared_test_file("replace-shared-old.txt")
+        old_name = old.file.name
+        asset, _ = FileLifecycleService.get_or_create_asset(old)
+        self._make_shared_message(old, "replace")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            _replace_file(
+                form_data=self.form_data,
+                field=self.file_field,
+                row_id="lifecycle-row",
+                upload=self._upload("replace-shared-new.txt"),
+                user=self.user,
+            )
+
+        old.refresh_from_db()
+        asset.refresh_from_db()
+        self.assertNotEqual(old.file.name, old_name)
+        self.assertTrue(default_storage.exists(old_name))
+        self.assertIsNone(asset.form_file_id)
+        self.assertEqual(asset.storage_name, old_name)
+
 
 class FormFileRowLifecycleTests(RepeatableFilePersistenceTests):
     def test_delete_for_row_deletes_storage_after_transaction_commit(self):

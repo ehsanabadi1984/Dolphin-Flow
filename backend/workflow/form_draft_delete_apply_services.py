@@ -2,7 +2,6 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from .form_draft_diff_services import FormDraftDiff, RowChangeAction
-from .form_file_models import FormFile
 from .instance_device_services import InstanceDeviceService
 from .models import FormRepeatableGroup, RepeatableRow
 

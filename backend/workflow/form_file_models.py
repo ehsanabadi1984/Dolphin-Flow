@@ -2,7 +2,7 @@ import os
 import uuid
 
 from django.conf import settings
-from django.db import models, transaction
+from django.db import models
 
 
 def workflow_form_file_upload_to(instance, filename):
@@ -50,20 +50,15 @@ class FormFile(models.Model):
 
     @classmethod
     def delete_for_row(cls, *, form_data, row_id):
-        """Delete all FILE sidecars for one canonical RepeatableRow id."""
-        files = cls.objects.filter(
+        """Delete FILE sidecars through the central storage lifecycle service."""
+        from .file_lifecycle_services import FileLifecycleService
+
+        files = list(cls.objects.filter(
             form_data=form_data,
             row_id=str(row_id),
-        )
-
+        ))
         for item in files:
-            file_name = item.file.name if item.file else ""
-            item.delete()
-            if file_name:
-                storage = item.file.storage
-                transaction.on_commit(
-                    lambda file_name=file_name, storage=storage: storage.delete(file_name)
-                )
+            FileLifecycleService.delete_form_file(item)
 
         return len(files)
 
@@ -75,7 +70,13 @@ class FormFile(models.Model):
 class SharedFileAsset(models.Model):
     """Database reference to an existing stored file; no file bytes are copied."""
 
-    form_file = models.ForeignKey(FormFile, on_delete=models.PROTECT, related_name="shared_assets")
+    form_file = models.ForeignKey(
+        FormFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="shared_assets",
+    )
     storage_backend = models.CharField(max_length=255, default="default", editable=False)
     storage_name = models.CharField(max_length=500, verbose_name="مسیر فایل در فضای ذخیره‌سازی")
     original_name = models.CharField(max_length=255, blank=True, default="")

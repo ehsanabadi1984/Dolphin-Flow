@@ -3,7 +3,6 @@ from decimal import Decimal, InvalidOperation
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from .form_file_models import FormFile
 from .models import (
     FormField,
     FormRepeatableGroup,
