@@ -36,6 +36,12 @@ def file_share_inbox(request):
             )]
         return JsonResponse({
             "available_recipients": recipients,
+            "sent_messages": [{
+                "id": m.pk, "recipient": str(m.recipient), "subject": m.subject,
+                "status": m.status, "file_name": m.asset.original_name,
+                "sent_at": m.sent_at.isoformat(),
+                "recall_url": f"/operator/file-shares/messages/{m.pk}/recall/",
+            } for m in FileShareMessage.objects.filter(sender=request.user).select_related("recipient", "asset")[:100]],
             "messages": [{
                 "id": m.pk, "sender": str(m.sender), "subject": m.subject,
                 "body": m.body, "status": m.status, "interaction_type": m.interaction_type,
@@ -64,6 +70,24 @@ def file_share_inbox(request):
     except (ValidationError, TypeError, ValueError) as exc:
         return JsonResponse({"error": str(exc)}, status=400)
     return JsonResponse({"draft_ids": [d.pk for d in drafts]}, status=201)
+
+
+@login_required
+@require_POST
+def file_share_draft_update(request, draft_id):
+    try:
+        data = _payload(request)
+        draft = FileShareDraftService.update_draft(
+            draft_id=draft_id, sender=request.user,
+            interaction_type=data.get("interaction_type"),
+            subject=data.get("subject"), body=data.get("body"),
+        )
+    except (ValidationError, TypeError, ValueError) as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    return JsonResponse({
+        "id": draft.pk, "subject": draft.subject, "body": draft.body,
+        "interaction_type": draft.interaction_type,
+    })
 
 
 @login_required
@@ -113,6 +137,49 @@ def file_share_message_download(request, message_id):
     if asset.content_type:
         response["Content-Type"] = asset.content_type
     return response
+
+
+
+@login_required
+@require_POST
+def file_share_message_respond(request, message_id):
+    message = get_object_or_404(
+        FileShareMessage, pk=message_id, recipient=request.user
+    )
+    try:
+        data = _payload(request)
+        response_text = str(data.get("response", "")).strip()
+        if not response_text:
+            raise ValidationError("متن پاسخ نمی‌تواند خالی باشد.")
+        if message.interaction_type == FileShareMessage.InteractionType.VIEW:
+            raise ValidationError("برای این پیام امکان ارسال پاسخ تعریف نشده است.")
+        FileShareMessageService.transition_status(
+            message=message,
+            to_status=FileShareMessage.Status.RESPONDED,
+            actor=request.user,
+            details={"response": response_text[:10000]},
+        )
+    except ValidationError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    return JsonResponse({"success": True, "status": FileShareMessage.Status.RESPONDED})
+
+
+@login_required
+@require_POST
+def file_share_message_complete(request, message_id):
+    message = get_object_or_404(
+        FileShareMessage, pk=message_id, recipient=request.user
+    )
+    try:
+        FileShareMessageService.transition_status(
+            message=message,
+            to_status=FileShareMessage.Status.COMPLETED,
+            actor=request.user,
+            details={"source": "recipient_completion"},
+        )
+    except ValidationError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    return JsonResponse({"success": True, "status": FileShareMessage.Status.COMPLETED})
 
 
 @login_required

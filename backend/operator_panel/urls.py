@@ -25,8 +25,8 @@ from .history_views import device_history, workflow_history
 from .history_list_views import history_list
 from workflow.form_print_views import form_print_preview
 from workflow.file_share_views import (
-    file_share_inbox, file_share_draft_delete, file_share_message_detail,
-    file_share_message_download, file_share_message_recall,
+    file_share_inbox, file_share_draft_delete, file_share_draft_update, file_share_message_detail,
+    file_share_message_download, file_share_message_recall,\n    file_share_message_respond, file_share_message_complete,
 )
 from workflow.form_file_services import (
     file_field_definitions,
@@ -71,9 +71,12 @@ urlpatterns = [
     path("pending-acceptances/<int:transition_execution_id>/files/<int:file_id>/download/", open_pending_acceptance_file, name="download_pending_acceptance_file"),
     path("workflow-file/<int:file_id>/delete/", delete_form_file, name="delete_form_file"),
     path("file-shares/", file_share_inbox, name="file_share_inbox"),
+    path("file-shares/drafts/<int:draft_id>/update/", file_share_draft_update, name="file_share_draft_update"),
     path("file-shares/drafts/<int:draft_id>/delete/", file_share_draft_delete, name="file_share_draft_delete"),
     path("file-shares/messages/<int:message_id>/", file_share_message_detail, name="file_share_message_detail"),
     path("file-shares/messages/<int:message_id>/download/", file_share_message_download, name="file_share_message_download"),
+    path("file-shares/messages/<int:message_id>/respond/", file_share_message_respond, name="file_share_message_respond"),
+    path("file-shares/messages/<int:message_id>/complete/", file_share_message_complete, name="file_share_message_complete"),
     path("file-shares/messages/<int:message_id>/recall/", file_share_message_recall, name="file_share_message_recall"),
     path("notifications/", notifications, name="notifications"),
     path("notifications/<int:notification_id>/read/", mark_notification_as_read, name="mark_notification_as_read"),

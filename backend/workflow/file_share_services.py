@@ -171,6 +171,33 @@ class FileShareDraftService:
             ) for rid in ids
         ]
 
+    @classmethod
+    @transaction.atomic
+    def update_draft(cls, *, draft_id, sender, interaction_type=None, subject=None, body=None):
+        from .models import WorkflowInstance
+
+        draft_ref = FileShareDraft.objects.filter(
+            pk=draft_id, sender=sender, status=FileShareDraft.Status.DRAFT
+        ).values("workflow_instance_id").first()
+        if draft_ref is None:
+            raise ValidationError("پیش‌نویس قابل ویرایش پیدا نشد.")
+        WorkflowInstance.objects.select_for_update().get(
+            pk=draft_ref["workflow_instance_id"]
+        )
+        draft = FileShareDraft.objects.select_for_update().get(
+            pk=draft_id, sender=sender, status=FileShareDraft.Status.DRAFT
+        )
+        if interaction_type is not None:
+            if interaction_type not in FileShareMessage.InteractionType.values:
+                raise ValidationError("نوع تعامل معتبر نیست.")
+            draft.interaction_type = interaction_type
+        if subject is not None:
+            draft.subject = str(subject)[:200]
+        if body is not None:
+            draft.body = str(body)
+        draft.save(update_fields=["interaction_type", "subject", "body", "updated_at"])
+        return draft
+
     @staticmethod
     @transaction.atomic
     def delete_draft(*, draft_id, sender):

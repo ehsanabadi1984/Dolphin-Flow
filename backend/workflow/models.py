@@ -1107,6 +1107,18 @@ class FileShareDraft(models.Model):
         if self.sender_id and self.recipient_id and self.sender_id == self.recipient_id:
             raise ValidationError({"recipient": "فرستنده و گیرنده نمی‌توانند یک نفر باشند."})
 
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(
+            pk=self.pk, status=self.Status.CONVERTED
+        ).exists():
+            raise ValidationError("پیش‌نویس تبدیل‌شده به پیام قابل ویرایش نیست.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.status == self.Status.CONVERTED:
+            raise ValidationError("سابقه پیش‌نویس تبدیل‌شده قابل حذف نیست.")
+        return super().delete(*args, **kwargs)
+
     def __str__(self):
         return f"{self.sender} → {self.recipient} - {self.get_status_display()}"
 
