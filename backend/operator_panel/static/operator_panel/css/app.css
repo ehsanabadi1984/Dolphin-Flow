@@ -3018,8 +3018,9 @@ body.df-modal-open {
 /* Internal file-sharing dialog and field actions */
 .df-file-share { margin-inline-start: 8px; min-height: 30px; padding: 5px 10px; font-size: 12px; }
 .df-share-overlay { position: fixed; inset: 0; z-index: 11000; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.58); }
-.df-share-dialog { width: min(520px, 100%); max-height: min(88vh, 760px); overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 22px; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--surface); color: var(--text); box-shadow: var(--df-shadow-lg); }
+.df-share-dialog { width: min(560px, 100%); max-height: min(88vh, 760px); overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 22px; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--surface); color: var(--text); box-shadow: var(--df-shadow-lg); }
 .df-share-dialog h2 { margin: 0; font-size: 18px; }
+.df-share-dialog h3 { margin: 0 0 10px; font-size: 15px; }
 .df-share-dialog label { font-size: 13px; color: var(--text-secondary); }
 .df-share-dialog input[type="text"], .df-share-dialog textarea, .df-share-dialog select { width: 100%; min-height: 38px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-input); color: var(--text); font: inherit; }
 .df-share-file-name { margin: 0; padding: 9px 11px; border-radius: 8px; background: var(--surface-2); font-size: 12px; overflow-wrap: anywhere; }
@@ -3027,7 +3028,18 @@ body.df-modal-open {
 .df-share-recipient { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 6px; color: var(--text) !important; }
 .df-share-recipient input { accent-color: var(--accent); }
 .df-share-feedback { min-height: 20px; color: var(--info); font-size: 12px; }
-.df-share-actions { display: flex; gap: 8px; justify-content: flex-start; margin-top: 4px; }
+.df-share-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; margin-top: 4px; }
+.df-share-preview { padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.df-share-preview-list { display: grid; gap: 10px; margin: 0; }
+.df-share-preview-list > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.df-share-preview-list dt { color: var(--text-secondary); font-size: 12px; }
+.df-share-preview-list dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 13px; }
+.df-share-preview-notice { margin: 12px 0 0; padding: 9px 11px; border-radius: 8px; background: var(--accent-soft); color: var(--text); font-size: 12px; line-height: 1.8; }
+.df-share-dialog [hidden] { display: none !important; }
+@media (max-width: 520px) {
+    .df-share-dialog { padding: 16px; }
+    .df-share-preview-list > div { grid-template-columns: 1fr; gap: 3px; }
+}
 
 
 /* Internal file-share inbox */

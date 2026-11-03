@@ -29,10 +29,21 @@ document.addEventListener("DOMContentLoaded", () => {
         return "";
     }
 
+    const shareDraftStates = new Map();
+
     function shareDialog(field, file) {
         if (!shareUrl || !stepId || !file || !file.id) return;
         const existing = document.getElementById("df-file-share-dialog");
         if (existing) existing.remove();
+
+        const state = shareDraftStates.get(String(file.id)) || {
+            recipientIds: [],
+            interactionType: "VIEW",
+            subject: "",
+            body: "",
+            view: "edit",
+        };
+        shareDraftStates.set(String(file.id), state);
 
         const overlay = document.createElement("div");
         overlay.id = "df-file-share-dialog";
@@ -49,6 +60,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const fileLabel = document.createElement("p");
         fileLabel.className = "df-share-file-name";
         fileLabel.textContent = field.label + " — " + file.name;
+
+        const editor = document.createElement("div");
+        editor.className = "df-share-editor";
         const recipientLabel = document.createElement("label");
         recipientLabel.textContent = "گیرندگان";
         const recipientList = document.createElement("div");
@@ -68,38 +82,134 @@ document.addEventListener("DOMContentLoaded", () => {
             option.textContent = label;
             type.appendChild(option);
         });
+        type.value = state.interactionType || "VIEW";
+
         const subjectLabel = document.createElement("label");
         subjectLabel.textContent = "موضوع";
         const subject = document.createElement("input");
         subject.type = "text";
         subject.maxLength = 200;
         subject.placeholder = "موضوع پیام (اختیاری)";
+        subject.value = state.subject || "";
+
         const bodyLabel = document.createElement("label");
         bodyLabel.textContent = "توضیحات";
         const body = document.createElement("textarea");
         body.rows = 3;
         body.placeholder = "توضیحات یا درخواست خود را بنویسید...";
+        body.value = state.body || "";
+
         const feedback = document.createElement("div");
         feedback.className = "df-share-feedback";
+        const preview = document.createElement("div");
+        preview.className = "df-share-preview";
+        preview.hidden = true;
         const actions = document.createElement("div");
         actions.className = "df-share-actions";
         const cancel = document.createElement("button");
         cancel.type = "button";
         cancel.className = "df-button df-button-secondary";
-        cancel.textContent = "انصراف";
+        cancel.textContent = "بستن";
         cancel.addEventListener("click", () => overlay.remove());
+        const review = document.createElement("button");
+        review.type = "button";
+        review.className = "df-button df-button-primary";
+        review.textContent = "بررسی و تأیید";
+        const back = document.createElement("button");
+        back.type = "button";
+        back.className = "df-button df-button-secondary";
+        back.textContent = "بازگشت و ویرایش";
+        back.hidden = true;
         const submit = document.createElement("button");
         submit.type = "button";
         submit.className = "df-button df-button-primary";
-        submit.textContent = "ثبت اشتراک‌گذاری";
-        actions.append(cancel, submit);
-        dialog.append(heading, fileLabel, recipientLabel, recipientList,
-            typeLabel, type, subjectLabel, subject, bodyLabel, body, feedback, actions);
+        submit.textContent = "تأیید و ثبت پیش‌نویس";
+        submit.hidden = true;
+        actions.append(cancel, review, back, submit);
+        editor.append(recipientLabel, recipientList, typeLabel, type,
+            subjectLabel, subject, bodyLabel, body);
+        dialog.append(heading, fileLabel, editor, preview, feedback, actions);
         overlay.appendChild(dialog);
         overlay.addEventListener("click", (event) => {
             if (event.target === overlay) overlay.remove();
         });
         document.body.appendChild(overlay);
+
+        function saveState() {
+            state.interactionType = type.value;
+            state.subject = subject.value;
+            state.body = body.value;
+        }
+        [type, subject, body].forEach((control) => {
+            control.addEventListener("input", saveState);
+            control.addEventListener("change", saveState);
+        });
+        recipientList.addEventListener("change", (event) => {
+            if (event.target.matches('input[type="checkbox"]')) {
+                state.recipientIds = Array.from(
+                    recipientList.querySelectorAll('input[type="checkbox"]:checked')
+                ).map((input) => Number(input.value));
+            }
+        });
+
+        function selectedRecipients() {
+            return Array.from(
+                recipientList.querySelectorAll('input[type="checkbox"]:checked')
+            ).map((input) => ({
+                id: Number(input.value),
+                label: input.parentElement.querySelector("span")?.textContent || "",
+            }));
+        }
+        function showEditor() {
+            saveState();
+            state.view = "edit";
+            editor.hidden = false;
+            preview.hidden = true;
+            review.hidden = false;
+            back.hidden = true;
+            submit.hidden = true;
+            feedback.textContent = "";
+        }
+        function showPreview() {
+            saveState();
+            const recipients = selectedRecipients();
+            if (!recipients.length) {
+                feedback.textContent = "حداقل یک گیرنده انتخاب کنید.";
+                return;
+            }
+            state.recipientIds = recipients.map((recipient) => recipient.id);
+            state.view = "preview";
+            const title = document.createElement("h3");
+            title.textContent = "خلاصه اشتراک‌گذاری";
+            const summary = document.createElement("dl");
+            summary.className = "df-share-preview-list";
+            const addSummary = (label, value) => {
+                const row = document.createElement("div");
+                const term = document.createElement("dt");
+                term.textContent = label;
+                const description = document.createElement("dd");
+                description.textContent = value || "—";
+                row.append(term, description);
+                summary.appendChild(row);
+            };
+            addSummary("فایل", field.label + " — " + file.name);
+            addSummary("گیرندگان", recipients.map((recipient) => recipient.label).join("، "));
+            addSummary("نوع تعامل", type.options[type.selectedIndex]?.textContent || type.value);
+            addSummary("موضوع", subject.value.trim());
+            addSummary("توضیحات", body.value.trim());
+            const notice = document.createElement("p");
+            notice.className = "df-share-preview-notice";
+            notice.textContent = "با تأیید، پیش‌نویس مستقلی برای هر گیرنده ثبت می‌شود. پیام‌ها پس از ارسال فرم نهایی خواهند شد.";
+            preview.replaceChildren(title, summary, notice);
+            editor.hidden = true;
+            preview.hidden = false;
+            review.hidden = true;
+            back.hidden = false;
+            submit.hidden = false;
+            feedback.textContent = "";
+        }
+        review.addEventListener("click", showPreview);
+        back.addEventListener("click", showEditor);
 
         fetch(
             shareUrl + "?instance_id=" + encodeURIComponent(instanceId) +
@@ -112,37 +222,42 @@ document.addEventListener("DOMContentLoaded", () => {
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || "دریافت گیرندگان ناموفق بود.");
             recipientList.replaceChildren();
-            if (!(payload.available_recipients || []).length) {
+            const recipients = payload.available_recipients || [];
+            if (!recipients.length) {
                 recipientList.textContent = "عضو دیگری برای دریافت پیام وجود ندارد.";
-                submit.disabled = true;
+                review.disabled = true;
                 return;
             }
-            payload.available_recipients.forEach((recipient) => {
+            recipients.forEach((recipient) => {
                 const label = document.createElement("label");
                 label.className = "df-share-recipient";
                 const checkbox = document.createElement("input");
                 checkbox.type = "checkbox";
                 checkbox.value = recipient.id;
+                checkbox.checked = state.recipientIds.includes(Number(recipient.id));
                 const name = document.createElement("span");
                 name.textContent = recipient.label;
                 label.append(checkbox, name);
                 recipientList.appendChild(label);
             });
+            if (state.view === "preview") showPreview();
         }).catch((error) => {
             recipientList.textContent = error.message;
-            submit.disabled = true;
+            review.disabled = true;
         });
 
         submit.addEventListener("click", async () => {
-            const recipientIds = Array.from(
-                recipientList.querySelectorAll('input[type="checkbox"]:checked')
-            ).map((input) => Number(input.value));
+            saveState();
+            const recipientIds = state.recipientIds;
             if (!recipientIds.length) {
                 feedback.textContent = "حداقل یک گیرنده انتخاب کنید.";
+                showEditor();
                 return;
             }
             submit.disabled = true;
-            feedback.textContent = "در حال ثبت...";
+            back.disabled = true;
+            cancel.disabled = true;
+            feedback.textContent = "در حال ثبت پیش‌نویس‌ها...";
             try {
                 const response = await fetch(shareUrl, {
                     method: "POST",
@@ -158,19 +273,23 @@ document.addEventListener("DOMContentLoaded", () => {
                         step_id: Number(stepId),
                         form_file_id: Number(file.id),
                         recipient_ids: recipientIds,
-                        interaction_type: type.value,
-                        subject: subject.value,
-                        body: body.value,
+                        interaction_type: state.interactionType,
+                        subject: state.subject,
+                        body: state.body,
                     }),
                 });
                 const payload = await response.json();
                 if (!response.ok) throw new Error(payload.error || "ثبت اشتراک‌گذاری انجام نشد.");
-                feedback.textContent = "پیش‌نویس اشتراک‌گذاری برای " + payload.draft_ids.length + " گیرنده ثبت شد. پیام‌ها پس از ارسال فرم نهایی می‌شوند.";
+                shareDraftStates.delete(String(file.id));
+                feedback.textContent = "پیش‌نویس اشتراک‌گذاری برای " + payload.draft_ids.length +
+                    " گیرنده ثبت شد. پیام‌ها پس از ارسال فرم نهایی می‌شوند.";
                 submit.textContent = "ثبت شد";
                 window.setTimeout(() => overlay.remove(), 1800);
             } catch (error) {
                 feedback.textContent = error.message || "خطا در ثبت اشتراک‌گذاری.";
                 submit.disabled = false;
+                back.disabled = false;
+                cancel.disabled = false;
             }
         });
     }
