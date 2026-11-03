@@ -59,3 +59,9 @@ test("cancelled messages open as a readable unavailable state without exposing a
     assert.match(inboxJs, /if \(message\.unavailable\)/);
     assert.match(inboxJs, /contentType\.includes\("application\/json"\)/);
 });
+
+test("opening any received message refreshes the global notification bell", () => {
+    assert.match(inboxJs, /df:file-share-notification-read/);
+    assert.match(appJs, /df:file-share-notification-read/);
+    assert.match(appJs, /loadNotifications\(\)/);
+});

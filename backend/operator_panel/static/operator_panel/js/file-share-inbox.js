@@ -200,6 +200,9 @@ document.addEventListener("DOMContentLoaded", () => {
         detail.replaceChildren(node("p", "df-share-inbox-empty", "در حال دریافت پیام..."));
         try {
             const message = await request(url);
+            window.dispatchEvent(new CustomEvent("df:file-share-notification-read", {
+                detail: { messageId: message.id },
+            }));
             detail.replaceChildren();
             detail.appendChild(node("h2", "", message.subject || "پیام اشتراک‌گذاری فایل"));
             detail.appendChild(node("p", "", "فرستنده: " + message.sender));

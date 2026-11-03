@@ -1799,6 +1799,12 @@ document.addEventListener("click", (event) => {
 
         }
     }
+    // The file-share inbox dispatches this after its detail API
+    // confirms that the corresponding notification was acknowledged.
+    window.addEventListener("df:file-share-notification-read", () => {
+        loadNotifications();
+    });
+
     /*
     * ---------------------------------------------------------
     * Notification Polling

@@ -348,6 +348,49 @@ class FileShareDraftFinalizationTests(TestCase):
         self.assertNotIn("download_url", payload)
         self.assertNotIn("file_details", payload)
 
+    def test_opening_messages_marks_linked_notifications_read_for_every_status(self):
+        asset = SharedFileAsset.get_or_create_for_form_file(self.form_file)[0]
+        statuses = (
+            FileShareMessage.Status.PENDING,
+            FileShareMessage.Status.CANCELLED,
+            FileShareMessage.Status.EXPIRED,
+        )
+        self.client.force_login(self.recipient_one)
+
+        for status in statuses:
+            with self.subTest(status=status):
+                message = FileShareMessage.objects.create(
+                    asset=asset, sender=self.sender, recipient=self.recipient_one,
+                    workflow_instance=self.instance, workflow_step=self.step,
+                    form_snapshot={"file": {"field_label": self.field.label}},
+                    subject=f"Message {status}",
+                    status=status,
+                )
+                notification = Notification.objects.create(
+                    recipient=self.recipient_one,
+                    notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+                    title="فایل جدید",
+                    message="فایلی برای شما ارسال شده است.",
+                    workflow_instance=self.instance,
+                    workflow_step=self.step,
+                    file_share_message=message,
+                )
+
+                response = self.client.get(reverse(
+                    "operator_panel:file_share_message_detail", args=[message.pk]
+                ))
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response["Content-Type"], "application/json")
+                notification.refresh_from_db()
+                self.assertTrue(notification.is_read)
+
+                if status == FileShareMessage.Status.PENDING:
+                    message.refresh_from_db()
+                    self.assertEqual(message.status, FileShareMessage.Status.READ)
+                else:
+                    self.assertEqual(response.json()["status"], status)
+
     def test_file_deletion_cascades_only_unconverted_drafts(self):
         draft = self._draft(self.recipient_one)
         FileShareDraftService.finalize_for_submit(

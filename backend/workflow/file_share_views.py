@@ -164,6 +164,16 @@ def file_share_draft_delete(request, draft_id):
 @require_GET
 def file_share_message_detail(request, message_id):
     message = get_object_or_404(FileShareMessage.objects.select_related("asset", "sender"), pk=message_id, recipient=request.user)
+    from .models import Notification
+    from .notification_services import NotificationService
+
+    # Opening a message acknowledges its notification regardless of the
+    # message lifecycle state (active, cancelled, or expired).
+    for notification in Notification.objects.filter(
+        file_share_message=message, recipient=request.user, is_read=False
+    ):
+        NotificationService.mark_as_read(notification=notification, user=request.user)
+
     if message.status in {FileShareMessage.Status.CANCELLED, FileShareMessage.Status.EXPIRED}:
         return JsonResponse({
             "id": message.pk,
@@ -182,12 +192,6 @@ def file_share_message_detail(request, message_id):
     if message.status == FileShareMessage.Status.PENDING:
         FileShareMessageService.transition_status(message=message, to_status=FileShareMessage.Status.READ, actor=request.user)
         message.refresh_from_db()
-    from .models import Notification
-    from .notification_services import NotificationService
-    for notification in Notification.objects.filter(
-        file_share_message=message, recipient=request.user, is_read=False
-    ):
-        NotificationService.mark_as_read(notification=notification, user=request.user)
     snapshot_file = message.form_snapshot.get("file", {}) if isinstance(message.form_snapshot, dict) else {}
     return JsonResponse({
         "id": message.pk, "sender": str(message.sender), "subject": message.subject,
