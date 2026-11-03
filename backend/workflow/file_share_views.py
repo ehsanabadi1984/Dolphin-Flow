@@ -10,6 +10,10 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from .file_share_services import FileShareDraftService, FileShareMessageService
+from .file_share_authorization import (
+    has_direct_share_files_permission,
+    has_step_share_files_permission,
+)
 from .models import FileShareDraft, FileShareMessage, FileShareMessageEvent, WorkflowInstance, WorkflowStep
 from .form_file_models import FormFile
 
@@ -40,6 +44,24 @@ def file_share_inbox(request):
         recipients = []
         if instance_id and instance_id.isdigit():
             instance = get_object_or_404(WorkflowInstance, pk=int(instance_id))
+            step_id = request.GET.get("step_id", "")
+            if not step_id.isdigit():
+                return JsonResponse({"error": "مرحله اشتراک‌گذاری مشخص نشده است."}, status=400)
+            step = get_object_or_404(
+                WorkflowStep, pk=int(step_id), workflow_id=instance.workflow_id
+            )
+            if (
+                instance.status != WorkflowInstance.Status.ACTIVE
+                or instance.current_step_id != step.pk
+                or not has_direct_share_files_permission(request.user)
+                or not has_step_share_files_permission(
+                    user=request.user, workflow=instance.workflow, step=step
+                )
+            ):
+                return JsonResponse(
+                    {"error": "اجازه اشتراک‌گذاری فایل در مرحله فعلی را ندارید."},
+                    status=403,
+                )
             try:
                 recipients = [{
                     "id": user.pk, "username": user.get_username(),

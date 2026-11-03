@@ -636,6 +636,11 @@ def file_field_definitions(request, instance_id):
         return JsonResponse({"fields": [], "groups": []})
 
     step = read_context_step
+    can_share_in_step = bool(
+        pending_acceptance_id is None
+        and instance.status == WorkflowInstance.Status.ACTIVE
+        and instance.current_step_id == step.pk
+    )
     permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=step, user=request.user)
 
     form_data = FormData.objects.filter(instance=instance).first()
@@ -666,7 +671,13 @@ def file_field_definitions(request, instance_id):
                 "label": field.label,
                 "scope": "FORM",
                 "editable": permission_context.field(field).can_edit,
-                "shareable": can_share_file_field(user=request.user, field=field),
+                "shareable": (
+                    can_share_in_step
+                    and can_share_file_field(
+                        user=request.user, field=field,
+                        workflow=instance.workflow, step=step,
+                    )
+                ),
                 "required": bool(field.is_required),
                 "input_name": field.code,
                 "file": existing.get((field.pk, "")),
@@ -721,7 +732,13 @@ def file_field_definitions(request, instance_id):
                         permission_context.field(field).can_edit
                         and permission_context.group(group).can_edit
                     ),
-                    "shareable": can_share_file_field(user=request.user, field=field),
+                    "shareable": (
+                    can_share_in_step
+                    and can_share_file_field(
+                        user=request.user, field=field,
+                        workflow=instance.workflow, step=step,
+                    )
+                ),
                     "required": bool(field.is_required),
                     "column_index": column_index,
                 })

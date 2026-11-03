@@ -91,6 +91,58 @@ class FileShareDraftFinalizationTests(TestCase):
         self.assertTrue(payload["drafts"][0]["update_url"])
         self.assertTrue(payload["drafts"][0]["delete_url"])
 
+    def test_file_field_definitions_exposes_shareable_only_with_all_permissions(self):
+        self.client.force_login(self.sender)
+        url = reverse("operator_panel:file_field_definitions", args=[self.instance.pk])
+
+        allowed = self.client.get(url)
+        self.assertEqual(allowed.status_code, 200)
+        field_payload = next(
+            item for item in allowed.json()["fields"]
+            if item["code"] == self.field.code
+        )
+        self.assertTrue(field_payload["shareable"])
+
+        WorkflowPermission.objects.filter(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.sender,
+            action=WorkflowPermission.Action.SHARE_FILES,
+        ).delete()
+
+        denied = self.client.get(url)
+        self.assertEqual(denied.status_code, 200)
+        field_payload = next(
+            item for item in denied.json()["fields"]
+            if item["code"] == self.field.code
+        )
+        self.assertFalse(field_payload["shareable"])
+
+    def test_recipient_discovery_requires_global_and_step_permissions(self):
+        self.client.force_login(self.sender)
+        url = reverse("operator_panel:file_share_inbox")
+        allowed = self.client.get(url, {
+            "instance_id": self.instance.pk,
+            "step_id": self.step.pk,
+        })
+        self.assertEqual(allowed.status_code, 200)
+        self.assertEqual(
+            {item["id"] for item in allowed.json()["available_recipients"]},
+            {self.recipient_one.pk, self.recipient_two.pk},
+        )
+
+        WorkflowPermission.objects.filter(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.sender,
+            action=WorkflowPermission.Action.SHARE_FILES,
+        ).delete()
+        denied = self.client.get(url, {
+            "instance_id": self.instance.pk,
+            "step_id": self.step.pk,
+        })
+        self.assertEqual(denied.status_code, 403)
+
     def test_create_drafts_creates_independent_recipient_requests(self):
         drafts = FileShareDraftService.create_drafts(
             instance=self.instance,

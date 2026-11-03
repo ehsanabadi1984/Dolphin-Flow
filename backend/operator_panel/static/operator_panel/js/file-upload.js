@@ -101,7 +101,9 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         document.body.appendChild(overlay);
 
-        fetch(shareUrl + "?instance_id=" + encodeURIComponent(instanceId), {
+        fetch(
+            shareUrl + "?instance_id=" + encodeURIComponent(instanceId) +
+            "&step_id=" + encodeURIComponent(stepId),
             credentials: "same-origin",
             headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json" },
         }).then(async (response) => {

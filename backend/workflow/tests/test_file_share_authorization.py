@@ -92,14 +92,25 @@ class FileShareAuthorizationTests(TestCase):
 
     def test_file_field_requires_both_permission_and_field_switch(self):
         self.user.user_permissions.add(self.permission)
+        WorkflowPermission.objects.create(
+            workflow=self.workflow, step=self.step, user=self.user,
+            action=WorkflowPermission.Action.SHARE_FILES,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
         enabled_field = self.make_field()
         disabled_field = self.make_field(
             field_type=FormField.FieldType.FILE,
             allow_file_sharing=False,
         )
 
-        self.assertTrue(can_share_file_field(user=self.user, field=enabled_field))
-        self.assertFalse(can_share_file_field(user=self.user, field=disabled_field))
+        self.assertTrue(can_share_file_field(
+            user=self.user, field=enabled_field,
+            workflow=self.workflow, step=self.step,
+        ))
+        self.assertFalse(can_share_file_field(
+            user=self.user, field=disabled_field,
+            workflow=self.workflow, step=self.step,
+        ))
 
     def test_non_file_field_cannot_be_shared_even_if_flag_is_set(self):
         self.user.user_permissions.add(self.permission)
@@ -111,14 +122,25 @@ class FileShareAuthorizationTests(TestCase):
         field.clean()
 
         self.assertFalse(field.allow_file_sharing)
-        self.assertFalse(can_share_file_field(user=self.user, field=field))
+        self.assertFalse(can_share_file_field(
+            user=self.user, field=field,
+            workflow=self.workflow, step=self.step,
+        ))
 
     def test_repeatable_file_field_can_be_shared(self):
         self.user.user_permissions.add(self.permission)
+        WorkflowPermission.objects.create(
+            workflow=self.workflow, step=self.step, user=self.user,
+            action=WorkflowPermission.Action.SHARE_FILES,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
         field = self.make_field(repeatable=True)
 
         self.assertEqual(field.repeatable_group_id, self.repeatable_group.pk)
-        self.assertTrue(can_share_file_field(user=self.user, field=field))
+        self.assertTrue(can_share_file_field(
+            user=self.user, field=field,
+            workflow=self.workflow, step=self.step,
+        ))
 
     def test_step_permission_is_required_in_addition_to_global_permission(self):
         self.user.user_permissions.add(self.permission)

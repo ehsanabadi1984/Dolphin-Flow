@@ -41,13 +41,24 @@ def has_step_share_files_permission(*, user, workflow, step):
         return False
     return rules.filter(effect=WorkflowPermission.Effect.ALLOW).exists()
 
-def can_share_file_field(*, user, field):
-    """Check the phase-one permission and field-level sharing switch."""
-    return bool(
-        has_direct_share_files_permission(user)
-        and field
-        and field.field_type == FormField.FieldType.FILE
-        and field.allow_file_sharing
+def can_share_file_field(*, user, field, workflow, step):
+    """Check global, selected-step, and field-level file-sharing permissions."""
+    if (
+        not has_direct_share_files_permission(user)
+        or not workflow
+        or not step
+        or step.workflow_id != workflow.pk
+        or not field
+        or field.field_type != FormField.FieldType.FILE
+        or not field.allow_file_sharing
+    ):
+        return False
+
+    if field.section.form.workflow_id != workflow.pk:
+        return False
+
+    return has_step_share_files_permission(
+        user=user, workflow=workflow, step=step
     )
 
 
