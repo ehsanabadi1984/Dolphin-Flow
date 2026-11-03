@@ -733,12 +733,12 @@ def file_field_definitions(request, instance_id):
                         and permission_context.group(group).can_edit
                     ),
                     "shareable": (
-                    can_share_in_step
-                    and can_share_file_field(
-                        user=request.user, field=field,
-                        workflow=instance.workflow, step=step,
-                    )
-                ),
+                        can_share_in_step
+                        and can_share_file_field(
+                            user=request.user, field=field,
+                            workflow=instance.workflow, step=step,
+                        )
+                    ),
                     "required": bool(field.is_required),
                     "column_index": column_index,
                 })
