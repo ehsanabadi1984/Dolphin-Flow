@@ -187,13 +187,36 @@ class FileShareDraftService:
         ).values_list("user_id", flat=True))
         if set(ids) != members:
             raise ValidationError("همه گیرندگان باید عضو فعال همین فرآیند باشند.")
-        return [
-            FileShareDraft.objects.create(
-                sender=sender, recipient_id=rid, workflow_instance=locked_instance,
-                workflow_step=step, form_file=form_file, interaction_type=interaction_type,
-                subject=(subject or "")[:200], body=body or "",
-            ) for rid in ids
-        ]
+        # Keep one editable draft per selected recipient for this file.
+        existing = {
+            draft.recipient_id: draft
+            for draft in FileShareDraft.objects.select_for_update().filter(
+                sender=sender, workflow_instance=locked_instance,
+                workflow_step=step, form_file=form_file,
+                status=FileShareDraft.Status.DRAFT,
+            )
+        }
+        selected = set(ids)
+        for recipient_id, draft in existing.items():
+            if recipient_id not in selected:
+                draft.delete()
+        result = []
+        for recipient_id in ids:
+            draft = existing.get(recipient_id)
+            if draft is None:
+                draft = FileShareDraft.objects.create(
+                    sender=sender, recipient_id=recipient_id,
+                    workflow_instance=locked_instance, workflow_step=step,
+                    form_file=form_file, interaction_type=interaction_type,
+                    subject=(subject or "")[:200], body=body or "",
+                )
+            else:
+                draft.interaction_type = interaction_type
+                draft.subject = (subject or "")[:200]
+                draft.body = body or ""
+                draft.save(update_fields=["interaction_type", "subject", "body", "updated_at"])
+            result.append(draft)
+        return result
 
     @classmethod
     @transaction.atomic

@@ -179,6 +179,41 @@ class FileShareDraftFinalizationTests(TestCase):
         FileShareDraftService.delete_draft(draft_id=draft.pk, sender=self.sender)
         self.assertFalse(FileShareDraft.objects.filter(pk=draft.pk).exists())
 
+    def test_create_drafts_updates_existing_file_drafts_and_reconciles_recipients(self):
+        first = self._draft(self.recipient_one)
+        removed = self._draft(self.recipient_two)
+        drafts = FileShareDraftService.create_drafts(
+            instance=self.instance, step=self.step, sender=self.sender,
+            form_file=self.form_file, recipient_ids=[self.recipient_one.pk],
+            interaction_type=FileShareMessage.InteractionType.REVIEW,
+            subject="Revised subject", body="Revised details",
+        )
+        self.assertEqual(len(drafts), 1)
+        self.assertEqual(drafts[0].pk, first.pk)
+        first.refresh_from_db()
+        self.assertEqual(first.interaction_type, FileShareMessage.InteractionType.REVIEW)
+        self.assertEqual(first.subject, "Revised subject")
+        self.assertEqual(first.body, "Revised details")
+        self.assertFalse(FileShareDraft.objects.filter(pk=removed.pk).exists())
+        self.assertEqual(FileShareDraft.objects.filter(
+            sender=self.sender, form_file=self.form_file,
+            status=FileShareDraft.Status.DRAFT,
+        ).count(), 1)
+
+    def test_file_share_get_returns_drafts_for_the_selected_file(self):
+        draft = self._draft(self.recipient_one)
+        self.client.force_login(self.sender)
+        response = self.client.get(reverse("operator_panel:file_share_inbox"), {
+            "instance_id": self.instance.pk,
+            "step_id": self.step.pk,
+            "form_file_id": self.form_file.pk,
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["file_drafts"]), 1)
+        self.assertEqual(payload["file_drafts"][0]["id"], draft.pk)
+        self.assertEqual(payload["file_drafts"][0]["recipient_id"], self.recipient_one.pk)
+
     def test_submit_converts_one_draft_per_recipient_without_copying_file(self):
         first = self._draft(self.recipient_one)
         second = self._draft(self.recipient_two)

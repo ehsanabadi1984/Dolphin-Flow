@@ -71,8 +71,24 @@ def file_share_inbox(request):
                 )]
             except ValidationError as exc:
                 return JsonResponse({"error": str(exc)}, status=403)
+            file_drafts = []
+            form_file_id = request.GET.get("form_file_id", "")
+            if form_file_id.isdigit():
+                file_drafts = [{
+                    "id": draft.pk,
+                    "recipient_id": draft.recipient_id,
+                    "recipient": str(draft.recipient),
+                    "interaction_type": draft.interaction_type,
+                    "subject": draft.subject,
+                    "body": draft.body,
+                } for draft in FileShareDraft.objects.filter(
+                    sender=request.user, workflow_instance=instance,
+                    workflow_step=step, form_file_id=int(form_file_id),
+                    status=FileShareDraft.Status.DRAFT,
+                ).select_related("recipient").order_by("recipient__username")]
         return JsonResponse({
             "available_recipients": recipients,
+            "file_drafts": file_drafts if instance_id and instance_id.isdigit() else [],
             "sent_messages": [{
                 "id": m.pk, "recipient": str(m.recipient), "subject": m.subject,
                 "status": m.status, "file_name": m.asset.original_name,

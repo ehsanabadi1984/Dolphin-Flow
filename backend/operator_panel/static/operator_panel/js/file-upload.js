@@ -213,7 +213,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         fetch(
             shareUrl + "?instance_id=" + encodeURIComponent(instanceId) +
-            "&step_id=" + encodeURIComponent(stepId),
+            "&step_id=" + encodeURIComponent(stepId) +
+            "&form_file_id=" + encodeURIComponent(file.id),
             {
                 credentials: "same-origin",
                 headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json" },
@@ -222,6 +223,25 @@ document.addEventListener("DOMContentLoaded", () => {
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || "دریافت گیرندگان ناموفق بود.");
             recipientList.replaceChildren();
+            const savedDrafts = payload.file_drafts || [];
+            if (!state.loadedFromServer) {
+                if (savedDrafts.length) {
+                    state.recipientIds = savedDrafts.map((draft) => Number(draft.recipient_id));
+                    state.interactionType = savedDrafts[0].interaction_type || "VIEW";
+                    state.subject = savedDrafts[0].subject || "";
+                    state.body = savedDrafts[0].body || "";
+                } else {
+                    state.recipientIds = [];
+                    state.interactionType = "VIEW";
+                    state.subject = "";
+                    state.body = "";
+                }
+                type.value = state.interactionType;
+                subject.value = state.subject;
+                body.value = state.body;
+                state.loadedFromServer = true;
+            }
+            renderShareSummary(targetForFile(file), field, file, savedDrafts);
             const recipients = payload.available_recipients || [];
             if (!recipients.length) {
                 recipientList.textContent = "عضو دیگری برای دریافت پیام وجود ندارد.";
@@ -280,11 +300,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 const payload = await response.json();
                 if (!response.ok) throw new Error(payload.error || "ثبت اشتراک‌گذاری انجام نشد.");
-                shareDraftStates.delete(String(file.id));
-                feedback.textContent = "پیش‌نویس اشتراک‌گذاری برای " + payload.draft_ids.length +
-                    " گیرنده ثبت شد. پیام‌ها پس از ارسال فرم نهایی می‌شوند.";
+                state.loadedFromServer = true;
+                state.view = "edit";
+                const refreshed = await fetch(
+                    shareUrl + "?instance_id=" + encodeURIComponent(instanceId) +
+                    "&step_id=" + encodeURIComponent(stepId) +
+                    "&form_file_id=" + encodeURIComponent(file.id),
+                    { credentials: "same-origin", headers: { "Accept": "application/json" } }
+                );
+                const refreshedPayload = await refreshed.json();
+                if (!refreshed.ok) throw new Error(refreshedPayload.error || "بازیابی پیش‌نویس‌ها ناموفق بود.");
+                renderShareSummary(targetForFile(file), field, file, refreshedPayload.file_drafts || []);
+                feedback.textContent = "پیش‌نویس‌ها ثبت شدند و در کنار فایل قابل مشاهده و ویرایش هستند.";
                 submit.textContent = "ثبت شد";
-                window.setTimeout(() => overlay.remove(), 1800);
+                window.setTimeout(() => overlay.remove(), 900);
             } catch (error) {
                 feedback.textContent = error.message || "خطا در ثبت اشتراک‌گذاری.";
                 submit.disabled = false;
@@ -294,14 +323,59 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function targetForFile(file) {
+        return form.querySelector('[data-file-share-id="' + cssEscape(String(file.id)) + '"]');
+    }
+
+    function renderShareSummary(target, field, file, drafts) {
+        if (!target) return;
+        const oldSummary = target.querySelector(".df-file-share-summary");
+        if (oldSummary) oldSummary.remove();
+        if (!drafts || !drafts.length) return;
+        const summary = document.createElement("div");
+        summary.className = "df-file-share-summary";
+        const heading = document.createElement("strong");
+        heading.textContent = "پیش‌نویس اشتراک‌گذاری این فایل";
+        const recipients = document.createElement("p");
+        recipients.textContent = "گیرندگان: " + drafts.map((draft) => draft.recipient).join("، ");
+        const labels = { VIEW: "مشاهده", RESPONSE: "درخواست پاسخ", ACTION: "درخواست اقدام", REVIEW: "بررسی و تأیید" };
+        const interaction = document.createElement("p");
+        interaction.textContent = "نوع تعامل: " + (labels[drafts[0].interaction_type] || drafts[0].interaction_type);
+        summary.append(heading, recipients, interaction);
+        if (drafts[0].subject) {
+            const item = document.createElement("p");
+            item.textContent = "موضوع: " + drafts[0].subject;
+            summary.appendChild(item);
+        }
+        if (drafts[0].body) {
+            const item = document.createElement("p");
+            item.textContent = "توضیحات: " + drafts[0].body;
+            summary.appendChild(item);
+        }
+        const note = document.createElement("small");
+        note.textContent = "این موارد پیش‌نویس هستند و پس از ارسال فرم نهایی می‌شوند.";
+        summary.appendChild(note);
+        target.appendChild(summary);
+    }
+
     function addShareButton(target, field, file) {
         if (!target || !file || !field.shareable || !file.id || target.querySelector(".df-file-share")) return;
+        target.dataset.fileShareId = String(file.id);
         const button = document.createElement("button");
         button.type = "button";
         button.className = "df-button df-button-secondary df-file-share";
         button.textContent = "اشتراک‌گذاری";
         button.addEventListener("click", () => shareDialog(field, file));
         target.appendChild(button);
+        fetch(
+            shareUrl + "?instance_id=" + encodeURIComponent(instanceId) +
+            "&step_id=" + encodeURIComponent(stepId) +
+            "&form_file_id=" + encodeURIComponent(file.id),
+            { credentials: "same-origin", headers: { "Accept": "application/json" } }
+        ).then(async (response) => {
+            const payload = await response.json();
+            if (response.ok) renderShareSummary(target, field, file, payload.file_drafts || []);
+        }).catch((error) => console.warn("Could not load file share drafts:", error));
     }
 
     function renderExistingFile(container, file, field) {
