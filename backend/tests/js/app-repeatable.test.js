@@ -532,6 +532,8 @@ test("adding a child row does not clone its nested grandchild rows", async () =>
 test("deletes a flat TABLE child row without affecting its parent or sibling rows", async () => {
     const dom = new JSDOM(
         `
+        <button id="df-nav-workflow-trigger" type="button" aria-expanded="false"></button>
+        <div id="df-nav-workflows"></div>
         <button id="df-notification-toggle" type="button" aria-expanded="false"></button>
         <div id="df-notification-menu" aria-hidden="true">
             <div id="df-notification-list"></div>
