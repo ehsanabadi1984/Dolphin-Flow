@@ -74,8 +74,15 @@ function generateRowId() {
                 String(!isOpen)
             );
         });
+    }
 
-        function escapeRegExp(value) {
+    /*
+     * Repeatable TABLE helpers are shared by form event handlers below.
+     * Keep them in the DOMContentLoaded scope, not inside the optional
+     * workflow flyout condition.
+     */
+
+    function escapeRegExp(value) {
     return value.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&");
 }
 
@@ -487,7 +494,8 @@ function removeFlatTableSubtree(container, rootRowId) {
     return removedIds;
 }
 
-document.addEventListener("click", (event) => {
+if (workflowTrigger && workflowList) {
+    document.addEventListener("click", (event) => {
             if (
                 !workflowTrigger.contains(event.target) &&
                 !workflowList.contains(event.target)
