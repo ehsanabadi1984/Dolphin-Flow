@@ -364,8 +364,19 @@ class FileShareDraftFinalizationTests(TestCase):
                     workflow_instance=self.instance, workflow_step=self.step,
                     form_snapshot={"file": {"field_label": self.field.label}},
                     subject=f"Message {status}",
-                    status=status,
                 )
+                if status != FileShareMessage.Status.PENDING:
+                    from workflow.file_share_services import FileShareMessageService
+
+                    FileShareMessageService.transition_status(
+                        message=message,
+                        to_status=status,
+                        actor=(
+                            self.sender
+                            if status == FileShareMessage.Status.CANCELLED
+                            else None
+                        ),
+                    )
                 notification = Notification.objects.create(
                     recipient=self.recipient_one,
                     notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
