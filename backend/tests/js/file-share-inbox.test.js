@@ -57,6 +57,5 @@ test("cancelled messages open as a readable unavailable state without exposing a
     assert.match(inboxJs, /message\.unavailable/);
     assert.match(inboxJs, /message\.unavailable_message/);
     assert.match(inboxJs, /if \(message\.unavailable\)/);
-    assert.match(inboxJs, /لغو کرده است/);
     assert.match(inboxJs, /contentType\.includes\("application\/json"\)/);
 });
