@@ -297,6 +297,7 @@ class FileShareDraftFinalizationTests(TestCase):
         message = FileShareMessage.objects.create(
             asset=asset, sender=self.sender, recipient=self.recipient_one,
             workflow_instance=self.instance, workflow_step=self.step,
+            form_snapshot={"file": {"field_label": self.field.label}},
         )
         self.client.force_login(self.sender)
         denied = self.client.get(reverse(
