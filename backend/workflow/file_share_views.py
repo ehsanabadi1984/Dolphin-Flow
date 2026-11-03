@@ -165,7 +165,20 @@ def file_share_draft_delete(request, draft_id):
 def file_share_message_detail(request, message_id):
     message = get_object_or_404(FileShareMessage.objects.select_related("asset", "sender"), pk=message_id, recipient=request.user)
     if message.status in {FileShareMessage.Status.CANCELLED, FileShareMessage.Status.EXPIRED}:
-        raise PermissionDenied("این پیام دیگر فعال نیست.")
+        return JsonResponse({
+            "id": message.pk,
+            "sender": str(message.sender),
+            "subject": message.subject,
+            "body": message.body,
+            "interaction_type": message.interaction_type,
+            "status": message.status,
+            "unavailable": True,
+            "unavailable_message": (
+                "فرستنده این پیام را لغو کرده است؛ فایل دیگر قابل دریافت نیست."
+                if message.status == FileShareMessage.Status.CANCELLED
+                else "مهلت این پیام به پایان رسیده است؛ فایل دیگر قابل دریافت نیست."
+            ),
+        })
     if message.status == FileShareMessage.Status.PENDING:
         FileShareMessageService.transition_status(message=message, to_status=FileShareMessage.Status.READ, actor=request.user)
         message.refresh_from_db()

@@ -52,3 +52,11 @@ test("interaction types and message statuses are translated for recipients", () 
     assert.match(inboxJs, /REVIEW: "درخواست بررسی یا تأیید فایل"/);
     assert.match(inboxJs, /PENDING: "خوانده‌نشده"/);
 });
+
+test("cancelled messages open as a readable unavailable state without exposing a download action", () => {
+    assert.match(inboxJs, /message\.unavailable/);
+    assert.match(inboxJs, /message\.unavailable_message/);
+    assert.match(inboxJs, /if \(message\.unavailable\)/);
+    assert.match(inboxJs, /لغو کرده است/);
+    assert.match(inboxJs, /contentType\.includes\("application\/json"\)/);
+});

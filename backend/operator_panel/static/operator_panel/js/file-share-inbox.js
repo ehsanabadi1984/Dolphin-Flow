@@ -106,6 +106,10 @@ document.addEventListener("DOMContentLoaded", () => {
             headers: { "Accept": "application/json", ...(options && options.headers || {}) },
             ...(options || {}),
         });
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+            throw new Error("پاسخ سرور قابل پردازش نیست. لطفاً صفحه را تازه‌سازی کنید.");
+        }
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "انجام عملیات ناموفق بود.");
         return data;
@@ -202,6 +206,15 @@ document.addEventListener("DOMContentLoaded", () => {
             detail.appendChild(node("p", "", "نوع تعامل: " + (interactionLabels[message.interaction_type] || message.interaction_type)));
             detail.appendChild(node("p", "", "وضعیت: " + (statusLabels[message.status] || message.status)));
             if (message.body) detail.appendChild(node("p", "", message.body));
+            if (message.unavailable) {
+                detail.appendChild(node(
+                    "p",
+                    "df-share-inbox-empty",
+                    message.unavailable_message || "این پیام دیگر فعال نیست و فایل آن قابل دریافت نیست."
+                ));
+                refreshUnreadCount();
+                return;
+            }
             appendFileDetails(message);
             const download = node("a", "df-share-inbox-file", "دانلود فایل: " + message.file_name);
             download.href = message.download_url;

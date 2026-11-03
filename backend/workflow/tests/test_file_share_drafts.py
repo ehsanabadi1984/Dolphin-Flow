@@ -321,6 +321,33 @@ class FileShareDraftFinalizationTests(TestCase):
         message.refresh_from_db()
         self.assertEqual(message.status, FileShareMessage.Status.READ)
 
+    def test_recipient_can_open_cancelled_message_and_sees_unavailable_notice_payload(self):
+        asset = SharedFileAsset.get_or_create_for_form_file(self.form_file)[0]
+        message = FileShareMessage.objects.create(
+            asset=asset, sender=self.sender, recipient=self.recipient_one,
+            workflow_instance=self.instance, workflow_step=self.step,
+            form_snapshot={"file": {"field_label": self.field.label}},
+            subject="Cancelled attachment",
+        )
+        self.client.force_login(self.sender)
+        recalled = self.client.post(reverse(
+            "operator_panel:file_share_message_recall", args=[message.pk]
+        ))
+        self.assertEqual(recalled.status_code, 200)
+
+        self.client.force_login(self.recipient_one)
+        response = self.client.get(reverse(
+            "operator_panel:file_share_message_detail", args=[message.pk]
+        ))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        payload = response.json()
+        self.assertEqual(payload["status"], FileShareMessage.Status.CANCELLED)
+        self.assertTrue(payload["unavailable"])
+        self.assertIn("لغو", payload["unavailable_message"])
+        self.assertNotIn("download_url", payload)
+        self.assertNotIn("file_details", payload)
+
     def test_file_deletion_cascades_only_unconverted_drafts(self):
         draft = self._draft(self.recipient_one)
         FileShareDraftService.finalize_for_submit(
