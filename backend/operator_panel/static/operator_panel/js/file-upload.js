@@ -104,9 +104,11 @@ document.addEventListener("DOMContentLoaded", () => {
         fetch(
             shareUrl + "?instance_id=" + encodeURIComponent(instanceId) +
             "&step_id=" + encodeURIComponent(stepId),
-            credentials: "same-origin",
-            headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json" },
-        }).then(async (response) => {
+            {
+                credentials: "same-origin",
+                headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json" },
+            }
+        ).then(async (response) => {
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || "دریافت گیرندگان ناموفق بود.");
             recipientList.replaceChildren();
