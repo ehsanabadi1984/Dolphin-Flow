@@ -1198,17 +1198,11 @@ def notifications(request):
                     notification.workflow_instance_id
                 ),
                 "file_share_message_url": (
-                    reverse(
-                        "operator_panel:file_share_message_detail",
-                        args=[notification.file_share_message_id],
-                    )
+                    f"{reverse('operator_panel:file_share_inbox_page')}?message_id={notification.file_share_message_id}"
                     if notification.file_share_message_id else None
                 ),
                 "workflow_instance_url": (
-                    reverse(
-                        "operator_panel:file_share_message_detail",
-                        args=[notification.file_share_message_id],
-                    )
+                    f"{reverse('operator_panel:file_share_inbox_page')}?message_id={notification.file_share_message_id}"
                     if notification.file_share_message_id else (
                     (
                         reverse(

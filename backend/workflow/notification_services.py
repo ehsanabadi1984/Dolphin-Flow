@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
 
 from asgiref.sync import async_to_sync
@@ -44,7 +45,7 @@ class NotificationService:
             ),
             "file_share_message_id": notification.file_share_message_id,
             "file_share_message_url": (
-                f"/operator/file-shares/messages/{notification.file_share_message_id}/"
+                f"{reverse('operator_panel:file_share_inbox_page')}?message_id={notification.file_share_message_id}"
                 if notification.file_share_message_id else None
             ),
         }

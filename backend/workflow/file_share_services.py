@@ -309,10 +309,7 @@ class FileShareDraftService:
             sent_at = timezone.now()
             snapshot = {
                 "file": {
-                    "field_id": form_file.field_id,
-                    "field_code": form_file.field.code,
                     "field_label": form_file.field.label,
-                    "row_id": form_file.row_id,
                     "original_name": form_file.original_name,
                     "file_size": form_file.file_size,
                     "content_type": form_file.content_type,

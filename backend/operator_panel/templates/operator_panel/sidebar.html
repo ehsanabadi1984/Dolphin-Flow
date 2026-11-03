@@ -58,9 +58,9 @@
             {% empty %}<div class="df-nav-empty">فرآیند قابل شروعی وجود ندارد.</div>{% endfor %}
         </div>
 
-        <a href="{% url 'operator_panel:file_share_inbox_page' %}" class="df-nav-link{% if request.resolver_match.url_name == 'file_share_inbox_page' %} active{% endif %}" data-tooltip="صندوق پیام‌ها">
+        <a href="{% url 'operator_panel:file_share_inbox_page' %}" class="df-nav-link{% if request.resolver_match.url_name == 'file_share_inbox_page' %} active{% endif %}" data-tooltip="صندوق پیام‌ها" id="df-file-share-inbox-link" data-api-url="{% url 'operator_panel:file_share_inbox' %}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"></path><path d="m4 7 8 6 8-6"></path></svg>
-            <span>صندوق پیام‌ها</span>
+            <span>صندوق پیام‌ها</span><span class="df-nav-badge df-nav-badge-warning" id="df-file-share-unread-badge" hidden>0</span>
         </a>
 
         <a href="{% url 'operator_panel:my_processes' %}" class="df-nav-link{% if request.resolver_match.url_name == 'my_processes' %} active{% endif %}" data-tooltip="فرآیندهای من">

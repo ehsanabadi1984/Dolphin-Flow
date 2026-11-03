@@ -3065,3 +3065,9 @@ body.df-modal-open {
 .df-file-share-summary { display: grid; gap: 4px; margin-top: 9px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 9px; background: var(--accent-soft); color: var(--text); font-size: 12px; line-height: 1.7; }
 .df-file-share-summary p { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .df-file-share-summary small { color: var(--text-secondary); }
+
+.df-share-inbox-item.is-unread { border-color: var(--accent); }
+.df-share-inbox-file-details { display:grid; grid-template-columns:minmax(100px, 25%) minmax(0, 1fr); gap:7px 12px; margin:10px 0; padding:12px; border:1px solid var(--border); border-radius:9px; background:var(--surface-2); }
+.df-share-inbox-file-details dt { color:var(--text-secondary); font-size:12px; }
+.df-share-inbox-file-details dd { margin:0; overflow-wrap:anywhere; font-size:13px; }
+@media(max-width:520px) { .df-share-inbox-file-details { grid-template-columns:1fr; gap:3px; } }

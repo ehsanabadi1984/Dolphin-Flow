@@ -1,12 +1,60 @@
 document.addEventListener("DOMContentLoaded", () => {
     const root = document.getElementById("df-share-inbox");
+    const inboxLink = document.getElementById("df-file-share-inbox-link");
+    const apiUrl = root?.dataset.apiUrl || inboxLink?.dataset.apiUrl;
+    const unreadBadge = document.getElementById("df-file-share-unread-badge");
+
+    async function refreshUnreadCount() {
+        if (!apiUrl || !unreadBadge) return;
+        try {
+            const separator = apiUrl.includes("?") ? "&" : "?";
+            const response = await fetch(apiUrl + separator + "counts_only=1", {
+                credentials: "same-origin",
+                cache: "no-store",
+                headers: { "Accept": "application/json" },
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            const count = Number(data.unread_messages_count || 0);
+            unreadBadge.textContent = String(count);
+            unreadBadge.hidden = count < 1;
+        } catch (error) {
+            console.warn("Unable to refresh unread file-share count:", error);
+        }
+    }
+
+    if (apiUrl && unreadBadge) {
+        refreshUnreadCount();
+        window.setInterval(refreshUnreadCount, 10000);
+        window.addEventListener("df:file-share-notification", refreshUnreadCount);
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) refreshUnreadCount();
+        });
+    }
+
     if (!root) return;
-    const apiUrl = root.dataset.apiUrl;
     const list = document.getElementById("df-share-inbox-items");
     const detail = document.getElementById("df-share-inbox-detail");
     const tabs = Array.from(root.querySelectorAll("[data-share-tab]"));
     let payload = { messages: [], sent_messages: [], drafts: [] };
     let activeTab = "received";
+    let initialMessageOpened = false;
+
+    const interactionLabels = {
+        VIEW: "اشتراک‌گذاری برای مشاهده",
+        RESPONSE: "درخواست پاسخ یا دریافت اطلاعات",
+        ACTION: "درخواست انجام اقدام",
+        REVIEW: "درخواست بررسی یا تأیید فایل",
+    };
+    const statusLabels = {
+        PENDING: "خوانده‌نشده",
+        READ: "مشاهده‌شده",
+        RESPONDED: "پاسخ‌داده‌شده",
+        COMPLETED: "تکمیل‌شده",
+        CANCELLED: "لغوشده",
+        EXPIRED: "منقضی‌شده",
+        DRAFT: "پیش‌نویس",
+    };
 
     function node(tag, className, value) {
         const element = document.createElement(tag);
@@ -22,6 +70,46 @@ document.addEventListener("DOMContentLoaded", () => {
         const feedback = detail.querySelector("[data-share-feedback]");
         if (feedback) feedback.textContent = message;
     }
+    function formatBytes(value) {
+        const bytes = Number(value);
+        if (!Number.isFinite(bytes) || bytes < 0) return "نامشخص";
+        if (bytes < 1024) return bytes + " بایت";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " کیلوبایت";
+        return (bytes / (1024 * 1024)).toFixed(1) + " مگابایت";
+    }
+    function formatContentType(value) {
+        const type = String(value || "").toLowerCase();
+        if (type.startsWith("image/")) return "تصویر " + type.slice(6).toUpperCase();
+        if (type === "application/pdf") return "سند PDF";
+        if (type.includes("word")) return "سند Word";
+        if (type.includes("spreadsheet") || type.includes("excel")) return "فایل صفحه‌گسترده";
+        if (type.startsWith("text/")) return "فایل متنی";
+        return type || "نامشخص";
+    }
+    function appendFileDetails(message) {
+        const file = message.file_details || {};
+        const details = node("dl", "df-share-inbox-file-details");
+        const rows = [
+            ["فیلد", file.field_label || "فایل پیوست"],
+            ["نام فایل", file.original_name || message.file_name || "نامشخص"],
+            ["حجم فایل", formatBytes(file.file_size ?? message.file_size)],
+            ["نوع فایل", formatContentType(file.content_type || message.content_type)],
+        ];
+        rows.forEach(([label, value]) => {
+            details.append(node("dt", "", label), node("dd", "", value));
+        });
+        detail.appendChild(details);
+    }
+    async function request(url, options) {
+        const response = await fetch(url, {
+            credentials: "same-origin",
+            headers: { "Accept": "application/json", ...(options && options.headers || {}) },
+            ...(options || {}),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "انجام عملیات ناموفق بود.");
+        return data;
+    }
     function renderList() {
         tabs.forEach((tab) => tab.setAttribute("aria-pressed", String(tab.dataset.shareTab === activeTab)));
         list.replaceChildren();
@@ -35,11 +123,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         items.forEach((item) => {
             const card = node("article", "df-share-inbox-item");
+            if (activeTab === "received" && item.status === "PENDING") card.classList.add("is-unread");
             card.appendChild(node("strong", "", item.subject || item.file_name || "بدون موضوع"));
             card.appendChild(node("span", "df-share-inbox-meta",
                 activeTab === "received" ? "فرستنده: " + item.sender : "گیرنده: " + item.recipient));
             card.appendChild(node("span", "df-share-inbox-meta",
-                "وضعیت: " + (item.status || "پیش‌نویس") + (item.file_name ? " · " + item.file_name : "")));
+                "وضعیت: " + (statusLabels[item.status] || item.status || "پیش‌نویس") +
+                (item.file_name ? " · " + item.file_name : "")));
             if (activeTab === "received") {
                 const open = node("button", "df-button df-button-secondary", "مشاهده پیام");
                 open.type = "button";
@@ -87,20 +177,17 @@ document.addEventListener("DOMContentLoaded", () => {
             list.appendChild(card);
         });
     }
-    async function request(url, options) {
-        const response = await fetch(url, {
-            credentials: "same-origin",
-            headers: { "Accept": "application/json", ...(options && options.headers || {}) },
-            ...(options || {}),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "انجام عملیات ناموفق بود.");
-        return data;
-    }
     async function load() {
         try {
             payload = await request(apiUrl);
             renderList();
+            refreshUnreadCount();
+            const messageId = new URLSearchParams(window.location.search).get("message_id");
+            if (!initialMessageOpened && messageId) {
+                initialMessageOpened = true;
+                const target = payload.messages.find((item) => String(item.id) === messageId);
+                if (target) await openMessage(target.url);
+            }
         } catch (error) {
             list.textContent = error.message;
         }
@@ -112,19 +199,14 @@ document.addEventListener("DOMContentLoaded", () => {
             detail.replaceChildren();
             detail.appendChild(node("h2", "", message.subject || "پیام اشتراک‌گذاری فایل"));
             detail.appendChild(node("p", "", "فرستنده: " + message.sender));
-            detail.appendChild(node("p", "", "نوع تعامل: " + message.interaction_type));
-            detail.appendChild(node("p", "", "وضعیت: " + message.status));
+            detail.appendChild(node("p", "", "نوع تعامل: " + (interactionLabels[message.interaction_type] || message.interaction_type)));
+            detail.appendChild(node("p", "", "وضعیت: " + (statusLabels[message.status] || message.status)));
             if (message.body) detail.appendChild(node("p", "", message.body));
+            appendFileDetails(message);
             const download = node("a", "df-share-inbox-file", "دانلود فایل: " + message.file_name);
             download.href = message.download_url;
             download.setAttribute("download", "");
             detail.appendChild(download);
-            if (message.form_snapshot && Object.keys(message.form_snapshot).length) {
-                detail.appendChild(node("h3", "", "اطلاعات ثبت‌شده همراه پیام"));
-                const snapshot = node("pre", "df-share-inbox-snapshot",
-                    JSON.stringify(message.form_snapshot, null, 2));
-                detail.appendChild(snapshot);
-            }
             const actions = node("div", "df-share-inbox-actions");
             if (message.interaction_type !== "VIEW" &&
                 ["PENDING", "READ"].includes(message.status)) {
@@ -163,10 +245,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 actions.appendChild(complete);
             }
             detail.appendChild(actions);
-            detail.appendChild(node("p", "df-share-inbox-meta", ""));
             const feedback = node("p", "df-share-inbox-meta", "");
             feedback.dataset.shareFeedback = "1";
             detail.appendChild(feedback);
+            refreshUnreadCount();
         } catch (error) {
             detail.replaceChildren(node("p", "df-share-inbox-empty", error.message));
         }

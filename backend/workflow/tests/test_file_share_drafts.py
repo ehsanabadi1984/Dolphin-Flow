@@ -6,7 +6,7 @@ from accounts.models import User
 from workflow.form_file_models import FormFile, SharedFileAsset
 from workflow.file_share_services import FileShareDraftService
 from workflow.models import (
-    FileShareDraft, FileShareMessage, FileShareMessageEvent,
+    FileShareDraft, FileShareMessage, FileShareMessageEvent, Notification,
     FormData, FormDefinition, FormField, FormSection,
     Workflow, WorkflowInstance, WorkflowStep, WorkflowTransition,
     WorkflowTransitionExecution, WorkflowMembership, FieldAccess,
@@ -214,6 +214,52 @@ class FileShareDraftFinalizationTests(TestCase):
         self.assertEqual(payload["file_drafts"][0]["id"], draft.pk)
         self.assertEqual(payload["file_drafts"][0]["recipient_id"], self.recipient_one.pk)
 
+    def test_unread_message_count_endpoint_tracks_pending_and_read_messages(self):
+        asset = SharedFileAsset.get_or_create_for_form_file(self.form_file)[0]
+        message = FileShareMessage.objects.create(
+            asset=asset, sender=self.sender, recipient=self.recipient_one,
+            workflow_instance=self.instance, workflow_step=self.step,
+        )
+        self.client.force_login(self.recipient_one)
+        url = reverse("operator_panel:file_share_inbox")
+        unread = self.client.get(url, {"counts_only": "1"})
+        self.assertEqual(unread.status_code, 200)
+        self.assertEqual(unread.json()["unread_messages_count"], 1)
+
+        from workflow.file_share_services import FileShareMessageService
+        FileShareMessageService.transition_status(
+            message=message, to_status=FileShareMessage.Status.READ,
+            actor=self.recipient_one,
+        )
+        read = self.client.get(url, {"counts_only": "1"})
+        self.assertEqual(read.json()["unread_messages_count"], 0)
+
+    def test_file_share_notification_links_to_mailbox_message_view(self):
+        asset = SharedFileAsset.get_or_create_for_form_file(self.form_file)[0]
+        message = FileShareMessage.objects.create(
+            asset=asset, sender=self.sender, recipient=self.recipient_one,
+            workflow_instance=self.instance, workflow_step=self.step,
+        )
+        Notification.objects.create(
+            recipient=self.recipient_one,
+            notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+            title="فایل جدید",
+            message="فایلی برای شما ارسال شده است.",
+            workflow_instance=self.instance,
+            workflow_step=self.step,
+            file_share_message=message,
+        )
+        self.client.force_login(self.recipient_one)
+        response = self.client.get(reverse("operator_panel:notifications"))
+        self.assertEqual(response.status_code, 200)
+        notification = response.json()["notifications"][0]
+        expected_url = (
+            reverse("operator_panel:file_share_inbox_page")
+            + f"?message_id={message.pk}"
+        )
+        self.assertEqual(notification["workflow_instance_url"], expected_url)
+        self.assertEqual(notification["file_share_message_url"], expected_url)
+
     def test_submit_converts_one_draft_per_recipient_without_copying_file(self):
         first = self._draft(self.recipient_one)
         second = self._draft(self.recipient_two)
@@ -236,6 +282,15 @@ class FileShareDraftFinalizationTests(TestCase):
         self.assertEqual(FileShareMessageEvent.objects.filter(
             event_type=FileShareMessageEvent.EventType.SENT
         ).count(), 2)
+        notifications = Notification.objects.filter(
+            notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+            file_share_message__in=messages,
+        )
+        self.assertEqual(notifications.count(), 2)
+        self.assertEqual(
+            set(notifications.values_list("recipient_id", flat=True)),
+            {self.recipient_one.pk, self.recipient_two.pk},
+        )
 
     def test_recipient_scoped_message_detail_does_not_grant_sender_access(self):
         asset = SharedFileAsset.get_or_create_for_form_file(self.form_file)[0]
@@ -254,6 +309,14 @@ class FileShareDraftFinalizationTests(TestCase):
             "operator_panel:file_share_message_detail", args=[message.pk]
         ))
         self.assertEqual(allowed.status_code, 200)
+        details = allowed.json()["file_details"]
+        self.assertEqual(details["field_label"], self.field.label)
+        self.assertEqual(details["original_name"], "draft.pdf")
+        self.assertEqual(details["file_size"], 123)
+        self.assertEqual(details["content_type"], "application/pdf")
+        self.assertNotIn("field_code", details)
+        self.assertNotIn("row_id", details)
+        self.assertNotIn("form_snapshot", allowed.json())
         message.refresh_from_db()
         self.assertEqual(message.status, FileShareMessage.Status.READ)
 

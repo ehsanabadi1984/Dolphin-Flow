@@ -39,6 +39,9 @@ def _payload(request):
 def file_share_inbox(request):
     if request.method == "GET":
         qs = FileShareMessage.objects.filter(recipient=request.user).select_related("sender", "asset")
+        unread_messages_count = qs.filter(status=FileShareMessage.Status.PENDING).count()
+        if request.GET.get("counts_only") == "1":
+            return JsonResponse({"unread_messages_count": unread_messages_count})
         drafts = FileShareDraft.objects.filter(sender=request.user, status=FileShareDraft.Status.DRAFT).select_related("recipient", "form_file")
         instance_id = request.GET.get("instance_id")
         recipients = []
@@ -87,6 +90,7 @@ def file_share_inbox(request):
                     status=FileShareDraft.Status.DRAFT,
                 ).select_related("recipient").order_by("recipient__username")]
         return JsonResponse({
+            "unread_messages_count": unread_messages_count,
             "available_recipients": recipients,
             "file_drafts": file_drafts if instance_id and instance_id.isdigit() else [],
             "sent_messages": [{
@@ -171,12 +175,18 @@ def file_share_message_detail(request, message_id):
         file_share_message=message, recipient=request.user, is_read=False
     ):
         NotificationService.mark_as_read(notification=notification, user=request.user)
+    snapshot_file = message.form_snapshot.get("file", {}) if isinstance(message.form_snapshot, dict) else {}
     return JsonResponse({
         "id": message.pk, "sender": str(message.sender), "subject": message.subject,
         "body": message.body, "interaction_type": message.interaction_type,
         "status": message.status, "file_name": message.asset.original_name,
         "file_size": message.asset.file_size, "content_type": message.asset.content_type,
-        "form_snapshot": message.form_snapshot,
+        "file_details": {
+            "field_label": snapshot_file.get("field_label") or "فایل پیوست",
+            "original_name": message.asset.original_name,
+            "file_size": message.asset.file_size,
+            "content_type": message.asset.content_type,
+        },
         "download_url": reverse("operator_panel:file_share_message_download", args=[message.pk]),
     })
 

@@ -827,6 +827,12 @@ function handleIncomingNotification(notification) {
         notification.id
     );
 
+    if (notification.type === "FILE_SHARE_MESSAGE") {
+        window.dispatchEvent(new CustomEvent("df:file-share-notification", {
+            detail: notification,
+        }));
+    }
+
     triggerNotificationAlert(
         notification
     );
