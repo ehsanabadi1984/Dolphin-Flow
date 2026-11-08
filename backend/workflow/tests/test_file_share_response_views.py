@@ -8,6 +8,7 @@ from workflow.form_file_models import FormFile, SharedFileAsset
 from workflow.file_share_services import FileShareMessageService
 from workflow.models import (
     FileShareMessage,
+    FileShareMessageEvent,
     FormData,
     FormDefinition,
     FormField,
