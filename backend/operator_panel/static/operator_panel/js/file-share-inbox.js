@@ -269,6 +269,22 @@ document.addEventListener("DOMContentLoaded", () => {
                 detail.appendChild(download);
             }
             const actions = node("div", "df-share-inbox-actions");
+            if (message.status === "RESPONDED") {
+                // Compatibility for requests answered before the one-step completion flow.
+                const completeLegacy = node("button", "df-button df-button-primary", "تکمیل درخواست قدیمی");
+                completeLegacy.type = "button";
+                completeLegacy.addEventListener("click", async () => {
+                    try {
+                        await request(url + "complete/", {
+                            method: "POST",
+                            headers: { "X-CSRFToken": csrf() },
+                        });
+                        await load();
+                        await openMessage(url);
+                    } catch (error) { setFeedback(error.message); }
+                });
+                actions.appendChild(completeLegacy);
+            }
             if (message.interaction_type !== "VIEW" &&
                 ["PENDING", "READ"].includes(message.status)) {
                 const response = node("textarea", "df-share-inbox-response");

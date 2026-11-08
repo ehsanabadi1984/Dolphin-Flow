@@ -5,9 +5,9 @@ from django.urls import reverse
 
 from accounts.models import User
 from workflow.form_file_models import FormFile, SharedFileAsset
+from workflow.file_share_services import FileShareMessageService
 from workflow.models import (
     FileShareMessage,
-    FileShareMessageEvent,
     FormData,
     FormDefinition,
     FormField,
@@ -74,12 +74,14 @@ class FileShareResponseViewTests(TestCase):
         self.assertIn("بررسی انجام شد.", notification.message)
 
     def test_sender_can_open_sent_message_and_read_response(self):
-        self.message.status = FileShareMessage.Status.COMPLETED
-        self.message.completed_at = self.message.sent_at
-        self.message.save(update_fields=["status", "completed_at"])
-        FileShareMessageEvent.objects.create(
+        FileShareMessageService.transition_status(
             message=self.message,
-            event_type=FileShareMessageEvent.EventType.COMPLETED,
+            to_status=FileShareMessage.Status.READ,
+            actor=self.recipient,
+        )
+        FileShareMessageService.transition_status(
+            message=self.message,
+            to_status=FileShareMessage.Status.COMPLETED,
             actor=self.recipient,
             details={"response": "نتیجه بررسی"},
         )
