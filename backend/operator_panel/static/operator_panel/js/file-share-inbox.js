@@ -286,7 +286,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 actions.appendChild(completeLegacy);
             }
-            if (message.interaction_type !== "VIEW" &&
+            if (!message.is_sender && message.interaction_type !== "VIEW" &&
                 ["PENDING", "READ"].includes(message.status)) {
                 const response = node("textarea", "df-share-inbox-response");
                 response.placeholder = "پاسخ خود را بنویسید...";

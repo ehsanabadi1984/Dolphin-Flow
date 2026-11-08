@@ -78,3 +78,7 @@ test("sender can inspect shared file metadata without receiving a download link"
     assert.match(inboxJs, /appendFileDetails\(message\)/);
     assert.match(inboxJs, /if \(!message\.is_sender && message\.download_url\)/);
 });
+
+test("only the recipient sees the response editor for an unanswered request", () => {
+    assert.match(inboxJs, /if \(!message\.is_sender && message\.interaction_type !== "VIEW"/);
+});
