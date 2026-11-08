@@ -240,15 +240,36 @@ document.addEventListener("DOMContentLoaded", () => {
             if (Array.isArray(message.events) && message.events.length) {
                 const history = node("section", "df-share-inbox-history");
                 history.appendChild(node("h3", "", "تاریخچه پیام"));
+                const eventLabels = {
+                    CREATED: "پیام ایجاد شد",
+                    SENT: "فایل ارسال شد",
+                    READ: "پیام مشاهده شد",
+                    RESPONDED: "پاسخ ثبت شد",
+                    COMPLETED: "درخواست تکمیل شد",
+                    CANCELLED: "پیام لغو شد",
+                    EXPIRED: "مهلت پیام به پایان رسید",
+                    DOWNLOADED: "فایل دانلود شد",
+                };
+                const dateFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                    timeZone: message.timezone || "Asia/Tehran",
+                });
                 message.events.forEach((event) => {
-                    const label = event.event_type === "COMPLETED" ? "درخواست تکمیل شد" :
-                        event.event_type === "RESPONDED" ? "پاسخ ثبت شد" :
-                        event.event_type === "READ" ? "پیام مشاهده شد" :
-                        event.event_type === "CANCELLED" ? "پیام لغو شد" :
-                        event.event_type === "SENT" ? "پیام ارسال شد" :
-                        event.event_type === "CREATED" ? "پیام ایجاد شد" : event.event_type;
-                    history.appendChild(node("p", "df-share-inbox-meta",
-                        label + (event.actor ? " · " + event.actor : "")));
+                    const label = event.event_label || eventLabels[event.event_type] || "رویداد پیام";
+                    let eventDate = "زمان نامشخص";
+                    if (event.created_at) {
+                        const parsedDate = new Date(event.created_at);
+                        if (!Number.isNaN(parsedDate.getTime())) {
+                            eventDate = dateFormatter.format(parsedDate);
+                        }
+                    }
+                    const actor = event.actor || "سیستم";
+                    history.appendChild(node(
+                        "p",
+                        "df-share-inbox-meta",
+                        label + " · " + actor + " · " + eventDate
+                    ));
                 });
                 detail.appendChild(history);
             }

@@ -82,3 +82,15 @@ test("sender can inspect shared file metadata without receiving a download link"
 test("only the recipient sees the response editor for an unanswered request", () => {
     assert.match(inboxJs, /if \(!message\.is_sender && message\.interaction_type !== "VIEW"/);
 });
+
+test("message history renders every event with its Persian title, actor and Tehran-local Jalali timestamp", () => {
+    for (const eventType of ["CREATED", "SENT", "READ", "RESPONDED", "COMPLETED", "CANCELLED", "EXPIRED", "DOWNLOADED"]) {
+        assert.match(inboxJs, new RegExp(eventType + ":"));
+    }
+    assert.match(inboxJs, /event\.event_label/);
+    assert.match(inboxJs, /event\.actor \|\| "سیستم"/);
+    assert.match(inboxJs, /event\.created_at/);
+    assert.match(inboxJs, /fa-IR-u-ca-persian/);
+    assert.match(inboxJs, /timeZone: message\.timezone \|\| "Asia\/Tehran"/);
+    assert.match(inboxJs, /label \+ " · " \+ actor \+ " · " \+ eventDate/);
+});

@@ -1,6 +1,6 @@
 import json
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import User
@@ -97,6 +97,54 @@ class FileShareResponseViewTests(TestCase):
         self.assertEqual(response.json()["file_details"]["original_name"], "document.pdf")
         self.assertEqual(response.json()["file_name"], "document.pdf")
         self.assertNotIn("download_url", response.json())
+
+    @override_settings(TIME_ZONE="Asia/Tehran")
+    def test_message_history_includes_persian_labels_timestamps_and_actors(self):
+        event_types = [
+            FileShareMessageEvent.EventType.CREATED,
+            FileShareMessageEvent.EventType.SENT,
+            FileShareMessageEvent.EventType.READ,
+            FileShareMessageEvent.EventType.RESPONDED,
+            FileShareMessageEvent.EventType.COMPLETED,
+            FileShareMessageEvent.EventType.CANCELLED,
+            FileShareMessageEvent.EventType.EXPIRED,
+            FileShareMessageEvent.EventType.DOWNLOADED,
+        ]
+        created_events = []
+        for event_type in event_types:
+            actor = (
+                None if event_type == FileShareMessageEvent.EventType.EXPIRED
+                else self.sender if event_type in {
+                    FileShareMessageEvent.EventType.CREATED,
+                    FileShareMessageEvent.EventType.SENT,
+                    FileShareMessageEvent.EventType.CANCELLED,
+                }
+                else self.recipient
+            )
+            created_events.append(FileShareMessageEvent.objects.create(
+                message=self.message,
+                event_type=event_type,
+                actor=actor,
+            ))
+
+        self.client.force_login(self.sender)
+        response = self.client.get(
+            reverse("operator_panel:file_share_message_detail", args=[self.message.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["timezone"], "Asia/Tehran")
+        events = payload["events"]
+        self.assertEqual([item["event_type"] for item in events], event_types)
+        for item, event in zip(events, created_events):
+            self.assertEqual(item["created_at"], event.created_at.isoformat())
+            self.assertEqual(item["event_label"], event.get_event_type_display())
+            self.assertTrue(item["actor"])
+        expired = next(item for item in events if item["event_type"] == "EXPIRED")
+        self.assertEqual(expired["actor"], "سیستم")
+        sent = next(item for item in events if item["event_type"] == "SENT")
+        self.assertEqual(sent["actor"], str(self.sender))
 
     def test_unrelated_user_cannot_open_message_detail(self):
         self.client.force_login(self.other)

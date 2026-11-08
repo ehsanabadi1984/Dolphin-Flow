@@ -8,6 +8,7 @@ from django.db import transaction
 from django.http import FileResponse, JsonResponse, Http404
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from .file_share_services import FileShareDraftService, FileShareMessageService
 from .file_share_authorization import (
@@ -236,9 +237,11 @@ def file_share_message_detail(request, message_id):
         "file_size": message.asset.file_size,
         "content_type": message.asset.content_type,
         "response": response_text,
+        "timezone": timezone.get_current_timezone_name(),
         "events": [{
             "event_type": event.event_type,
-            "actor": str(event.actor) if event.actor_id else "",
+            "event_label": event.get_event_type_display(),
+            "actor": str(event.actor) if event.actor_id else "سیستم",
             "created_at": event.created_at.isoformat(),
         } for event in events],
         "file_details": {
