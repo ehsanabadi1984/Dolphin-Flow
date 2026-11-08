@@ -18,6 +18,7 @@ class FileShareMessageService:
         },
         FileShareMessage.Status.READ: {
             FileShareMessage.Status.RESPONDED,
+            FileShareMessage.Status.COMPLETED,
             FileShareMessage.Status.CANCELLED,
             FileShareMessage.Status.EXPIRED,
         },

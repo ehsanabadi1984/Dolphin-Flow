@@ -154,12 +154,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 open.type = "button";
                 open.addEventListener("click", () => openMessage(item.url));
                 card.appendChild(open);
-            } else if (activeTab === "sent" &&
-                ["PENDING", "READ", "RESPONDED"].includes(item.status)) {
-                const recall = node("button", "df-button df-button-danger", "لغو پیام");
-                recall.type = "button";
-                recall.addEventListener("click", () => recallMessage(item.recall_url));
-                card.appendChild(recall);
+            } else if (activeTab === "sent") {
+                const open = node("button", "df-button df-button-secondary", "مشاهده جزئیات و پاسخ");
+                open.type = "button";
+                open.addEventListener("click", () => openMessage(item.detail_url));
+                card.appendChild(open);
+                if (["PENDING", "READ", "RESPONDED"].includes(item.status)) {
+                    const recall = node("button", "df-button df-button-danger", "لغو پیام");
+                    recall.type = "button";
+                    recall.addEventListener("click", () => recallMessage(item.recall_url));
+                    card.appendChild(recall);
+                }
             } else if (activeTab === "drafts") {
                 const actions = node("div", "df-share-inbox-actions");
                 const edit = node("button", "df-button df-button-secondary", "ویرایش");
@@ -205,7 +210,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!initialMessageOpened && messageId) {
                 initialMessageOpened = true;
                 const target = payload.messages.find((item) => String(item.id) === messageId);
+                const sentTarget = payload.sent_messages.find((item) => String(item.id) === messageId);
                 if (target) await openMessage(target.url);
+                else if (sentTarget) await openMessage(sentTarget.detail_url);
             }
         } catch (error) {
             list.textContent = error.message;
@@ -221,10 +228,30 @@ document.addEventListener("DOMContentLoaded", () => {
             detail.replaceChildren();
             detail.appendChild(node("h2", "", message.subject || "پیام اشتراک‌گذاری فایل"));
             appendWorkflowContext(detail, message);
-            detail.appendChild(node("p", "", "فرستنده: " + message.sender));
+            detail.appendChild(node("p", "", (message.is_sender ? "گیرنده: " : "فرستنده: ") +
+                (message.is_sender ? message.recipient : message.sender)));
             detail.appendChild(node("p", "", "نوع تعامل: " + (interactionLabels[message.interaction_type] || message.interaction_type)));
             detail.appendChild(node("p", "", "وضعیت: " + (statusLabels[message.status] || message.status)));
             if (message.body) detail.appendChild(node("p", "", message.body));
+            if (message.response) {
+                detail.appendChild(node("h3", "", "پاسخ ثبت‌شده"));
+                detail.appendChild(node("p", "df-share-inbox-response-text", message.response));
+            }
+            if (Array.isArray(message.events) && message.events.length) {
+                const history = node("section", "df-share-inbox-history");
+                history.appendChild(node("h3", "", "تاریخچه پیام"));
+                message.events.forEach((event) => {
+                    const label = event.event_type === "COMPLETED" ? "درخواست تکمیل شد" :
+                        event.event_type === "RESPONDED" ? "پاسخ ثبت شد" :
+                        event.event_type === "READ" ? "پیام مشاهده شد" :
+                        event.event_type === "CANCELLED" ? "پیام لغو شد" :
+                        event.event_type === "SENT" ? "پیام ارسال شد" :
+                        event.event_type === "CREATED" ? "پیام ایجاد شد" : event.event_type;
+                    history.appendChild(node("p", "df-share-inbox-meta",
+                        label + (event.actor ? " · " + event.actor : "")));
+                });
+                detail.appendChild(history);
+            }
             if (message.unavailable) {
                 detail.appendChild(node(
                     "p",
@@ -234,11 +261,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 refreshUnreadCount();
                 return;
             }
-            appendFileDetails(message);
-            const download = node("a", "df-share-inbox-file", "دانلود فایل: " + message.file_name);
-            download.href = message.download_url;
-            download.setAttribute("download", "");
-            detail.appendChild(download);
+            if (!message.is_sender && message.download_url) {
+                appendFileDetails(message);
+                const download = node("a", "df-share-inbox-file", "دانلود فایل: " + message.file_name);
+                download.href = message.download_url;
+                download.setAttribute("download", "");
+                detail.appendChild(download);
+            }
             const actions = node("div", "df-share-inbox-actions");
             if (message.interaction_type !== "VIEW" &&
                 ["PENDING", "READ"].includes(message.status)) {
@@ -260,21 +289,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     } catch (error) { setFeedback(error.message); }
                 });
                 actions.appendChild(send);
-            }
-            if (message.status === "RESPONDED") {
-                const complete = node("button", "df-button df-button-primary", "تکمیل درخواست");
-                complete.type = "button";
-                complete.addEventListener("click", async () => {
-                    try {
-                        await request(url + "complete/", {
-                            method: "POST",
-                            headers: { "X-CSRFToken": csrf() },
-                        });
-                        await load();
-                        await openMessage(url);
-                    } catch (error) { setFeedback(error.message); }
-                });
-                actions.appendChild(complete);
             }
             detail.appendChild(actions);
             const feedback = node("p", "df-share-inbox-meta", "");

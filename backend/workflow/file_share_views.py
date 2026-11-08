@@ -117,6 +117,7 @@ def file_share_inbox(request):
                 **_workflow_context(m),
                 "sent_at": m.sent_at.isoformat(),
                 "recall_url": reverse("operator_panel:file_share_message_recall", args=[m.pk]),
+                "detail_url": reverse("operator_panel:file_share_message_detail", args=[m.pk]),
             } for m in FileShareMessage.objects.filter(sender=request.user).select_related(
                 "recipient", "asset", "workflow_instance__workflow", "workflow_step"
             )[:100]],
@@ -187,29 +188,68 @@ def file_share_draft_delete(request, draft_id):
 def file_share_message_detail(request, message_id):
     message = get_object_or_404(
         FileShareMessage.objects.select_related(
-            "asset", "sender", "workflow_instance__workflow", "workflow_step"
+            "asset", "sender", "recipient", "workflow_instance__workflow", "workflow_step"
         ),
-        pk=message_id, recipient=request.user,
+        pk=message_id,
     )
+    is_sender = message.sender_id == request.user.pk
+    is_recipient = message.recipient_id == request.user.pk
+    if not (is_sender or is_recipient):
+        raise Http404
+
     from .models import Notification
     from .notification_services import NotificationService
 
-    # Opening a message acknowledges its notification regardless of the
-    # message lifecycle state (active, cancelled, or expired).
+    # Opening the message acknowledges only this viewer's linked notification.
     for notification in Notification.objects.filter(
         file_share_message=message, recipient=request.user, is_read=False
     ):
         NotificationService.mark_as_read(notification=notification, user=request.user)
 
+    if is_recipient and message.status == FileShareMessage.Status.PENDING:
+        FileShareMessageService.transition_status(
+            message=message, to_status=FileShareMessage.Status.READ, actor=request.user
+        )
+        message.refresh_from_db()
+
+    events = list(message.events.select_related("actor").order_by("created_at", "pk"))
+    response_text = next(
+        (
+            event.details.get("response", "")
+            for event in reversed(events)
+            if isinstance(event.details, dict) and event.details.get("response")
+        ),
+        "",
+    )
+    snapshot_file = message.form_snapshot.get("file", {}) if isinstance(message.form_snapshot, dict) else {}
+    result = {
+        "id": message.pk,
+        "is_sender": is_sender,
+        "sender": str(message.sender),
+        "recipient": str(message.recipient),
+        "subject": message.subject,
+        "body": message.body,
+        "interaction_type": message.interaction_type,
+        "status": message.status,
+        **_workflow_context(message),
+        "file_name": message.asset.original_name,
+        "file_size": message.asset.file_size,
+        "content_type": message.asset.content_type,
+        "response": response_text,
+        "events": [{
+            "event_type": event.event_type,
+            "actor": str(event.actor) if event.actor_id else "",
+            "created_at": event.created_at.isoformat(),
+        } for event in events],
+        "file_details": {
+            "field_label": snapshot_file.get("field_label") or "فایل پیوست",
+            "original_name": message.asset.original_name,
+            "file_size": message.asset.file_size,
+            "content_type": message.asset.content_type,
+        },
+    }
     if message.status in {FileShareMessage.Status.CANCELLED, FileShareMessage.Status.EXPIRED}:
-        return JsonResponse({
-            "id": message.pk,
-            "sender": str(message.sender),
-            "subject": message.subject,
-            "body": message.body,
-            "interaction_type": message.interaction_type,
-            "status": message.status,
-            **_workflow_context(message),
+        result.update({
             "unavailable": True,
             "unavailable_message": (
                 "فرستنده این پیام را لغو کرده است؛ فایل دیگر قابل دریافت نیست."
@@ -217,24 +257,15 @@ def file_share_message_detail(request, message_id):
                 else "مهلت این پیام به پایان رسیده است؛ فایل دیگر قابل دریافت نیست."
             ),
         })
-    if message.status == FileShareMessage.Status.PENDING:
-        FileShareMessageService.transition_status(message=message, to_status=FileShareMessage.Status.READ, actor=request.user)
-        message.refresh_from_db()
-    snapshot_file = message.form_snapshot.get("file", {}) if isinstance(message.form_snapshot, dict) else {}
-    return JsonResponse({
-        "id": message.pk, "sender": str(message.sender), "subject": message.subject,
-        "body": message.body, "interaction_type": message.interaction_type,
-        "status": message.status, **_workflow_context(message),
-        "file_name": message.asset.original_name,
-        "file_size": message.asset.file_size, "content_type": message.asset.content_type,
-        "file_details": {
-            "field_label": snapshot_file.get("field_label") or "فایل پیوست",
-            "original_name": message.asset.original_name,
-            "file_size": message.asset.file_size,
-            "content_type": message.asset.content_type,
-        },
-        "download_url": reverse("operator_panel:file_share_message_download", args=[message.pk]),
-    })
+        return JsonResponse(result)
+
+    # The sender can inspect the response and audit trail, but file delivery
+    # remains available only through the recipient's message grant.
+    if is_recipient:
+        result["download_url"] = reverse(
+            "operator_panel:file_share_message_download", args=[message.pk]
+        )
+    return JsonResponse(result)
 
 
 @login_required
@@ -263,7 +294,10 @@ def file_share_message_download(request, message_id):
 @transaction.atomic
 def file_share_message_respond(request, message_id):
     message = get_object_or_404(
-        FileShareMessage, pk=message_id, recipient=request.user
+        FileShareMessage.objects.select_related(
+            "sender", "workflow_instance__workflow", "workflow_step"
+        ),
+        pk=message_id, recipient=request.user,
     )
     try:
         data = _payload(request)
@@ -278,15 +312,36 @@ def file_share_message_respond(request, message_id):
                 to_status=FileShareMessage.Status.READ,
                 actor=request.user,
             )
-        FileShareMessageService.transition_status(
+        completed_message, _ = FileShareMessageService.transition_status(
             message=message,
-            to_status=FileShareMessage.Status.RESPONDED,
+            to_status=FileShareMessage.Status.COMPLETED,
             actor=request.user,
-            details={"response": response_text[:10000]},
+            details={
+                "response": response_text[:10000],
+                "source": "recipient_response",
+            },
+        )
+        from .models import Notification
+        from .notification_services import NotificationService
+        NotificationService.create(
+            recipient=message.sender,
+            notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+            title="پاسخ جدیدی برای درخواست فایل شما ثبت شد",
+            message=(
+                f"{request.user} به پیام «{message.subject or message.asset.original_name}» "
+                f"پاسخ داده است: {response_text[:500]}"
+            ),
+            workflow_instance=message.workflow_instance,
+            workflow_step=message.workflow_step,
+            transition_execution=message.transition_execution,
+            file_share_message=message,
         )
     except ValidationError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
-    return JsonResponse({"success": True, "status": FileShareMessage.Status.RESPONDED})
+    return JsonResponse({
+        "success": True,
+        "status": FileShareMessage.Status.COMPLETED,
+    })
 
 
 @login_required
