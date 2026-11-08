@@ -94,6 +94,8 @@ class FileShareResponseViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["is_sender"])
         self.assertEqual(response.json()["response"], "نتیجه بررسی")
+        self.assertEqual(response.json()["file_details"]["original_name"], "document.pdf")
+        self.assertEqual(response.json()["file_name"], "document.pdf")
         self.assertNotIn("download_url", response.json())
 
     def test_unrelated_user_cannot_open_message_detail(self):

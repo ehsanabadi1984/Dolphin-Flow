@@ -73,3 +73,8 @@ test("sender and recipient message cards display process context from the API", 
     assert.match(inboxJs, /شماره /);
     assert.match(inboxJs, /مرحله ارسال:/);
 });
+
+test("sender can inspect shared file metadata without receiving a download link", () => {
+    assert.match(inboxJs, /appendFileDetails\(message\)/);
+    assert.match(inboxJs, /if \(!message\.is_sender && message\.download_url\)/);
+});

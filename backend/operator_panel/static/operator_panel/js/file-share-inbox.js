@@ -252,6 +252,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 detail.appendChild(history);
             }
+            // File metadata is visible to both parties; the download grant remains recipient-only.
+            appendFileDetails(message);
             if (message.unavailable) {
                 detail.appendChild(node(
                     "p",
@@ -262,7 +264,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
             if (!message.is_sender && message.download_url) {
-                appendFileDetails(message);
                 const download = node("a", "df-share-inbox-file", "دانلود فایل: " + message.file_name);
                 download.href = message.download_url;
                 download.setAttribute("download", "");
