@@ -91,6 +91,35 @@ class FileShareDraftFinalizationTests(TestCase):
         self.assertTrue(payload["drafts"][0]["update_url"])
         self.assertTrue(payload["drafts"][0]["delete_url"])
 
+    def test_sender_and_recipient_inbox_payloads_include_related_workflow_context(self):
+        asset = SharedFileAsset.get_or_create_for_form_file(self.form_file)[0]
+        message = FileShareMessage.objects.create(
+            asset=asset, sender=self.sender, recipient=self.recipient_one,
+            workflow_instance=self.instance, workflow_step=self.step,
+            subject="Process context",
+        )
+
+        self.client.force_login(self.sender)
+        sent = self.client.get(reverse("operator_panel:file_share_inbox")).json()
+        sent_message = next(item for item in sent["sent_messages"] if item["id"] == message.pk)
+        self.assertEqual(sent_message["workflow_name"], self.workflow.name)
+        self.assertEqual(sent_message["workflow_instance_id"], self.instance.pk)
+        self.assertEqual(sent_message["workflow_step_name"], self.step.name)
+
+        self.client.force_login(self.recipient_one)
+        received = self.client.get(reverse("operator_panel:file_share_inbox")).json()
+        received_message = next(item for item in received["messages"] if item["id"] == message.pk)
+        self.assertEqual(received_message["workflow_name"], self.workflow.name)
+        self.assertEqual(received_message["workflow_instance_id"], self.instance.pk)
+        self.assertEqual(received_message["workflow_step_name"], self.step.name)
+
+        detail = self.client.get(reverse(
+            "operator_panel:file_share_message_detail", args=[message.pk]
+        )).json()
+        self.assertEqual(detail["workflow_name"], self.workflow.name)
+        self.assertEqual(detail["workflow_instance_id"], self.instance.pk)
+        self.assertEqual(detail["workflow_step_name"], self.step.name)
+
     def test_file_field_definitions_exposes_shareable_only_with_all_permissions(self):
         self.client.force_login(self.sender)
         url = reverse("operator_panel:file_field_definitions", args=[self.instance.pk])

@@ -86,6 +86,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (type.startsWith("text/")) return "فایل متنی";
         return type || "نامشخص";
     }
+    function appendWorkflowContext(container, message) {
+        if (!message.workflow_name && !message.workflow_instance_id) return;
+        const process = node("div", "df-share-inbox-process");
+        process.appendChild(node(
+            "strong", "", "فرآیند: " +
+            (message.workflow_name || "فرآیند نامشخص") +
+            (message.workflow_instance_id ? " · شماره " + message.workflow_instance_id : "")
+        ));
+        if (message.workflow_step_name) {
+            process.appendChild(node("span", "df-share-inbox-meta",
+                "مرحله ارسال: " + message.workflow_step_name));
+        }
+        container.appendChild(process);
+    }
     function appendFileDetails(message) {
         const file = message.file_details || {};
         const details = node("dl", "df-share-inbox-file-details");
@@ -129,6 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const card = node("article", "df-share-inbox-item");
             if (activeTab === "received" && item.status === "PENDING") card.classList.add("is-unread");
             card.appendChild(node("strong", "", item.subject || item.file_name || "بدون موضوع"));
+            appendWorkflowContext(card, item);
             card.appendChild(node("span", "df-share-inbox-meta",
                 activeTab === "received" ? "فرستنده: " + item.sender : "گیرنده: " + item.recipient));
             card.appendChild(node("span", "df-share-inbox-meta",
@@ -205,6 +220,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }));
             detail.replaceChildren();
             detail.appendChild(node("h2", "", message.subject || "پیام اشتراک‌گذاری فایل"));
+            appendWorkflowContext(detail, message);
             detail.appendChild(node("p", "", "فرستنده: " + message.sender));
             detail.appendChild(node("p", "", "نوع تعامل: " + (interactionLabels[message.interaction_type] || message.interaction_type)));
             detail.appendChild(node("p", "", "وضعیت: " + (statusLabels[message.status] || message.status)));

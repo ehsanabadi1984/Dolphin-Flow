@@ -35,10 +35,28 @@ def _payload(request):
         raise ValidationError("بدنه درخواست JSON معتبر نیست.")
 
 
+def _workflow_context(message):
+    """Return process context from the message's existing workflow relation."""
+    instance = message.workflow_instance
+    if instance is None:
+        return {
+            "workflow_name": "",
+            "workflow_instance_id": None,
+            "workflow_step_name": "",
+        }
+    return {
+        "workflow_name": instance.workflow.name,
+        "workflow_instance_id": instance.pk,
+        "workflow_step_name": message.workflow_step.name if message.workflow_step_id else "",
+    }
+
+
 @login_required
 def file_share_inbox(request):
     if request.method == "GET":
-        qs = FileShareMessage.objects.filter(recipient=request.user).select_related("sender", "asset")
+        qs = FileShareMessage.objects.filter(recipient=request.user).select_related(
+            "sender", "asset", "workflow_instance__workflow", "workflow_step"
+        )
         unread_messages_count = qs.filter(status=FileShareMessage.Status.PENDING).count()
         if request.GET.get("counts_only") == "1":
             return JsonResponse({"unread_messages_count": unread_messages_count})
@@ -96,13 +114,17 @@ def file_share_inbox(request):
             "sent_messages": [{
                 "id": m.pk, "recipient": str(m.recipient), "subject": m.subject,
                 "status": m.status, "file_name": m.asset.original_name,
+                **_workflow_context(m),
                 "sent_at": m.sent_at.isoformat(),
                 "recall_url": reverse("operator_panel:file_share_message_recall", args=[m.pk]),
-            } for m in FileShareMessage.objects.filter(sender=request.user).select_related("recipient", "asset")[:100]],
+            } for m in FileShareMessage.objects.filter(sender=request.user).select_related(
+                "recipient", "asset", "workflow_instance__workflow", "workflow_step"
+            )[:100]],
             "messages": [{
                 "id": m.pk, "sender": str(m.sender), "subject": m.subject,
                 "body": m.body, "status": m.status, "interaction_type": m.interaction_type,
-                "file_name": m.asset.original_name, "sent_at": m.sent_at.isoformat(),
+                "file_name": m.asset.original_name, **_workflow_context(m),
+                "sent_at": m.sent_at.isoformat(),
                 "url": reverse("operator_panel:file_share_message_detail", args=[m.pk]),
             } for m in qs[:100]],
             "drafts": [{
@@ -163,7 +185,12 @@ def file_share_draft_delete(request, draft_id):
 @login_required
 @require_GET
 def file_share_message_detail(request, message_id):
-    message = get_object_or_404(FileShareMessage.objects.select_related("asset", "sender"), pk=message_id, recipient=request.user)
+    message = get_object_or_404(
+        FileShareMessage.objects.select_related(
+            "asset", "sender", "workflow_instance__workflow", "workflow_step"
+        ),
+        pk=message_id, recipient=request.user,
+    )
     from .models import Notification
     from .notification_services import NotificationService
 
@@ -182,6 +209,7 @@ def file_share_message_detail(request, message_id):
             "body": message.body,
             "interaction_type": message.interaction_type,
             "status": message.status,
+            **_workflow_context(message),
             "unavailable": True,
             "unavailable_message": (
                 "فرستنده این پیام را لغو کرده است؛ فایل دیگر قابل دریافت نیست."
@@ -196,7 +224,8 @@ def file_share_message_detail(request, message_id):
     return JsonResponse({
         "id": message.pk, "sender": str(message.sender), "subject": message.subject,
         "body": message.body, "interaction_type": message.interaction_type,
-        "status": message.status, "file_name": message.asset.original_name,
+        "status": message.status, **_workflow_context(message),
+        "file_name": message.asset.original_name,
         "file_size": message.asset.file_size, "content_type": message.asset.content_type,
         "file_details": {
             "field_label": snapshot_file.get("field_label") or "فایل پیوست",

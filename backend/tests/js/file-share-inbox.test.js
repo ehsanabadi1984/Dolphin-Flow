@@ -65,3 +65,11 @@ test("opening any received message refreshes the global notification bell", () =
     assert.match(appJs, /df:file-share-notification-read/);
     assert.match(appJs, /loadNotifications\(\)/);
 });
+
+
+test("sender and recipient message cards display process context from the API", () => {
+    assert.match(inboxJs, /appendWorkflowContext/);
+    assert.match(inboxJs, /فرآیند:/);
+    assert.match(inboxJs, /شماره /);
+    assert.match(inboxJs, /مرحله ارسال:/);
+});
