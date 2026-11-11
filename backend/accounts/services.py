@@ -20,7 +20,8 @@ OTP_RESEND_COOLDOWN = timedelta(seconds=max(30, settings.SMS_OTP_RESEND_COOLDOWN
 OTP_MAX_ATTEMPTS = max(3, min(10, settings.SMS_OTP_MAX_ATTEMPTS))
 OTP_DAILY_USER_LIMIT = max(1, settings.SMS_OTP_DAILY_USER_LIMIT)
 OTP_DAILY_PHONE_LIMIT = max(1, settings.SMS_OTP_DAILY_PHONE_LIMIT)
-OTP_RATE_WINDOW = timedelta(hours=24)
+OTP_RATE_WINDOW = timedelta(seconds=max(3600, settings.SMS_OTP_RATE_WINDOW_SECONDS))
+OTP_REQUEST_LOG_RETENTION = timedelta(days=max(1, settings.SMS_OTP_REQUEST_LOG_RETENTION_DAYS))
 
 
 def _phone_fingerprint(phone_number):
@@ -72,7 +73,7 @@ def request_sms_verification(user, phone_number):
             raise ValidationError("برای درخواست کد جدید، حداقل یک دقیقه صبر کنید.")
 
         window_start = now - OTP_RATE_WINDOW
-        SMSVerificationRequest.objects.filter(created_at__lt=now - timedelta(days=30)).delete()
+        SMSVerificationRequest.objects.filter(created_at__lt=now - OTP_REQUEST_LOG_RETENTION).delete()
         user_requests = SMSVerificationRequest.objects.filter(
             user=user, created_at__gte=window_start,
         ).count()
