@@ -19,6 +19,11 @@ OTP_MAX_ATTEMPTS = max(3, min(10, settings.SMS_OTP_MAX_ATTEMPTS))
 
 
 def request_sms_verification(user, phone_number):
+    from workflow.models import WorkflowSMSSettings
+
+    if not WorkflowSMSSettings.objects.filter(pk=1, is_enabled=True).exists():
+        raise ValidationError("ارسال پیامک از طرف مدیر سامانه غیرفعال است.")
+
     now = timezone.now()
     phone_changed = False
     with transaction.atomic():
