@@ -21,7 +21,7 @@ class SMSPhoneForm(forms.Form):
         label="شماره موبایل",
         max_length=16,
         validators=[RegexValidator(
-            regex=r"^\\+?[0-9]{8,15}$",
+            regex=r"^[+]?[0-9]{8,15}$",
             message="شماره را با ۸ تا ۱۵ رقم و بدون فاصله وارد کنید.",
         )],
         widget=forms.TextInput(attrs={
