@@ -310,12 +310,5 @@ class UserSMSSettingsTests(TestCase):
         with self.assertRaises(ValidationError):
             request_sms_verification(third_user, phone)
 
-        self.assertEqual(
-            SMSVerificationRequest.objects.filter(
-                phone_fingerprint__in=SMSVerificationRequest.objects.values_list(
-                    "phone_fingerprint", flat=True,
-                )
-            ).count(),
-            2,
-        )
+        self.assertEqual(SMSVerificationRequest.objects.count(), 2)
         self.assertEqual(provider.return_value.send.call_count, 2)
