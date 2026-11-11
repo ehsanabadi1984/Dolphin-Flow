@@ -80,7 +80,7 @@
                     {% for error in sms_phone_form.phone_number.errors %}<div class="df-form-error">{{ error }}</div>{% endfor %}
                     <small class="df-muted">شماره را با کد کشور وارد کنید؛ برای نمونه 989121234567.</small>
                 </div></div>
-                <div class="df-card-actions"><button type="submit" class="df-button">ثبت شماره / ارسال کد تأیید</button></div>
+                <div class="df-card-actions"><button type="submit" class="df-button" {% if not sms_global_enabled %}disabled{% endif %}>ثبت شماره / ارسال کد تأیید</button></div>
             </form>
         {% endif %}
         {% if sms_contact and sms_contact.is_active and not sms_contact.is_verified %}
