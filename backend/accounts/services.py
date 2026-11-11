@@ -12,10 +12,10 @@ from django.utils.module_loading import import_string
 from .models import UserContactMethod
 
 logger = logging.getLogger(__name__)
-OTP_LENGTH = 6
-OTP_TTL = timedelta(minutes=5)
-OTP_RESEND_COOLDOWN = timedelta(seconds=60)
-OTP_MAX_ATTEMPTS = 5
+OTP_LENGTH = max(4, min(8, settings.SMS_OTP_LENGTH))
+OTP_TTL = timedelta(seconds=max(60, settings.SMS_OTP_TTL_SECONDS))
+OTP_RESEND_COOLDOWN = timedelta(seconds=max(30, settings.SMS_OTP_RESEND_COOLDOWN_SECONDS))
+OTP_MAX_ATTEMPTS = max(3, min(10, settings.SMS_OTP_MAX_ATTEMPTS))
 
 
 def request_sms_verification(user, phone_number):
