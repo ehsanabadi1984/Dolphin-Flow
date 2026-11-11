@@ -974,6 +974,60 @@ class WorkflowStepSMSRule(models.Model):
             f"{'فعال' if self.sms_enabled else 'غیرفعال'}"
         )
 
+
+
+class WorkflowSMSSettings(models.Model):
+    """Singleton switch for the SMS channel; provider secrets stay in env."""
+
+    is_enabled = models.BooleanField(
+        default=False,
+        verbose_name="ارسال پیامک فعال باشد",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "تنظیم سراسری پیامک"
+        verbose_name_plural = "تنظیمات سراسری پیامک"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return "تنظیمات سراسری پیامک"
+
+
+class SMSDelivery(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "در صف / در حال ارسال"
+        SENT = "SENT", "پذیرفته‌شده توسط درگاه"
+        FAILED = "FAILED", "ناموفق"
+        SKIPPED = "SKIPPED", "ارسال نشد"
+
+    notification = models.OneToOneField(
+        Notification,
+        on_delete=models.CASCADE,
+        related_name="sms_delivery",
+        verbose_name="اعلان",
+    )
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    recipient_number = models.CharField(max_length=16, blank=True)
+    provider_uid = models.PositiveBigIntegerField(null=True, blank=True)
+    provider_message_id = models.CharField(max_length=64, blank=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    last_error = models.TextField(blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "ارسال پیامک"
+        verbose_name_plural = "سوابق فنی ارسال پیامک"
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"SMS · notification #{self.notification_id} · {self.get_status_display()}"
+
 class FileShareMessage(models.Model):
     class InteractionType(models.TextChoices):
         VIEW = "VIEW", "اشتراک‌گذاری برای مشاهده"
