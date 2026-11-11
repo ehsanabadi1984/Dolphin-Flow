@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.core.validators import RegexValidator
 
 from .models import UserPreference
@@ -35,11 +36,12 @@ class SMSPhoneForm(forms.Form):
 
 
 class SMSVerificationForm(forms.Form):
+    otp_length = max(4, min(8, settings.SMS_OTP_LENGTH))
     verification_code = forms.CharField(
-        label="کد تأیید", min_length=6, max_length=6,
+        label="کد تأیید", min_length=otp_length, max_length=otp_length,
         validators=[RegexValidator(
-            regex=r"^[0-9]{6}$",
-            message="کد تأیید باید دقیقاً ۶ رقم باشد.",
+            regex=rf"^[0-9]{{{otp_length}}}$",
+            message=f"کد تأیید باید دقیقاً {otp_length} رقم باشد.",
         )],
         widget=forms.TextInput(attrs={
             "class": "df-form-input", "inputmode": "numeric",
