@@ -961,7 +961,7 @@ class SMSDeliveryAdmin(admin.ModelAdmin):
     search_fields = ("notification__recipient__username", "notification__title", "provider_message_id")
     readonly_fields = (
         "notification", "status", "provider_uid", "provider_message_id",
-        "attempt_count", "last_error", "sent_at", "created_at", "updated_at",
+        "attempt_count", "last_error", "sent_at", "last_queued_at", "created_at", "updated_at",
     )
     fields = readonly_fields
 
