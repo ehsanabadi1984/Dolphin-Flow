@@ -7,7 +7,6 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("accounts", "0007_usercontactmethod_sms_preference"),
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
