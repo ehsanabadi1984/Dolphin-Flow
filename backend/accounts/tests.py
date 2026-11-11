@@ -219,10 +219,16 @@ class UserSMSSettingsTests(TestCase):
             "sms_action": "save_phone", "phone_number": "989124444444",
         })
         contact = UserContactMethod.objects.get(user=self.user)
+        import re
+        from accounts.services import verify_sms_verification_code
+        actual_code = re.search(
+            r"(?<![0-9])[0-9]{6}(?![0-9])",
+            provider.return_value.send.call_args.kwargs["message"],
+        ).group()
+        wrong_code = "000001" if actual_code != "000001" else "000002"
         for _ in range(5):
             with self.assertRaises(ValidationError):
-                from accounts.services import verify_sms_verification_code
-                verify_sms_verification_code(self.user, "000000")
+                verify_sms_verification_code(self.user, wrong_code)
         contact.refresh_from_db()
         self.assertEqual(contact.verification_attempts, 5)
         self.assertEqual(contact.verification_code_hash, "")
