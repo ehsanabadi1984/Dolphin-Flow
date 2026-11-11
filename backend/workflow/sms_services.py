@@ -65,19 +65,28 @@ class MagfaSMSProvider:
                 result = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise MagfaAPIError(f"Magfa HTTP {exc.code}: {detail[:1000]}") from exc
+            error = f"Magfa HTTP {exc.code}: {detail[:1000]}"
+            if exc.code >= 500:
+                raise MagfaUncertainDeliveryError(error) from exc
+            raise MagfaAPIError(error) from exc
         except (URLError, TimeoutError, OSError, ValueError) as exc:
             raise MagfaUncertainDeliveryError(
                 f"Magfa delivery outcome is unknown: {exc}"
             ) from exc
 
-        if not isinstance(result, dict) or result.get("status") != 0:
+        if not isinstance(result, dict):
+            raise MagfaUncertainDeliveryError("Magfa returned an unreadable response.")
+        if result.get("status") != 0:
             raise MagfaAPIError(f"Magfa rejected the request: {str(result)[:1000]}")
         messages = result.get("messages")
         if not isinstance(messages, list) or len(messages) != 1:
-            raise MagfaAPIError("Magfa response did not contain exactly one message result.")
+            raise MagfaUncertainDeliveryError(
+                "Magfa response did not contain exactly one message result."
+            )
         item = messages[0]
-        if not isinstance(item, dict) or item.get("status") != 0:
+        if not isinstance(item, dict):
+            raise MagfaUncertainDeliveryError("Magfa returned an unreadable message result.")
+        if item.get("status") != 0:
             raise MagfaAPIError(f"Magfa message was not accepted: {str(item)[:1000]}")
         return item
 
@@ -173,8 +182,8 @@ class SMSDispatcher:
             ))
             provider_uid = delivery.provider_uid
 
-        provider_class = import_string(settings.SMS_PROVIDER_CLASS)
         try:
+            provider_class = import_string(settings.SMS_PROVIDER_CLASS)
             result = provider_class().send(
                 recipient=contact.value,
                 message=message,
