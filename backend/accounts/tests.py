@@ -4,6 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .models import User, UserPreference
+from workflow.models import WorkflowSMSSettings
 
 
 class UserPreferenceTests(TestCase):
@@ -127,6 +128,7 @@ class UserSMSSettingsTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="sms-settings-user", password="test-password")
         self.client.force_login(self.user)
+        WorkflowSMSSettings.objects.get_or_create(pk=1, defaults={"is_enabled": True})
 
     def test_settings_page_exposes_sms_controls(self):
         response = self.client.get(reverse("accounts:settings"))
@@ -250,3 +252,12 @@ class UserSMSSettingsTests(TestCase):
         })
         self.assertRedirects(response, reverse("accounts:settings"))
         self.assertTrue(UserPreference.objects.get(user=self.user).sms_notifications_enabled)
+
+
+    def test_otp_cannot_be_sent_when_global_sms_is_disabled(self):
+        from django.core.exceptions import ValidationError
+        from accounts.services import request_sms_verification
+        WorkflowSMSSettings.objects.filter(pk=1).update(is_enabled=False)
+        with self.assertRaises(ValidationError):
+            request_sms_verification(self.user, "989126666666")
+        self.assertFalse(self.user.contact_methods.exists())
