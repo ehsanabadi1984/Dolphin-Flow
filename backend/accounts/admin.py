@@ -1,12 +1,34 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import PermissionDenied
+from django.utils import timezone
 
-from .models import User
+from .models import User, UserContactMethod
+
+
+class UserContactMethodInline(admin.StackedInline):
+    model = UserContactMethod
+    extra = 0
+    max_num = 1
+    fields = (
+        "channel_type",
+        "value",
+        "is_active",
+        "is_verified",
+        "verification_method",
+        "verified_at",
+        "verified_by",
+    )
+    readonly_fields = (
+        "verification_method",
+        "verified_at",
+        "verified_by",
+    )
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
+    inlines = (UserContactMethodInline,)
 
     list_display = (
         "username",
@@ -92,6 +114,43 @@ class UserAdmin(BaseUserAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return self._is_system_admin(request)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+
+        for formset in formsets:
+            if formset.model is not UserContactMethod:
+                continue
+
+            for contact_form in formset.forms:
+                contact = contact_form.instance
+                if "is_verified" not in contact_form.changed_data:
+                    continue
+
+                if contact.is_verified:
+                    contact.verification_method = (
+                        UserContactMethod.VerificationMethod.MANUAL
+                    )
+                    contact.verified_by = request.user
+                    contact.verified_at = timezone.now()
+                    contact.verification_code_hash = ""
+                    contact.verification_expires_at = None
+                    contact.verification_attempts = 0
+                else:
+                    contact.verification_method = ""
+                    contact.verified_by = None
+                    contact.verified_at = None
+
+                contact.save(update_fields=[
+                    "is_verified",
+                    "verification_method",
+                    "verified_by",
+                    "verified_at",
+                    "verification_code_hash",
+                    "verification_expires_at",
+                    "verification_attempts",
+                    "updated_at",
+                ])
 
     def save_model(self, request, obj, form, change):
         if not self._is_system_admin(request):
