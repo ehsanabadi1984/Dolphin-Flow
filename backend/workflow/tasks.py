@@ -59,7 +59,7 @@ def requeue_pending_sms_deliveries():
     from .models import SMSDelivery
     from .sms_services import enqueue_pending_sms_notification
 
-    delay = max(30, settings.SMS_PENDING_REQUEUE_AFTER)
+    delay = max(60, settings.SMS_PENDING_REQUEUE_AFTER)
     cutoff = timezone.now() - timedelta(seconds=delay)
     pending_ids = list(
         SMSDelivery.objects.filter(
