@@ -191,6 +191,8 @@ MAGFA_DOMAIN = env("MAGFA_DOMAIN", default="")
 MAGFA_SENDER = env("MAGFA_SENDER", default="")
 MAGFA_TIMEOUT = env.int("MAGFA_TIMEOUT", default=10)
 SMS_MAX_SEGMENTS = env.int("SMS_MAX_SEGMENTS", default=2)
+SMS_DELIVERY_STALE_AFTER = env.int("SMS_DELIVERY_STALE_AFTER", default=600)
+SMS_PENDING_REQUEUE_AFTER = env.int("SMS_PENDING_REQUEUE_AFTER", default=60)
 SMS_FALLBACK_MESSAGE = env(
     "SMS_FALLBACK_MESSAGE",
     default="شما یک اعلان جدید در سامانه فرآیندها دارید. برای مشاهده جزئیات وارد سامانه شوید.",
@@ -236,6 +238,14 @@ CELERY_BEAT_SCHEDULE = {
     },
     "process-backup-schedules-every-minute": {
         "task": "backup.tasks.process_backup_schedules",
+        "schedule": 60.0,
+    },
+    "reconcile-stale-sms-deliveries-every-minute": {
+        "task": "workflow.tasks.reconcile_stale_sms_deliveries",
+        "schedule": 60.0,
+    },
+    "requeue-pending-sms-deliveries-every-minute": {
+        "task": "workflow.tasks.requeue_pending_sms_deliveries",
         "schedule": 60.0,
     },
     "process-backup-retention-hourly": {
