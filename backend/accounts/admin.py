@@ -7,6 +7,7 @@ from .models import User, UserContactMethod
 
 
 class UserContactMethodInline(admin.StackedInline):
+    fk_name = "user"
     model = UserContactMethod
     extra = 0
     fields = (
