@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import logging
 import secrets
 from datetime import timedelta
@@ -9,24 +11,37 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.module_loading import import_string
 
-from .models import UserContactMethod
+from .models import SMSVerificationRequest, UserContactMethod
 
 logger = logging.getLogger(__name__)
 OTP_LENGTH = max(4, min(8, settings.SMS_OTP_LENGTH))
 OTP_TTL = timedelta(seconds=max(60, settings.SMS_OTP_TTL_SECONDS))
 OTP_RESEND_COOLDOWN = timedelta(seconds=max(30, settings.SMS_OTP_RESEND_COOLDOWN_SECONDS))
 OTP_MAX_ATTEMPTS = max(3, min(10, settings.SMS_OTP_MAX_ATTEMPTS))
+OTP_DAILY_USER_LIMIT = max(1, settings.SMS_OTP_DAILY_USER_LIMIT)
+OTP_DAILY_PHONE_LIMIT = max(1, settings.SMS_OTP_DAILY_PHONE_LIMIT)
+OTP_RATE_WINDOW = timedelta(hours=24)
+
+
+def _phone_fingerprint(phone_number):
+    secret = str(settings.SECRET_KEY).encode("utf-8")
+    return hmac.new(secret, phone_number.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def request_sms_verification(user, phone_number):
     from workflow.models import WorkflowSMSSettings
 
-    if not WorkflowSMSSettings.objects.filter(pk=1, is_enabled=True).exists():
-        raise ValidationError("ارسال پیامک از طرف مدیر سامانه غیرفعال است.")
-
     now = timezone.now()
+    phone_fingerprint = _phone_fingerprint(phone_number)
     phone_changed = False
     with transaction.atomic():
+        # Serialize OTP requests globally against the singleton SMS setting.
+        # This makes both per-user and per-number quotas race-safe, including
+        # requests for the same number made by different accounts.
+        sms_settings = WorkflowSMSSettings.objects.select_for_update().filter(pk=1).first()
+        if not sms_settings or not sms_settings.is_enabled:
+            raise ValidationError("ارسال پیامک از طرف مدیر سامانه غیرفعال است.")
+
         contact = UserContactMethod.objects.select_for_update().filter(
             user=user, channel_type=UserContactMethod.ChannelType.SMS,
         ).first()
@@ -56,6 +71,23 @@ def request_sms_verification(user, phone_number):
         if contact.verification_sent_at and now - contact.verification_sent_at < OTP_RESEND_COOLDOWN:
             raise ValidationError("برای درخواست کد جدید، حداقل یک دقیقه صبر کنید.")
 
+        window_start = now - OTP_RATE_WINDOW
+        SMSVerificationRequest.objects.filter(created_at__lt=now - timedelta(days=30)).delete()
+        user_requests = SMSVerificationRequest.objects.filter(
+            user=user, created_at__gte=window_start,
+        ).count()
+        phone_requests = SMSVerificationRequest.objects.filter(
+            phone_fingerprint=phone_fingerprint, created_at__gte=window_start,
+        ).count()
+        if user_requests >= OTP_DAILY_USER_LIMIT:
+            raise ValidationError(
+                "سقف درخواست روزانه کد تأیید برای حساب شما به پایان رسیده است."
+            )
+        if phone_requests >= OTP_DAILY_PHONE_LIMIT:
+            raise ValidationError(
+                "برای این شماره، سقف درخواست روزانه کد تأیید به پایان رسیده است."
+            )
+
         if phone_changed:
             # Let the model invalidate the previous verification before storing
             # the newly generated OTP fields.
@@ -72,6 +104,11 @@ def request_sms_verification(user, phone_number):
         contact.verification_sent_at = now
         contact.verification_attempts = 0
         contact.save()
+        # Count every accepted request, including provider failures, to prevent
+        # repeated attempts from bypassing quotas when the gateway is unhealthy.
+        SMSVerificationRequest.objects.create(
+            user=user, phone_fingerprint=phone_fingerprint,
+        )
 
     try:
         provider_class = import_string(settings.SMS_PROVIDER_CLASS)
