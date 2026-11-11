@@ -261,3 +261,61 @@ class UserSMSSettingsTests(TestCase):
         with self.assertRaises(ValidationError):
             request_sms_verification(self.user, "989126666666")
         self.assertFalse(self.user.contact_methods.exists())
+
+
+    @patch("accounts.services.import_string")
+    @patch("accounts.services.OTP_DAILY_USER_LIMIT", 2)
+    def test_daily_user_limit_cannot_be_bypassed_by_changing_phone(self, mock_import_string):
+        from django.core.exceptions import ValidationError
+        from django.utils import timezone
+        from datetime import timedelta
+        from accounts.models import UserContactMethod, SMSVerificationRequest
+        from accounts.services import request_sms_verification
+
+        provider = MagicMock()
+        provider.return_value.send.return_value = {"id": 111, "status": 0}
+        mock_import_string.return_value = provider
+        request_sms_verification(self.user, "989121000001")
+        contact = UserContactMethod.objects.get(user=self.user)
+        contact.verification_sent_at = timezone.now() - timedelta(minutes=2)
+        contact.save(update_fields=("verification_sent_at", "updated_at"))
+        request_sms_verification(self.user, "989121000002")
+
+        contact.refresh_from_db()
+        contact.verification_sent_at = timezone.now() - timedelta(minutes=2)
+        contact.save(update_fields=("verification_sent_at", "updated_at"))
+        with self.assertRaises(ValidationError):
+            request_sms_verification(self.user, "989121000003")
+
+        self.assertEqual(SMSVerificationRequest.objects.filter(user=self.user).count(), 2)
+        self.assertEqual(provider.return_value.send.call_count, 2)
+
+    @patch("accounts.services.import_string")
+    @patch("accounts.services.OTP_DAILY_PHONE_LIMIT", 2)
+    def test_daily_phone_limit_applies_across_different_users(self, mock_import_string):
+        from django.core.exceptions import ValidationError
+        from accounts.models import SMSVerificationRequest
+        from accounts.services import request_sms_verification
+
+        provider = MagicMock()
+        provider.return_value.send.return_value = {"id": 222, "status": 0}
+        mock_import_string.return_value = provider
+        phone = "989122000001"
+        request_sms_verification(self.user, phone)
+
+        second_user = User.objects.create_user(username="otp-second-user", password="test")
+        request_sms_verification(second_user, phone)
+
+        third_user = User.objects.create_user(username="otp-third-user", password="test")
+        with self.assertRaises(ValidationError):
+            request_sms_verification(third_user, phone)
+
+        self.assertEqual(
+            SMSVerificationRequest.objects.filter(
+                phone_fingerprint__in=SMSVerificationRequest.objects.values_list(
+                    "phone_fingerprint", flat=True,
+                )
+            ).count(),
+            2,
+        )
+        self.assertEqual(provider.return_value.send.call_count, 2)
