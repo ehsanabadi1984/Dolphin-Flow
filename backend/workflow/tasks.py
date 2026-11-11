@@ -1,17 +1,42 @@
+import logging
+
 from celery import shared_task
 
 from .sla_monitor_services import SLAMonitorService
-# Parked: from .n8n_notification_services import N8NNotificationDispatcher
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task
 def process_sla_monitor():
     return SLAMonitorService.process_active_slas()
 
-# @shared_task(
-#     autoretry_for=(Exception,),
-#     retry_backoff=True,
-#     retry_kwargs={"max_retries": 5},
-# )
-# def dispatch_n8n_notification(notification_id):
-#     return N8NNotificationDispatcher.dispatch(notification_id)
+
+@shared_task(bind=True, max_retries=5)
+def dispatch_sms_notification(self, notification_id):
+    from .models import SMSDelivery
+    from .sms_services import SMSDispatcher
+
+    try:
+        return SMSDispatcher.dispatch(notification_id)
+    except Exception as exc:
+        delivery = SMSDelivery.objects.filter(
+            notification_id=notification_id
+        ).first()
+        if delivery:
+            delivery.last_error = str(exc)[:4000]
+            if self.request.retries >= self.max_retries:
+                delivery.status = SMSDelivery.Status.FAILED
+            delivery.save(update_fields=("last_error", "status", "updated_at"))
+
+        if self.request.retries >= self.max_retries:
+            logger.exception(
+                "SMS delivery permanently failed for notification %s",
+                notification_id,
+            )
+            raise
+
+        raise self.retry(
+            exc=exc,
+            countdown=min(60 * (2 ** self.request.retries), 900),
+        )
