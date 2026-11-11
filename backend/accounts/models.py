@@ -184,14 +184,20 @@ class UserContactMethod(models.Model):
                 .first()
             )
             if previous_value is not None and previous_value != self.value:
-                self.is_verified = False
-                self.verification_method = ""
-                self.verified_at = None
-                self.verified_by = None
-                self.verification_code_hash = ""
-                self.verification_expires_at = None
-                self.verification_sent_at = None
-                self.verification_attempts = 0
+                manually_verified = (
+                    self.is_verified
+                    and self.verification_method == self.VerificationMethod.MANUAL
+                    and self.verified_by_id is not None
+                )
+                if not manually_verified:
+                    self.is_verified = False
+                    self.verification_method = ""
+                    self.verified_at = None
+                    self.verified_by = None
+                    self.verification_code_hash = ""
+                    self.verification_expires_at = None
+                    self.verification_sent_at = None
+                    self.verification_attempts = 0
 
         if self.is_verified and self.verified_at is None:
             self.verified_at = timezone.now()
