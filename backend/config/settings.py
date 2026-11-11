@@ -199,6 +199,8 @@ SMS_OTP_RESEND_COOLDOWN_SECONDS = env.int("SMS_OTP_RESEND_COOLDOWN_SECONDS", def
 SMS_OTP_MAX_ATTEMPTS = env.int("SMS_OTP_MAX_ATTEMPTS", default=5)
 SMS_OTP_DAILY_USER_LIMIT = env.int("SMS_OTP_DAILY_USER_LIMIT", default=5)
 SMS_OTP_DAILY_PHONE_LIMIT = env.int("SMS_OTP_DAILY_PHONE_LIMIT", default=3)
+SMS_OTP_RATE_WINDOW_SECONDS = env.int("SMS_OTP_RATE_WINDOW_SECONDS", default=86400)
+SMS_OTP_REQUEST_LOG_RETENTION_DAYS = env.int("SMS_OTP_REQUEST_LOG_RETENTION_DAYS", default=30)
 SMS_FALLBACK_MESSAGE = env(
     "SMS_FALLBACK_MESSAGE",
     default="شما یک اعلان جدید در سامانه فرآیندها دارید. برای مشاهده جزئیات وارد سامانه شوید.",
