@@ -9,7 +9,6 @@ from .models import User, UserContactMethod
 class UserContactMethodInline(admin.StackedInline):
     model = UserContactMethod
     extra = 0
-    max_num = 1
     fields = (
         "channel_type",
         "value",
@@ -115,42 +114,33 @@ class UserAdmin(BaseUserAdmin):
     def has_delete_permission(self, request, obj=None):
         return self._is_system_admin(request)
 
-    def save_related(self, request, form, formsets, change):
-        super().save_related(request, form, formsets, change)
+    def save_formset(self, request, form, formset, change):
+        if formset.model is not UserContactMethod:
+            return super().save_formset(request, form, formset, change)
 
-        for formset in formsets:
-            if formset.model is not UserContactMethod:
+        instances = formset.save(commit=False)
+        for deleted_object in formset.deleted_objects:
+            deleted_object.delete()
+
+        for contact_form in formset.forms:
+            contact = contact_form.instance
+            if contact not in instances:
                 continue
 
-            for contact_form in formset.forms:
-                contact = contact_form.instance
-                if "is_verified" not in contact_form.changed_data:
-                    continue
+            if "is_verified" in contact_form.changed_data and contact.is_verified:
+                contact.verification_method = (
+                    UserContactMethod.VerificationMethod.MANUAL
+                )
+                contact.verified_by = request.user
+                contact.verified_at = timezone.now()
+                contact.verification_code_hash = ""
+                contact.verification_expires_at = None
+                contact.verification_sent_at = None
+                contact.verification_attempts = 0
 
-                if contact.is_verified:
-                    contact.verification_method = (
-                        UserContactMethod.VerificationMethod.MANUAL
-                    )
-                    contact.verified_by = request.user
-                    contact.verified_at = timezone.now()
-                    contact.verification_code_hash = ""
-                    contact.verification_expires_at = None
-                    contact.verification_attempts = 0
-                else:
-                    contact.verification_method = ""
-                    contact.verified_by = None
-                    contact.verified_at = None
+            contact.save()
 
-                contact.save(update_fields=[
-                    "is_verified",
-                    "verification_method",
-                    "verified_by",
-                    "verified_at",
-                    "verification_code_hash",
-                    "verification_expires_at",
-                    "verification_attempts",
-                    "updated_at",
-                ])
+        formset.save_m2m()
 
     def save_model(self, request, obj, form, change):
         if not self._is_system_admin(request):
