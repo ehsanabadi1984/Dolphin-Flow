@@ -4,6 +4,7 @@ from datetime import timedelta
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
+from django.db.models import Q
 
 from .sla_monitor_services import SLAMonitorService
 
@@ -54,22 +55,26 @@ def reconcile_stale_sms_deliveries():
 
 @shared_task
 def requeue_pending_sms_deliveries():
-    """Recover outbox rows that could not be enqueued after notification commit."""
+    """Recover pending outbox rows without repeatedly enqueueing the same row."""
     from .models import SMSDelivery
+    from .sms_services import enqueue_pending_sms_notification
 
     delay = max(30, settings.SMS_PENDING_REQUEUE_AFTER)
     cutoff = timezone.now() - timedelta(seconds=delay)
     pending_ids = list(
         SMSDelivery.objects.filter(
             status=SMSDelivery.Status.PENDING,
-            updated_at__lt=cutoff,
+        ).filter(
+            Q(last_queued_at__isnull=True) | Q(last_queued_at__lt=cutoff)
         ).order_by("created_at").values_list("notification_id", flat=True)[:100]
     )
     queued = 0
     for notification_id in pending_ids:
         try:
-            dispatch_sms_notification.delay(notification_id)
-            queued += 1
+            if enqueue_pending_sms_notification(
+                notification_id, min_interval_seconds=delay,
+            ):
+                queued += 1
         except Exception:
             logger.exception("Unable to requeue SMS for notification %s", notification_id)
     return queued
