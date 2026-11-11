@@ -1015,6 +1015,7 @@ class SMSDelivery(models.Model):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
     provider_uid = models.PositiveBigIntegerField(null=True, blank=True)
     provider_message_id = models.CharField(max_length=64, blank=True)
+    last_queued_at = models.DateTimeField(null=True, blank=True, db_index=True)
     attempt_count = models.PositiveSmallIntegerField(default=0)
     last_error = models.TextField(blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
