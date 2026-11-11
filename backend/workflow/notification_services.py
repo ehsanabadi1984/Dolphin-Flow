@@ -77,12 +77,12 @@ class NotificationService:
                     "notification": notification_payload,
                 },
             )
-        transaction.on_commit(publish_notification)
-
-        # SMS is an independent channel; queue failures never affect in-app delivery.
+        # Queue SMS first so a later WebSocket callback failure cannot suppress it.
+        # The WebSocket callback and payload remain unchanged.
         transaction.on_commit(
             lambda notification_id=notification.pk: _schedule_sms_safely(notification_id)
         )
+        transaction.on_commit(publish_notification)
 
         # PARKED: n8n delivery is intentionally disabled.
         # if getattr(settings, "N8N_NOTIFICATION_WEBHOOK_URL", ""):
