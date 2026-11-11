@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
                         validators=[
                             django.core.validators.RegexValidator(
                                 message="شماره موبایل را با ۸ تا ۱۵ رقم و بدون فاصله وارد کنید.",
-                                regex=r"^\\+?[0-9]{8,15}$",
+                                regex=r"^\+?[0-9]{8,15}$",
                             ),
                         ],
                         verbose_name="شماره موبایل",
