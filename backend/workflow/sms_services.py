@@ -6,6 +6,7 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.module_loading import import_string
 from django.utils import timezone
 
 from accounts.models import UserContactMethod
@@ -151,7 +152,8 @@ class SMSDispatcher:
             "last_error", "updated_at",
         ))
 
-        result = MagfaSMSProvider().send(
+        provider_class = import_string(settings.SMS_PROVIDER_CLASS)
+        result = provider_class().send(
             recipient=contact.value,
             message=message,
             uid=delivery.provider_uid,
