@@ -114,7 +114,7 @@ class UserContactMethod(models.Model):
         max_length=16,
         validators=[
             RegexValidator(
-                regex=r"^\\+?[0-9]{8,15}$",
+                regex=r"^\+?[0-9]{8,15}$",
                 message="شماره موبایل را با ۸ تا ۱۵ رقم و بدون فاصله وارد کنید.",
             ),
         ],
