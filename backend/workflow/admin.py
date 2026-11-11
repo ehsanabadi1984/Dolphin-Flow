@@ -22,6 +22,7 @@ from .models import (
     WorkflowStep,
     WorkflowStepSMSRule,
     WorkflowSMSSettings,
+    SMSDelivery,
     WorkflowStepExecution,
     WorkflowInstance,
     WorkflowTransition,
@@ -813,6 +814,21 @@ class WorkflowStepSMSRuleInline(admin.TabularInline):
     verbose_name = "قانون ارسال پیامک"
     verbose_name_plural = "قوانین ارسال پیامک بر اساس نوع اعلان"
 
+    def has_view_permission(self, request, obj=None):
+        return True
+
+    def has_add_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def get_readonly_fields(self, request, obj=None):
+        return () if request.user.is_superuser else self.fields
+
 
 @admin.register(
     WorkflowStep,
@@ -914,15 +930,55 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).filter(pk=1)
 
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_active and request.user.is_superuser
+
     def has_add_permission(self, request):
-        return super().has_add_permission(request) and not WorkflowSMSSettings.objects.exists()
+        return request.user.is_active and request.user.is_superuser and not WorkflowSMSSettings.objects.exists()
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_active and request.user.is_superuser
 
     def has_delete_permission(self, request, obj=None):
         return False
 
     def save_model(self, request, obj, form, change):
+        if not request.user.is_superuser:
+            raise PermissionDenied
         obj.pk = 1
         super().save_model(request, obj, form, change)
+
+
+@admin.register(SMSDelivery, site=dolphin_admin_site)
+class SMSDeliveryAdmin(admin.ModelAdmin):
+    admin_category = "communications"
+    admin_section = "notification"
+    list_display = ("notification", "status", "attempt_count", "provider_message_id", "updated_at")
+    list_filter = ("status",)
+    search_fields = ("notification__recipient__username", "notification__title", "provider_message_id")
+    readonly_fields = (
+        "notification", "status", "provider_uid", "provider_message_id",
+        "attempt_count", "last_error", "sent_at", "created_at", "updated_at",
+    )
+    fields = readonly_fields
+
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 #++++++++++++++++++++++
