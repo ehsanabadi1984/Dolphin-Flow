@@ -1,6 +1,7 @@
 import base64
 import json
 import math
+from datetime import timedelta
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -8,6 +9,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.module_loading import import_string
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from accounts.models import UserContactMethod
@@ -261,6 +263,34 @@ class SMSDispatcher:
         return "", contact
 
 
+def enqueue_pending_sms_notification(notification_id, *, min_interval_seconds=0):
+    """Atomically claim a PENDING outbox row for one broker enqueue attempt."""
+    now = timezone.now()
+    cutoff = now - timedelta(seconds=max(0, min_interval_seconds))
+    eligible = SMSDelivery.objects.filter(
+        notification_id=notification_id,
+        status=SMSDelivery.Status.PENDING,
+    ).filter(
+        Q(last_queued_at__isnull=True) | Q(last_queued_at__lt=cutoff)
+    )
+    claimed = eligible.update(last_queued_at=now)
+    if not claimed:
+        return False
+
+    from .tasks import dispatch_sms_notification
+    try:
+        dispatch_sms_notification.delay(notification_id)
+    except Exception:
+        # Keep the outbox immediately eligible when the broker rejected enqueue.
+        SMSDelivery.objects.filter(
+            notification_id=notification_id,
+            status=SMSDelivery.Status.PENDING,
+            last_queued_at=now,
+        ).update(last_queued_at=None)
+        raise
+    return True
+
+
 def schedule_sms_notification(notification_id):
     if not WorkflowSMSSettings.objects.filter(pk=1, is_enabled=True).exists():
         return False
@@ -270,6 +300,7 @@ def schedule_sms_notification(notification_id):
         notification=notification,
         defaults={"status": SMSDelivery.Status.PENDING},
     )
-    from .tasks import dispatch_sms_notification
-    dispatch_sms_notification.delay(notification_id)
-    return True
+    return enqueue_pending_sms_notification(
+        notification_id,
+        min_interval_seconds=max(30, settings.SMS_PENDING_REQUEUE_AFTER),
+    )
