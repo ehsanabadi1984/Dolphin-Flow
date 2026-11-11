@@ -20,6 +20,7 @@ from .models import (
     Workflow,
     WorkflowMembership,
     WorkflowStep,
+    WorkflowStepSMSRule,
     WorkflowStepExecution,
     WorkflowInstance,
     WorkflowTransition,
@@ -800,6 +801,18 @@ class WorkflowStepSLAInline(admin.StackedInline):
         "updated_at",
     )
 
+
+class WorkflowStepSMSRuleInline(admin.TabularInline):
+    model = WorkflowStepSMSRule
+    extra = 0
+    fields = (
+        "notification_type",
+        "sms_enabled",
+    )
+    verbose_name = "قانون ارسال پیامک"
+    verbose_name_plural = "قوانین ارسال پیامک بر اساس نوع اعلان"
+
+
 @admin.register(
     WorkflowStep,
     site=dolphin_admin_site,
@@ -870,6 +883,7 @@ class WorkflowStepAdmin(admin.ModelAdmin):
     inlines = (
         WorkflowStepSLAInline,
         WorkflowStepPermissionInline,
+        WorkflowStepSMSRuleInline,
     )
 
     def save_formset(self, request, form, formset, change):

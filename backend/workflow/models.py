@@ -933,6 +933,47 @@ class Notification(models.Model):
             f"{self.title}"
         )
 
+
+class WorkflowStepSMSRule(models.Model):
+    """
+    Per-step, per-notification-type SMS delivery configuration.
+    Missing rules are treated as disabled by the SMS dispatcher.
+    """
+
+    step = models.ForeignKey(
+        WorkflowStep,
+        on_delete=models.CASCADE,
+        related_name="sms_rules",
+        verbose_name="مرحله",
+    )
+    notification_type = models.CharField(
+        max_length=30,
+        choices=Notification.NotificationType.choices,
+        verbose_name="نوع اعلان",
+    )
+    sms_enabled = models.BooleanField(
+        default=False,
+        verbose_name="ارسال پیامک فعال باشد",
+    )
+
+    class Meta:
+        verbose_name = "تنظیم پیامک مرحله"
+        verbose_name_plural = "تنظیمات پیامک مرحله"
+        ordering = ("notification_type",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("step", "notification_type"),
+                name="unique_step_sms_notification_rule",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.step} · "
+            f"{self.get_notification_type_display()} · "
+            f"{'فعال' if self.sms_enabled else 'غیرفعال'}"
+        )
+
 class FileShareMessage(models.Model):
     class InteractionType(models.TextChoices):
         VIEW = "VIEW", "اشتراک‌گذاری برای مشاهده"
