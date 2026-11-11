@@ -20,6 +20,7 @@ OTP_MAX_ATTEMPTS = 5
 
 def request_sms_verification(user, phone_number):
     now = timezone.now()
+    phone_changed = False
     with transaction.atomic():
         contact = UserContactMethod.objects.select_for_update().filter(
             user=user, channel_type=UserContactMethod.ChannelType.SMS,
@@ -31,6 +32,7 @@ def request_sms_verification(user, phone_number):
             )
         elif contact.value != phone_number:
             # A self-service number change must never inherit manual verification.
+            phone_changed = True
             contact.value = phone_number
             contact.is_active = True
             contact.is_verified = False
@@ -48,6 +50,11 @@ def request_sms_verification(user, phone_number):
             return False
         if contact.verification_sent_at and now - contact.verification_sent_at < OTP_RESEND_COOLDOWN:
             raise ValidationError("برای درخواست کد جدید، حداقل یک دقیقه صبر کنید.")
+
+        if phone_changed:
+            # Let the model invalidate the previous verification before storing
+            # the newly generated OTP fields.
+            contact.save()
 
         code = f"{secrets.randbelow(10 ** OTP_LENGTH):0{OTP_LENGTH}d}"
         contact.is_active = True
