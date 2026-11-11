@@ -26,7 +26,6 @@ class Migration(migrations.Migration):
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("status", models.CharField(choices=[("PENDING", "در صف / در حال ارسال"), ("SENT", "پذیرفته‌شده توسط درگاه"), ("FAILED", "ناموفق"), ("SKIPPED", "ارسال نشد")], default="PENDING", max_length=12)),
-                ("recipient_number", models.CharField(blank=True, max_length=16)),
                 ("provider_uid", models.PositiveBigIntegerField(blank=True, null=True)),
                 ("provider_message_id", models.CharField(blank=True, max_length=64)),
                 ("attempt_count", models.PositiveSmallIntegerField(default=0)),
