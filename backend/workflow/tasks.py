@@ -12,7 +12,7 @@ def process_sla_monitor():
     return SLAMonitorService.process_active_slas()
 
 
-@shared_task(bind=True, max_retries=5)
+@shared_task(bind=True, max_retries=5, acks_late=True, reject_on_worker_lost=True)
 def dispatch_sms_notification(self, notification_id):
     from .models import SMSDelivery
     from .sms_services import SMSDispatcher
