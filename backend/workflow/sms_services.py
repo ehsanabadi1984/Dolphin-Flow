@@ -302,5 +302,5 @@ def schedule_sms_notification(notification_id):
     )
     return enqueue_pending_sms_notification(
         notification_id,
-        min_interval_seconds=max(30, settings.SMS_PENDING_REQUEUE_AFTER),
+        min_interval_seconds=max(60, settings.SMS_PENDING_REQUEUE_AFTER),
     )
