@@ -92,6 +92,23 @@ class UserPreference(models.Model):
 
 
 
+class SMSVerificationRequest(models.Model):
+    """Privacy-preserving audit record used for OTP abuse limits."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="sms_verification_requests",
+    )
+    phone_fingerprint = models.CharField(max_length=64, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "درخواست تأیید پیامکی"
+        verbose_name_plural = "درخواست‌های تأیید پیامکی"
+        ordering = ("-created_at",)
+
+
 class UserContactMethod(models.Model):
     class ChannelType(models.TextChoices):
         SMS = "SMS", "پیامک"
