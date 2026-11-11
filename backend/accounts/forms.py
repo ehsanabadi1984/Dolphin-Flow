@@ -45,6 +45,6 @@ class SMSVerificationForm(forms.Form):
         )],
         widget=forms.TextInput(attrs={
             "class": "df-form-input", "inputmode": "numeric",
-            "autocomplete": "one-time-code", "placeholder": "کد ۶ رقمی",
+            "autocomplete": "one-time-code", "placeholder": f"کد {otp_length} رقمی",
         }),
     )
