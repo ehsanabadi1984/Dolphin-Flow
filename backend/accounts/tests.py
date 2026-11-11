@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+
 from django.test import TestCase
 from django.urls import reverse
 
@@ -119,3 +121,86 @@ class UserContactMethodTests(TestCase):
         self.assertEqual(contact.verification_code_hash, "")
         self.assertIsNone(contact.verification_expires_at)
         self.assertEqual(contact.verification_attempts, 0)
+
+
+class UserSMSSettingsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="sms-settings-user", password="test-password")
+        self.client.force_login(self.user)
+
+    def test_settings_page_exposes_sms_controls(self):
+        response = self.client.get(reverse("accounts:settings"))
+        self.assertContains(response, "دریافت اعلان‌های سامانه از طریق پیامک")
+        self.assertContains(response, "ثبت شماره / ارسال کد تأیید")
+
+    def test_user_cannot_enable_sms_without_verified_active_number(self):
+        self.client.post(reverse("accounts:settings"), {"sms_action": "toggle_sms", "sms_enabled": "1"})
+        self.assertFalse(UserPreference.objects.get(user=self.user).sms_notifications_enabled)
+
+    def test_user_can_disable_sms_without_contact(self):
+        preference = UserPreference.objects.create(user=self.user, sms_notifications_enabled=True)
+        response = self.client.post(reverse("accounts:settings"), {"sms_action": "toggle_sms"})
+        self.assertRedirects(response, reverse("accounts:settings"))
+        preference.refresh_from_db()
+        self.assertFalse(preference.sms_notifications_enabled)
+
+    @patch("accounts.services.import_string")
+    def test_user_can_register_and_verify_phone_with_otp(self, mock_import_string):
+        import re
+        from django.contrib.auth.hashers import check_password
+        from accounts.models import UserContactMethod
+        provider = MagicMock()
+        provider.return_value.send.return_value = {"id": 123, "status": 0}
+        mock_import_string.return_value = provider
+        response = self.client.post(reverse("accounts:settings"), {
+            "sms_action": "save_phone", "phone_number": "989121234567",
+        })
+        self.assertRedirects(response, reverse("accounts:settings"))
+        contact = UserContactMethod.objects.get(user=self.user)
+        self.assertTrue(contact.is_active)
+        self.assertFalse(contact.is_verified)
+        sent_code = re.search(r"(?<![0-9])[0-9]{6}(?![0-9])", provider.return_value.send.call_args.kwargs["message"]).group()
+        self.assertTrue(check_password(sent_code, contact.verification_code_hash))
+        response = self.client.post(reverse("accounts:settings"), {
+            "sms_action": "verify_phone", "verification_code": sent_code,
+        })
+        self.assertRedirects(response, reverse("accounts:settings"))
+        contact.refresh_from_db()
+        self.assertTrue(contact.is_verified)
+        self.assertEqual(contact.verification_method, UserContactMethod.VerificationMethod.OTP)
+        self.assertEqual(contact.verification_code_hash, "")
+
+    @patch("accounts.services.import_string")
+    def test_changing_phone_invalidates_manual_verification(self, mock_import_string):
+        from accounts.models import UserContactMethod
+        provider = MagicMock()
+        provider.return_value.send.return_value = {"id": 456, "status": 0}
+        mock_import_string.return_value = provider
+        contact = UserContactMethod.objects.create(
+            user=self.user, value="989121111111", is_verified=True,
+            verification_method=UserContactMethod.VerificationMethod.MANUAL,
+            verified_by=self.user,
+        )
+        self.client.post(reverse("accounts:settings"), {
+            "sms_action": "save_phone", "phone_number": "989122222222",
+        })
+        contact.refresh_from_db()
+        self.assertEqual(contact.value, "989122222222")
+        self.assertFalse(contact.is_verified)
+        self.assertEqual(contact.verification_method, "")
+        self.assertIsNone(contact.verified_by_id)
+
+    @patch("accounts.services.import_string")
+    def test_otp_resend_is_rate_limited(self, mock_import_string):
+        from accounts.models import UserContactMethod
+        provider = MagicMock()
+        provider.return_value.send.return_value = {"id": 789, "status": 0}
+        mock_import_string.return_value = provider
+        self.client.post(reverse("accounts:settings"), {
+            "sms_action": "save_phone", "phone_number": "989123333333",
+        })
+        self.client.post(reverse("accounts:settings"), {
+            "sms_action": "save_phone", "phone_number": "989123333333",
+        })
+        provider.return_value.send.assert_called_once()
+        self.assertEqual(UserContactMethod.objects.get(user=self.user).verification_attempts, 0)
