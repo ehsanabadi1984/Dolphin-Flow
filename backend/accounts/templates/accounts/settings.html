@@ -40,7 +40,61 @@
 
     <div class="df-card">
         <h2>اعلان‌ها</h2>
-        <p class="df-muted">تنظیمات پیشرفته اعلان‌ها در نسخه بعدی این بخش اضافه خواهد شد.</p>
+        <p class="df-muted">مدیریت دریافت پیامک برای اعلان‌های سامانه. اعلان‌های داخل سامانه مستقل از این تنظیم هستند.</p>
+        {% if not sms_global_enabled %}
+            <p class="df-muted">ارسال پیامک در حال حاضر از طرف مدیر سامانه غیرفعال است. تنظیم شخصی شما ذخیره می‌شود و پس از فعال‌شدن کانال قابل اجرا خواهد بود.</p>
+        {% endif %}
+        <form method="post" class="df-form">
+            {% csrf_token %}
+            <input type="hidden" name="sms_action" value="toggle_sms">
+            <label>
+                <input type="checkbox" name="sms_enabled" value="1" {% if user_preference.sms_notifications_enabled %}checked{% endif %} {% if not sms_contact or not sms_contact.is_active or not sms_contact.is_verified %}disabled{% endif %}>
+                دریافت اعلان‌های سامانه از طریق پیامک فعال باشد
+            </label>
+            {% if not sms_contact or not sms_contact.is_active or not sms_contact.is_verified %}
+                <p class="df-muted">برای فعال‌سازی این گزینه ابتدا باید شماره موبایل خود را ثبت و تأیید کنید.</p>
+            {% endif %}
+            <div class="df-card-actions"><button type="submit" class="df-button">ذخیره تنظیم دریافت پیامک</button></div>
+        </form>
+        <hr>
+        <h3>شماره موبایل</h3>
+        {% if sms_contact %}
+            <p class="df-muted">شماره ثبت‌شده: <strong>{{ sms_contact.value }}</strong></p>
+            {% if sms_contact.is_verified and sms_contact.is_active %}
+                <p class="df-muted">{% if sms_contact.verification_method == "MANUAL" %}شماره توسط مدیر تأیید شده است.{% else %}شماره با کد یک‌بارمصرف تأیید شده است.{% endif %}</p>
+            {% elif not sms_contact.is_active %}
+                <p class="df-muted">این شماره توسط مدیر غیرفعال شده است. برای فعال‌سازی مجدد با مدیر سامانه تماس بگیرید.</p>
+            {% else %}
+                <p class="df-muted">شماره هنوز تأیید نشده است.</p>
+            {% endif %}
+        {% else %}
+            <p class="df-muted">هنوز شماره موبایلی برای حساب شما ثبت نشده است.</p>
+        {% endif %}
+        {% if not sms_contact or sms_contact.is_active %}
+            <form method="post" class="df-form">
+                {% csrf_token %}
+                <input type="hidden" name="sms_action" value="save_phone">
+                <div class="df-form-grid"><div class="df-form-field">
+                    {{ sms_phone_form.phone_number.label_tag }}
+                    {{ sms_phone_form.phone_number }}
+                    {% for error in sms_phone_form.phone_number.errors %}<div class="df-form-error">{{ error }}</div>{% endfor %}
+                    <small class="df-muted">شماره را با کد کشور وارد کنید؛ برای نمونه 989121234567.</small>
+                </div></div>
+                <div class="df-card-actions"><button type="submit" class="df-button">ثبت شماره / ارسال کد تأیید</button></div>
+            </form>
+        {% endif %}
+        {% if sms_contact and sms_contact.is_active and not sms_contact.is_verified %}
+            <form method="post" class="df-form">
+                {% csrf_token %}
+                <input type="hidden" name="sms_action" value="verify_phone">
+                <div class="df-form-grid"><div class="df-form-field">
+                    {{ sms_verification_form.verification_code.label_tag }}
+                    {{ sms_verification_form.verification_code }}
+                    {% for error in sms_verification_form.verification_code.errors %}<div class="df-form-error">{{ error }}</div>{% endfor %}
+                </div></div>
+                <div class="df-card-actions"><button type="submit" class="df-button">تأیید شماره موبایل</button></div>
+            </form>
+        {% endif %}
     </div>
 </section>
 {% endblock %}
