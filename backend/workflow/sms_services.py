@@ -213,10 +213,10 @@ class SMSDispatcher:
             )
             return SMSDelivery.Status.UNKNOWN
 
-        if not isinstance(result, dict):
+        if not isinstance(result, dict) or not result.get("id"):
             SMSDelivery.objects.filter(pk=delivery.pk).update(
                 status=SMSDelivery.Status.UNKNOWN,
-                last_error="Provider returned an invalid result after submission.",
+                last_error="Provider did not return a confirmed message identifier after submission.",
                 updated_at=timezone.now(),
             )
             return SMSDelivery.Status.UNKNOWN
