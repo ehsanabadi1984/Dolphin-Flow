@@ -228,3 +228,19 @@ class UserSMSSettingsTests(TestCase):
         self.assertEqual(contact.verification_code_hash, "")
         self.assertIsNone(contact.verification_expires_at)
         self.assertFalse(contact.is_verified)
+
+
+    def test_user_can_enable_sms_after_phone_is_verified(self):
+        from accounts.models import UserContactMethod
+        UserContactMethod.objects.create(
+            user=self.user,
+            value="989125555555",
+            is_active=True,
+            is_verified=True,
+            verification_method=UserContactMethod.VerificationMethod.OTP,
+        )
+        response = self.client.post(reverse("accounts:settings"), {
+            "sms_action": "toggle_sms", "sms_enabled": "1",
+        })
+        self.assertRedirects(response, reverse("accounts:settings"))
+        self.assertTrue(UserPreference.objects.get(user=self.user).sms_notifications_enabled)
