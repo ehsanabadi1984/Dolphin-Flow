@@ -196,13 +196,30 @@ class SMSDispatcher:
                 updated_at=timezone.now(),
             )
             return SMSDelivery.Status.UNKNOWN
-        except Exception as exc:
+        except MagfaAPIError as exc:
             SMSDelivery.objects.filter(pk=delivery.pk).update(
                 status=SMSDelivery.Status.FAILED,
                 last_error=str(exc)[:4000],
                 updated_at=timezone.now(),
             )
             raise
+        except Exception as exc:
+            # An unclassified provider exception may happen after acceptance.
+            # Mark it UNKNOWN rather than allowing an unsafe automatic resend.
+            SMSDelivery.objects.filter(pk=delivery.pk).update(
+                status=SMSDelivery.Status.UNKNOWN,
+                last_error=str(exc)[:4000],
+                updated_at=timezone.now(),
+            )
+            return SMSDelivery.Status.UNKNOWN
+
+        if not isinstance(result, dict):
+            SMSDelivery.objects.filter(pk=delivery.pk).update(
+                status=SMSDelivery.Status.UNKNOWN,
+                last_error="Provider returned an invalid result after submission.",
+                updated_at=timezone.now(),
+            )
+            return SMSDelivery.Status.UNKNOWN
 
         SMSDelivery.objects.filter(pk=delivery.pk).update(
             status=SMSDelivery.Status.SENT,
@@ -247,6 +264,12 @@ class SMSDispatcher:
 def schedule_sms_notification(notification_id):
     if not WorkflowSMSSettings.objects.filter(pk=1, is_enabled=True).exists():
         return False
+    # Persist an outbox row before enqueueing so broker failures are recoverable.
+    notification = Notification.objects.get(pk=notification_id)
+    SMSDelivery.objects.get_or_create(
+        notification=notification,
+        defaults={"status": SMSDelivery.Status.PENDING},
+    )
     from .tasks import dispatch_sms_notification
     dispatch_sms_notification.delay(notification_id)
     return True
