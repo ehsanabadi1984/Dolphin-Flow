@@ -155,6 +155,7 @@ def settings(request):
         {
             "session_timeout_form": session_timeout_form,
             "user_preference": preference,
+            "sms_preference_locked": not preference.sms_notifications_enabled and not (contact and contact.is_active and contact.is_verified),
             "sms_contact": contact,
             "sms_global_enabled": WorkflowSMSSettings.objects.filter(pk=1, is_enabled=True).exists(),
             "sms_phone_form": phone_form,
