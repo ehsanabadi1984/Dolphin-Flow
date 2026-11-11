@@ -43,3 +43,79 @@ class UserPreferenceTests(TestCase):
         UserPreference.objects.create(user=self.user, session_timeout=28800)
         self.client.get(reverse("accounts:settings"))
         self.assertEqual(self.client.session.get_expiry_age(), 28800)
+
+
+
+class UserContactMethodTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="contact-user",
+            password="test-password",
+        )
+
+    def test_sms_preference_is_disabled_by_default(self):
+        preference = UserPreference.objects.create(user=self.user)
+        self.assertFalse(preference.sms_notifications_enabled)
+
+    def test_contact_is_unverified_by_default(self):
+        from .models import UserContactMethod
+
+        contact = UserContactMethod.objects.create(
+            user=self.user,
+            value="09123456789",
+        )
+        self.assertTrue(contact.is_active)
+        self.assertFalse(contact.is_verified)
+        self.assertEqual(contact.verification_attempts, 0)
+
+    def test_only_one_contact_per_channel_is_allowed_for_a_user(self):
+        from django.db import IntegrityError, transaction
+        from .models import UserContactMethod
+
+        UserContactMethod.objects.create(
+            user=self.user,
+            value="09123456789",
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                UserContactMethod.objects.create(
+                    user=self.user,
+                    value="09129876543",
+                )
+
+    def test_invalid_mobile_number_is_rejected(self):
+        from django.core.exceptions import ValidationError
+        from .models import UserContactMethod
+
+        contact = UserContactMethod(
+            user=self.user,
+            value="09 1234 56789",
+        )
+        with self.assertRaises(ValidationError):
+            contact.full_clean()
+
+    def test_changing_mobile_number_invalidates_previous_verification(self):
+        from django.utils import timezone
+        from .models import UserContactMethod
+
+        contact = UserContactMethod.objects.create(
+            user=self.user,
+            value="09123456789",
+            is_verified=True,
+            verification_method=UserContactMethod.VerificationMethod.MANUAL,
+        )
+        self.assertIsNotNone(contact.verified_at)
+
+        contact.value = "09129876543"
+        contact.verification_code_hash = "old-hash"
+        contact.verification_expires_at = timezone.now()
+        contact.verification_attempts = 2
+        contact.save()
+
+        contact.refresh_from_db()
+        self.assertFalse(contact.is_verified)
+        self.assertEqual(contact.verification_method, "")
+        self.assertIsNone(contact.verified_at)
+        self.assertEqual(contact.verification_code_hash, "")
+        self.assertIsNone(contact.verification_expires_at)
+        self.assertEqual(contact.verification_attempts, 0)
