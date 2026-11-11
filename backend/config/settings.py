@@ -193,6 +193,10 @@ MAGFA_TIMEOUT = env.int("MAGFA_TIMEOUT", default=10)
 SMS_MAX_SEGMENTS = env.int("SMS_MAX_SEGMENTS", default=2)
 SMS_DELIVERY_STALE_AFTER = env.int("SMS_DELIVERY_STALE_AFTER", default=600)
 SMS_PENDING_REQUEUE_AFTER = env.int("SMS_PENDING_REQUEUE_AFTER", default=60)
+SMS_OTP_LENGTH = env.int("SMS_OTP_LENGTH", default=6)
+SMS_OTP_TTL_SECONDS = env.int("SMS_OTP_TTL_SECONDS", default=300)
+SMS_OTP_RESEND_COOLDOWN_SECONDS = env.int("SMS_OTP_RESEND_COOLDOWN_SECONDS", default=60)
+SMS_OTP_MAX_ATTEMPTS = env.int("SMS_OTP_MAX_ATTEMPTS", default=5)
 SMS_FALLBACK_MESSAGE = env(
     "SMS_FALLBACK_MESSAGE",
     default="شما یک اعلان جدید در سامانه فرآیندها دارید. برای مشاهده جزئیات وارد سامانه شوید.",
