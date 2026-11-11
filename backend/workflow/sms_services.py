@@ -196,7 +196,7 @@ class SMSDispatcher:
                 updated_at=timezone.now(),
             )
             return SMSDelivery.Status.UNKNOWN
-        except (MagfaAPIError, ImproperlyConfigured) as exc:
+        except (MagfaAPIError, ImproperlyConfigured, ImportError) as exc:
             SMSDelivery.objects.filter(pk=delivery.pk).update(
                 status=SMSDelivery.Status.FAILED,
                 last_error=str(exc)[:4000],
