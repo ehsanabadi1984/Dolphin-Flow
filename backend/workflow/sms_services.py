@@ -1,6 +1,5 @@
 import base64
 import json
-import logging
 import math
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -9,9 +8,8 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
 
+from accounts.models import UserContactMethod
 from .models import Notification, SMSDelivery, WorkflowSMSSettings, WorkflowStepSMSRule
-
-logger = logging.getLogger(__name__)
 
 _GSM_BASIC = set(
     "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡"
@@ -145,12 +143,11 @@ class SMSDispatcher:
             return delivery.status
 
         message = build_sms_message(notification)
-        delivery.recipient_number = contact.value
         delivery.provider_uid = delivery.pk
         delivery.attempt_count += 1
         delivery.last_error = ""
         delivery.save(update_fields=(
-            "recipient_number", "provider_uid", "attempt_count",
+            "provider_uid", "attempt_count",
             "last_error", "updated_at",
         ))
 
@@ -179,7 +176,9 @@ class SMSDispatcher:
             return "دریافت پیامک برای کاربر فعال نیست.", None
 
         contact = notification.recipient.contact_methods.filter(
-            channel_type="SMS", is_active=True, is_verified=True,
+            channel_type=UserContactMethod.ChannelType.SMS,
+            is_active=True,
+            is_verified=True,
         ).first()
         if not contact:
             return "شماره پیامکی فعال و تأییدشده‌ای برای کاربر وجود ندارد.", None
