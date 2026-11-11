@@ -8,6 +8,21 @@ from channels.layers import get_channel_layer
 from .models import Notification
 
 
+def _schedule_sms_safely(notification_id):
+    try:
+        from .sms_services import schedule_sms_notification
+
+        schedule_sms_notification(notification_id)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "Unable to queue SMS for notification %s", notification_id
+        )
+
+
+
+
 class NotificationService:
 
     @staticmethod
@@ -63,6 +78,11 @@ class NotificationService:
                 },
             )
         transaction.on_commit(publish_notification)
+
+        # SMS is an independent channel; queue failures never affect in-app delivery.
+        transaction.on_commit(
+            lambda notification_id=notification.pk: _schedule_sms_safely(notification_id)
+        )
 
         # PARKED: n8n delivery is intentionally disabled.
         # if getattr(settings, "N8N_NOTIFICATION_WEBHOOK_URL", ""):
