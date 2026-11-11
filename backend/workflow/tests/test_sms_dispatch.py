@@ -81,6 +81,19 @@ class SMSDispatchTests(TestCase):
             "اعلان جدید؛ برای مشاهده وارد سامانه شوید.",
         )
 
+    @patch("workflow.sms_services.MagfaSMSProvider.send")
+    def test_successful_delivery_is_not_sent_twice(self, mock_send):
+        mock_send.return_value = {"id": 9876, "status": 0}
+        first = SMSDispatcher.dispatch(self.notification.pk)
+        second = SMSDispatcher.dispatch(self.notification.pk)
+
+        self.assertEqual(first, SMSDelivery.Status.SENT)
+        self.assertEqual(second, SMSDelivery.Status.SENT)
+        mock_send.assert_called_once()
+        delivery = SMSDelivery.objects.get(notification=self.notification)
+        self.assertEqual(delivery.provider_message_id, "9876")
+        self.assertEqual(delivery.attempt_count, 1)
+
     @patch("workflow.sms_services.urlopen")
     @override_settings(
         MAGFA_USERNAME="account", MAGFA_PASSWORD="secret",
