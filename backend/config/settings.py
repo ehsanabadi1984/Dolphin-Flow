@@ -175,6 +175,24 @@ PG_RESTORE_PATH = env("PG_RESTORE_PATH", default="pg_restore")
 # )
 
 
+
+# SMS provider configuration. The global switch is database-backed; secrets stay in env.
+MAGFA_API_BASE_URL = env(
+    "MAGFA_API_BASE_URL",
+    default="https://sms.magfa.com/api/http/sms/v2",
+).rstrip("/")
+MAGFA_USERNAME = env("MAGFA_USERNAME", default="")
+MAGFA_PASSWORD = env("MAGFA_PASSWORD", default="")
+MAGFA_DOMAIN = env("MAGFA_DOMAIN", default="")
+MAGFA_SENDER = env("MAGFA_SENDER", default="")
+MAGFA_TIMEOUT = env.int("MAGFA_TIMEOUT", default=10)
+SMS_MAX_SEGMENTS = env.int("SMS_MAX_SEGMENTS", default=2)
+SMS_FALLBACK_MESSAGE = env(
+    "SMS_FALLBACK_MESSAGE",
+    default="شما یک اعلان جدید در سامانه فرآیندها دارید. برای مشاهده جزئیات وارد سامانه شوید.",
+)
+
+
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
