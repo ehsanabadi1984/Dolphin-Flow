@@ -1011,7 +1011,6 @@ class SMSDelivery(models.Model):
         verbose_name="اعلان",
     )
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
-    recipient_number = models.CharField(max_length=16, blank=True)
     provider_uid = models.PositiveBigIntegerField(null=True, blank=True)
     provider_message_id = models.CharField(max_length=64, blank=True)
     attempt_count = models.PositiveSmallIntegerField(default=0)
