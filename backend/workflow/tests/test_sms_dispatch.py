@@ -1,8 +1,10 @@
 import base64
 import json
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from accounts.models import User, UserContactMethod, UserPreference
 from workflow.models import (
@@ -166,3 +168,36 @@ class SMSDispatchTests(TestCase):
         self.assertEqual(payload["messages"], ["متن آزمایشی"])
         self.assertEqual(payload["uids"], [77])
         self.assertEqual(result["id"], 12345)
+
+
+class SMSRecoveryTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="sms-recovery", password="test")
+        self.notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="Recovery test",
+            message="Recovery test",
+        )
+        self.delivery = SMSDelivery.objects.create(
+            notification=self.notification,
+            status=SMSDelivery.Status.SENDING,
+        )
+
+    @override_settings(SMS_DELIVERY_STALE_AFTER=600)
+    def test_abandoned_sending_delivery_becomes_unknown_without_resend(self):
+        from workflow.tasks import reconcile_stale_sms_deliveries
+        SMSDelivery.objects.filter(pk=self.delivery.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=11),
+        )
+        self.assertEqual(reconcile_stale_sms_deliveries(), 1)
+        self.delivery.refresh_from_db()
+        self.assertEqual(self.delivery.status, SMSDelivery.Status.UNKNOWN)
+
+    def test_dispatch_task_does_not_retry_failed_delivery(self):
+        from workflow.tasks import dispatch_sms_notification
+        with patch("workflow.sms_services.SMSDispatcher.dispatch", side_effect=RuntimeError("provider failure")):
+            result = dispatch_sms_notification.run(self.notification.pk)
+        self.assertEqual(result, SMSDelivery.Status.FAILED)
+        self.delivery.refresh_from_db()
+        self.assertEqual(self.delivery.status, SMSDelivery.Status.FAILED)
