@@ -189,6 +189,8 @@ class UserSMSSettingsTests(TestCase):
         self.assertFalse(contact.is_verified)
         self.assertEqual(contact.verification_method, "")
         self.assertIsNone(contact.verified_by_id)
+        self.assertTrue(contact.verification_code_hash)
+        self.assertIsNotNone(contact.verification_expires_at)
 
     @patch("accounts.services.import_string")
     def test_otp_resend_is_rate_limited(self, mock_import_string):
@@ -204,3 +206,25 @@ class UserSMSSettingsTests(TestCase):
         })
         provider.return_value.send.assert_called_once()
         self.assertEqual(UserContactMethod.objects.get(user=self.user).verification_attempts, 0)
+
+
+    @patch("accounts.services.import_string")
+    def test_five_wrong_otp_attempts_are_persisted_and_invalidate_code(self, mock_import_string):
+        from django.core.exceptions import ValidationError
+        from accounts.models import UserContactMethod
+        provider = MagicMock()
+        provider.return_value.send.return_value = {"id": 999, "status": 0}
+        mock_import_string.return_value = provider
+        self.client.post(reverse("accounts:settings"), {
+            "sms_action": "save_phone", "phone_number": "989124444444",
+        })
+        contact = UserContactMethod.objects.get(user=self.user)
+        for _ in range(5):
+            with self.assertRaises(ValidationError):
+                from accounts.services import verify_sms_verification_code
+                verify_sms_verification_code(self.user, "000000")
+        contact.refresh_from_db()
+        self.assertEqual(contact.verification_attempts, 5)
+        self.assertEqual(contact.verification_code_hash, "")
+        self.assertIsNone(contact.verification_expires_at)
+        self.assertFalse(contact.is_verified)
