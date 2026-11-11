@@ -8,7 +8,6 @@ class WorkflowConfig(AppConfig):
         from .models import FormField, WorkflowInstance, WorkflowPermission
         from .form_file_models import FormFile, SharedFileAsset  # noqa: F401
         from .history_models import HistoryConfiguration, HistoryField  # noqa: F401
-        from .history_permissions import HISTORY_ACTION, HISTORY_ACTION_LABEL
         from .branding_models import SystemBranding  # noqa: F401
         from django.contrib.admin import autodiscover
         autodiscover()
@@ -36,12 +35,6 @@ class WorkflowConfig(AppConfig):
         if not any(value == "FILE" for value, _ in choices):
             choices.append(("FILE", "بارگذاری فایل"))
         model_field.choices = choices
-
-        permission_field = WorkflowPermission._meta.get_field("action")
-        permission_choices = list(permission_field.choices or [])
-        if not any(value == HISTORY_ACTION for value, _ in permission_choices):
-            permission_choices.append((HISTORY_ACTION, HISTORY_ACTION_LABEL))
-        permission_field.choices = permission_choices
 
         request_started.connect(
             lambda sender, **kwargs: bootstrap_formula_system(),
