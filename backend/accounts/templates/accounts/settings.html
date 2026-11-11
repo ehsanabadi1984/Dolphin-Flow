@@ -48,7 +48,7 @@
             {% csrf_token %}
             <input type="hidden" name="sms_action" value="toggle_sms">
             <label>
-                <input type="checkbox" name="sms_enabled" value="1" {% if user_preference.sms_notifications_enabled %}checked{% endif %} {% if not user_preference.sms_notifications_enabled and (not sms_contact or not sms_contact.is_active or not sms_contact.is_verified) %}disabled{% endif %}>
+                <input type="checkbox" name="sms_enabled" value="1" {% if user_preference.sms_notifications_enabled %}checked{% endif %} {% if sms_preference_locked %}disabled{% endif %}>
                 دریافت اعلان‌های سامانه از طریق پیامک فعال باشد
             </label>
             {% if not sms_contact or not sms_contact.is_active or not sms_contact.is_verified %}
