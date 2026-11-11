@@ -6,10 +6,14 @@ from django.test import TestCase, override_settings
 
 from accounts.models import User, UserContactMethod, UserPreference
 from workflow.models import (
-    Notification, SMSDelivery, Workflow, WorkflowSMSSettings,
-    WorkflowStep, WorkflowStepSMSRule,
+    Notification, SMSDelivery, Workflow, WorkflowInstance, WorkflowSMSSettings,
+    WorkflowStep, WorkflowStepSMSRule, WorkflowTransition,
+    WorkflowTransitionExecution,
 )
-from workflow.sms_services import MagfaSMSProvider, SMSDispatcher, build_sms_message
+from workflow.sms_services import (
+    MagfaSMSProvider, SMSDispatcher, build_sms_message,
+    resolve_notification_step,
+)
 
 
 class SMSDispatchTests(TestCase):
@@ -40,6 +44,49 @@ class SMSDispatchTests(TestCase):
             notification_type=self.notification.notification_type,
             sms_enabled=True,
         )
+
+    def test_workflow_completed_uses_transition_origin_step(self):
+        instance = WorkflowInstance.objects.create(
+            workflow=self.step.workflow, current_step=None, started_by=self.user,
+            status=WorkflowInstance.Status.COMPLETED,
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.step.workflow, from_step=self.step,
+            to_step=None, name="Complete dynamically",
+        )
+        execution = WorkflowTransitionExecution.objects.create(
+            instance=instance, transition=transition, performed_by=self.user,
+        )
+        completed = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.WORKFLOW_COMPLETED,
+            title="فرآیند تکمیل شد", message="فرآیند پایان یافت.",
+            workflow_instance=instance, transition_execution=execution,
+        )
+        WorkflowStepSMSRule.objects.create(
+            step=self.step,
+            notification_type=Notification.NotificationType.WORKFLOW_COMPLETED,
+            sms_enabled=True,
+        )
+        self.assertEqual(resolve_notification_step(completed), self.step)
+        with patch("workflow.sms_services.MagfaSMSProvider.send") as mock_send:
+            mock_send.return_value = {"id": 123, "status": 0}
+            self.assertEqual(
+                SMSDispatcher.dispatch(completed.pk), SMSDelivery.Status.SENT
+            )
+        mock_send.assert_called_once()
+
+    @patch("workflow.sms_services.MagfaSMSProvider.send")
+    def test_uncertain_provider_result_is_not_retried_automatically(self, mock_send):
+        from workflow.sms_services import MagfaUncertainDeliveryError
+        mock_send.side_effect = MagfaUncertainDeliveryError("read timeout")
+        self.assertEqual(
+            SMSDispatcher.dispatch(self.notification.pk), SMSDelivery.Status.UNKNOWN
+        )
+        self.assertEqual(
+            SMSDispatcher.dispatch(self.notification.pk), SMSDelivery.Status.UNKNOWN
+        )
+        mock_send.assert_called_once()
 
     def test_global_switch_must_be_enabled(self):
         WorkflowSMSSettings.objects.filter(pk=1).update(is_enabled=False)

@@ -7,6 +7,7 @@ from urllib.request import Request, urlopen
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.module_loading import import_string
+from django.db import transaction
 from django.utils import timezone
 
 from accounts.models import UserContactMethod
@@ -20,7 +21,11 @@ _GSM_EXTENDED = set("^{}\\[~]|€")
 
 
 class MagfaAPIError(Exception):
-    pass
+    """A definitive error response from Magfa."""
+
+
+class MagfaUncertainDeliveryError(MagfaAPIError):
+    """The request may have reached Magfa, but acceptance could not be confirmed."""
 
 
 class MagfaSMSProvider:
@@ -62,7 +67,9 @@ class MagfaSMSProvider:
             detail = exc.read().decode("utf-8", errors="replace")
             raise MagfaAPIError(f"Magfa HTTP {exc.code}: {detail[:1000]}") from exc
         except (URLError, TimeoutError, OSError, ValueError) as exc:
-            raise MagfaAPIError(f"Magfa connection/response error: {exc}") from exc
+            raise MagfaUncertainDeliveryError(
+                f"Magfa delivery outcome is unknown: {exc}"
+            ) from exc
 
         if not isinstance(result, dict) or result.get("status") != 0:
             raise MagfaAPIError(f"Magfa rejected the request: {str(result)[:1000]}")
@@ -133,40 +140,69 @@ class SMSDispatcher:
             notification=notification,
             defaults={"status": SMSDelivery.Status.PENDING},
         )
-        if delivery.status in (SMSDelivery.Status.SENT, SMSDelivery.Status.SKIPPED):
-            return delivery.status
 
-        reason, contact = cls._eligibility(notification)
-        if reason:
-            delivery.status = SMSDelivery.Status.SKIPPED
-            delivery.last_error = reason
-            delivery.save(update_fields=("status", "last_error", "updated_at"))
-            return delivery.status
+        # Claim the delivery in a short transaction. The row lock serializes
+        # concurrent workers; SENDING is committed before the network call so
+        # a worker crash cannot cause an automatic duplicate submission.
+        with transaction.atomic():
+            delivery = SMSDelivery.objects.select_for_update().get(pk=delivery.pk)
+            if delivery.status in (
+                SMSDelivery.Status.SENT,
+                SMSDelivery.Status.SKIPPED,
+                SMSDelivery.Status.SENDING,
+                SMSDelivery.Status.UNKNOWN,
+            ):
+                return delivery.status
 
-        message = build_sms_message(notification)
-        delivery.provider_uid = delivery.pk
-        delivery.attempt_count += 1
-        delivery.last_error = ""
-        delivery.save(update_fields=(
-            "provider_uid", "attempt_count",
-            "last_error", "updated_at",
-        ))
+            reason, contact = cls._eligibility(notification)
+            if reason:
+                delivery.status = SMSDelivery.Status.SKIPPED
+                delivery.last_error = reason
+                delivery.save(update_fields=("status", "last_error", "updated_at"))
+                return delivery.status
+
+            message = build_sms_message(notification)
+            if delivery.provider_uid is None:
+                delivery.provider_uid = delivery.pk
+            delivery.status = SMSDelivery.Status.SENDING
+            delivery.attempt_count += 1
+            delivery.last_error = ""
+            delivery.save(update_fields=(
+                "status", "provider_uid", "attempt_count",
+                "last_error", "updated_at",
+            ))
+            provider_uid = delivery.provider_uid
 
         provider_class = import_string(settings.SMS_PROVIDER_CLASS)
-        result = provider_class().send(
-            recipient=contact.value,
-            message=message,
-            uid=delivery.provider_uid,
+        try:
+            result = provider_class().send(
+                recipient=contact.value,
+                message=message,
+                uid=provider_uid,
+            )
+        except MagfaUncertainDeliveryError as exc:
+            SMSDelivery.objects.filter(pk=delivery.pk).update(
+                status=SMSDelivery.Status.UNKNOWN,
+                last_error=str(exc)[:4000],
+                updated_at=timezone.now(),
+            )
+            return SMSDelivery.Status.UNKNOWN
+        except Exception as exc:
+            SMSDelivery.objects.filter(pk=delivery.pk).update(
+                status=SMSDelivery.Status.FAILED,
+                last_error=str(exc)[:4000],
+                updated_at=timezone.now(),
+            )
+            raise
+
+        SMSDelivery.objects.filter(pk=delivery.pk).update(
+            status=SMSDelivery.Status.SENT,
+            provider_message_id=str(result.get("id", "")),
+            sent_at=timezone.now(),
+            last_error="",
+            updated_at=timezone.now(),
         )
-        delivery.status = SMSDelivery.Status.SENT
-        delivery.provider_message_id = str(result.get("id", ""))
-        delivery.sent_at = timezone.now()
-        delivery.last_error = ""
-        delivery.save(update_fields=(
-            "status", "provider_message_id", "sent_at",
-            "last_error", "updated_at",
-        ))
-        return delivery.status
+        return SMSDelivery.Status.SENT
 
     @staticmethod
     def _eligibility(notification):

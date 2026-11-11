@@ -999,8 +999,10 @@ class WorkflowSMSSettings(models.Model):
 
 class SMSDelivery(models.Model):
     class Status(models.TextChoices):
-        PENDING = "PENDING", "در صف / در حال ارسال"
+        PENDING = "PENDING", "در صف"
+        SENDING = "SENDING", "در حال ارسال"
         SENT = "SENT", "پذیرفته‌شده توسط درگاه"
+        UNKNOWN = "UNKNOWN", "وضعیت نامشخص؛ نیازمند بررسی"
         FAILED = "FAILED", "ناموفق"
         SKIPPED = "SKIPPED", "ارسال نشد"
 
