@@ -22,7 +22,7 @@ class SMSPhoneForm(forms.Form):
         label="شماره موبایل",
         max_length=16,
         validators=[RegexValidator(
-            regex=r"^[+]?[0-9]{8,15}$",
+            regex=r"^[+]?[1-9][0-9]{7,14}$",
             message="شماره را با ۸ تا ۱۵ رقم و بدون فاصله وارد کنید.",
         )],
         widget=forms.TextInput(attrs={
@@ -32,7 +32,7 @@ class SMSPhoneForm(forms.Form):
     )
 
     def clean_phone_number(self):
-        return self.cleaned_data["phone_number"].strip()
+        return self.cleaned_data["phone_number"].strip().lstrip("+")
 
 
 class SMSVerificationForm(forms.Form):
