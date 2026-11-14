@@ -284,6 +284,8 @@ def prepare_sms_delivery_snapshot(notification, delivery):
         snapshot_ready = bool(
             locked.provider_code_snapshot
             and locked.message_source
+            and locked.rendered_message
+            and locked.rendered_message.strip()
         )
         if snapshot_ready:
             delivery.refresh_from_db()
