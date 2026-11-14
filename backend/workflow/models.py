@@ -1,4 +1,6 @@
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 import uuid
 from django.conf import settings
 from django.db import models, transaction
@@ -976,6 +978,187 @@ class WorkflowStepSMSRule(models.Model):
 
 
 
+class SMSProviderConfiguration(models.Model):
+    code = models.SlugField(max_length=50, unique=True)
+    name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "اپراتور پیامکی"
+        verbose_name_plural = "اپراتورهای پیامکی"
+        ordering = ("name",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("is_active",),
+                condition=models.Q(is_active=True),
+                name="sms_only_one_active_provider",
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+_sms_revision_mutation_allowed = ContextVar(
+    "sms_revision_mutation_allowed",
+    default=False,
+)
+
+
+@contextmanager
+def allow_sms_revision_mutation():
+    token = _sms_revision_mutation_allowed.set(True)
+    try:
+        yield
+    finally:
+        _sms_revision_mutation_allowed.reset(token)
+
+
+class SMSProviderConfigRevisionQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("تغییر گروهی نسخه‌های تنظیمات مجاز نیست.")
+
+    def bulk_create(self, objs, *args, **kwargs):
+        raise ValidationError("ساخت گروهی نسخه‌های تنظیمات مجاز نیست.")
+
+    def bulk_update(self, objs, fields, *args, **kwargs):
+        raise ValidationError("ویرایش گروهی نسخه‌های تنظیمات مجاز نیست.")
+
+    def delete(self):
+        raise ValidationError("حذف گروهی نسخه‌های تنظیمات مجاز نیست.")
+
+
+class SMSProviderConfigRevisionManager(
+    models.Manager.from_queryset(SMSProviderConfigRevisionQuerySet)
+):
+    pass
+
+
+class SMSProviderConfigRevision(models.Model):
+    objects = SMSProviderConfigRevisionManager()
+    provider = models.ForeignKey(
+        SMSProviderConfiguration,
+        on_delete=models.PROTECT,
+        related_name="revisions",
+    )
+    version = models.PositiveIntegerField()
+    credentials_ciphertext = models.TextField()
+    connection_options = models.JSONField(default=dict, blank=True)
+    is_current = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_sms_provider_revisions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "نسخه تنظیمات اپراتور پیامکی"
+        verbose_name_plural = "نسخه‌های تنظیمات اپراتور پیامکی"
+        ordering = ("provider", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("provider", "version"),
+                name="unique_sms_provider_revision",
+            ),
+            models.UniqueConstraint(
+                fields=("provider",),
+                condition=models.Q(is_current=True),
+                name="sms_one_current_revision_per_provider",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not _sms_revision_mutation_allowed.get():
+            raise ValidationError(
+                "ساخت یا تغییر نسخه تنظیمات فقط از طریق Registry مجاز است."
+            )
+        if self.pk:
+            if not _sms_revision_mutation_allowed.get():
+                raise ValidationError(
+                    "نسخه ثبت‌شده تنظیمات اپراتور قابل ویرایش نیست."
+                )
+            original = type(self).objects.filter(pk=self.pk).first()
+            if original is None:
+                raise ValidationError("نسخه تنظیمات موردنظر وجود ندارد.")
+            immutable_fields = (
+                "provider_id",
+                "version",
+                "credentials_ciphertext",
+                "connection_options",
+                "created_by_id",
+                "created_at",
+            )
+            if any(
+                getattr(self, field) != getattr(original, field)
+                for field in immutable_fields
+            ):
+                raise ValidationError(
+                    "اطلاعات اصلی نسخه تنظیمات قابل تغییر نیست."
+                )
+            if self.is_current == original.is_current:
+                raise ValidationError(
+                    "تغییر نسخه فقط برای تغییر وضعیت جاری مجاز است."
+                )
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("حذف نسخه‌های تنظیمات اپراتور مجاز نیست.")
+
+    def __str__(self):
+        return f"{self.provider.code} · v{self.version}"
+
+
+class SMSTemplate(models.Model):
+    step = models.ForeignKey(
+        WorkflowStep,
+        on_delete=models.CASCADE,
+        related_name="sms_templates",
+        verbose_name="مرحله",
+    )
+    notification_type = models.CharField(
+        max_length=30,
+        choices=Notification.NotificationType.choices,
+        verbose_name="نوع اعلان",
+    )
+    body_template = models.TextField(verbose_name="متن قالب")
+    is_active = models.BooleanField(default=True, verbose_name="فعال")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_sms_templates",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_sms_templates",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "قالب پیامک"
+        verbose_name_plural = "قالب‌های پیامک"
+        ordering = ("step", "notification_type")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("step", "notification_type"),
+                name="unique_step_sms_template",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.step} · {self.get_notification_type_display()}"
+
+
 class WorkflowSMSSettings(models.Model):
     """Singleton switch for the SMS channel; provider secrets stay in env."""
 
@@ -1016,6 +1199,31 @@ class SMSDelivery(models.Model):
     provider_uid = models.PositiveBigIntegerField(null=True, blank=True)
     provider_message_id = models.CharField(max_length=64, blank=True)
     last_queued_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    provider_revision = models.ForeignKey(
+        SMSProviderConfigRevision,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="deliveries",
+    )
+    provider_code_snapshot = models.CharField(max_length=50, blank=True, default="")
+    template = models.ForeignKey(
+        SMSTemplate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deliveries",
+    )
+    rendered_message = models.TextField(blank=True, default="")
+    message_source = models.CharField(
+        max_length=20,
+        choices=[
+            ("TEMPLATE", "قالب اختصاصی"),
+            ("NOTIFICATION", "عنوان و متن اعلان"),
+            ("LENGTH_FALLBACK", "متن جایگزین محدودیت طول"),
+        ],
+        default="NOTIFICATION",
+    )
     attempt_count = models.PositiveSmallIntegerField(default=0)
     last_error = models.TextField(blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)

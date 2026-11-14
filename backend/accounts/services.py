@@ -112,8 +112,10 @@ def request_sms_verification(user, phone_number):
         )
 
     try:
-        provider_class = import_string(settings.SMS_PROVIDER_CLASS)
-        provider_class().send(
+        from workflow.sms_provider_registry import get_active_provider
+
+        provider, provider_revision = get_active_provider()
+        provider.send(
             recipient=phone_number,
             message=f"کد تأیید شماره موبایل شما در Dolphin-Flow: {code}",
             uid=secrets.randbelow(2_000_000_000) + 1,

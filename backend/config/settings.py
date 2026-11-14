@@ -177,6 +177,8 @@ PG_RESTORE_PATH = env("PG_RESTORE_PATH", default="pg_restore")
 
 
 # SMS provider configuration. The global switch is database-backed; secrets stay in env.
+SMS_CREDENTIALS_ENCRYPTION_KEY = env("SMS_CREDENTIALS_ENCRYPTION_KEY", default="")
+
 SMS_PROVIDER_CLASS = env(
     "SMS_PROVIDER_CLASS",
     default="workflow.sms_services.MagfaSMSProvider",

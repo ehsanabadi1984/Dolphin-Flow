@@ -8,13 +8,13 @@ from django.utils import timezone
 
 from accounts.models import User, UserContactMethod, UserPreference
 from workflow.models import (
-    Notification, SMSDelivery, Workflow, WorkflowInstance, WorkflowSMSSettings,
+    Notification, SMSDelivery, SMSTemplate, SMSProviderConfiguration, SMSProviderConfigRevision, Workflow, WorkflowInstance, WorkflowSMSSettings,
     WorkflowStep, WorkflowStepSMSRule, WorkflowTransition,
     WorkflowTransitionExecution,
 )
 from workflow.sms_services import (
     MagfaSMSProvider, SMSDispatcher, build_sms_message,
-    resolve_notification_step,
+    prepare_sms_delivery_snapshot, resolve_notification_step,
 )
 
 
@@ -46,6 +46,75 @@ class SMSDispatchTests(TestCase):
             notification_type=self.notification.notification_type,
             sms_enabled=True,
         )
+
+    def test_sms_template_renders_notification_variables(self):
+        template = SMSTemplate.objects.create(
+            step=self.step,
+            notification_type=self.notification.notification_type,
+            body_template="{{ title }} - {{ message }}",
+        )
+        from workflow.sms_services import _build_sms_content
+
+        message, source = _build_sms_content(self.notification, template)
+
+        self.assertEqual(
+            message,
+            "اقدام لازم - لطفاً فرآیند را بررسی کنید.",
+        )
+        self.assertEqual(source, "TEMPLATE")
+
+    def test_delivery_snapshot_keeps_rendered_template_message(self):
+        SMSTemplate.objects.create(
+            step=self.step,
+            notification_type=self.notification.notification_type,
+            body_template="اعلان: {{ title }}",
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=self.notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+
+        prepare_sms_delivery_snapshot(self.notification, delivery)
+
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.rendered_message, "اعلان: اقدام لازم")
+        self.assertEqual(delivery.message_source, "TEMPLATE")
+        self.assertEqual(delivery.template.step, self.step)
+
+    @override_settings(SMS_CREDENTIALS_ENCRYPTION_KEY="MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=")
+    def test_delivery_snapshot_preserves_provider_revision(self):
+        from workflow.sms_provider_registry import (
+            activate_provider,
+            create_provider_revision,
+            register_provider,
+        )
+
+        provider = register_provider(code="magfa", name="Magfa")
+        revision = create_provider_revision(
+            provider,
+            credentials={
+                "username": "test", "password": "test",
+                "domain": "test", "sender": "1000",
+            },
+        )
+        activate_provider(provider)
+        delivery = SMSDelivery.objects.create(
+            notification=self.notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+
+        prepare_sms_delivery_snapshot(self.notification, delivery)
+        delivery.refresh_from_db()
+
+        self.assertEqual(delivery.provider_revision_id, revision.pk)
+        self.assertEqual(delivery.provider_code_snapshot, "magfa")
+
+        provider.is_active = False
+        provider.save(update_fields=("is_active",))
+        prepare_sms_delivery_snapshot(self.notification, delivery)
+        delivery.refresh_from_db()
+
+        self.assertEqual(delivery.provider_revision_id, revision.pk)
 
     def test_workflow_completed_uses_transition_origin_step(self):
         instance = WorkflowInstance.objects.create(

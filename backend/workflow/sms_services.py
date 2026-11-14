@@ -11,6 +11,7 @@ from django.utils.module_loading import import_string
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.template import Context, Engine
 
 from accounts.models import UserContactMethod
 from .models import Notification, SMSDelivery, WorkflowSMSSettings, WorkflowStepSMSRule
@@ -30,17 +31,79 @@ class MagfaUncertainDeliveryError(MagfaAPIError):
     """The request may have reached Magfa, but acceptance could not be confirmed."""
 
 
-class MagfaSMSProvider:
-    """Stdlib-only adapter for Magfa HTTP SMS API v2."""
+class SMSProvider:
+    """Contract shared by all SMS provider adapters."""
+
+    def validate_configuration(self):
+        raise NotImplementedError
 
     def send(self, *, recipient, message, uid):
-        username = settings.MAGFA_USERNAME
-        password = settings.MAGFA_PASSWORD
-        domain = settings.MAGFA_DOMAIN
-        sender = settings.MAGFA_SENDER
+        raise NotImplementedError
+
+    def test_connection(self):
+        raise NotImplementedError
+
+    def get_balance(self):
+        raise NotImplementedError
+
+
+class MagfaSMSProvider(SMSProvider):
+    """Magfa HTTP SMS API v2 adapter."""
+
+    def validate_configuration(self):
+        config = self._config()
+        required = ("username", "password", "domain", "sender")
+        missing = [key for key in required if not config.get(key)]
+        if missing:
+            raise ImproperlyConfigured(
+                "Magfa configuration is incomplete: " + ", ".join(missing)
+            )
+        if not config["base_url"].startswith(("https://", "http://")):
+            raise ImproperlyConfigured("Magfa API base URL is invalid.")
+        if config["timeout"] <= 0:
+            raise ImproperlyConfigured("Magfa timeout must be positive.")
+        return True
+
+    def __init__(self, credentials=None, options=None):
+        self._legacy_environment_config = credentials is None
+        self.credentials = credentials if credentials is not None else {}
+        self.options = options or {}
+
+    def _config(self):
+        if self._legacy_environment_config:
+            credentials = {
+                "username": settings.MAGFA_USERNAME,
+                "password": settings.MAGFA_PASSWORD,
+                "domain": settings.MAGFA_DOMAIN,
+                "sender": settings.MAGFA_SENDER,
+            }
+            options = {
+                "base_url": settings.MAGFA_API_BASE_URL,
+                "timeout": settings.MAGFA_TIMEOUT,
+            }
+        else:
+            credentials = self.credentials
+            options = self.options
+
+        return {
+            "username": credentials.get("username"),
+            "password": credentials.get("password"),
+            "domain": credentials.get("domain"),
+            "sender": credentials.get("sender"),
+            "base_url": (options.get("base_url") or settings.MAGFA_API_BASE_URL).rstrip("/"),
+            "timeout": int(options.get("timeout") or settings.MAGFA_TIMEOUT),
+        }
+
+    def send(self, *, recipient, message, uid):
+        config = self._config()
+        username = config["username"]
+        password = config["password"]
+        domain = config["domain"]
+        sender = config["sender"]
+
         if not all((username, password, domain, sender)):
             raise ImproperlyConfigured(
-                "Magfa credentials, domain and sender must be configured in the environment."
+                "Magfa credentials, domain and sender must be configured."
             )
 
         token = base64.b64encode(
@@ -53,7 +116,7 @@ class MagfaSMSProvider:
             "uids": [uid],
         }
         request = Request(
-            f"{settings.MAGFA_API_BASE_URL}/send",
+            f"{config['base_url']}/send",
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             headers={
                 "Authorization": f"Basic {token}",
@@ -63,7 +126,7 @@ class MagfaSMSProvider:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=settings.MAGFA_TIMEOUT) as response:
+            with urlopen(request, timeout=config["timeout"]) as response:
                 result = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
@@ -92,7 +155,6 @@ class MagfaSMSProvider:
             raise MagfaAPIError(f"Magfa message was not accepted: {str(item)[:1000]}")
         return item
 
-
 def _message_parts(message):
     if all(ch in _GSM_BASIC or ch in _GSM_EXTENDED for ch in message):
         units = sum(2 if ch in _GSM_EXTENDED else 1 for ch in message)
@@ -101,20 +163,93 @@ def _message_parts(message):
     return 1 if units <= 70 else math.ceil(units / 67)
 
 
-def build_sms_message(notification):
-    full_message = "\n".join(
-        part.strip()
-        for part in (notification.title, notification.message)
-        if part and part.strip()
-    )
+def _build_sms_content(notification, template=None):
+    if template is not None:
+        rendered = Engine(autoescape=False).from_string(
+            template.body_template
+        ).render(Context({
+            "title": notification.title,
+            "message": notification.message,
+        })).strip()
+        message = rendered
+        source = "TEMPLATE"
+    else:
+        message = "\\n".join(
+            part.strip()
+            for part in (notification.title, notification.message)
+            if part and part.strip()
+        )
+        source = "NOTIFICATION"
+
     max_segments = max(1, settings.SMS_MAX_SEGMENTS)
-    if _message_parts(full_message) <= max_segments:
-        return full_message
+    if _message_parts(message) <= max_segments:
+        return message, source
 
     fallback = settings.SMS_FALLBACK_MESSAGE.strip()
     if not fallback or _message_parts(fallback) > max_segments:
-        raise ValueError("Configured SMS fallback message is empty or exceeds SMS_MAX_SEGMENTS.")
-    return fallback
+        raise ValueError(
+            "Configured SMS fallback message is empty or exceeds SMS_MAX_SEGMENTS."
+        )
+    return fallback, "LENGTH_FALLBACK"
+
+
+def build_sms_message(notification):
+    message, _ = _build_sms_content(notification)
+    return message
+
+
+def prepare_sms_delivery_snapshot(notification, delivery):
+    """Persist provider, template and rendered-message snapshots once."""
+    from .models import SMSProviderConfiguration, SMSTemplate
+    from .sms_provider_registry import get_active_revision
+
+    # The caller may already hold this row lock. Nested atomic blocks are safe.
+    with transaction.atomic():
+        locked = SMSDelivery.objects.select_for_update().get(pk=delivery.pk)
+
+        snapshot_ready = bool(
+            locked.provider_code_snapshot
+            and locked.message_source
+        )
+        if snapshot_ready:
+            delivery.refresh_from_db()
+            return delivery
+
+        step = resolve_notification_step(notification)
+        template = None
+        if step is not None:
+            template = SMSTemplate.objects.filter(
+                step=step,
+                notification_type=notification.notification_type,
+                is_active=True,
+            ).first()
+
+        message, source = _build_sms_content(notification, template)
+        if not message.strip():
+            raise ValueError("Rendered SMS message is empty.")
+
+        if SMSProviderConfiguration.objects.filter(is_active=True).exists():
+            revision = get_active_revision()
+            locked.provider_revision = revision
+            locked.provider_code_snapshot = revision.provider.code
+        else:
+            # Temporary compatibility until legacy settings are migrated.
+            locked.provider_code_snapshot = "legacy"
+
+        locked.template = template
+        locked.rendered_message = message
+        locked.message_source = source
+        locked.save(update_fields=(
+            "provider_revision",
+            "provider_code_snapshot",
+            "template",
+            "rendered_message",
+            "message_source",
+            "updated_at",
+        ))
+
+        delivery.refresh_from_db()
+        return delivery
 
 
 def resolve_notification_step(notification):
@@ -172,7 +307,8 @@ class SMSDispatcher:
                 delivery.save(update_fields=("status", "last_error", "updated_at"))
                 return delivery.status
 
-            message = build_sms_message(notification)
+            prepare_sms_delivery_snapshot(notification, delivery)
+            message = delivery.rendered_message
             if delivery.provider_uid is None:
                 delivery.provider_uid = delivery.pk
             delivery.status = SMSDelivery.Status.SENDING
@@ -185,8 +321,15 @@ class SMSDispatcher:
             provider_uid = delivery.provider_uid
 
         try:
-            provider_class = import_string(settings.SMS_PROVIDER_CLASS)
-            result = provider_class().send(
+            if delivery.provider_revision_id:
+                from .sms_provider_registry import build_provider
+                provider = build_provider(delivery.provider_revision)
+            else:
+                # Temporary compatibility with the legacy environment config.
+                provider_class = import_string(settings.SMS_PROVIDER_CLASS)
+                provider = provider_class()
+
+            result = provider.send(
                 recipient=contact.value,
                 message=message,
                 uid=provider_uid,
@@ -296,10 +439,11 @@ def schedule_sms_notification(notification_id):
         return False
     # Persist an outbox row before enqueueing so broker failures are recoverable.
     notification = Notification.objects.get(pk=notification_id)
-    SMSDelivery.objects.get_or_create(
+    delivery, _ = SMSDelivery.objects.get_or_create(
         notification=notification,
         defaults={"status": SMSDelivery.Status.PENDING},
     )
+    prepare_sms_delivery_snapshot(notification, delivery)
     return enqueue_pending_sms_notification(
         notification_id,
         min_interval_seconds=max(60, settings.SMS_PENDING_REQUEUE_AFTER),
