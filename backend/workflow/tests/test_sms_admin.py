@@ -10,6 +10,7 @@ from workflow.admin import (
 from workflow.models import (
     SMSTemplate,
     WorkflowSMSSettings,
+    SMSDelivery,
 )
 from workflow.sms_provider_registry import create_provider_revision, register_provider
 
@@ -248,3 +249,29 @@ class SMSAdminPermissionTests(SimpleTestCase):
         self.assertFalse(model_admin.has_module_permission(request))
         request.user = admin_user
         self.assertTrue(model_admin.has_module_permission(request))
+
+
+
+class SMSDeliveryAdminTests(SimpleTestCase):
+    def test_delivery_admin_is_a_read_only_monitor_with_operational_filters(self):
+        model_admin = dolphin_admin_site._registry[SMSDelivery]
+
+        self.assertFalse(model_admin.has_add_permission(None))
+        self.assertFalse(model_admin.has_change_permission(None))
+        self.assertEqual(model_admin.date_hierarchy, "created_at")
+        self.assertIn("status", model_admin.list_filter)
+        self.assertIn("provider_code_snapshot", model_admin.list_filter)
+        self.assertIn("message_source", model_admin.list_filter)
+        self.assertIn("recipient", model_admin.list_display)
+        self.assertIn("has_error", model_admin.list_display)
+
+    def test_delivery_monitor_shows_recipient_without_exposing_error_text(self):
+        model_admin = dolphin_admin_site._registry[SMSDelivery]
+        delivery = MagicMock()
+        delivery.notification.recipient.get_full_name.return_value = "کاربر آزمایشی"
+        delivery.notification.recipient.get_username.return_value = "tester"
+        delivery.last_error = "sensitive provider response"
+
+        self.assertEqual(model_admin.recipient(delivery), "کاربر آزمایشی")
+        self.assertTrue(model_admin.has_error(delivery))
+        self.assertNotIn("sensitive", str(model_admin.has_error(delivery)))
