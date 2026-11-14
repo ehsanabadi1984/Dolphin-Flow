@@ -1137,7 +1137,8 @@ class SMSTemplate(models.Model):
         choices=Notification.NotificationType.choices,
         verbose_name="نوع اعلان",
     )
-    body_template = models.TextField(verbose_name="متن قالب")
+    title_template = models.TextField(blank=True, verbose_name="عنوان پیامک")
+    body_template = models.TextField(verbose_name="متن پیامک")
     is_active = models.BooleanField(default=True, verbose_name="فعال")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1174,13 +1175,15 @@ class SMSTemplate(models.Model):
 
     def clean(self):
         super().clean()
-        if self.body_template:
-            from .sms_services import validate_sms_template_source
+        from .sms_services import validate_sms_template_source
 
-            try:
-                validate_sms_template_source(self.body_template)
-            except ValueError as exc:
-                raise ValidationError({"body_template": str(exc)}) from exc
+        for field_name in ("title_template", "body_template"):
+            source = getattr(self, field_name)
+            if source:
+                try:
+                    validate_sms_template_source(source)
+                except ValueError as exc:
+                    raise ValidationError({field_name: str(exc)}) from exc
 
     def __str__(self):
         scope = str(self.step) if self.step_id else "همه مراحل"
