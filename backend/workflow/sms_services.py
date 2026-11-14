@@ -68,7 +68,7 @@ class MagfaSMSProvider:
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             error = f"Magfa HTTP {exc.code}: {detail[:1000]}"
-            if exc.code >= 500:
+            if exc.code == 408 or exc.code >= 500:
                 raise MagfaUncertainDeliveryError(error) from exc
             raise MagfaAPIError(error) from exc
         except (URLError, TimeoutError, OSError, ValueError) as exc:
