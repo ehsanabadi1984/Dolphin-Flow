@@ -1353,6 +1353,11 @@ class SMSTemplateAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["step"].required = False
+        self.fields["step"].help_text = (
+            "در صورت خالی‌بودن، این قالب برای همه مراحلِ همین نوع اعلان استفاده می‌شود؛ "
+            "قالب اختصاصی هر مرحله بر این قالب عمومی اولویت دارد."
+        )
         self.fields["body_template"].help_text = (
             "متغیرهای مجاز: {{ title }} برای عنوان اعلان و {{ message }} برای متن اعلان. "
             "از فیلتر، شرط، حلقه یا متغیر دیگری نمی‌توان استفاده کرد."
@@ -1364,7 +1369,7 @@ class SMSTemplateAdmin(admin.ModelAdmin):
     form = SMSTemplateAdminForm
     admin_category = "communications"
     admin_section = "notification"
-    list_display = ("step", "notification_type", "is_active", "updated_at")
+    list_display = ("step_display", "notification_type", "is_active", "updated_at")
     list_filter = ("is_active", "notification_type", "step__workflow")
     search_fields = ("step__name", "step__workflow__name", "body_template")
     fields = (
@@ -1385,6 +1390,10 @@ class SMSTemplateAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
+
+    @admin.display(description="مرحله")
+    def step_display(self, obj):
+        return obj.step if obj.step_id else "همه مراحل"
 
     @admin.display(description="پیش‌نمایش نمونه پیام")
     def template_preview(self, obj):
