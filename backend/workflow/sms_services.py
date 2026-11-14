@@ -269,11 +269,14 @@ def _build_sms_content(notification, template=None):
     if template is not None:
         context = sms_template_context(notification)
         allowed_variables = SMS_TEMPLATE_VARIABLES_BY_TYPE.get(notification.notification_type, ())
-        title_source = template.title_template.strip() if template.title_template else (notification.title or "")
         body_source = template.body_template.strip() if template.body_template else (notification.message or "")
-        rendered_title = validate_sms_template_source(title_source, allowed_variables).render(Context(context)).strip() if title_source else ""
-        rendered_body = validate_sms_template_source(body_source, allowed_variables).render(Context(context)).strip() if body_source else ""
-        message = "\n".join(part for part in (rendered_title, rendered_body) if part)
+        if template.legacy_format:
+            message = validate_sms_template_source(body_source, allowed_variables).render(Context(context)).strip()
+        else:
+            title_source = template.title_template.strip() if template.title_template else (notification.title or "")
+            rendered_title = validate_sms_template_source(title_source, allowed_variables).render(Context(context)).strip() if title_source else ""
+            rendered_body = validate_sms_template_source(body_source, allowed_variables).render(Context(context)).strip() if body_source else ""
+            message = "\n".join(part for part in (rendered_title, rendered_body) if part)
         source = "TEMPLATE"
     else:
         message = "\n".join(
