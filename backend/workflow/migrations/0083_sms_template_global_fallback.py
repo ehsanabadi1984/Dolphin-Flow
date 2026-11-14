@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
             constraint=models.UniqueConstraint(
                 condition=Q(step__isnull=True),
                 fields=("notification_type",),
-                name="unique_global_sms_template_type",
+                name="uniq_global_sms_tpl_type",
             ),
         ),
     ]
