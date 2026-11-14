@@ -11,7 +11,8 @@ from django.utils.module_loading import import_string
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-from django.template import Context, Engine
+from django.template import Context, Engine, TemplateSyntaxError
+from django.template.base import TextNode, VariableNode
 
 from accounts.models import UserContactMethod
 from .models import Notification, SMSDelivery, WorkflowSMSSettings, WorkflowStepSMSRule
@@ -199,13 +200,44 @@ def _message_parts(message):
     return 1 if units <= 70 else math.ceil(units / 67)
 
 
+def validate_sms_template_source(source):
+    """Compile a deliberately small SMS template language.
+
+    Only literal text and the two notification string variables are allowed.
+    Tags, attribute traversal, filters and other variables are rejected.
+    """
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError("SMS template cannot be empty.")
+
+    try:
+        compiled = Engine(autoescape=False).from_string(source)
+    except TemplateSyntaxError as exc:
+        raise ValueError("SMS template syntax is invalid.") from exc
+
+    for node in compiled.nodelist:
+        if isinstance(node, TextNode):
+            continue
+        if isinstance(node, VariableNode):
+            expression = node.filter_expression
+            variable = expression.var
+            if tuple(variable.lookups) not in (("title",), ("message",)):
+                raise ValueError(
+                    "Only the title and message variables are allowed in SMS templates."
+                )
+            if expression.filters:
+                raise ValueError("Filters are not allowed in SMS templates.")
+            continue
+        raise ValueError("Template tags and control structures are not allowed in SMS templates.")
+
+    return compiled
+
+
 def _build_sms_content(notification, template=None):
     if template is not None:
-        rendered = Engine(autoescape=False).from_string(
-            template.body_template
-        ).render(Context({
-            "title": notification.title,
-            "message": notification.message,
+        compiled = validate_sms_template_source(template.body_template)
+        rendered = compiled.render(Context({
+            "title": notification.title or "",
+            "message": notification.message or "",
         })).strip()
         message = rendered
         source = "TEMPLATE"
