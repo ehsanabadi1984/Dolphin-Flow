@@ -25,7 +25,6 @@ SMS_SETTINGS = {
 class WorkflowSMSSettingsAdminFormTests(TestCase):
     def form_data(self, **overrides):
         data = {
-            "is_enabled": "on",
             "provider_username": "panel-user",
             "provider_password": "panel-secret",
             "provider_domain": "panel-domain",
