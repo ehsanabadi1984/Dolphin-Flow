@@ -99,6 +99,19 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
         self.assertFalse(form._sms_new_revision)
         self.assertEqual(form["provider_password"].value(), "")
 
+    def test_global_settings_admin_exposes_channel_and_delivery_health(self):
+        model_admin = dolphin_admin_site._registry[WorkflowSMSSettings]
+        settings_obj = WorkflowSMSSettings(is_enabled=True)
+
+        self.assertEqual(model_admin.global_sms_status(settings_obj), "فعال")
+        self.assertIn("کل:", model_admin.delivery_overview(settings_obj))
+        self.assertEqual(
+            model_admin.latest_delivery_status(settings_obj),
+            "هنوز سابقه ارسالی ثبت نشده است.",
+        )
+        self.assertIn("delivery_overview", model_admin.readonly_fields)
+        self.assertIn("latest_delivery_status", model_admin.readonly_fields)
+
     def test_provider_settings_and_templates_are_registered_in_admin(self):
         self.assertIn(WorkflowSMSSettings, dolphin_admin_site._registry)
         self.assertIn(SMSTemplate, dolphin_admin_site._registry)
