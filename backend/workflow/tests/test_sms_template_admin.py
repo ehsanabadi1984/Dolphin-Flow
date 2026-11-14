@@ -28,8 +28,11 @@ class SMSTemplateAdminPreviewTests(SimpleTestCase):
                 self.assertNotIn("خطای قالب:", preview)
                 self.assertNotIn("قالب معتبر نیست", preview)
                 self.assertIn("کاربر نمونه", preview)
-                self.assertIn("فرآیند نمونه", preview)
-                if notification_type == Notification.NotificationType.FILE_SHARE_MESSAGE:
-                    self.assertNotIn("مرحله نمونه", preview)
+                if "workflow_name" in variables:
+                    self.assertIn("فرآیند نمونه", preview)
                 else:
+                    self.assertNotIn("فرآیند نمونه", preview)
+                if "step_name" in variables:
                     self.assertIn("مرحله نمونه", preview)
+                else:
+                    self.assertNotIn("مرحله نمونه", preview)
