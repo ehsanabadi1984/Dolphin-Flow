@@ -15,7 +15,7 @@ from workflow.models import (
 )
 from workflow.sms_services import (
     MagfaSMSProvider, SMSDispatcher, build_sms_message,
-    prepare_sms_delivery_snapshot, resolve_notification_step,
+    prepare_sms_delivery_snapshot, resolve_notification_step, _message_parts,
 )
 
 
@@ -99,6 +99,61 @@ class SMSDispatchTests(TestCase):
             with self.subTest(source=source):
                 with self.assertRaises(ValueError):
                     validate_sms_template_source(source)
+
+    def test_sms_segment_count_respects_gsm_and_unicode_boundaries(self):
+        # GSM basic alphabet: one septet per character.
+        self.assertEqual(_message_parts("A" * 160), 1)
+        self.assertEqual(_message_parts("A" * 161), 2)
+        # GSM extension characters consume two septets each.
+        self.assertEqual(_message_parts("^" * 80), 1)
+        self.assertEqual(_message_parts("^" * 81), 2)
+        # Persian text uses UCS-2: 70 units in one segment, then 67 per part.
+        self.assertEqual(_message_parts("ا" * 70), 1)
+        self.assertEqual(_message_parts("ا" * 71), 2)
+        self.assertEqual(_message_parts("ا" * 138), 3)
+        # Supplementary Unicode characters occupy two UTF-16 code units.
+        self.assertEqual(_message_parts("😀" * 35), 1)
+        self.assertEqual(_message_parts("😀" * 36), 2)
+
+    def test_delivery_snapshot_does_not_change_after_source_updates(self):
+        template = SMSTemplate.objects.create(
+            step=self.step,
+            notification_type=self.notification.notification_type,
+            body_template="اعلان: {{ title }}",
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=self.notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+        prepare_sms_delivery_snapshot(self.notification, delivery)
+        delivery.refresh_from_db()
+        original_message = delivery.rendered_message
+        original_template_id = delivery.template_id
+        original_source = delivery.message_source
+
+        self.notification.title = "عنوان جدید"
+        self.notification.message = "متن جدید"
+        self.notification.save(update_fields=("title", "message"))
+        template.body_template = "تغییر قالب: {{ message }}"
+        template.save(update_fields=("body_template",))
+
+        prepare_sms_delivery_snapshot(self.notification, delivery)
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.rendered_message, original_message)
+        self.assertEqual(delivery.template_id, original_template_id)
+        self.assertEqual(delivery.message_source, original_source)
+
+    def test_incomplete_snapshot_is_rebuilt(self):
+        delivery = SMSDelivery.objects.create(
+            notification=self.notification,
+            status=SMSDelivery.Status.PENDING,
+            provider_code_snapshot="legacy",
+            message_source="NOTIFICATION",
+            rendered_message="",
+        )
+        prepare_sms_delivery_snapshot(self.notification, delivery)
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.rendered_message, "اقدام لازم\\nلطفاً فرآیند را بررسی کنید.")
 
     def test_delivery_snapshot_keeps_rendered_template_message(self):
         SMSTemplate.objects.create(
