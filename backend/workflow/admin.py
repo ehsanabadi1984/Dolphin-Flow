@@ -1121,6 +1121,7 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         if not request.user.is_superuser:
             raise PermissionDenied
         obj.pk = 1
+        obj._requested_sms_enabled = form.cleaned_data.get("is_enabled", False)
         super().save_model(request, obj, form, change)
         provider = register_provider(code="magfa", name="مگفا")
         if form._sms_new_revision:
@@ -1156,6 +1157,10 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
             adapter.test_connection()
             if action == "activate":
                 activate_provider(provider)
+                if getattr(obj, "_requested_sms_enabled", False):
+                    WorkflowSMSSettings.objects.filter(pk=1).update(
+                        is_enabled=True
+                    )
                 messages.success(request, "اتصال مگفا موفق بود و اپراتور فعال شد.")
             else:
                 messages.success(
@@ -1163,6 +1168,12 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
                     "اتصال مگفا موفق بود. وضعیت فعال‌سازی اپراتور تغییری نکرد.",
                 )
         except Exception:
+            if not SMSProviderConfiguration.objects.filter(
+                is_active=True
+            ).exists():
+                WorkflowSMSSettings.objects.filter(pk=1).update(
+                    is_enabled=False
+                )
             messages.error(
                 request,
                 "آزمایش اتصال مگفا ناموفق بود. اپراتور فعال نشد؛ اطلاعات اتصال و دسترسی API را بررسی کنید.",
