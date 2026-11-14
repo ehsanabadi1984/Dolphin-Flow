@@ -293,6 +293,8 @@ def _build_sms_content(notification, template=None):
         )
         source = "NOTIFICATION"
 
+    return message, source
+
 
 def build_sms_message(notification):
     message, _ = _build_sms_content(notification)
