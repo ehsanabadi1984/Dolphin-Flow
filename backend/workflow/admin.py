@@ -31,7 +31,6 @@ from .models import (
     WorkflowStepSMSRule,
     WorkflowSMSSettings,
     SMSProviderConfiguration,
-    SMSProviderConfigRevision,
     SMSTemplate,
     SMSDelivery,
     WorkflowStepExecution,
