@@ -448,7 +448,7 @@ class SMSDispatchTests(TestCase):
         self.assertNotEqual(delivery.template_id, step_template.pk)
         self.assertEqual(
             delivery.rendered_message,
-            "فایل جدید\\nسلام sms-recipient؛ فایل جدیدی برای شما ارسال شده است.",
+            "فایل جدید\nسلام sms-recipient؛ فایل جدیدی برای شما ارسال شده است.",
         )
 
     def test_user_preference_must_be_enabled(self):
