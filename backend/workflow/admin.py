@@ -1022,6 +1022,20 @@ class WorkflowSMSSettingsAdminForm(forms.ModelForm):
         required = ("username", "password", "domain", "sender")
         missing = [key for key in required if not credentials.get(key)]
         if missing:
+            submitted_credentials = any(
+                cleaned.get(field)
+                for field in (
+                    "provider_username",
+                    "provider_password",
+                    "provider_domain",
+                    "provider_sender",
+                )
+            )
+            if not cleaned.get("is_enabled") and not submitted_credentials:
+                self._sms_credentials = None
+                self._sms_connection_options = None
+                self._sms_new_revision = False
+                return cleaned
             raise forms.ValidationError(
                 "برای راه‌اندازی مگفا، نام کاربری، رمز عبور، دامنه و شماره فرستنده الزامی است."
             )
@@ -1138,8 +1152,9 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         obj.pk = 1
         obj._requested_sms_enabled = form.cleaned_data.get("is_enabled", False)
         super().save_model(request, obj, form, change)
-        provider = register_provider(code="magfa", name="مگفا")
+        provider = SMSProviderConfiguration.objects.filter(code="magfa").first()
         if form._sms_new_revision:
+            provider = provider or register_provider(code="magfa", name="مگفا")
             if provider.is_active:
                 provider.is_active = False
                 provider.save(update_fields=("is_active", "updated_at"))
