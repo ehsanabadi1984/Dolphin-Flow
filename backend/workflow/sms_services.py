@@ -356,7 +356,8 @@ def prepare_sms_delivery_snapshot(notification, delivery):
             delivery.refresh_from_db()
             return delivery
 
-        step = resolve_notification_step(notification)
+        is_file_share = notification.notification_type == Notification.NotificationType.FILE_SHARE_MESSAGE
+        step = None if is_file_share else resolve_notification_step(notification)
         template = None
         if step is not None:
             template = SMSTemplate.objects.filter(
@@ -539,6 +540,14 @@ class SMSDispatcher:
         if not contact:
             return "شماره پیامکی فعال و تأییدشده‌ای برای کاربر وجود ندارد.", None
 
+        if notification.notification_type == Notification.NotificationType.FILE_SHARE_MESSAGE:
+            enabled = WorkflowSMSSettings.objects.filter(
+                pk=1, file_share_sms_enabled=True,
+            ).exists()
+            if not enabled:
+                return "قانون سراسری پیامک اشتراک‌گذاری فایل غیرفعال است.", None
+            return "", contact
+
         step = resolve_notification_step(notification)
         if not step:
             return "مرحله مرتبط با اعلان برای ارزیابی قانون پیامک مشخص نیست.", None
@@ -549,7 +558,7 @@ class SMSDispatcher:
             sms_enabled=True,
         ).exists()
         if not enabled:
-            return "قانون پیامک این نوع اعلان در مرحله مقصد فعال نیست.", None
+            return "قانون پیامک این نوع اعلان در مرحله فعال نیست.", None
         return "", contact
 
 
