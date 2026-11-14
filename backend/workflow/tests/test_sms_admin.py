@@ -56,7 +56,10 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
         )
 
     def test_global_sms_can_be_disabled_without_provider_credentials(self):
-        form = WorkflowSMSSettingsAdminForm(data={"is_enabled": ""})
+        form = WorkflowSMSSettingsAdminForm(data={
+            "is_enabled": "",
+            "sms_verification_template": "کد شما {{ code }}",
+        })
 
         self.assertTrue(form.is_valid(), form.errors)
         self.assertFalse(form._sms_new_revision)
