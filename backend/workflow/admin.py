@@ -1440,6 +1440,7 @@ class SMSTemplateAdmin(admin.ModelAdmin):
     search_fields = (
         "step__name",
         "step__workflow__name",
+        "title_template",
         "body_template",
     )
     autocomplete_fields = ("step",)
