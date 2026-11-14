@@ -326,6 +326,50 @@ class SMSDispatchTests(TestCase):
             SMSDelivery.Status.SKIPPED,
         )
 
+    def test_step_entered_rule_applies_to_notification_for_entered_destination_step(self):
+        origin = WorkflowStep.objects.create(
+            workflow=self.step.workflow, name="Origin step", order=0,
+        )
+        instance = WorkflowInstance.objects.create(
+            workflow=self.step.workflow,
+            started_by=self.user,
+            current_step=self.step,
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.step.workflow,
+            from_step=origin,
+            to_step=self.step,
+            name="Enter destination",
+        )
+        execution = WorkflowTransitionExecution.objects.create(
+            instance=instance,
+            transition=transition,
+            performed_by=self.user,
+        )
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="فرآیند وارد مرحله شد",
+            message="فرآیند وارد مرحله مقصد شد.",
+            workflow_instance=instance,
+            workflow_step=self.step,
+            transition_execution=execution,
+        )
+        WorkflowStepSMSRule.objects.filter(
+            step=self.step,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+        ).delete()
+        WorkflowStepSMSRule.objects.create(
+            step=self.step,
+            notification_type=Notification.NotificationType.STEP_ENTERED,
+            sms_enabled=True,
+        )
+
+        reason, contact = SMSDispatcher._eligibility(notification)
+
+        self.assertEqual(reason, "")
+        self.assertEqual(contact.pk, self.contact.pk)
+
     def test_user_preference_must_be_enabled(self):
         UserPreference.objects.filter(user=self.user).update(sms_notifications_enabled=False)
         self.assertEqual(
