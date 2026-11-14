@@ -14,7 +14,7 @@ from workflow.models import (
 from workflow.sms_provider_registry import create_provider_revision, register_provider
 
 
-TEST_FERNET_KEY = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
+TEST_FERNET_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 SMS_SETTINGS = {
     "SMS_CREDENTIALS_ENCRYPTION_KEY": TEST_FERNET_KEY,
@@ -222,5 +222,8 @@ class SMSAdminPermissionTests(SimpleTestCase):
             {"is_active": True, "is_superuser": True},
         )()
 
-        self.assertFalse(model_admin.has_module_permission(regular_user))
-        self.assertTrue(model_admin.has_module_permission(admin_user))
+        request = RequestFactory().get("/")
+        request.user = regular_user
+        self.assertFalse(model_admin.has_module_permission(request))
+        request.user = admin_user
+        self.assertTrue(model_admin.has_module_permission(request))
