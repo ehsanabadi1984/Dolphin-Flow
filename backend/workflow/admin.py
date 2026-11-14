@@ -1066,17 +1066,33 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
     admin_category = "communications"
     admin_section = "notification"
     list_display = ("is_enabled", "updated_at")
-    fields = (
-        "is_enabled",
-        "provider_status",
-        "provider_revision",
-        "provider_username",
-        "provider_password",
-        "provider_domain",
-        "provider_sender",
-        "provider_api_base_url",
-        "provider_timeout",
-        "updated_at",
+    fieldsets = (
+        (
+            "تنظیمات عمومی پیامک",
+            {"fields": ("is_enabled",)},
+        ),
+        (
+            "وضعیت اپراتور",
+            {"fields": ("provider_status", "provider_revision")},
+        ),
+        (
+            "اطلاعات اتصال مگفا",
+            {
+                "fields": (
+                    "provider_username",
+                    "provider_password",
+                    "provider_domain",
+                    "provider_sender",
+                    "provider_api_base_url",
+                    "provider_timeout",
+                ),
+                "description": (
+                    "رمز عبور به‌صورت رمزنگاری‌شده ذخیره می‌شود. "
+                    "برای حفظ رمز فعلی، فیلد رمز عبور را خالی بگذارید."
+                ),
+            },
+        ),
+        ("اطلاعات ثبت", {"fields": ("updated_at",)}),
     )
     readonly_fields = ("provider_status", "provider_revision", "updated_at")
 
@@ -1255,7 +1271,9 @@ class SMSDeliveryAdmin(admin.ModelAdmin):
     search_fields = ("notification__recipient__username", "notification__title", "provider_message_id")
     readonly_fields = (
         "notification", "status", "provider_uid", "provider_message_id",
-        "attempt_count", "last_error", "sent_at", "last_queued_at", "created_at", "updated_at",
+        "provider_revision", "provider_code_snapshot", "template",
+        "message_source", "rendered_message", "attempt_count", "last_error",
+        "sent_at", "last_queued_at", "created_at", "updated_at",
     )
     fields = readonly_fields
 
