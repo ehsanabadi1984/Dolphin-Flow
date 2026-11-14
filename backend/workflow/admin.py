@@ -1300,9 +1300,39 @@ class SMSTemplateAdmin(admin.ModelAdmin):
 class SMSDeliveryAdmin(admin.ModelAdmin):
     admin_category = "communications"
     admin_section = "notification"
-    list_display = ("notification", "status", "attempt_count", "provider_message_id", "updated_at")
-    list_filter = ("status",)
-    search_fields = ("notification__recipient__username", "notification__title", "provider_message_id")
+    list_display = (
+        "created_at",
+        "recipient",
+        "notification",
+        "status",
+        "provider_code_snapshot",
+        "message_source",
+        "attempt_count",
+        "has_error",
+        "sent_at",
+    )
+    list_filter = (
+        "status",
+        "provider_code_snapshot",
+        "message_source",
+        "created_at",
+    )
+    search_fields = (
+        "notification__recipient__username",
+        "notification__recipient__first_name",
+        "notification__recipient__last_name",
+        "notification__title",
+        "provider_message_id",
+    )
+    date_hierarchy = "created_at"
+    ordering = ("-created_at",)
+    list_per_page = 50
+    list_select_related = (
+        "notification",
+        "notification__recipient",
+        "provider_revision",
+        "template",
+    )
     readonly_fields = (
         "notification", "status", "provider_uid", "provider_message_id",
         "provider_revision", "provider_code_snapshot", "template",
@@ -1310,6 +1340,15 @@ class SMSDeliveryAdmin(admin.ModelAdmin):
         "sent_at", "last_queued_at", "created_at", "updated_at",
     )
     fields = readonly_fields
+
+    @admin.display(description="دریافت‌کننده", ordering="notification__recipient__username")
+    def recipient(self, obj):
+        user = obj.notification.recipient
+        return user.get_full_name() or user.get_username()
+
+    @admin.display(description="جزئیات خطا", boolean=True)
+    def has_error(self, obj):
+        return bool(obj.last_error)
 
     def has_module_permission(self, request):
         return request.user.is_active and request.user.is_superuser
