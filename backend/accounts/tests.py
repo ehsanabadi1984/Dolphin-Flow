@@ -153,13 +153,13 @@ class UserSMSSettingsTests(TestCase):
         self.assertFalse(preference.sms_notifications_enabled)
 
     @patch("workflow.sms_provider_registry.get_active_provider")
-    def test_user_can_register_and_verify_phone_with_otp(self, mock_import_string):
+    def test_user_can_register_and_verify_phone_with_otp(self, mock_get_provider):
         import re
         from django.contrib.auth.hashers import check_password
         from accounts.models import UserContactMethod
         provider = MagicMock()
         provider.send.return_value = {"id": 123, "status": 0}
-        mock_import_string.return_value = (provider, None)
+        mock_get_provider.return_value = (provider, None)
         response = self.client.post(reverse("accounts:settings"), {
             "sms_action": "save_phone", "phone_number": "989121234567",
         })
@@ -179,11 +179,11 @@ class UserSMSSettingsTests(TestCase):
         self.assertEqual(contact.verification_code_hash, "")
 
     @patch("workflow.sms_provider_registry.get_active_provider")
-    def test_changing_phone_invalidates_manual_verification(self, mock_import_string):
+    def test_changing_phone_invalidates_manual_verification(self, mock_get_provider):
         from accounts.models import UserContactMethod
         provider = MagicMock()
         provider.send.return_value = {"id": 456, "status": 0}
-        mock_import_string.return_value = (provider, None)
+        mock_get_provider.return_value = (provider, None)
         contact = UserContactMethod.objects.create(
             user=self.user, value="989121111111", is_verified=True,
             verification_method=UserContactMethod.VerificationMethod.MANUAL,
@@ -201,7 +201,7 @@ class UserSMSSettingsTests(TestCase):
         self.assertIsNotNone(contact.verification_expires_at)
 
     @patch("workflow.sms_provider_registry.get_active_provider")
-    def test_expired_otp_is_rejected_and_cleared(self, mock_import_string):
+    def test_expired_otp_is_rejected_and_cleared(self, mock_get_provider):
         from datetime import timedelta
         from django.core.exceptions import ValidationError
         from django.utils import timezone
@@ -210,7 +210,7 @@ class UserSMSSettingsTests(TestCase):
 
         provider = MagicMock()
         provider.send.return_value = {"id": 4567, "status": 0}
-        mock_import_string.return_value = (provider, None)
+        mock_get_provider.return_value = (provider, None)
         request_sms_verification(self.user, "989127777777")
         contact = UserContactMethod.objects.get(user=self.user)
         contact.verification_expires_at = timezone.now() - timedelta(seconds=1)
@@ -225,11 +225,11 @@ class UserSMSSettingsTests(TestCase):
         self.assertFalse(contact.is_verified)
 
     @patch("workflow.sms_provider_registry.get_active_provider")
-    def test_otp_resend_is_rate_limited(self, mock_import_string):
+    def test_otp_resend_is_rate_limited(self, mock_get_provider):
         from accounts.models import UserContactMethod
         provider = MagicMock()
         provider.send.return_value = {"id": 789, "status": 0}
-        mock_import_string.return_value = (provider, None)
+        mock_get_provider.return_value = (provider, None)
         self.client.post(reverse("accounts:settings"), {
             "sms_action": "save_phone", "phone_number": "989123333333",
         })
@@ -241,12 +241,12 @@ class UserSMSSettingsTests(TestCase):
 
 
     @patch("workflow.sms_provider_registry.get_active_provider")
-    def test_five_wrong_otp_attempts_are_persisted_and_invalidate_code(self, mock_import_string):
+    def test_five_wrong_otp_attempts_are_persisted_and_invalidate_code(self, mock_get_provider):
         from django.core.exceptions import ValidationError
         from accounts.models import UserContactMethod
         provider = MagicMock()
         provider.send.return_value = {"id": 999, "status": 0}
-        mock_import_string.return_value = (provider, None)
+        mock_get_provider.return_value = (provider, None)
         self.client.post(reverse("accounts:settings"), {
             "sms_action": "save_phone", "phone_number": "989124444444",
         })
@@ -312,7 +312,7 @@ class UserSMSSettingsTests(TestCase):
 
     @patch("workflow.sms_provider_registry.get_active_provider")
     @patch("accounts.services.OTP_DAILY_USER_LIMIT", 2)
-    def test_daily_user_limit_cannot_be_bypassed_by_changing_phone(self, mock_import_string):
+    def test_daily_user_limit_cannot_be_bypassed_by_changing_phone(self, mock_get_provider):
         from django.core.exceptions import ValidationError
         from django.utils import timezone
         from datetime import timedelta
@@ -321,7 +321,7 @@ class UserSMSSettingsTests(TestCase):
 
         provider = MagicMock()
         provider.send.return_value = {"id": 111, "status": 0}
-        mock_import_string.return_value = (provider, None)
+        mock_get_provider.return_value = (provider, None)
         request_sms_verification(self.user, "989121000001")
         contact = UserContactMethod.objects.get(user=self.user)
         contact.verification_sent_at = timezone.now() - timedelta(minutes=2)
@@ -339,14 +339,14 @@ class UserSMSSettingsTests(TestCase):
 
     @patch("workflow.sms_provider_registry.get_active_provider")
     @patch("accounts.services.OTP_DAILY_PHONE_LIMIT", 2)
-    def test_daily_phone_limit_applies_across_different_users(self, mock_import_string):
+    def test_daily_phone_limit_applies_across_different_users(self, mock_get_provider):
         from django.core.exceptions import ValidationError
         from accounts.models import SMSVerificationRequest
         from accounts.services import request_sms_verification
 
         provider = MagicMock()
         provider.send.return_value = {"id": 222, "status": 0}
-        mock_import_string.return_value = (provider, None)
+        mock_get_provider.return_value = (provider, None)
         phone = "989122000001"
         request_sms_verification(self.user, phone)
 
@@ -367,14 +367,14 @@ class ConcurrentSMSQuotaTests(TransactionTestCase):
     @skipUnlessDBFeature("has_select_for_update")
     @patch("workflow.sms_provider_registry.get_active_provider")
     @patch("accounts.services.OTP_DAILY_PHONE_LIMIT", 1)
-    def test_concurrent_requests_cannot_exceed_phone_quota(self, mock_import_string):
+    def test_concurrent_requests_cannot_exceed_phone_quota(self, mock_get_provider):
         from django.core.exceptions import ValidationError
         from accounts.models import SMSVerificationRequest
         from accounts.services import request_sms_verification
 
         provider = MagicMock()
         provider.send.return_value = {"id": 9001, "status": 0}
-        mock_import_string.return_value = (provider, None)
+        mock_get_provider.return_value = (provider, None)
         users = [
             User.objects.create_user(username="parallel-sms-one", password="test"),
             User.objects.create_user(username="parallel-sms-two", password="test"),
