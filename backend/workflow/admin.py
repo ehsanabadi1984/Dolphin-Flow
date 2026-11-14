@@ -1530,17 +1530,26 @@ class SMSTemplateAdmin(admin.ModelAdmin):
         recipient = SimpleNamespace(get_full_name=lambda: "کاربر نمونه", get_username=lambda: "sample")
         instance = SimpleNamespace(pk=123, workflow=SimpleNamespace(name="فرآیند نمونه"))
         sample_notification = SimpleNamespace(
-            title="عنوان نمونه اعلان", message="متن نمونه اعلان برای مشاهده خروجی.",
-            notification_type="ACTION_REQUIRED",
-            recipient=recipient, workflow_instance=instance,
-            workflow_step=SimpleNamespace(name="مرحله نمونه"), workflow_step_id=1,
-            transition_execution=None, transition_execution_id=None,
-            file_share_message=None, created_at=timezone.now(),
+            title="عنوان نمونه اعلان",
+            message="متن نمونه اعلان برای مشاهده خروجی.",
+            notification_type=obj.notification_type,
+            recipient=recipient,
+            workflow_instance=instance,
+            workflow_instance_id=1,
+            workflow_step=SimpleNamespace(name="مرحله نمونه"),
+            workflow_step_id=1,
+            transition_execution=None,
+            transition_execution_id=None,
+            file_share_message=None,
+            created_at=timezone.now(),
         )
         try:
             rendered, _ = _build_sms_content(sample_notification, obj)
-        except Exception:
-            return "قالب معتبر نیست؛ متغیرها و متن را بررسی کنید."
+        except (TypeError, ValueError, TemplateSyntaxError) as exc:
+            return format_html(
+                '<span style="color:#b45309;">خطای قالب: {}</span>',
+                str(exc),
+            )
         if not rendered:
             return "خروجی قالب خالی است."
         return format_html('<pre style="white-space:pre-wrap;direction:rtl;margin:0;">{}</pre>', rendered)
