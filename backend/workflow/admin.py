@@ -1390,7 +1390,10 @@ class SMSTemplateAdminForm(forms.ModelForm):
         self.fields["title_template"].required = False
         self.fields["title_template"].help_text = "عنوان پیامک؛ در صورت خالی بودن، عنوان خود اعلان استفاده می‌شود."
         self.fields["body_template"].label = "متن پیامک"
-        self.fields["body_template"].help_text = "متن پیامک؛ متغیرها را از فهرست انتخاب و در محل مکان‌نما درج کنید."
+        self.fields["body_template"].help_text = (
+            "متن پیامک؛ متغیرها را از فهرست انتخاب و در محل مکان‌نما درج کنید. "
+            "سامانه عنوان و متن را خودکار با یک خط فاصله به هم متصل می‌کند."
+        )
         for field_name in ("title_template", "body_template"):
             self.fields[field_name].widget.attrs["data-sms-variables"] = variable_json
 
