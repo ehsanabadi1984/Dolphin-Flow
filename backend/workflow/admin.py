@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.http import JsonResponse, HttpResponseRedirect
 from django.urls import path, reverse
@@ -970,9 +971,14 @@ class WorkflowSMSSettingsAdminForm(forms.ModelForm):
         self._sms_existing_options = {}
         if revision:
             from .sms_security import decrypt_credentials
-            self._sms_existing_credentials = decrypt_credentials(
-                revision.credentials_ciphertext
-            )
+            try:
+                self._sms_existing_credentials = decrypt_credentials(
+                    revision.credentials_ciphertext
+                )
+            except Exception:
+                # Allow an administrator to replace credentials if the key was
+                # rotated or is unavailable; never expose ciphertext or secrets.
+                self._sms_existing_credentials = {}
             self._sms_existing_options = revision.connection_options or {}
 
         for field, key in (
@@ -983,13 +989,11 @@ class WorkflowSMSSettingsAdminForm(forms.ModelForm):
             self.fields[field].initial = self._sms_existing_credentials.get(key, "")
         self.fields["provider_api_base_url"].initial = (
             self._sms_existing_options.get("base_url") or
-            getattr(__import__("django.conf", fromlist=["settings"]).settings,
-                    "MAGFA_API_BASE_URL", "")
+            getattr(settings, "MAGFA_API_BASE_URL", "")
         )
         self.fields["provider_timeout"].initial = (
             self._sms_existing_options.get("timeout") or
-            getattr(__import__("django.conf", fromlist=["settings"]).settings,
-                    "MAGFA_TIMEOUT", 10)
+            getattr(settings, "MAGFA_TIMEOUT", 10)
         )
 
     def clean(self):
@@ -1166,6 +1170,50 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
             )
         return super().response_add(request, obj, post_url_continue)
 
+
+
+@admin.register(SMSTemplate, site=dolphin_admin_site)
+class SMSTemplateAdmin(admin.ModelAdmin):
+    admin_category = "communications"
+    admin_section = "notification"
+    list_display = ("step", "notification_type", "is_active", "updated_at")
+    list_filter = ("is_active", "notification_type", "step__workflow")
+    search_fields = ("step__name", "step__workflow__name", "body_template")
+    fields = (
+        "step",
+        "notification_type",
+        "body_template",
+        "is_active",
+        "created_by",
+        "updated_by",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = ("created_by", "updated_by", "created_at", "updated_at")
+
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_active and request.user.is_superuser
+
+    def save_model(self, request, obj, form, change):
+        if not request.user.is_superuser:
+            raise PermissionDenied
+        if not change:
+            obj.created_by = request.user
+        obj.updated_by = request.user
+        obj.full_clean()
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(SMSDelivery, site=dolphin_admin_site)
