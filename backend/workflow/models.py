@@ -1198,6 +1198,11 @@ class WorkflowSMSSettings(models.Model):
         default=False,
         verbose_name="ارسال پیامک فعال باشد",
     )
+    file_share_sms_enabled = models.BooleanField(
+        default=False,
+        verbose_name="ارسال پیامک اشتراک‌گذاری فایل فعال باشد",
+        help_text="این قانون مستقل از تنظیمات پیامک مراحل است و فقط به دریافت‌کنندگان انتخاب‌شده در File Sharing پیامک می‌فرستد.",
+    )
     sms_verification_template = models.TextField(
         default="کد تأیید شماره موبایل شما در Dolphin-Flow: {{ code }}",
         verbose_name="متن پیامک تأیید شماره موبایل",
