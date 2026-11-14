@@ -63,6 +63,18 @@ class SMSDispatchTests(TestCase):
         self.assertEqual(message, "فرآیند 1\nسلام sms-recipient؛ مرحله Dynamic step")
         self.assertEqual(source, "TEMPLATE")
 
+    def test_legacy_sms_template_keeps_its_original_single_body_output(self):
+        template = SMSTemplate.objects.create(
+            step=self.step,
+            notification_type=self.notification.notification_type,
+            body_template="{{ title }} - {{ message }}",
+            legacy_format=True,
+        )
+        from workflow.sms_services import _build_sms_content
+        message, source = _build_sms_content(self.notification, template)
+        self.assertEqual(message, "اقدام لازم - لطفاً فرآیند را بررسی کنید.")
+        self.assertEqual(source, "TEMPLATE")
+
     def test_global_sms_template_is_used_when_step_specific_template_is_missing(self):
         template = SMSTemplate.objects.create(
             step=None,
