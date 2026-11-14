@@ -48,20 +48,19 @@ class SMSDispatchTests(TestCase):
             sms_enabled=True,
         )
 
-    def test_sms_template_renders_notification_variables(self):
+    def test_sms_template_combines_separate_title_and_body_with_dynamic_variables(self):
+        self.notification.workflow_instance = WorkflowInstance.objects.create(
+            workflow=self.step.workflow, started_by=self.user,
+        )
+        self.notification.save(update_fields=("workflow_instance",))
         template = SMSTemplate.objects.create(
-            step=self.step,
-            notification_type=self.notification.notification_type,
-            body_template="{{ title }} - {{ message }}",
+            step=self.step, notification_type=self.notification.notification_type,
+            title_template="فرآیند {{ workflow_number }}",
+            body_template="سلام {{ recipient_name }}؛ مرحله {{ step_name }}",
         )
         from workflow.sms_services import _build_sms_content
-
         message, source = _build_sms_content(self.notification, template)
-
-        self.assertEqual(
-            message,
-            "اقدام لازم - لطفاً فرآیند را بررسی کنید.",
-        )
+        self.assertEqual(message, "فرآیند 1\nسلام sms-recipient؛ مرحله Dynamic step")
         self.assertEqual(source, "TEMPLATE")
 
     def test_global_sms_template_is_used_when_step_specific_template_is_missing(self):
