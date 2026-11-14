@@ -4,6 +4,7 @@ from django.test import RequestFactory, SimpleTestCase, TestCase, override_setti
 
 from workflow.admin import (
     SMSTemplateAdmin,
+    SMSTemplateAdminForm,
     WorkflowSMSSettingsAdminForm,
     dolphin_admin_site,
 )
@@ -275,3 +276,34 @@ class SMSDeliveryAdminTests(SimpleTestCase):
         self.assertEqual(model_admin.recipient(delivery), "کاربر آزمایشی")
         self.assertTrue(model_admin.has_error(delivery))
         self.assertNotIn("sensitive", str(model_admin.has_error(delivery)))
+
+
+
+class SMSTemplateAdminPreviewTests(SimpleTestCase):
+    def test_template_form_explains_only_supported_variables(self):
+        form = SMSTemplateAdminForm()
+        help_text = form.fields["body_template"].help_text
+
+        self.assertIn("{{ title }}", help_text)
+        self.assertIn("{{ message }}", help_text)
+        self.assertIn("فیلتر", help_text)
+
+    def test_template_preview_renders_safe_sample_content(self):
+        model_admin = dolphin_admin_site._registry[SMSTemplate]
+        template = SMSTemplate(
+            body_template="عنوان: {{ title }}\\n{{ message }}"
+        )
+
+        preview = str(model_admin.template_preview(template))
+
+        self.assertIn("عنوان نمونه اعلان", preview)
+        self.assertIn("متن نمونه", preview)
+        self.assertIn("<pre", preview)
+
+    def test_invalid_template_preview_shows_guidance_instead_of_crashing(self):
+        model_admin = dolphin_admin_site._registry[SMSTemplate]
+        template = SMSTemplate(body_template="{{ recipient.phone }}")
+
+        preview = str(model_admin.template_preview(template))
+
+        self.assertIn("قالب معتبر نیست", preview)
