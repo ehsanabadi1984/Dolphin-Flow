@@ -150,6 +150,26 @@ class SMSDispatchTests(TestCase):
         MAGFA_API_BASE_URL="https://sms.magfa.com/api/http/sms/v2",
         MAGFA_TIMEOUT=7,
     )
+    def test_magfa_http_408_is_an_uncertain_delivery(self, mock_urlopen):
+        from urllib.error import HTTPError
+        from workflow.sms_services import MagfaUncertainDeliveryError
+
+        mock_urlopen.side_effect = HTTPError(
+            "https://sms.magfa.com/api/http/sms/v2/send",
+            408, "Request Timeout", {}, None,
+        )
+        with self.assertRaises(MagfaUncertainDeliveryError):
+            MagfaSMSProvider().send(
+                recipient="09120000000", message="متن آزمایشی", uid=78,
+            )
+
+    @patch("workflow.sms_services.urlopen")
+    @override_settings(
+        MAGFA_USERNAME="account", MAGFA_PASSWORD="secret",
+        MAGFA_DOMAIN="domain", MAGFA_SENDER="3000",
+        MAGFA_API_BASE_URL="https://sms.magfa.com/api/http/sms/v2",
+        MAGFA_TIMEOUT=7,
+    )
     def test_magfa_adapter_sends_authenticated_json_with_uid(self, mock_urlopen):
         response = MagicMock()
         response.__enter__.return_value.read.return_value = json.dumps({
@@ -194,13 +214,13 @@ class SMSRecoveryTests(TestCase):
         self.delivery.refresh_from_db()
         self.assertEqual(self.delivery.status, SMSDelivery.Status.UNKNOWN)
 
-    def test_dispatch_task_does_not_retry_failed_delivery(self):
+    def test_unexpected_error_after_send_claim_becomes_unknown(self):
         from workflow.tasks import dispatch_sms_notification
-        with patch("workflow.sms_services.SMSDispatcher.dispatch", side_effect=RuntimeError("provider failure")):
+        with patch("workflow.sms_services.SMSDispatcher.dispatch", side_effect=RuntimeError("provider result persistence failed")):
             result = dispatch_sms_notification.run(self.notification.pk)
-        self.assertEqual(result, SMSDelivery.Status.FAILED)
+        self.assertEqual(result, SMSDelivery.Status.UNKNOWN)
         self.delivery.refresh_from_db()
-        self.assertEqual(self.delivery.status, SMSDelivery.Status.FAILED)
+        self.assertEqual(self.delivery.status, SMSDelivery.Status.UNKNOWN)
 
 
     @override_settings(SMS_PENDING_REQUEUE_AFTER=60)
