@@ -169,6 +169,27 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
         activate.assert_called_once_with(provider)
         mock_success.assert_called_once()
 
+    @patch("workflow.admin.messages.success")
+    def test_deactivation_action_disables_provider_and_global_sms(self, mock_success):
+        provider = register_provider(code="magfa", name="مگفا")
+        provider.is_active = True
+        provider.save(update_fields=("is_active", "updated_at"))
+        WorkflowSMSSettings.objects.create(is_enabled=True)
+        request = RequestFactory().post("/", {"_deactivate_provider": "1"})
+        model_admin = dolphin_admin_site._registry[WorkflowSMSSettings]
+
+        handled = model_admin._handle_provider_action(
+            request, WorkflowSMSSettings(pk=1)
+        )
+
+        provider.refresh_from_db()
+        global_settings = WorkflowSMSSettings.objects.get(pk=1)
+        self.assertTrue(handled)
+        self.assertFalse(provider.is_active)
+        self.assertFalse(global_settings.is_enabled)
+        mock_success.assert_called_once()
+
+
     @patch("workflow.admin.messages.error")
     def test_failed_connection_keeps_provider_inactive_and_global_sms_off(
         self, mock_error
