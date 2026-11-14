@@ -39,6 +39,7 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
             "provider_sender": "1000",
             "provider_api_base_url": SMS_SETTINGS["MAGFA_API_BASE_URL"],
             "provider_timeout": "10",
+            "sms_verification_template": "کد تأیید شما: {{ code }}",
         }
         data.update(overrides)
         return data
@@ -102,6 +103,37 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
         self.assertEqual(form._sms_credentials["password"], "saved-secret")
         self.assertFalse(form._sms_new_revision)
         self.assertEqual(form["provider_password"].value(), "")
+
+    def test_otp_template_requires_exactly_one_supported_code_variable(self):
+        valid = WorkflowSMSSettingsAdminForm(data=self.form_data(
+            sms_verification_template="کد شما {{ code }}"
+        ))
+        self.assertTrue(valid.is_valid(), valid.errors)
+
+        for invalid_template in (
+            "کد شما",
+            "{{ code }} {{ code }}",
+            "{{ user }}",
+            "{{ code|upper }}",
+            "{{ code }} {% if code %}",
+        ):
+            with self.subTest(template=invalid_template):
+                form = WorkflowSMSSettingsAdminForm(data=self.form_data(
+                    sms_verification_template=invalid_template
+                ))
+                self.assertFalse(form.is_valid())
+                self.assertIn("sms_verification_template", form.errors)
+
+    def test_otp_template_and_preview_are_visible_in_global_settings_admin(self):
+        model_admin = dolphin_admin_site._registry[WorkflowSMSSettings]
+        settings_obj = WorkflowSMSSettings(
+            sms_verification_template="رمز ورود: {{ code }}"
+        )
+        self.assertIn("sms_verification_template", model_admin.form.base_fields)
+        self.assertIn("sms_verification_preview", model_admin.readonly_fields)
+        self.assertIn("رمز ورود: ۱۲۳۴۵۶", str(
+            model_admin.sms_verification_preview(settings_obj)
+        ))
 
     def test_global_settings_admin_exposes_channel_and_delivery_health(self):
         model_admin = dolphin_admin_site._registry[WorkflowSMSSettings]
