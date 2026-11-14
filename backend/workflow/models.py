@@ -1139,6 +1139,7 @@ class SMSTemplate(models.Model):
     )
     title_template = models.TextField(blank=True, verbose_name="عنوان پیامک")
     body_template = models.TextField(verbose_name="متن پیامک")
+    legacy_format = models.BooleanField(default=False, editable=False)
     is_active = models.BooleanField(default=True, verbose_name="فعال")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
