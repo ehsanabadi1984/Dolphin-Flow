@@ -204,7 +204,10 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
                 request, WorkflowSMSSettings(pk=1)
             )
 
+        provider.refresh_from_db()
         self.assertTrue(handled)
+        self.assertTrue(provider.last_connection_test_success)
+        self.assertIsNotNone(provider.last_connection_test_at)
         build.return_value.test_connection.assert_called_once_with()
         activate.assert_called_once_with(provider)
         mock_success.assert_called_once()
