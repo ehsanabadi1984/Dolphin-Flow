@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
 
 from workflow.admin import (
     SMSTemplateAdmin,
@@ -12,6 +13,7 @@ from workflow.models import (
     SMSTemplate,
     WorkflowSMSSettings,
     SMSDelivery,
+    SMSProviderConfiguration,
 )
 from workflow.sms_provider_registry import create_provider_revision, register_provider
 
@@ -112,6 +114,26 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
         self.assertIn("delivery_overview", model_admin.readonly_fields)
         self.assertIn("latest_delivery_status", model_admin.readonly_fields)
 
+    def test_provider_connection_test_result_is_visible_on_settings_page(self):
+        provider = register_provider(code="magfa", name="مگفا")
+        provider.last_connection_test_at = timezone.now()
+        provider.last_connection_test_success = False
+        provider.last_connection_test_message = "برقراری ارتباط با سرویس‌دهنده ممکن نشد."
+        provider.save(update_fields=(
+            "last_connection_test_at",
+            "last_connection_test_success",
+            "last_connection_test_message",
+            "updated_at",
+        ))
+        model_admin = dolphin_admin_site._registry[WorkflowSMSSettings]
+
+        self.assertIn("ناموفق", model_admin.last_connection_test_result(
+            WorkflowSMSSettings(pk=1)
+        ))
+        self.assertIn("برقراری ارتباط", model_admin.last_connection_test_message(
+            WorkflowSMSSettings(pk=1)
+        ))
+
     def test_provider_settings_and_templates_are_registered_in_admin(self):
         self.assertIn(WorkflowSMSSettings, dolphin_admin_site._registry)
         self.assertIn(SMSTemplate, dolphin_admin_site._registry)
@@ -149,6 +171,9 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
         provider.refresh_from_db()
         self.assertTrue(handled)
         self.assertFalse(provider.is_active)
+        self.assertTrue(provider.last_connection_test_success)
+        self.assertIsNotNone(provider.last_connection_test_at)
+        self.assertIn("اتصال برقرار شد", provider.last_connection_test_message)
         build.return_value.test_connection.assert_called_once_with()
         mock_success.assert_called_once()
 
@@ -240,6 +265,10 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
         self.assertTrue(handled)
         self.assertFalse(provider.is_active)
         self.assertFalse(global_settings.is_enabled)
+        self.assertFalse(provider.last_connection_test_success)
+        self.assertIsNotNone(provider.last_connection_test_at)
+        self.assertIn("برقراری ارتباط", provider.last_connection_test_message)
+        self.assertNotIn("private API response", provider.last_connection_test_message)
         mock_error.assert_called_once()
 
 
