@@ -1378,10 +1378,21 @@ class SMSTemplateAdminForm(forms.ModelForm):
             "برای جلوگیری از تداخل، برای هر دامنه و نوع اعلان فقط یک قالب ثبت می‌شود؛ "
             "قالب موجود را ویرایش کنید."
         )
-        self.fields["body_template"].help_text = (
-            "متغیرهای مجاز: {{ title }} برای عنوان اعلان و {{ message }} برای متن اعلان. "
-            "از فیلتر، شرط، حلقه یا متغیر دیگری نمی‌توان استفاده کرد."
-        )
+        from .sms_services import SMS_TEMPLATE_VARIABLES, SMS_TEMPLATE_VARIABLES_BY_TYPE
+        variable_payload = {
+            notification_type: [
+                {"value": key, "label": SMS_TEMPLATE_VARIABLES[key]}
+                for key in keys
+            ]
+            for notification_type, keys in SMS_TEMPLATE_VARIABLES_BY_TYPE.items()
+        }
+        variable_json = json.dumps(variable_payload, ensure_ascii=False)
+        self.fields["title_template"].required = False
+        self.fields["title_template"].help_text = "عنوان پیامک؛ در صورت خالی بودن، عنوان خود اعلان استفاده می‌شود."
+        self.fields["body_template"].label = "متن پیامک"
+        self.fields["body_template"].help_text = "متن پیامک؛ متغیرها را از فهرست انتخاب و در محل مکان‌نما درج کنید."
+        for field_name in ("title_template", "body_template"):
+            self.fields[field_name].widget.attrs["data-sms-variables"] = variable_json
 
     def clean(self):
         cleaned_data = super().clean()
@@ -1436,6 +1447,7 @@ class SMSTemplateAdmin(admin.ModelAdmin):
     fields = (
         "step",
         "notification_type",
+        "title_template",
         "body_template",
         "template_preview",
         "is_active",
@@ -1464,26 +1476,31 @@ class SMSTemplateAdmin(admin.ModelAdmin):
     def step_display(self, obj):
         return obj.step.name if obj.step_id else "همه مراحل"
 
-    @admin.display(description="پیش‌نمایش نمونه پیام")
+    @admin.display(description="پیش‌نمایش خروجی نهایی پیامک")
     def template_preview(self, obj):
-        if not obj or not obj.body_template:
-            return "پس از نوشتن قالب، پیش‌نمایش نمونه در این قسمت نمایش داده می‌شود."
-        from .sms_services import validate_sms_template_source
-
+        if not obj or not (obj.title_template or obj.body_template):
+            return "پس از نوشتن عنوان یا متن پیامک، پیش‌نمایش در این قسمت نمایش داده می‌شود."
+        from types import SimpleNamespace
+        from .sms_services import _build_sms_content
+        recipient = SimpleNamespace(get_full_name=lambda: "کاربر نمونه", get_username=lambda: "sample")
+        instance = SimpleNamespace(pk=123, workflow=SimpleNamespace(name="فرآیند نمونه"))
+        sample_notification = SimpleNamespace(
+            title="عنوان نمونه اعلان", message="متن نمونه اعلان برای مشاهده خروجی.",
+            recipient=recipient, workflow_instance=instance,
+            workflow_step=SimpleNamespace(name="مرحله نمونه"), workflow_step_id=1,
+            transition_execution=None, transition_execution_id=None,
+            file_share_message=None, created_at=timezone.now(),
+        )
         try:
-            compiled = validate_sms_template_source(obj.body_template)
-            rendered = compiled.render(Context({
-                "title": "عنوان نمونه اعلان",
-                "message": "این یک متن نمونه برای بررسی خروجی قالب پیامک است.",
-            })).strip()
+            rendered, _ = _build_sms_content(sample_notification, obj)
         except Exception:
-            return "قالب معتبر نیست؛ ابتدا خطاهای نحوی و متغیرهای مجاز را اصلاح کنید."
+            return "قالب معتبر نیست؛ متغیرها و متن را بررسی کنید."
         if not rendered:
             return "خروجی قالب خالی است."
-        return format_html(
-            '<pre style="white-space:pre-wrap;direction:rtl;margin:0;">{}</pre>',
-            rendered,
-        )
+        return format_html('<pre style="white-space:pre-wrap;direction:rtl;margin:0;">{}</pre>', rendered)
+
+    class Media:
+        js = ("workflow/admin/sms-template-editor.js",)
 
     def has_module_permission(self, request):
         return request.user.is_active and request.user.is_superuser
