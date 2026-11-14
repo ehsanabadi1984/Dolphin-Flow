@@ -1096,7 +1096,7 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         ),
         (
             "وضعیت اپراتور",
-            {"fields": ("provider_status", "provider_revision")},
+            {"fields": ("provider_status", "provider_revision", "global_sms_status", "delivery_overview", "latest_delivery_status")},
         ),
         (
             "اطلاعات اتصال مگفا",
@@ -1117,7 +1117,7 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         ),
         ("اطلاعات ثبت", {"fields": ("updated_at",)}),
     )
-    readonly_fields = ("provider_status", "provider_revision", "updated_at")
+    readonly_fields = ("provider_status", "provider_revision", "global_sms_status", "delivery_overview", "latest_delivery_status", "updated_at")
 
     def get_queryset(self, request):
         return super().get_queryset(request).filter(pk=1)
@@ -1146,6 +1146,39 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         if not provider:
             return "مگفا هنوز پیکربندی نشده است."
         return "فعال" if provider.is_active else "غیرفعال"
+
+    @admin.display(description="وضعیت ارسال سراسری")
+    def global_sms_status(self, obj):
+        enabled = bool(obj and obj.is_enabled)
+        return "فعال" if enabled else "غیرفعال"
+
+    @admin.display(description="خلاصه وضعیت ارسال‌ها")
+    def delivery_overview(self, obj):
+        totals = SMSDelivery.objects.aggregate(
+            total=models.Count("pk"),
+            pending=models.Count("pk", filter=models.Q(status=SMSDelivery.Status.PENDING)),
+            sending=models.Count("pk", filter=models.Q(status=SMSDelivery.Status.SENDING)),
+            sent=models.Count("pk", filter=models.Q(status=SMSDelivery.Status.SENT)),
+            failed=models.Count("pk", filter=models.Q(status=SMSDelivery.Status.FAILED)),
+            unknown=models.Count("pk", filter=models.Q(status=SMSDelivery.Status.UNKNOWN)),
+        )
+        return (
+            f"کل: {totals['total']} | در صف: {totals['pending']} | "
+            f"در حال ارسال: {totals['sending']} | پذیرفته‌شده: {totals['sent']} | "
+            f"ناموفق: {totals['failed']} | نامشخص: {totals['unknown']}"
+        )
+
+    @admin.display(description="آخرین وضعیت ارسال")
+    def latest_delivery_status(self, obj):
+        latest = SMSDelivery.objects.order_by("-created_at").first()
+        if latest is None:
+            return "هنوز سابقه ارسالی ثبت نشده است."
+        error_state = "؛ دارای خطا" if latest.last_error else ""
+        return (
+            f"{latest.get_status_display()} — "
+            f"{timezone.localtime(latest.created_at).strftime('%Y-%m-%d %H:%M')}"
+            f"{error_state}"
+        )
 
     @admin.display(description="نسخه تنظیمات")
     def provider_revision(self, obj):
