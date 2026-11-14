@@ -291,7 +291,7 @@ class SMSTemplateAdminPreviewTests(SimpleTestCase):
     def test_template_preview_renders_safe_sample_content(self):
         model_admin = dolphin_admin_site._registry[SMSTemplate]
         template = SMSTemplate(
-            body_template="عنوان: {{ title }}\\n{{ message }}"
+            body_template="عنوان: {{ title }}\n{{ message }}"
         )
 
         preview = str(model_admin.template_preview(template))
