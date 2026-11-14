@@ -94,6 +94,42 @@ class MagfaSMSProvider(SMSProvider):
             "timeout": int(options.get("timeout") or settings.MAGFA_TIMEOUT),
         }
 
+    def _get_balance_response(self):
+        config = self._config()
+        self.validate_configuration()
+        token = base64.b64encode(
+            f"{config['username']}/{config['domain']}:{config['password']}".encode("utf-8")
+        ).decode("ascii")
+        request = Request(
+            f"{config['base_url']}/balance",
+            headers={
+                "Authorization": f"Basic {token}",
+                "Accept": "application/json",
+            },
+            method="GET",
+        )
+        try:
+            with urlopen(request, timeout=config["timeout"]) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            raise MagfaAPIError(f"Magfa balance check failed (HTTP {exc.code}).") from exc
+        except (URLError, TimeoutError, OSError, ValueError) as exc:
+            raise MagfaAPIError(f"Magfa connection check failed: {exc}") from exc
+
+        if not isinstance(result, dict) or result.get("status") != 0:
+            raise MagfaAPIError("Magfa returned an unsuccessful or invalid balance response.")
+        return result
+
+    def test_connection(self):
+        self._get_balance_response()
+        return True
+
+    def get_balance(self):
+        result = self._get_balance_response()
+        if "balance" not in result:
+            raise MagfaAPIError("Magfa response did not include the account balance.")
+        return result["balance"]
+
     def send(self, *, recipient, message, uid):
         config = self._config()
         username = config["username"]

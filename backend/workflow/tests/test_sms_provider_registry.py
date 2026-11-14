@@ -1,8 +1,9 @@
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.test import TestCase, override_settings
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from workflow.models import SMSProviderConfigRevision, SMSProviderConfiguration
+from workflow.sms_services import MagfaAPIError, MagfaSMSProvider
 from workflow.sms_provider_registry import (
     activate_provider,
     create_provider_revision,
@@ -181,3 +182,58 @@ class SMSProviderRegistryTests(TestCase):
         self.assertFalse(self.provider.is_active)
         self.assertTrue(other.is_active)
         self.assertEqual(get_active_revision().provider_id, other.pk)
+
+    def test_magfa_connection_check_uses_balance_endpoint_without_sending_sms(self):
+        provider = MagfaSMSProvider(
+            credentials={
+                "username": "user", "password": "secret",
+                "domain": "test", "sender": "1000",
+            },
+        )
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"status": 0, "balance": 1250}'
+        with patch("workflow.sms_services.urlopen", return_value=response) as mocked:
+            self.assertTrue(provider.test_connection())
+
+        request = mocked.call_args.args[0]
+        self.assertEqual(request.full_url, "https://sms.magfa.com/api/http/sms/v2/balance")
+        self.assertEqual(request.get_method(), "GET")
+        self.assertEqual(mocked.call_args.kwargs["timeout"], provider._config()["timeout"])
+
+    def test_magfa_get_balance_returns_balance(self):
+        provider = MagfaSMSProvider(
+            credentials={
+                "username": "user", "password": "secret",
+                "domain": "test", "sender": "1000",
+            },
+        )
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"status": 0, "balance": 1250}'
+        with patch("workflow.sms_services.urlopen", return_value=response):
+            self.assertEqual(provider.get_balance(), 1250)
+
+    def test_magfa_balance_rejects_unsuccessful_response(self):
+        provider = MagfaSMSProvider(
+            credentials={
+                "username": "user", "password": "secret",
+                "domain": "test", "sender": "1000",
+            },
+        )
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"status": 1}'
+        with patch("workflow.sms_services.urlopen", return_value=response):
+            with self.assertRaises(MagfaAPIError):
+                provider.test_connection()
+
+    def test_magfa_balance_rejects_missing_balance(self):
+        provider = MagfaSMSProvider(
+            credentials={
+                "username": "user", "password": "secret",
+                "domain": "test", "sender": "1000",
+            },
+        )
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"status": 0}'
+        with patch("workflow.sms_services.urlopen", return_value=response):
+            with self.assertRaises(MagfaAPIError):
+                provider.get_balance()
