@@ -273,7 +273,14 @@ def _build_sms_content(notification, template=None):
         if template.legacy_format:
             message = validate_sms_template_source(body_source, allowed_variables).render(Context(context)).strip()
         else:
-            title_source = template.title_template.strip() if template.title_template else (notification.title or "")
+            if template.title_template.strip():
+                title_source = template.title_template.strip()
+            elif "{{ title }}" in body_source:
+                # Avoid duplicating the notification title in a legacy body template
+                # when an administrator first edits it in the new two-field editor.
+                title_source = ""
+            else:
+                title_source = notification.title or ""
             rendered_title = validate_sms_template_source(title_source, allowed_variables).render(Context(context)).strip() if title_source else ""
             rendered_body = validate_sms_template_source(body_source, allowed_variables).render(Context(context)).strip() if body_source else ""
             message = "\n".join(part for part in (rendered_title, rendered_body) if part)
