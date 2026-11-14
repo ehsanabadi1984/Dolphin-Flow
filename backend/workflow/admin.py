@@ -957,7 +957,23 @@ class WorkflowSMSSettingsAdminForm(forms.ModelForm):
 
     class Meta:
         model = WorkflowSMSSettings
-        fields = ("is_enabled",)
+        fields = ("is_enabled", "sms_verification_template")
+
+    def clean_sms_verification_template(self):
+        value = self.cleaned_data.get("sms_verification_template", "")
+        token = "{{ code }}"
+        if value.count(token) != 1:
+            raise forms.ValidationError(
+                "متن پیامک باید دقیقاً یک‌بار شامل متغیر {{ code }} باشد."
+            )
+        remainder = value.replace(token, "")
+        if "{{" in remainder or "}}" in remainder or "{%" in remainder or "%}" in remainder:
+            raise forms.ValidationError(
+                "فقط متغیر {{ code }} در متن پیامک مجاز است."
+            )
+        if not value.strip():
+            raise forms.ValidationError("متن پیامک نمی‌تواند خالی باشد.")
+        return value
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1095,6 +1111,16 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
             {"fields": ("is_enabled",)},
         ),
         (
+            "قالب پیامک تأیید شماره موبایل",
+            {
+                "fields": ("sms_verification_template", "sms_verification_preview"),
+                "description": (
+                    "این متن هنگام ثبت یا تغییر شماره موبایل ارسال می‌شود. "
+                    "متغیر {{ code }} با کد شش‌رقمی جایگزین می‌شود."
+                ),
+            },
+        ),
+        (
             "وضعیت اپراتور",
             {"fields": ("provider_status", "provider_revision", "global_sms_status", "last_connection_test_result", "last_connection_test_message", "delivery_overview", "latest_delivery_status")},
         ),
@@ -1117,7 +1143,15 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         ),
         ("اطلاعات ثبت", {"fields": ("updated_at",)}),
     )
-    readonly_fields = ("provider_status", "provider_revision", "global_sms_status", "last_connection_test_result", "last_connection_test_message", "delivery_overview", "latest_delivery_status", "updated_at")
+    readonly_fields = ("sms_verification_preview", "provider_status", "provider_revision", "global_sms_status", "last_connection_test_result", "last_connection_test_message", "delivery_overview", "latest_delivery_status", "updated_at")
+
+    @admin.display(description="پیش‌نمایش پیامک با کد نمونه")
+    def sms_verification_preview(self, obj):
+        template = (
+            getattr(obj, "sms_verification_template", "") or
+            "کد تأیید شماره موبایل شما در Dolphin-Flow: {{ code }}"
+        )
+        return format_html("<pre>{}</pre>", template.replace("{{ code }}", "۱۲۳۴۵۶"))
 
     def get_queryset(self, request):
         return super().get_queryset(request).filter(pk=1)
