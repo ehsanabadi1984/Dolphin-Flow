@@ -106,6 +106,7 @@ class UserContactMethodTests(TestCase):
             value="09123456789",
             is_verified=True,
             verification_method=UserContactMethod.VerificationMethod.MANUAL,
+            verified_by=self.user,
         )
         self.assertIsNotNone(contact.verified_at)
 
@@ -113,7 +114,8 @@ class UserContactMethodTests(TestCase):
         contact.verification_code_hash = "old-hash"
         contact.verification_expires_at = timezone.now()
         contact.verification_attempts = 2
-        contact.save()
+        # Even a partial update must persist invalidation of the old proof.
+        contact.save(update_fields=("value",))
 
         contact.refresh_from_db()
         self.assertFalse(contact.is_verified)
@@ -193,6 +195,30 @@ class UserSMSSettingsTests(TestCase):
         self.assertIsNone(contact.verified_by_id)
         self.assertTrue(contact.verification_code_hash)
         self.assertIsNotNone(contact.verification_expires_at)
+
+    @patch("accounts.services.import_string")
+    def test_expired_otp_is_rejected_and_cleared(self, mock_import_string):
+        from datetime import timedelta
+        from django.core.exceptions import ValidationError
+        from django.utils import timezone
+        from accounts.models import UserContactMethod
+        from accounts.services import request_sms_verification, verify_sms_verification_code
+
+        provider = MagicMock()
+        provider.return_value.send.return_value = {"id": 4567, "status": 0}
+        mock_import_string.return_value = provider
+        request_sms_verification(self.user, "989127777777")
+        contact = UserContactMethod.objects.get(user=self.user)
+        contact.verification_expires_at = timezone.now() - timedelta(seconds=1)
+        contact.save(update_fields=("verification_expires_at", "updated_at"))
+
+        with self.assertRaises(ValidationError):
+            verify_sms_verification_code(self.user, "123456")
+
+        contact.refresh_from_db()
+        self.assertEqual(contact.verification_code_hash, "")
+        self.assertIsNone(contact.verification_expires_at)
+        self.assertFalse(contact.is_verified)
 
     @patch("accounts.services.import_string")
     def test_otp_resend_is_rate_limited(self, mock_import_string):
