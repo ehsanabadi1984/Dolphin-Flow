@@ -957,7 +957,7 @@ class WorkflowSMSSettingsAdminForm(forms.ModelForm):
 
     class Meta:
         model = WorkflowSMSSettings
-        fields = ("is_enabled", "sms_verification_template")
+        fields = ("is_enabled", "file_share_sms_enabled", "sms_verification_template")
 
     def clean_sms_verification_template(self):
         value = self.cleaned_data.get("sms_verification_template", "")
@@ -1109,6 +1109,13 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         (
             "تنظیمات عمومی پیامک",
             {"fields": ("is_enabled",)},
+        ),
+        (
+            "قانون مستقل اشتراک‌گذاری فایل",
+            {
+                "fields": ("file_share_sms_enabled",),
+                "description": "در صورت فعال‌سازی، پیامک فقط برای کاربرانی ارسال می‌شود که فرستنده در File Sharing انتخاب کرده است؛ این اعلان به قوانین مراحل وابسته نیست.",
+            },
         ),
         (
             "قالب پیامک تأیید شماره موبایل",
