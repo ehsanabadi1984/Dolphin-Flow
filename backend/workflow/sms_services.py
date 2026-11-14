@@ -248,7 +248,7 @@ def _build_sms_content(notification, template=None):
         message = rendered
         source = "TEMPLATE"
     else:
-        message = "\\n".join(
+        message = "\n".join(
             part.strip()
             for part in (notification.title, notification.message)
             if part and part.strip()
