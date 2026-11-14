@@ -9,7 +9,6 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
-from django.utils.module_loading import import_string
 
 from .models import SMSVerificationRequest, UserContactMethod
 
