@@ -15,4 +15,14 @@ class Migration(migrations.Migration):
             name="body_template",
             field=models.TextField(verbose_name="متن پیامک"),
         ),
+        migrations.AddField(
+            model_name="smstemplate",
+            name="legacy_format",
+            field=models.BooleanField(default=True, editable=False),
+        ),
+        migrations.AlterField(
+            model_name="smstemplate",
+            name="legacy_format",
+            field=models.BooleanField(default=False, editable=False),
+        ),
     ]
