@@ -393,6 +393,12 @@ class SMSTemplateAdminPreviewTests(SimpleTestCase):
         self.assertIn("workflow_number", payload)
         self.assertIn("step_name", payload)
         self.assertIn("متن پیامک", form.fields["body_template"].label)
+        import json
+        variable_map = json.loads(payload)
+        self.assertNotIn(
+            "workflow_number",
+            [item["value"] for item in variable_map["FILE_SHARE_MESSAGE"]],
+        )
 
     def test_template_preview_renders_safe_sample_content(self):
         model_admin = dolphin_admin_site._registry[SMSTemplate]
