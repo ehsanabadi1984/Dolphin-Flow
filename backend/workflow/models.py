@@ -4,6 +4,7 @@ from contextvars import ContextVar
 import uuid
 from django.conf import settings
 from django.db import models, transaction
+from django.db.models import Q
 from django.core.exceptions import ValidationError
 
 
@@ -1127,7 +1128,9 @@ class SMSTemplate(models.Model):
         WorkflowStep,
         on_delete=models.CASCADE,
         related_name="sms_templates",
-        verbose_name="مرحله",
+        null=True,
+        blank=True,
+        verbose_name="مرحله (خالی = همه مراحل)",
     )
     notification_type = models.CharField(
         max_length=30,
@@ -1156,11 +1159,16 @@ class SMSTemplate(models.Model):
     class Meta:
         verbose_name = "قالب پیامک"
         verbose_name_plural = "قالب‌های پیامک"
-        ordering = ("step", "notification_type")
+        ordering = ("notification_type", "step_id")
         constraints = [
             models.UniqueConstraint(
                 fields=("step", "notification_type"),
                 name="unique_step_sms_template",
+            ),
+            models.UniqueConstraint(
+                fields=("notification_type",),
+                condition=Q(step__isnull=True),
+                name="unique_global_sms_template_type",
             ),
         ]
 
@@ -1175,7 +1183,8 @@ class SMSTemplate(models.Model):
                 raise ValidationError({"body_template": str(exc)}) from exc
 
     def __str__(self):
-        return f"{self.step} · {self.get_notification_type_display()}"
+        scope = str(self.step) if self.step_id else "همه مراحل"
+        return f"{scope} · {self.get_notification_type_display()}"
 
 
 class WorkflowSMSSettings(models.Model):
