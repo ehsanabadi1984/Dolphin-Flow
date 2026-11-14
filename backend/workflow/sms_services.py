@@ -361,13 +361,13 @@ def prepare_sms_delivery_snapshot(notification, delivery):
         if step is not None:
             template = SMSTemplate.objects.filter(
                 step=step,
-                notification_type=notification.notification_type,
+                notification_type=resolve_sms_notification_type(notification),
                 is_active=True,
             ).first()
         if template is None:
             template = SMSTemplate.objects.filter(
                 step__isnull=True,
-                notification_type=notification.notification_type,
+                notification_type=resolve_sms_notification_type(notification),
                 is_active=True,
             ).first()
 
@@ -545,11 +545,11 @@ class SMSDispatcher:
 
         enabled = WorkflowStepSMSRule.objects.filter(
             step=step,
-            notification_type=notification.notification_type,
+            notification_type=resolve_sms_notification_type(notification),
             sms_enabled=True,
         ).exists()
         if not enabled:
-            return "قانون پیامک این نوع اعلان در مرحله مبدأ فعال نیست.", None
+            return "قانون پیامک این نوع اعلان در مرحله مقصد فعال نیست.", None
         return "", contact
 
 
