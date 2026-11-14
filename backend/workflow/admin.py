@@ -1528,6 +1528,7 @@ class SMSTemplateAdmin(admin.ModelAdmin):
         if not change:
             obj.created_by = request.user
         obj.updated_by = request.user
+        obj.legacy_format = False
         obj.full_clean()
         super().save_model(request, obj, form, change)
 
