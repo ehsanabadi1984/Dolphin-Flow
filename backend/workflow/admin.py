@@ -1487,6 +1487,7 @@ class SMSTemplateAdmin(admin.ModelAdmin):
         instance = SimpleNamespace(pk=123, workflow=SimpleNamespace(name="فرآیند نمونه"))
         sample_notification = SimpleNamespace(
             title="عنوان نمونه اعلان", message="متن نمونه اعلان برای مشاهده خروجی.",
+            notification_type="ACTION_REQUIRED",
             recipient=recipient, workflow_instance=instance,
             workflow_step=SimpleNamespace(name="مرحله نمونه"), workflow_step_id=1,
             transition_execution=None, transition_execution_id=None,
