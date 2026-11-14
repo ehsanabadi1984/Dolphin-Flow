@@ -1175,13 +1175,13 @@ class SMSTemplate(models.Model):
 
     def clean(self):
         super().clean()
-        from .sms_services import validate_sms_template_source
-
+        from .sms_services import validate_sms_template_source, SMS_TEMPLATE_VARIABLES_BY_TYPE
+        allowed_variables = SMS_TEMPLATE_VARIABLES_BY_TYPE.get(self.notification_type, ())
         for field_name in ("title_template", "body_template"):
             source = getattr(self, field_name)
             if source:
                 try:
-                    validate_sms_template_source(source)
+                    validate_sms_template_source(source, allowed_variables)
                 except ValueError as exc:
                     raise ValidationError({field_name: str(exc)}) from exc
 
