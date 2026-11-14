@@ -22,13 +22,46 @@ class Command(BaseCommand):
     requires_migrations_checks = True
 
     def add_arguments(self, parser):
-        parser.add_argument(
+        actions = parser.add_mutually_exclusive_group()
+        actions.add_argument(
             "--activate",
             action="store_true",
             help="Test the Magfa balance endpoint and activate the provider.",
         )
+        actions.add_argument(
+            "--test-connection",
+            action="store_true",
+            help="Test the saved Magfa configuration without activating the provider.",
+        )
 
     def handle(self, *args, **options):
+        if options["test_connection"]:
+            try:
+                provider = SMSProviderConfiguration.objects.get(code="magfa")
+                revision = provider.revisions.filter(is_current=True).first()
+                if revision is None:
+                    raise CommandError(
+                        "Magfa has no current saved configuration revision."
+                    )
+                build_provider(revision).test_connection()
+            except SMSProviderConfiguration.DoesNotExist as exc:
+                raise CommandError(
+                    "Magfa is not registered. Run bootstrap_sms_provider first."
+                ) from exc
+            except CommandError:
+                raise
+            except Exception as exc:
+                raise CommandError(
+                    "Magfa connection check failed; provider activation state was unchanged."
+                ) from exc
+
+            self.stdout.write(
+                self.style.SUCCESS(
+                    "Magfa connection check succeeded; provider activation state was unchanged."
+                )
+            )
+            return
+
         credentials = {
             "username": settings.MAGFA_USERNAME,
             "password": settings.MAGFA_PASSWORD,
