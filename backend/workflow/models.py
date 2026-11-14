@@ -1159,7 +1159,7 @@ class SMSTemplate(models.Model):
     class Meta:
         verbose_name = "قالب پیامک"
         verbose_name_plural = "قالب‌های پیامک"
-        ordering = ("notification_type", "step_id")
+        ordering = ("notification_type", "step")
         constraints = [
             models.UniqueConstraint(
                 fields=("step", "notification_type"),
@@ -1168,7 +1168,7 @@ class SMSTemplate(models.Model):
             models.UniqueConstraint(
                 fields=("notification_type",),
                 condition=Q(step__isnull=True),
-                name="unique_global_sms_template_type",
+                name="uniq_global_sms_tpl_type",
             ),
         ]
 
