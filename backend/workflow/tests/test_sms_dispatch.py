@@ -121,6 +121,15 @@ class SMSDispatchTests(TestCase):
                 with self.assertRaises(ValidationError):
                     template.full_clean()
 
+    def test_template_variables_are_restricted_by_notification_type(self):
+        template = SMSTemplate(
+            step=None,
+            notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+            body_template="فرآیند {{ workflow_number }}",
+        )
+        with self.assertRaises(ValidationError):
+            template.full_clean()
+
     def test_sms_template_runtime_validation_blocks_direct_database_bypass(self):
         template = SMSTemplate.objects.create(
             step=self.step,
