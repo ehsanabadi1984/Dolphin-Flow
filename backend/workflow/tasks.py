@@ -25,15 +25,26 @@ def dispatch_sms_notification(self, notification_id):
         return SMSDispatcher.dispatch(notification_id)
     except Exception as exc:
         delivery = SMSDelivery.objects.filter(notification_id=notification_id).first()
-        if delivery and delivery.status in (SMSDelivery.Status.PENDING, SMSDelivery.Status.SENDING):
+        if delivery and delivery.status == SMSDelivery.Status.SENDING:
+            # The provider may have accepted the request before an unexpected
+            # exception occurred. Never make this row eligible for a resend.
+            delivery.status = SMSDelivery.Status.UNKNOWN
+            delivery.last_error = str(exc)[:4000]
+            delivery.save(update_fields=("status", "last_error", "updated_at"))
+            result_status = SMSDelivery.Status.UNKNOWN
+        elif delivery and delivery.status == SMSDelivery.Status.PENDING:
+            # No send was claimed; this is a definitive pre-submission failure.
             delivery.status = SMSDelivery.Status.FAILED
             delivery.last_error = str(exc)[:4000]
             delivery.save(update_fields=("status", "last_error", "updated_at"))
+            result_status = SMSDelivery.Status.FAILED
+        else:
+            result_status = delivery.status if delivery else SMSDelivery.Status.FAILED
         logger.exception(
-            "SMS delivery failed without automatic resend for notification %s",
+            "SMS delivery task failed for notification %s",
             notification_id,
         )
-        return SMSDelivery.Status.FAILED
+        return result_status
 
 
 @shared_task
