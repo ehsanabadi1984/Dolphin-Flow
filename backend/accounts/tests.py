@@ -268,6 +268,23 @@ class UserSMSSettingsTests(TestCase):
         self.assertFalse(contact.is_verified)
 
 
+    @patch("workflow.sms_provider_registry.get_active_provider")
+    def test_otp_uses_admin_configured_message_template(self, mock_get_provider):
+        from accounts.services import request_sms_verification
+        provider = MagicMock()
+        provider.send.return_value = {"id": 456, "status": 0}
+        mock_get_provider.return_value = (provider, None)
+        settings_obj = WorkflowSMSSettings.objects.get(pk=1)
+        settings_obj.sms_verification_template = "رمز یکبارمصرف Dolphin: {{ code }}"
+        settings_obj.save(update_fields=("sms_verification_template", "updated_at"))
+
+        request_sms_verification(self.user, "989127654321")
+
+        message = provider.send.call_args.kwargs["message"]
+        self.assertTrue(message.startswith("رمز یکبارمصرف Dolphin: "))
+        sent_code = message.rsplit(" ", 1)[-1]
+        self.assertRegex(sent_code, r"^[0-9]{6}$")
+
     def test_user_can_enable_sms_after_phone_is_verified(self):
         from accounts.models import UserContactMethod
         UserContactMethod.objects.create(
