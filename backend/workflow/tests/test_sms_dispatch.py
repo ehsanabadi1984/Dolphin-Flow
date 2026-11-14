@@ -3,6 +3,7 @@ import json
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -62,6 +63,42 @@ class SMSDispatchTests(TestCase):
             "اقدام لازم - لطفاً فرآیند را بررسی کنید.",
         )
         self.assertEqual(source, "TEMPLATE")
+
+    def test_sms_template_rejects_unapproved_variables_filters_and_tags(self):
+        invalid_sources = (
+            "{{ recipient.password }}",
+            "{{ title|safe }}",
+            "{% if title %}{{ title }}{% endif %}",
+            "{{ unknown }}",
+        )
+        for source in invalid_sources:
+            with self.subTest(source=source):
+                template = SMSTemplate(
+                    step=self.step,
+                    notification_type=self.notification.notification_type,
+                    body_template=source,
+                )
+                with self.assertRaises(ValidationError):
+                    template.full_clean()
+
+    def test_sms_template_runtime_validation_blocks_direct_database_bypass(self):
+        template = SMSTemplate.objects.create(
+            step=self.step,
+            notification_type=self.notification.notification_type,
+            body_template="{{ title|safe }}",
+        )
+        from workflow.sms_services import _build_sms_content
+
+        with self.assertRaises(ValueError):
+            _build_sms_content(self.notification, template)
+
+    def test_sms_template_rejects_blank_or_malformed_source(self):
+        from workflow.sms_services import validate_sms_template_source
+
+        for source in ("", "   ", "{{ title"):
+            with self.subTest(source=source):
+                with self.assertRaises(ValueError):
+                    validate_sms_template_source(source)
 
     def test_delivery_snapshot_keeps_rendered_template_message(self):
         SMSTemplate.objects.create(
