@@ -1,4 +1,6 @@
-from django.test import SimpleTestCase, TestCase, override_settings
+from unittest.mock import MagicMock, patch
+
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 
 from workflow.admin import (
     SMSTemplateAdmin,
@@ -96,6 +98,108 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
             dolphin_admin_site._registry[SMSTemplate],
             SMSTemplateAdmin,
         )
+
+
+    @patch("workflow.admin.messages.success")
+    def test_connection_action_does_not_activate_provider(self, mock_success):
+        provider = register_provider(code="magfa", name="مگفا")
+        create_provider_revision(
+            provider,
+            credentials={
+                "username": "user",
+                "password": "secret",
+                "domain": "domain",
+                "sender": "1000",
+            },
+            connection_options={
+                "base_url": SMS_SETTINGS["MAGFA_API_BASE_URL"],
+                "timeout": 10,
+            },
+        )
+        request = RequestFactory().post("/", {"_test_connection": "1"})
+        model_admin = dolphin_admin_site._registry[WorkflowSMSSettings]
+
+        with patch("workflow.admin.build_provider") as build:
+            build.return_value.test_connection.return_value = True
+            handled = model_admin._handle_provider_action(
+                request, WorkflowSMSSettings(pk=1)
+            )
+
+        provider.refresh_from_db()
+        self.assertTrue(handled)
+        self.assertFalse(provider.is_active)
+        build.return_value.test_connection.assert_called_once_with()
+        mock_success.assert_called_once()
+
+    @patch("workflow.admin.messages.success")
+    def test_activation_action_tests_connection_before_activating(self, mock_success):
+        provider = register_provider(code="magfa", name="مگفا")
+        create_provider_revision(
+            provider,
+            credentials={
+                "username": "user",
+                "password": "secret",
+                "domain": "domain",
+                "sender": "1000",
+            },
+            connection_options={
+                "base_url": SMS_SETTINGS["MAGFA_API_BASE_URL"],
+                "timeout": 10,
+            },
+        )
+        request = RequestFactory().post("/", {"_activate_provider": "1"})
+        model_admin = dolphin_admin_site._registry[WorkflowSMSSettings]
+
+        with patch("workflow.admin.build_provider") as build, patch(
+            "workflow.admin.activate_provider"
+        ) as activate:
+            build.return_value.test_connection.return_value = True
+            handled = model_admin._handle_provider_action(
+                request, WorkflowSMSSettings(pk=1)
+            )
+
+        self.assertTrue(handled)
+        build.return_value.test_connection.assert_called_once_with()
+        activate.assert_called_once_with(provider)
+        mock_success.assert_called_once()
+
+    @patch("workflow.admin.messages.error")
+    def test_failed_connection_keeps_provider_inactive_and_global_sms_off(
+        self, mock_error
+    ):
+        provider = register_provider(code="magfa", name="مگفا")
+        create_provider_revision(
+            provider,
+            credentials={
+                "username": "user",
+                "password": "secret",
+                "domain": "domain",
+                "sender": "1000",
+            },
+            connection_options={
+                "base_url": SMS_SETTINGS["MAGFA_API_BASE_URL"],
+                "timeout": 10,
+            },
+        )
+        WorkflowSMSSettings.objects.create(is_enabled=True)
+        request = RequestFactory().post("/", {"_activate_provider": "1"})
+        model_admin = dolphin_admin_site._registry[WorkflowSMSSettings]
+
+        with patch("workflow.admin.build_provider") as build:
+            build.return_value.test_connection.side_effect = OSError(
+                "private API response"
+            )
+            handled = model_admin._handle_provider_action(
+                request, WorkflowSMSSettings(pk=1)
+            )
+
+        provider.refresh_from_db()
+        global_settings = WorkflowSMSSettings.objects.get(pk=1)
+        self.assertTrue(handled)
+        self.assertFalse(provider.is_active)
+        self.assertFalse(global_settings.is_enabled)
+        mock_error.assert_called_once()
+
 
 
 class SMSAdminPermissionTests(SimpleTestCase):
