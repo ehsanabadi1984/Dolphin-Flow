@@ -325,6 +325,12 @@ class SMSDeliveryAdminTests(SimpleTestCase):
 
 
 class SMSTemplateAdminPreviewTests(SimpleTestCase):
+    def test_template_form_allows_global_scope_and_explains_precedence(self):
+        form = SMSTemplateAdminForm()
+        self.assertFalse(form.fields["step"].required)
+        self.assertIn("همه مراحل", form.fields["step"].help_text)
+        self.assertIn("اولویت", form.fields["step"].help_text)
+
     def test_template_form_explains_only_supported_variables(self):
         form = SMSTemplateAdminForm()
         help_text = form.fields["body_template"].help_text
