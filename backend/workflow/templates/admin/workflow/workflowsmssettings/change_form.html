@@ -1,5 +1,22 @@
 {% extends "admin/change_form.html" %}
 
+{% block after_field_sets %}
+    {{ block.super }}
+    <div class="module aligned">
+        <h2>راهنمای راه‌اندازی</h2>
+        <div class="form-row">
+            <p>
+                ابتدا اطلاعات مگفا را ذخیره و اتصال را آزمایش کنید.
+                آزمایش اتصال فقط سرویس موجودی را بررسی می‌کند و هیچ پیامکی نمی‌فرستد.
+            </p>
+            <p>
+                فعال‌سازی اپراتور فقط پس از موفقیت آزمایش انجام می‌شود.
+                روشن‌کردن ارسال سراسری پیامک نیز مستقل از فعال‌سازی اپراتور است.
+            </p>
+        </div>
+    </div>
+{% endblock %}
+
 {% block submit_buttons_bottom %}
     {{ block.super }}
     <div class="submit-row">
