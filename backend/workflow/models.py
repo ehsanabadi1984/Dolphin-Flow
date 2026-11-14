@@ -982,6 +982,15 @@ class SMSProviderConfiguration(models.Model):
     code = models.SlugField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=False)
+    last_connection_test_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="زمان آخرین آزمایش اتصال"
+    )
+    last_connection_test_success = models.BooleanField(
+        null=True, blank=True, verbose_name="نتیجه آخرین آزمایش اتصال"
+    )
+    last_connection_test_message = models.TextField(
+        blank=True, default="", verbose_name="شرح امن نتیجه آزمایش"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
