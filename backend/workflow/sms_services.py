@@ -200,52 +200,79 @@ def _message_parts(message):
     return 1 if units <= 70 else math.ceil(units / 67)
 
 
-def validate_sms_template_source(source):
-    """Compile a deliberately small SMS template language.
+SMS_TEMPLATE_VARIABLES = {
+    "recipient_name": "نام دریافت‌کننده",
+    "notification_date": "تاریخ اعلان",
+    "workflow_number": "شماره فرآیند",
+    "workflow_name": "نام فرآیند",
+    "step_name": "نام مرحله",
+}
+SMS_TEMPLATE_VARIABLES_BY_TYPE = {
+    "WORKFLOW_STARTED": ("recipient_name", "notification_date", "workflow_number", "workflow_name"),
+    "STEP_ENTERED": ("recipient_name", "notification_date", "workflow_number", "workflow_name", "step_name"),
+    "TRANSITION_EXECUTED": ("recipient_name", "notification_date", "workflow_number", "workflow_name", "step_name"),
+    "ACTION_REQUIRED": ("recipient_name", "notification_date", "workflow_number", "workflow_name", "step_name"),
+    "WORKFLOW_COMPLETED": ("recipient_name", "notification_date", "workflow_number", "workflow_name"),
+    "WORKFLOW_CANCELLED": ("recipient_name", "notification_date", "workflow_number", "workflow_name"),
+    "SLA_WARNING": ("recipient_name", "notification_date", "workflow_number", "workflow_name", "step_name"),
+    "SLA_BREACHED": ("recipient_name", "notification_date", "workflow_number", "workflow_name", "step_name"),
+    "FILE_SHARE_MESSAGE": ("recipient_name", "notification_date"),
+}
+SMS_TEMPLATE_LEGACY_VARIABLES = ("title", "message")
 
-    Only literal text and the two notification string variables are allowed.
-    Tags, attribute traversal, filters and other variables are rejected.
-    """
+
+def validate_sms_template_source(source, allowed_variables=None):
+    """Compile a deliberately small SMS template language without filters or tags."""
     if not isinstance(source, str) or not source.strip():
         raise ValueError("SMS template cannot be empty.")
-
-    # Django's template parser treats some unclosed delimiters as plain
-    # text, so reject unbalanced template markers before compiling.
+    allowed = set(allowed_variables or SMS_TEMPLATE_VARIABLES) | set(SMS_TEMPLATE_LEGACY_VARIABLES)
     for opening, closing in (("{{", "}}"), ("{%", "%}"), ("{#", "#}")):
         if source.count(opening) != source.count(closing):
             raise ValueError("SMS template syntax is invalid.")
-
     try:
         compiled = Engine(autoescape=False).from_string(source)
     except TemplateSyntaxError as exc:
         raise ValueError("SMS template syntax is invalid.") from exc
-
     for node in compiled.nodelist:
         if isinstance(node, TextNode):
             continue
         if isinstance(node, VariableNode):
             expression = node.filter_expression
             variable = expression.var
-            if tuple(variable.lookups) not in (("title",), ("message",)):
-                raise ValueError(
-                    "Only the title and message variables are allowed in SMS templates."
-                )
+            name = variable.var
+            if tuple(variable.lookups) != (name,) or name not in allowed:
+                raise ValueError("This variable is not available for the selected notification type.")
             if expression.filters:
                 raise ValueError("Filters are not allowed in SMS templates.")
             continue
         raise ValueError("Template tags and control structures are not allowed in SMS templates.")
-
     return compiled
+
+
+def sms_template_context(notification):
+    from django.utils import timezone as django_timezone
+    recipient = notification.recipient
+    instance = notification.workflow_instance
+    step = resolve_notification_step(notification)
+    return {
+        "title": notification.title or "",
+        "message": notification.message or "",
+        "recipient_name": (recipient.get_full_name() or recipient.get_username()) if recipient else "",
+        "notification_date": django_timezone.localtime(notification.created_at).strftime("%Y/%m/%d") if notification.created_at else "",
+        "workflow_number": str(instance.pk) if instance else "",
+        "workflow_name": instance.workflow.name if instance else "",
+        "step_name": step.name if step else "",
+    }
 
 
 def _build_sms_content(notification, template=None):
     if template is not None:
-        compiled = validate_sms_template_source(template.body_template)
-        rendered = compiled.render(Context({
-            "title": notification.title or "",
-            "message": notification.message or "",
-        })).strip()
-        message = rendered
+        context = sms_template_context(notification)
+        title_source = template.title_template.strip() if template.title_template else (notification.title or "")
+        body_source = template.body_template.strip() if template.body_template else (notification.message or "")
+        rendered_title = validate_sms_template_source(title_source).render(Context(context)).strip() if title_source else ""
+        rendered_body = validate_sms_template_source(body_source).render(Context(context)).strip() if body_source else ""
+        message = "\n".join(part for part in (rendered_title, rendered_body) if part)
         source = "TEMPLATE"
     else:
         message = "\n".join(
@@ -254,17 +281,6 @@ def _build_sms_content(notification, template=None):
             if part and part.strip()
         )
         source = "NOTIFICATION"
-
-    max_segments = max(1, settings.SMS_MAX_SEGMENTS)
-    if _message_parts(message) <= max_segments:
-        return message, source
-
-    fallback = settings.SMS_FALLBACK_MESSAGE.strip()
-    if not fallback or _message_parts(fallback) > max_segments:
-        raise ValueError(
-            "Configured SMS fallback message is empty or exceeds SMS_MAX_SEGMENTS."
-        )
-    return fallback, "LENGTH_FALLBACK"
 
 
 def build_sms_message(notification):
