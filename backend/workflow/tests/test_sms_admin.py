@@ -6,7 +6,6 @@ from workflow.admin import (
     dolphin_admin_site,
 )
 from workflow.models import (
-    SMSProviderConfiguration,
     SMSTemplate,
     WorkflowSMSSettings,
 )
@@ -92,10 +91,7 @@ class WorkflowSMSSettingsAdminFormTests(TestCase):
         self.assertEqual(form["provider_password"].value(), "")
 
     def test_provider_settings_and_templates_are_registered_in_admin(self):
-        self.assertIn(
-            type(SMSProviderConfiguration()),
-            dolphin_admin_site._registry,
-        )
+        self.assertIn(WorkflowSMSSettings, dolphin_admin_site._registry)
         self.assertIn(SMSTemplate, dolphin_admin_site._registry)
         self.assertIsInstance(
             dolphin_admin_site._registry[SMSTemplate],
