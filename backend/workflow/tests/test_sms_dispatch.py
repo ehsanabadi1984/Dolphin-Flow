@@ -385,6 +385,72 @@ class SMSDispatchTests(TestCase):
         self.assertEqual(delivery.template_id, template.pk)
         self.assertEqual(delivery.rendered_message, "ورود به مرحله\nDynamic step")
 
+    def test_file_share_sms_uses_independent_global_rule_not_origin_step_rule(self):
+        WorkflowSMSSettings.objects.filter(pk=1).update(file_share_sms_enabled=True)
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+            title="فایل جدیدی برای شما به اشتراک گذاشته شد",
+            message="یک فایل برای شما ارسال شده است.",
+            workflow_step=self.step,
+        )
+
+        reason, contact = SMSDispatcher._eligibility(notification)
+
+        self.assertEqual(reason, "")
+        self.assertEqual(contact.pk, self.contact.pk)
+
+    def test_file_share_sms_is_skipped_when_its_global_rule_is_disabled(self):
+        WorkflowSMSSettings.objects.filter(pk=1).update(file_share_sms_enabled=False)
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+            title="فایل جدید",
+            message="فایل برای شما ارسال شده است.",
+            workflow_step=self.step,
+        )
+
+        reason, contact = SMSDispatcher._eligibility(notification)
+
+        self.assertEqual(reason, "قانون سراسری پیامک اشتراک‌گذاری فایل غیرفعال است.")
+        self.assertIsNone(contact)
+
+    def test_file_share_sms_uses_only_global_template(self):
+        WorkflowSMSSettings.objects.filter(pk=1).update(file_share_sms_enabled=True)
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+            title="فایل جدید",
+            message="فایل برای شما ارسال شده است.",
+            workflow_step=self.step,
+        )
+        step_template = SMSTemplate.objects.create(
+            step=self.step,
+            notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+            title_template="قالب مرحله",
+            body_template="این قالب نباید استفاده شود.",
+        )
+        global_template = SMSTemplate.objects.create(
+            step=None,
+            notification_type=Notification.NotificationType.FILE_SHARE_MESSAGE,
+            title_template="فایل جدید",
+            body_template="سلام {{ recipient_name }}؛ فایل جدیدی برای شما ارسال شده است.",
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+
+        prepare_sms_delivery_snapshot(notification, delivery)
+        delivery.refresh_from_db()
+
+        self.assertEqual(delivery.template_id, global_template.pk)
+        self.assertNotEqual(delivery.template_id, step_template.pk)
+        self.assertEqual(
+            delivery.rendered_message,
+            "فایل جدید\\nسلام sms-recipient؛ فایل جدیدی برای شما ارسال شده است.",
+        )
+
     def test_user_preference_must_be_enabled(self):
         UserPreference.objects.filter(user=self.user).update(sms_notifications_enabled=False)
         self.assertEqual(
