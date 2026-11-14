@@ -201,20 +201,24 @@ class UserContactMethod(models.Model):
                 .first()
             )
             if previous_value is not None and previous_value != self.value:
-                manually_verified = (
-                    self.is_verified
-                    and self.verification_method == self.VerificationMethod.MANUAL
-                    and self.verified_by_id is not None
-                )
-                if not manually_verified:
-                    self.is_verified = False
-                    self.verification_method = ""
-                    self.verified_at = None
-                    self.verified_by = None
-                    self.verification_code_hash = ""
-                    self.verification_expires_at = None
-                    self.verification_sent_at = None
-                    self.verification_attempts = 0
+                # Verification belongs to the exact phone number, never
+                # to the contact record. A number change always requires a
+                # fresh verification, including manually verified contacts.
+                self.is_verified = False
+                self.verification_method = ""
+                self.verified_at = None
+                self.verified_by = None
+                self.verification_code_hash = ""
+                self.verification_expires_at = None
+                self.verification_sent_at = None
+                self.verification_attempts = 0
+                if kwargs.get("update_fields") is not None:
+                    kwargs["update_fields"] = set(kwargs["update_fields"]) | {
+                        "value", "is_verified", "verification_method",
+                        "verified_at", "verified_by", "verification_code_hash",
+                        "verification_expires_at", "verification_sent_at",
+                        "verification_attempts", "updated_at",
+                    }
 
         if self.is_verified and self.verified_at is None:
             self.verified_at = timezone.now()
