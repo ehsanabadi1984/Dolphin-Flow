@@ -1,6 +1,10 @@
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
+from django.db import close_old_connections
+from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 from django.urls import reverse
 
 from .models import User, UserPreference
@@ -338,3 +342,46 @@ class UserSMSSettingsTests(TestCase):
 
         self.assertEqual(SMSVerificationRequest.objects.count(), 2)
         self.assertEqual(provider.return_value.send.call_count, 2)
+
+
+class ConcurrentSMSQuotaTests(TransactionTestCase):
+    reset_sequences = True
+
+    @skipUnlessDBFeature("has_select_for_update")
+    @patch("accounts.services.import_string")
+    @patch("accounts.services.OTP_DAILY_PHONE_LIMIT", 1)
+    def test_concurrent_requests_cannot_exceed_phone_quota(self, mock_import_string):
+        from django.core.exceptions import ValidationError
+        from accounts.models import SMSVerificationRequest
+        from accounts.services import request_sms_verification
+
+        provider = MagicMock()
+        provider.return_value.send.return_value = {"id": 9001, "status": 0}
+        mock_import_string.return_value = provider
+        users = [
+            User.objects.create_user(username="parallel-sms-one", password="test"),
+            User.objects.create_user(username="parallel-sms-two", password="test"),
+        ]
+        WorkflowSMSSettings.objects.get_or_create(pk=1, defaults={"is_enabled": True})
+        WorkflowSMSSettings.objects.filter(pk=1).update(is_enabled=True)
+        barrier = Barrier(2)
+
+        def request_for_user(user_id):
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                user = User.objects.get(pk=user_id)
+                try:
+                    request_sms_verification(user, "989129999999")
+                    return "accepted"
+                except ValidationError:
+                    return "limited"
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(request_for_user, [user.pk for user in users]))
+
+        self.assertCountEqual(outcomes, ["accepted", "limited"])
+        self.assertEqual(SMSVerificationRequest.objects.count(), 1)
+        provider.return_value.send.assert_called_once()
