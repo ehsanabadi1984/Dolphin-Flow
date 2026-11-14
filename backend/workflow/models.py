@@ -1198,6 +1198,11 @@ class WorkflowSMSSettings(models.Model):
         default=False,
         verbose_name="ارسال پیامک فعال باشد",
     )
+    sms_verification_template = models.TextField(
+        default="کد تأیید شماره موبایل شما در Dolphin-Flow: {{ code }}",
+        verbose_name="متن پیامک تأیید شماره موبایل",
+        help_text="متغیر الزامی و ثابت: {{ code }}",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
