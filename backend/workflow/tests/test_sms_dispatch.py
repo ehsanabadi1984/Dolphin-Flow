@@ -64,6 +64,47 @@ class SMSDispatchTests(TestCase):
         )
         self.assertEqual(source, "TEMPLATE")
 
+    def test_global_sms_template_is_used_when_step_specific_template_is_missing(self):
+        template = SMSTemplate.objects.create(
+            step=None,
+            notification_type=self.notification.notification_type,
+            body_template="عمومی: {{ title }}",
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=self.notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+
+        prepare_sms_delivery_snapshot(self.notification, delivery)
+
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.template_id, template.pk)
+        self.assertEqual(delivery.rendered_message, "عمومی: اقدام لازم")
+        self.assertEqual(delivery.message_source, "TEMPLATE")
+
+    def test_step_specific_sms_template_overrides_global_template(self):
+        global_template = SMSTemplate.objects.create(
+            step=None,
+            notification_type=self.notification.notification_type,
+            body_template="عمومی: {{ title }}",
+        )
+        specific_template = SMSTemplate.objects.create(
+            step=self.step,
+            notification_type=self.notification.notification_type,
+            body_template="اختصاصی: {{ title }}",
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=self.notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+
+        prepare_sms_delivery_snapshot(self.notification, delivery)
+
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.template_id, specific_template.pk)
+        self.assertEqual(delivery.rendered_message, "اختصاصی: اقدام لازم")
+        self.assertNotEqual(delivery.template_id, global_template.pk)
+
     def test_sms_template_rejects_unapproved_variables_filters_and_tags(self):
         invalid_sources = (
             "{{ recipient.password }}",
