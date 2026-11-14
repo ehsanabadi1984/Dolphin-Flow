@@ -293,7 +293,16 @@ def _build_sms_content(notification, template=None):
         )
         source = "NOTIFICATION"
 
-    return message, source
+    max_segments = max(1, settings.SMS_MAX_SEGMENTS)
+    if _message_parts(message) <= max_segments:
+        return message, source
+
+    fallback = settings.SMS_FALLBACK_MESSAGE.strip()
+    if not fallback or _message_parts(fallback) > max_segments:
+        raise ValueError(
+            "Configured SMS fallback message is empty or exceeds SMS_MAX_SEGMENTS."
+        )
+    return fallback, "LENGTH_FALLBACK"
 
 
 def build_sms_message(notification):
