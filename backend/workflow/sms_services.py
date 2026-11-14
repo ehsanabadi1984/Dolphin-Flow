@@ -209,6 +209,12 @@ def validate_sms_template_source(source):
     if not isinstance(source, str) or not source.strip():
         raise ValueError("SMS template cannot be empty.")
 
+    # Django's template parser treats some unclosed delimiters as plain
+    # text, so reject unbalanced template markers before compiling.
+    for opening, closing in (("{{", "}}"), ("{%", "%}"), ("{#", "#}")):
+        if source.count(opening) != source.count(closing):
+            raise ValueError("SMS template syntax is invalid.")
+
     try:
         compiled = Engine(autoescape=False).from_string(source)
     except TemplateSyntaxError as exc:
