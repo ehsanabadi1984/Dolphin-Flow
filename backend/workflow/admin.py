@@ -1183,12 +1183,23 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
     def _handle_provider_action(self, request, obj):
         action = (
             "test" if "_test_connection" in request.POST else
-            "activate" if "_activate_provider" in request.POST else None
+            "activate" if "_activate_provider" in request.POST else
+            "deactivate" if "_deactivate_provider" in request.POST else None
         )
         if not action:
             return False
         try:
             provider = SMSProviderConfiguration.objects.get(code="magfa")
+            if action == "deactivate":
+                provider.is_active = False
+                provider.save(update_fields=("is_active", "updated_at"))
+                WorkflowSMSSettings.objects.filter(pk=1).update(is_enabled=False)
+                messages.success(
+                    request,
+                    "اپراتور مگفا و ارسال سراسری پیامک غیرفعال شدند.",
+                )
+                return True
+
             revision = provider.revisions.filter(is_current=True).first()
             if revision is None:
                 raise ValueError("تنظیمات مگفا ثبت نشده است.")
