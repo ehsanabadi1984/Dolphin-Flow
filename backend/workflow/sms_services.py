@@ -265,10 +265,37 @@ def sms_template_context(notification):
     }
 
 
+def resolve_sms_notification_type(notification):
+    """Use STEP_ENTERED rules/templates for notifications created on real step entry.
+
+    The inbox keeps its ACTION_REQUIRED notification semantics; SMS configuration
+    can independently target the STEP_ENTERED event for the destination step.
+    """
+    if notification.notification_type != Notification.NotificationType.ACTION_REQUIRED:
+        return notification.notification_type
+
+    if not (
+        notification.workflow_instance_id
+        and notification.workflow_step_id
+        and notification.transition_execution_id
+    ):
+        return notification.notification_type
+
+    transition = notification.transition_execution.transition
+    if (
+        transition
+        and transition.to_step_id == notification.workflow_step_id
+        and notification.workflow_instance.current_step_id == notification.workflow_step_id
+    ):
+        return Notification.NotificationType.STEP_ENTERED
+
+    return notification.notification_type
+
+
 def _build_sms_content(notification, template=None):
     if template is not None:
         context = sms_template_context(notification)
-        allowed_variables = SMS_TEMPLATE_VARIABLES_BY_TYPE.get(notification.notification_type, ())
+        allowed_variables = SMS_TEMPLATE_VARIABLES_BY_TYPE.get(resolve_sms_notification_type(notification), ())
         body_source = template.body_template.strip() if template.body_template else (notification.message or "")
         if template.legacy_format:
             message = validate_sms_template_source(body_source, allowed_variables).render(Context(context)).strip()
@@ -514,7 +541,7 @@ class SMSDispatcher:
 
         step = resolve_notification_step(notification)
         if not step:
-            return "مرحله مبدأ برای ارزیابی قانون پیامک مشخص نیست.", None
+            return "مرحله مرتبط با اعلان برای ارزیابی قانون پیامک مشخص نیست.", None
 
         enabled = WorkflowStepSMSRule.objects.filter(
             step=step,
