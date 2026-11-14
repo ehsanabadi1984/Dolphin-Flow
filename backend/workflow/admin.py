@@ -1305,7 +1305,7 @@ class SMSTemplateAdmin(admin.ModelAdmin):
                 "title": "عنوان نمونه اعلان",
                 "message": "این یک متن نمونه برای بررسی خروجی قالب پیامک است.",
             })).strip()
-        except (ValueError, Exception):
+        except Exception:
             return "قالب معتبر نیست؛ ابتدا خطاهای نحوی و متغیرهای مجاز را اصلاح کنید."
         if not rendered:
             return "خروجی قالب خالی است."
