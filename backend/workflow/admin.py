@@ -1545,7 +1545,7 @@ class SMSTemplateAdmin(admin.ModelAdmin):
         )
         try:
             rendered, _ = _build_sms_content(sample_notification, obj)
-        except (TypeError, ValueError, TemplateSyntaxError) as exc:
+        except Exception as exc:
             return format_html(
                 '<span style="color:#b45309;">خطای قالب: {}</span>',
                 str(exc),
