@@ -299,6 +299,12 @@ def prepare_sms_delivery_snapshot(notification, delivery):
                 notification_type=notification.notification_type,
                 is_active=True,
             ).first()
+        if template is None:
+            template = SMSTemplate.objects.filter(
+                step__isnull=True,
+                notification_type=notification.notification_type,
+                is_active=True,
+            ).first()
 
         message, source = _build_sms_content(notification, template)
         if not message.strip():
