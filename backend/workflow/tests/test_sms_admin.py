@@ -384,24 +384,27 @@ class SMSTemplateAdminPreviewTests(SimpleTestCase):
         self.assertIn("همه مراحل", form.fields["step"].help_text)
         self.assertIn("اولویت", form.fields["step"].help_text)
 
-    def test_template_form_explains_only_supported_variables(self):
+    def test_template_form_exposes_separate_title_and_body_with_variable_picker_data(self):
         form = SMSTemplateAdminForm()
-        help_text = form.fields["body_template"].help_text
-
-        self.assertIn("{{ title }}", help_text)
-        self.assertIn("{{ message }}", help_text)
-        self.assertIn("فیلتر", help_text)
+        self.assertIn("title_template", form.fields)
+        self.assertIn("body_template", form.fields)
+        self.assertFalse(form.fields["title_template"].required)
+        payload = form.fields["body_template"].widget.attrs["data-sms-variables"]
+        self.assertIn("workflow_number", payload)
+        self.assertIn("step_name", payload)
+        self.assertIn("متن پیامک", form.fields["body_template"].label)
 
     def test_template_preview_renders_safe_sample_content(self):
         model_admin = dolphin_admin_site._registry[SMSTemplate]
         template = SMSTemplate(
-            body_template="عنوان: {{ title }}\n{{ message }}"
+            title_template="فرآیند {{ workflow_number }}",
+            body_template="سلام {{ recipient_name }}",
         )
 
         preview = str(model_admin.template_preview(template))
 
-        self.assertIn("عنوان نمونه اعلان", preview)
-        self.assertIn("متن نمونه", preview)
+        self.assertIn("فرآیند 123", preview)
+        self.assertIn("کاربر نمونه", preview)
         self.assertIn("<pre", preview)
 
     def test_invalid_template_preview_shows_guidance_instead_of_crashing(self):
