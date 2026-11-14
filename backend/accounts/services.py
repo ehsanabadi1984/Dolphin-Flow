@@ -117,7 +117,7 @@ def request_sms_verification(user, phone_number):
         provider, provider_revision = get_active_provider()
         provider.send(
             recipient=phone_number,
-            message=f"کد تأیید شماره موبایل شما در Dolphin-Flow: {code}",
+            message=sms_settings.sms_verification_template.replace("{{ code }}", code),
             uid=secrets.randbelow(2_000_000_000) + 1,
         )
     except Exception as exc:
