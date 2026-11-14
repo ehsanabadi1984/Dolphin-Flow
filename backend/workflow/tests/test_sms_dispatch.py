@@ -370,6 +370,21 @@ class SMSDispatchTests(TestCase):
         self.assertEqual(reason, "")
         self.assertEqual(contact.pk, self.contact.pk)
 
+        template = SMSTemplate.objects.create(
+            step=self.step,
+            notification_type=Notification.NotificationType.STEP_ENTERED,
+            title_template="ورود به مرحله",
+            body_template="{{ step_name }}",
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+        prepare_sms_delivery_snapshot(notification, delivery)
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.template_id, template.pk)
+        self.assertEqual(delivery.rendered_message, "ورود به مرحله\nDynamic step")
+
     def test_user_preference_must_be_enabled(self):
         UserPreference.objects.filter(user=self.user).update(sms_notifications_enabled=False)
         self.assertEqual(
