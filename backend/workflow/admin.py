@@ -1346,6 +1346,24 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
 
 
 
+class SMSTemplateScopeFilter(admin.SimpleListFilter):
+    title = "دامنه قالب"
+    parameter_name = "template_scope"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("global", "قالب عمومی (همه مراحل)"),
+            ("step", "قالب اختصاصی مرحله"),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == "global":
+            return queryset.filter(step__isnull=True)
+        if self.value() == "step":
+            return queryset.filter(step__isnull=False)
+        return queryset
+
+
 class SMSTemplateAdminForm(forms.ModelForm):
     class Meta:
         model = SMSTemplate
@@ -1355,13 +1373,38 @@ class SMSTemplateAdminForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["step"].required = False
         self.fields["step"].help_text = (
-            "در صورت خالی‌بودن، این قالب برای همه مراحلِ همین نوع اعلان استفاده می‌شود؛ "
-            "قالب اختصاصی هر مرحله بر این قالب عمومی اولویت دارد."
+            "برای ساخت قالب عمومی، مرحله را خالی بگذارید. "
+            "قالب اختصاصی هر مرحله بر قالب عمومی همان نوع اعلان اولویت دارد. "
+            "برای جلوگیری از تداخل، برای هر دامنه و نوع اعلان فقط یک قالب ثبت می‌شود؛ "
+            "قالب موجود را ویرایش کنید."
         )
         self.fields["body_template"].help_text = (
             "متغیرهای مجاز: {{ title }} برای عنوان اعلان و {{ message }} برای متن اعلان. "
             "از فیلتر، شرط، حلقه یا متغیر دیگری نمی‌توان استفاده کرد."
         )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        notification_type = cleaned_data.get("notification_type")
+        if notification_type and "step" in cleaned_data:
+            existing = SMSTemplate.objects.filter(
+                notification_type=notification_type,
+                step=cleaned_data.get("step"),
+            )
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            if existing.exists():
+                scope = (
+                    "قالب عمومی همه مراحل"
+                    if cleaned_data.get("step") is None
+                    else f"مرحله «{cleaned_data['step']}»"
+                )
+                self.add_error(
+                    "notification_type",
+                    f"برای {scope} و این نوع اعلان، قالبی از قبل ثبت شده است. "
+                    "قالب موجود را ویرایش کنید یا دامنه دیگری انتخاب کنید.",
+                )
+        return cleaned_data
 
 
 @admin.register(SMSTemplate, site=dolphin_admin_site)
@@ -1369,9 +1412,27 @@ class SMSTemplateAdmin(admin.ModelAdmin):
     form = SMSTemplateAdminForm
     admin_category = "communications"
     admin_section = "notification"
-    list_display = ("step_display", "notification_type", "is_active", "updated_at")
-    list_filter = ("is_active", "notification_type", "step__workflow")
-    search_fields = ("step__name", "step__workflow__name", "body_template")
+    list_display = (
+        "scope_display",
+        "workflow_display",
+        "step_display",
+        "notification_type",
+        "is_active",
+        "updated_at",
+    )
+    list_filter = (
+        "is_active",
+        "notification_type",
+        SMSTemplateScopeFilter,
+        "step__workflow",
+    )
+    search_fields = (
+        "step__name",
+        "step__workflow__name",
+        "body_template",
+    )
+    autocomplete_fields = ("step",)
+    list_select_related = ("step", "step__workflow")
     fields = (
         "step",
         "notification_type",
@@ -1391,9 +1452,17 @@ class SMSTemplateAdmin(admin.ModelAdmin):
         "updated_at",
     )
 
-    @admin.display(description="مرحله")
+    @admin.display(description="نوع قالب")
+    def scope_display(self, obj):
+        return "عمومی" if obj.step_id is None else "اختصاصی مرحله"
+
+    @admin.display(description="فرآیند", ordering="step__workflow__name")
+    def workflow_display(self, obj):
+        return obj.step.workflow.name if obj.step_id else "همه فرآیندها"
+
+    @admin.display(description="مرحله", ordering="step__name")
     def step_display(self, obj):
-        return obj.step if obj.step_id else "همه مراحل"
+        return obj.step.name if obj.step_id else "همه مراحل"
 
     @admin.display(description="پیش‌نمایش نمونه پیام")
     def template_preview(self, obj):
