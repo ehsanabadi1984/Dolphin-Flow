@@ -153,7 +153,7 @@ class SMSDispatchTests(TestCase):
         )
         prepare_sms_delivery_snapshot(self.notification, delivery)
         delivery.refresh_from_db()
-        self.assertEqual(delivery.rendered_message, "اقدام لازم\\nلطفاً فرآیند را بررسی کنید.")
+        self.assertEqual(delivery.rendered_message, "اقدام لازم\nلطفاً فرآیند را بررسی کنید.")
 
     def test_delivery_snapshot_keeps_rendered_template_message(self):
         SMSTemplate.objects.create(
