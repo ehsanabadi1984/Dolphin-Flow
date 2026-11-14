@@ -1096,7 +1096,7 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         ),
         (
             "وضعیت اپراتور",
-            {"fields": ("provider_status", "provider_revision", "global_sms_status", "delivery_overview", "latest_delivery_status")},
+            {"fields": ("provider_status", "provider_revision", "global_sms_status", "last_connection_test_result", "last_connection_test_message", "delivery_overview", "latest_delivery_status")},
         ),
         (
             "اطلاعات اتصال مگفا",
@@ -1117,7 +1117,7 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         ),
         ("اطلاعات ثبت", {"fields": ("updated_at",)}),
     )
-    readonly_fields = ("provider_status", "provider_revision", "global_sms_status", "delivery_overview", "latest_delivery_status", "updated_at")
+    readonly_fields = ("provider_status", "provider_revision", "global_sms_status", "last_connection_test_result", "last_connection_test_message", "delivery_overview", "latest_delivery_status", "updated_at")
 
     def get_queryset(self, request):
         return super().get_queryset(request).filter(pk=1)
@@ -1151,6 +1151,25 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
     def global_sms_status(self, obj):
         enabled = bool(obj and obj.is_enabled)
         return "فعال" if enabled else "غیرفعال"
+
+    @admin.display(description="آخرین آزمایش اتصال")
+    def last_connection_test_result(self, obj):
+        provider = SMSProviderConfiguration.objects.filter(code="magfa").first()
+        if not provider or provider.last_connection_test_success is None:
+            return "هنوز آزمایش اتصالی ثبت نشده است."
+        result = "موفق" if provider.last_connection_test_success else "ناموفق"
+        if provider.last_connection_test_at:
+            result += " — " + timezone.localtime(
+                provider.last_connection_test_at
+            ).strftime("%Y-%m-%d %H:%M")
+        return result
+
+    @admin.display(description="توضیح نتیجه آخرین آزمایش")
+    def last_connection_test_message(self, obj):
+        provider = SMSProviderConfiguration.objects.filter(code="magfa").first()
+        if not provider or not provider.last_connection_test_message:
+            return "توضیحی ثبت نشده است."
+        return provider.last_connection_test_message
 
     @admin.display(description="خلاصه وضعیت ارسال‌ها")
     def delivery_overview(self, obj):
@@ -1222,6 +1241,7 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         )
         if not action:
             return False
+        provider = None
         try:
             provider = SMSProviderConfiguration.objects.get(code="magfa")
             if action == "deactivate":
@@ -1239,6 +1259,17 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
                 raise ValueError("تنظیمات مگفا ثبت نشده است.")
             adapter = build_provider(revision)
             adapter.test_connection()
+            provider.last_connection_test_at = timezone.now()
+            provider.last_connection_test_success = True
+            provider.last_connection_test_message = (
+                "اتصال برقرار شد و سرویس موجودی با موفقیت پاسخ داد."
+            )
+            provider.save(update_fields=(
+                "last_connection_test_at",
+                "last_connection_test_success",
+                "last_connection_test_message",
+                "updated_at",
+            ))
             if action == "activate":
                 activate_provider(provider)
                 if getattr(obj, "_requested_sms_enabled", False):
@@ -1251,7 +1282,27 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
                     request,
                     "اتصال مگفا موفق بود. وضعیت فعال‌سازی اپراتور تغییری نکرد.",
                 )
-        except Exception:
+        except Exception as exc:
+            if provider is not None:
+                if isinstance(exc, TimeoutError):
+                    safe_error = "مهلت اتصال به پایان رسید."
+                elif isinstance(exc, (ConnectionError, OSError)):
+                    safe_error = "برقراری ارتباط با سرویس‌دهنده ممکن نشد."
+                elif isinstance(exc, ValueError):
+                    safe_error = "پیکربندی اتصال معتبر نیست."
+                else:
+                    safe_error = (
+                        "آزمایش اتصال ناموفق بود؛ تنظیمات و دسترسی سرویس را بررسی کنید."
+                    )
+                provider.last_connection_test_at = timezone.now()
+                provider.last_connection_test_success = False
+                provider.last_connection_test_message = safe_error
+                provider.save(update_fields=(
+                    "last_connection_test_at",
+                    "last_connection_test_success",
+                    "last_connection_test_message",
+                    "updated_at",
+                ))
             if not SMSProviderConfiguration.objects.filter(
                 is_active=True
             ).exists():
