@@ -968,6 +968,7 @@ class WorkflowSMSSettingsAdminForm(forms.ModelForm):
         self._sms_existing_revision = revision
         self._sms_existing_credentials = {}
         self._sms_existing_options = {}
+        self._sms_credentials_decryption_failed = False
         if revision:
             from .sms_security import decrypt_credentials
             try:
@@ -975,8 +976,9 @@ class WorkflowSMSSettingsAdminForm(forms.ModelForm):
                     revision.credentials_ciphertext
                 )
             except Exception:
-                # Allow an administrator to replace credentials if the key was
-                # rotated or is unavailable; never expose ciphertext or secrets.
+                # Do not silently rotate keys: historical deliveries may still
+                # depend on this revision. Restore the original key first.
+                self._sms_credentials_decryption_failed = True
                 self._sms_existing_credentials = {}
             self._sms_existing_options = revision.connection_options or {}
 
@@ -1019,18 +1021,25 @@ class WorkflowSMSSettingsAdminForm(forms.ModelForm):
                 self._sms_existing_options.get("timeout") or 10
             ),
         }
+        submitted_credentials = any(
+            cleaned.get(field)
+            for field in (
+                "provider_username",
+                "provider_password",
+                "provider_domain",
+                "provider_sender",
+            )
+        )
+        if self._sms_credentials_decryption_failed and (
+            submitted_credentials or cleaned.get("is_enabled")
+        ):
+            raise forms.ValidationError(
+                "کلید رمزنگاری با تنظیمات ذخیره‌شده سازگار نیست. برای جلوگیری از قطع دسترسی به سوابق ارسال، کلید اصلی را در محیط امن سرور بازیابی کنید."
+            )
+
         required = ("username", "password", "domain", "sender")
         missing = [key for key in required if not credentials.get(key)]
         if missing:
-            submitted_credentials = any(
-                cleaned.get(field)
-                for field in (
-                    "provider_username",
-                    "provider_password",
-                    "provider_domain",
-                    "provider_sender",
-                )
-            )
             if not cleaned.get("is_enabled") and not submitted_credentials:
                 self._sms_credentials = None
                 self._sms_connection_options = None
