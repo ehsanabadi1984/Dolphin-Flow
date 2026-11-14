@@ -1046,6 +1046,16 @@ class WorkflowSMSSettingsAdminForm(forms.ModelForm):
             credentials != self._sms_existing_credentials or
             options != self._sms_existing_options
         )
+        if cleaned.get("is_enabled"):
+            provider = SMSProviderConfiguration.objects.filter(code="magfa").first()
+            provider_will_be_activated = (
+                "_activate_provider" in self.data
+                or bool(provider and provider.is_active and not self._sms_new_revision)
+            )
+            if not provider_will_be_activated:
+                raise forms.ValidationError(
+                    "برای فعال‌کردن ارسال سراسری، ابتدا اتصال مگفا را آزمایش و اپراتور را فعال کنید."
+                )
         return cleaned
 
 
@@ -1114,6 +1124,15 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         provider = register_provider(code="magfa", name="مگفا")
         if form._sms_new_revision:
+            if provider.is_active:
+                provider.is_active = False
+                provider.save(update_fields=("is_active", "updated_at"))
+                obj.is_enabled = False
+                obj.save(update_fields=("is_enabled", "updated_at"))
+                messages.warning(
+                    request,
+                    "تنظیمات اتصال تغییر کرد؛ برای جلوگیری از ارسال با اعتبارنامه آزمایش‌نشده، اپراتور و ارسال سراسری غیرفعال شدند.",
+                )
             create_provider_revision(
                 provider,
                 credentials=form._sms_credentials,
