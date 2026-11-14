@@ -1,6 +1,6 @@
 from django import forms
-from django.contrib import admin
-from django.http import JsonResponse
+from django.contrib import admin, messages
+from django.http import JsonResponse, HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.contrib.admin import AdminSite
@@ -16,12 +16,22 @@ from django.core.exceptions import PermissionDenied
 import json
 
 from .form_workspace import get_valid_parent_group_queryset
+from .sms_provider_registry import (
+    activate_provider,
+    build_provider,
+    create_provider_revision,
+    register_provider,
+)
+
 from .models import (
     Workflow,
     WorkflowMembership,
     WorkflowStep,
     WorkflowStepSMSRule,
     WorkflowSMSSettings,
+    SMSProviderConfiguration,
+    SMSProviderConfigRevision,
+    SMSTemplate,
     SMSDelivery,
     WorkflowStepExecution,
     WorkflowInstance,
@@ -919,13 +929,142 @@ class WorkflowStepAdmin(admin.ModelAdmin):
 
 
 
+class WorkflowSMSSettingsAdminForm(forms.ModelForm):
+    provider_username = forms.CharField(
+        label="نام کاربری مگفا", required=False, max_length=255,
+    )
+    provider_password = forms.CharField(
+        label="رمز عبور مگفا", required=False,
+        widget=forms.PasswordInput(
+            render_value=False,
+            attrs={"autocomplete": "new-password"},
+        ),
+        help_text="برای حفظ رمز فعلی، این فیلد را خالی بگذارید.",
+    )
+    provider_domain = forms.CharField(
+        label="دامنه مگفا", required=False, max_length=255,
+    )
+    provider_sender = forms.CharField(
+        label="شماره فرستنده", required=False, max_length=255,
+    )
+    provider_api_base_url = forms.URLField(
+        label="آدرس API", required=False,
+    )
+    provider_timeout = forms.IntegerField(
+        label="مهلت اتصال (ثانیه)", required=False, min_value=1,
+    )
+
+    class Meta:
+        model = WorkflowSMSSettings
+        fields = ("is_enabled",)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        provider = SMSProviderConfiguration.objects.filter(code="magfa").first()
+        revision = (
+            provider.revisions.filter(is_current=True).first()
+            if provider else None
+        )
+        self._sms_existing_revision = revision
+        self._sms_existing_credentials = {}
+        self._sms_existing_options = {}
+        if revision:
+            from .sms_security import decrypt_credentials
+            self._sms_existing_credentials = decrypt_credentials(
+                revision.credentials_ciphertext
+            )
+            self._sms_existing_options = revision.connection_options or {}
+
+        for field, key in (
+            ("provider_username", "username"),
+            ("provider_domain", "domain"),
+            ("provider_sender", "sender"),
+        ):
+            self.fields[field].initial = self._sms_existing_credentials.get(key, "")
+        self.fields["provider_api_base_url"].initial = (
+            self._sms_existing_options.get("base_url") or
+            getattr(__import__("django.conf", fromlist=["settings"]).settings,
+                    "MAGFA_API_BASE_URL", "")
+        )
+        self.fields["provider_timeout"].initial = (
+            self._sms_existing_options.get("timeout") or
+            getattr(__import__("django.conf", fromlist=["settings"]).settings,
+                    "MAGFA_TIMEOUT", 10)
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        credentials = dict(self._sms_existing_credentials)
+        for field, key in (
+            ("provider_username", "username"),
+            ("provider_password", "password"),
+            ("provider_domain", "domain"),
+            ("provider_sender", "sender"),
+        ):
+            value = cleaned.get(field)
+            if value:
+                credentials[key] = value
+
+        options = {
+            "base_url": (
+                cleaned.get("provider_api_base_url") or
+                self._sms_existing_options.get("base_url") or
+                "https://sms.magfa.com/api/http/sms/v2"
+            ),
+            "timeout": (
+                cleaned.get("provider_timeout") or
+                self._sms_existing_options.get("timeout") or 10
+            ),
+        }
+        required = ("username", "password", "domain", "sender")
+        missing = [key for key in required if not credentials.get(key)]
+        if missing:
+            raise forms.ValidationError(
+                "برای راه‌اندازی مگفا، نام کاربری، رمز عبور، دامنه و شماره فرستنده الزامی است."
+            )
+
+        from .sms_services import MagfaSMSProvider
+        from .sms_security import encrypt_credentials
+        try:
+            MagfaSMSProvider(
+                credentials=credentials, options=options,
+            ).validate_configuration()
+            encrypt_credentials(credentials)
+        except Exception as exc:
+            raise forms.ValidationError(
+                "تنظیمات اتصال مگفا یا کلید رمزنگاری معتبر نیست. تنظیمات محیط امن سرور را بررسی کنید."
+            ) from exc
+
+        self._sms_credentials = credentials
+        self._sms_connection_options = options
+        self._sms_new_revision = (
+            self._sms_existing_revision is None or
+            credentials != self._sms_existing_credentials or
+            options != self._sms_existing_options
+        )
+        return cleaned
+
+
 @admin.register(WorkflowSMSSettings, site=dolphin_admin_site)
 class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
+    form = WorkflowSMSSettingsAdminForm
+    change_form_template = "admin/workflow/workflowsmssettings/change_form.html"
     admin_category = "communications"
     admin_section = "notification"
     list_display = ("is_enabled", "updated_at")
-    fields = ("is_enabled", "updated_at")
-    readonly_fields = ("updated_at",)
+    fields = (
+        "is_enabled",
+        "provider_status",
+        "provider_revision",
+        "provider_username",
+        "provider_password",
+        "provider_domain",
+        "provider_sender",
+        "provider_api_base_url",
+        "provider_timeout",
+        "updated_at",
+    )
+    readonly_fields = ("provider_status", "provider_revision", "updated_at")
 
     def get_queryset(self, request):
         return super().get_queryset(request).filter(pk=1)
@@ -937,7 +1076,10 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
         return request.user.is_active and request.user.is_superuser
 
     def has_add_permission(self, request):
-        return request.user.is_active and request.user.is_superuser and not WorkflowSMSSettings.objects.exists()
+        return (
+            request.user.is_active and request.user.is_superuser
+            and not WorkflowSMSSettings.objects.exists()
+        )
 
     def has_change_permission(self, request, obj=None):
         return request.user.is_active and request.user.is_superuser
@@ -945,11 +1087,85 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    @admin.display(description="وضعیت اپراتور")
+    def provider_status(self, obj):
+        provider = SMSProviderConfiguration.objects.filter(code="magfa").first()
+        if not provider:
+            return "مگفا هنوز پیکربندی نشده است."
+        return "فعال" if provider.is_active else "غیرفعال"
+
+    @admin.display(description="نسخه تنظیمات")
+    def provider_revision(self, obj):
+        provider = SMSProviderConfiguration.objects.filter(code="magfa").first()
+        revision = (
+            provider.revisions.filter(is_current=True).first()
+            if provider else None
+        )
+        return f"نسخه {revision.version}" if revision else "ثبت نشده"
+
     def save_model(self, request, obj, form, change):
         if not request.user.is_superuser:
             raise PermissionDenied
         obj.pk = 1
         super().save_model(request, obj, form, change)
+        provider = register_provider(code="magfa", name="مگفا")
+        if form._sms_new_revision:
+            create_provider_revision(
+                provider,
+                credentials=form._sms_credentials,
+                connection_options=form._sms_connection_options,
+                created_by=request.user,
+            )
+
+    def _handle_provider_action(self, request, obj):
+        action = (
+            "test" if "_test_connection" in request.POST else
+            "activate" if "_activate_provider" in request.POST else None
+        )
+        if not action:
+            return False
+        try:
+            provider = SMSProviderConfiguration.objects.get(code="magfa")
+            revision = provider.revisions.filter(is_current=True).first()
+            if revision is None:
+                raise ValueError("تنظیمات مگفا ثبت نشده است.")
+            adapter = build_provider(revision)
+            adapter.test_connection()
+            if action == "activate":
+                activate_provider(provider)
+                messages.success(request, "اتصال مگفا موفق بود و اپراتور فعال شد.")
+            else:
+                messages.success(
+                    request,
+                    "اتصال مگفا موفق بود. وضعیت فعال‌سازی اپراتور تغییری نکرد.",
+                )
+        except Exception:
+            messages.error(
+                request,
+                "آزمایش اتصال مگفا ناموفق بود. اپراتور فعال نشد؛ اطلاعات اتصال و دسترسی API را بررسی کنید.",
+            )
+        return True
+
+    def response_change(self, request, obj):
+        if self._handle_provider_action(request, obj):
+            return HttpResponseRedirect(
+                reverse(
+                    "dolphin_admin:workflow_workflowsmssettings_change",
+                    args=(obj.pk,),
+                )
+            )
+        return super().response_change(request, obj)
+
+    def response_add(self, request, obj, post_url_continue=None):
+        if self._handle_provider_action(request, obj):
+            return HttpResponseRedirect(
+                reverse(
+                    "dolphin_admin:workflow_workflowsmssettings_change",
+                    args=(obj.pk,),
+                )
+            )
+        return super().response_add(request, obj, post_url_continue)
+
 
 
 @admin.register(SMSDelivery, site=dolphin_admin_site)
