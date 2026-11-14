@@ -8,6 +8,7 @@ from django.contrib.admin import AdminSite
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.utils import timezone
+from django.template import Context
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.contrib.contenttypes.models import ContentType
@@ -1252,8 +1253,22 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
 
 
 
+class SMSTemplateAdminForm(forms.ModelForm):
+    class Meta:
+        model = SMSTemplate
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["body_template"].help_text = (
+            "متغیرهای مجاز: {{ title }} برای عنوان اعلان و {{ message }} برای متن اعلان. "
+            "از فیلتر، شرط، حلقه یا متغیر دیگری نمی‌توان استفاده کرد."
+        )
+
+
 @admin.register(SMSTemplate, site=dolphin_admin_site)
 class SMSTemplateAdmin(admin.ModelAdmin):
+    form = SMSTemplateAdminForm
     admin_category = "communications"
     admin_section = "notification"
     list_display = ("step", "notification_type", "is_active", "updated_at")
@@ -1263,13 +1278,41 @@ class SMSTemplateAdmin(admin.ModelAdmin):
         "step",
         "notification_type",
         "body_template",
+        "template_preview",
         "is_active",
         "created_by",
         "updated_by",
         "created_at",
         "updated_at",
     )
-    readonly_fields = ("created_by", "updated_by", "created_at", "updated_at")
+    readonly_fields = (
+        "template_preview",
+        "created_by",
+        "updated_by",
+        "created_at",
+        "updated_at",
+    )
+
+    @admin.display(description="پیش‌نمایش نمونه پیام")
+    def template_preview(self, obj):
+        if not obj or not obj.body_template:
+            return "پس از نوشتن قالب، پیش‌نمایش نمونه در این قسمت نمایش داده می‌شود."
+        from .sms_services import validate_sms_template_source
+
+        try:
+            compiled = validate_sms_template_source(obj.body_template)
+            rendered = compiled.render(Context({
+                "title": "عنوان نمونه اعلان",
+                "message": "این یک متن نمونه برای بررسی خروجی قالب پیامک است.",
+            })).strip()
+        except (ValueError, Exception):
+            return "قالب معتبر نیست؛ ابتدا خطاهای نحوی و متغیرهای مجاز را اصلاح کنید."
+        if not rendered:
+            return "خروجی قالب خالی است."
+        return format_html(
+            '<pre style="white-space:pre-wrap;direction:rtl;margin:0;">{}</pre>',
+            rendered,
+        )
 
     def has_module_permission(self, request):
         return request.user.is_active and request.user.is_superuser
