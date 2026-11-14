@@ -1232,6 +1232,15 @@ class WorkflowSMSSettingsAdmin(admin.ModelAdmin):
                 connection_options=form._sms_connection_options,
                 created_by=request.user,
             )
+            provider.last_connection_test_at = None
+            provider.last_connection_test_success = None
+            provider.last_connection_test_message = ""
+            provider.save(update_fields=(
+                "last_connection_test_at",
+                "last_connection_test_success",
+                "last_connection_test_message",
+                "updated_at",
+            ))
 
     def _handle_provider_action(self, request, obj):
         action = (
