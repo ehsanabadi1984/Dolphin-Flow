@@ -14,6 +14,8 @@ from workflow.models import (
     WorkflowSMSSettings,
     SMSDelivery,
     SMSProviderConfiguration,
+    Workflow,
+    WorkflowStep,
 )
 from workflow.sms_provider_registry import create_provider_revision, register_provider
 
@@ -322,6 +324,57 @@ class SMSDeliveryAdminTests(SimpleTestCase):
         self.assertTrue(model_admin.has_error(delivery))
         self.assertNotIn("sensitive", str(model_admin.has_error(delivery)))
 
+
+
+class SMSTemplateAdminManagementTests(TestCase):
+    def setUp(self):
+        self.workflow = Workflow.objects.create(name="فرآیند آزمایشی قالب")
+        self.step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="مرحله آزمایشی قالب",
+            order=1,
+        )
+
+    def form_data(self, step=""):
+        return {
+            "step": step,
+            "notification_type": "ACTION_REQUIRED",
+            "body_template": "پیام {{ title }}",
+            "is_active": "on",
+        }
+
+    def test_duplicate_global_template_has_clear_form_error(self):
+        SMSTemplate.objects.create(
+            step=None,
+            notification_type="ACTION_REQUIRED",
+            body_template="قالب عمومی",
+        )
+        form = SMSTemplateAdminForm(data=self.form_data())
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("قالب عمومی همه مراحل", str(form.errors))
+        self.assertIn("قالب موجود را ویرایش کنید", str(form.errors))
+
+    def test_duplicate_step_template_has_clear_form_error(self):
+        SMSTemplate.objects.create(
+            step=self.step,
+            notification_type="ACTION_REQUIRED",
+            body_template="قالب اختصاصی",
+        )
+        form = SMSTemplateAdminForm(data=self.form_data(step=str(self.step.pk)))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn(self.step.name, str(form.errors))
+        self.assertIn("قالب موجود را ویرایش کنید", str(form.errors))
+
+    def test_template_list_exposes_scope_workflow_and_step_columns(self):
+        model_admin = dolphin_admin_site._registry[SMSTemplate]
+
+        self.assertIn("scope_display", model_admin.list_display)
+        self.assertIn("workflow_display", model_admin.list_display)
+        self.assertIn("step_display", model_admin.list_display)
+        self.assertIn("autocomplete_fields", dir(model_admin))
+        self.assertIn("step", model_admin.autocomplete_fields)
 
 
 class SMSTemplateAdminPreviewTests(SimpleTestCase):
