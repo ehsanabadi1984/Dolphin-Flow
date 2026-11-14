@@ -1155,6 +1155,16 @@ class SMSTemplate(models.Model):
             ),
         ]
 
+    def clean(self):
+        super().clean()
+        if self.body_template:
+            from .sms_services import validate_sms_template_source
+
+            try:
+                validate_sms_template_source(self.body_template)
+            except ValueError as exc:
+                raise ValidationError({"body_template": str(exc)}) from exc
+
     def __str__(self):
         return f"{self.step} · {self.get_notification_type_display()}"
 
