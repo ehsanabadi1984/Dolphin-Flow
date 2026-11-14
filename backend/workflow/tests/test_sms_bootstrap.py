@@ -87,6 +87,52 @@ class BootstrapSMSProviderCommandTests(TestCase):
         )
 
     @patch("workflow.sms_services.urlopen")
+    def test_test_connection_checks_saved_revision_without_activation(self, mock_urlopen):
+        call_command("bootstrap_sms_provider")
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = (
+            b'{"status": 0, "balance": 500}'
+        )
+        mock_urlopen.return_value = response
+
+        output = StringIO()
+        call_command("bootstrap_sms_provider", test_connection=True, stdout=output)
+
+        provider = SMSProviderConfiguration.objects.get(code="magfa")
+        self.assertFalse(provider.is_active)
+        self.assertIn("connection check succeeded", output.getvalue())
+        self.assertEqual(
+            mock_urlopen.call_args.args[0].full_url,
+            f'{MAGFA_SETTINGS["MAGFA_API_BASE_URL"]}/balance',
+        )
+        self.assertEqual(mock_urlopen.call_args.args[0].get_method(), "GET")
+
+    @patch("workflow.sms_services.urlopen")
+    def test_failed_test_connection_does_not_activate_or_expose_error(self, mock_urlopen):
+        call_command("bootstrap_sms_provider")
+        mock_urlopen.side_effect = OSError("private network detail")
+
+        output = StringIO()
+        with self.assertRaises(CommandError) as error:
+            call_command(
+                "bootstrap_sms_provider",
+                test_connection=True,
+                stdout=output,
+            )
+
+        provider = SMSProviderConfiguration.objects.get(code="magfa")
+        self.assertFalse(provider.is_active)
+        self.assertIn("activation state was unchanged", str(error.exception))
+        self.assertNotIn("private network detail", str(error.exception))
+        self.assertNotIn("private network detail", output.getvalue())
+
+    def test_test_connection_requires_registered_provider(self):
+        with self.assertRaises(CommandError) as error:
+            call_command("bootstrap_sms_provider", test_connection=True)
+
+        self.assertIn("not registered", str(error.exception))
+
+    @patch("workflow.sms_services.urlopen")
     def test_failed_connection_does_not_activate_provider(self, mock_urlopen):
         mock_urlopen.side_effect = OSError("network unavailable")
 
