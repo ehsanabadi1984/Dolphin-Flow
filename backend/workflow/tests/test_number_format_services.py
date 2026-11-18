@@ -12,6 +12,7 @@ class NumberFormatServiceTests(SimpleTestCase):
     def test_preserves_small_values_and_decimal_precision(self):
         self.assertEqual(NumberFormatService.format_display("999"), "999")
         self.assertEqual(NumberFormatService.format_display("12500.750", 3), "12,500.75")
+        self.assertEqual(NumberFormatService.format_display("12500.75"), "12,500.75")
 
     def test_formats_negative_decimal_values(self):
         self.assertEqual(NumberFormatService.format_display(Decimal("-1250000.75"), 2), "-1,250,000.75")
