@@ -5,7 +5,7 @@
         return String(value ?? "").replace(/[۰-۹٠-٩]/g, digit => String(digitMap.indexOf(digit) % 10));
     }
     function normalizeNumericText(value) {
-        let normalized = normalizeDigits(value).trim().replace(/٫/g, ".").replace(/٬/g, ",");
+        let normalized = normalizeDigits(value).trim().replace(/٫/g, ".").replace(/[٬،]/g, ",");
         if (!normalized) return "";
         if (normalized.includes(",")) {
             const sign = /^[+-]/.test(normalized) ? normalized[0] : "";
@@ -22,7 +22,7 @@
         if (normalized === "") return "";
         const match = normalized.match(/^([+-]?)(\d+)(\.\d*)?$/);
         if (!match) return normalized;
-        return match[1] + match[2].replace(/\B(?=(\d{3})+(?!\d))/g, "٬") + (match[3] || "");
+        return match[1] + match[2].replace(/\B(?=(\d{3})+(?!\d))/g, "،") + (match[3] || "");
     }
     function enhanceInput(input) {
         if (!input || input.dataset.dfNumberReady === "1") return;
