@@ -28,9 +28,11 @@
         if (!input || input.dataset.dfNumberReady === "1") return;
         input.dataset.dfNumberReady = "1";
         input.addEventListener("focus", () => {
+            input.setCustomValidity("");
             const normalized = normalizeNumericText(input.value);
             if (normalized !== null) input.value = normalized;
         });
+        input.addEventListener("input", () => input.setCustomValidity(""));
         input.addEventListener("blur", () => { input.value = formatNumericText(input.value); });
         input.addEventListener("change", () => { input.value = formatNumericText(input.value); });
         input.value = formatNumericText(input.value);
@@ -59,5 +61,33 @@
         })));
         observer.observe(document.body, { childList: true, subtree: true });
     });
+
+    document.addEventListener("submit", event => {
+        const inputs = Array.from(event.target.querySelectorAll("[data-df-number-input]"));
+        let invalid = false;
+        inputs.forEach(input => {
+            const normalized = normalizeNumericText(input.value);
+            let message = "";
+            if (normalized === null) {
+                message = "مقدار این فیلد باید یک عدد معتبر باشد.";
+            } else if (normalized !== "" && input.dataset.numberStep && input.dataset.numberStep !== "any") {
+                const step = Number(input.dataset.numberStep);
+                const value = Number(normalized);
+                const base = Number(input.min || 0);
+                if (Number.isFinite(step) && step > 0 && Number.isFinite(value)) {
+                    const quotient = (value - base) / step;
+                    if (Math.abs(quotient - Math.round(quotient)) > 1e-9) {
+                        message = "عدد واردشده با گام مجاز این فیلد سازگار نیست.";
+                    }
+                }
+            }
+            input.setCustomValidity(message);
+            if (message) {
+                invalid = true;
+                input.reportValidity();
+            }
+        });
+        if (invalid) event.preventDefault();
+    }, true);
     window.DolphinFlowNumberFormat = { normalize: normalizeNumericText, format: formatNumericText };
 })();
