@@ -117,7 +117,10 @@ class DashboardEnhancementService:
 
         instances = {
             instance.pk: instance
-            for instance in [*assigned, *other_actionable]
+            for instance in [
+                *assigned_instances,
+                *other_actionable_instances,
+            ]
         }
         instances = list(instances.values())
         self.dashboard._attach_dashboard_state(instances, now=timezone.now())
