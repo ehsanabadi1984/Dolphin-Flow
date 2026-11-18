@@ -148,6 +148,16 @@ class FormulaServiceTests(SimpleTestCase):
         self.assertEqual(FormulaService._to_decimal(""), Decimal("0"))
         self.assertEqual(FormulaService._to_decimal(None), Decimal("0"))
 
+    def test_grouped_persian_numeric_values_remain_calculable(self):
+        self.assertEqual(
+            FormulaService._to_decimal("۱۱,۳۰۰,۰۰۰"),
+            Decimal("11300000"),
+        )
+        self.assertEqual(
+            FormulaService._to_decimal("-1,250,000.75"),
+            Decimal("-1250000.75"),
+        )
+
     def test_division_by_zero_is_rejected(self):
         tokens = [
             {"type": "number", "value": "10"},
