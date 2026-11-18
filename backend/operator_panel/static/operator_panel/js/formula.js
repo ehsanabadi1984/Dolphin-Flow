@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function formatNumber(value, decimalPlaces) {
         const places = Math.max(0, Math.min(Number(decimalPlaces) || 0, 6));
         if (!Number.isFinite(value)) return "";
-        return value.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places, useGrouping: true });
+        return value.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places, useGrouping: true }).replace(/,/g, "٬");
     }
 
     function getNormalFieldContainers() {
