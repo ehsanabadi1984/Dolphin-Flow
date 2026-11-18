@@ -99,10 +99,21 @@ class DashboardEnhancementService:
             .order_by("-started_at")
         )
 
-    def _next_best_actions(self):
-        """Return the most urgent actionable items without changing task rules."""
-        assigned = self.dashboard._pending_instances(assigned_only=True)
-        other_actionable = self.dashboard._pending_instances(exclude_assigned=True)
+    def _next_best_actions(
+        self,
+        *,
+        assigned_instances=None,
+        other_actionable_instances=None,
+    ):
+        """Prioritize supplied dashboard batches, fetching only missing batches."""
+        if assigned_instances is None:
+            assigned_instances = self.dashboard._pending_instances(
+                assigned_only=True,
+            )
+        if other_actionable_instances is None:
+            other_actionable_instances = self.dashboard._pending_instances(
+                exclude_assigned=True,
+            )
 
         instances = {
             instance.pk: instance
