@@ -1011,6 +1011,40 @@ class DashboardQueryVolumeTests(DashboardSidebarBase):
     """O: the dashboard request stays bounded instead of doing
     per-instance authorization queries."""
 
+    def test_dashboard_reuses_task_batches_for_priority_panel(self):
+        self.grant_role_action_permissions()
+        self.create_active_instance(started_by=self.other)
+
+        original = DashboardService._pending_instances
+        calls = []
+
+        def tracked_pending_instances(
+            service,
+            *,
+            assigned_only=False,
+            exclude_assigned=False,
+        ):
+            calls.append((assigned_only, exclude_assigned))
+            return original(
+                service,
+                assigned_only=assigned_only,
+                exclude_assigned=exclude_assigned,
+            )
+
+        with mock.patch.object(
+            DashboardService,
+            "_pending_instances",
+            tracked_pending_instances,
+        ):
+            response = self.get_client().get(
+                reverse("operator_panel:dashboard"),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        # The dashboard fetches each rendered batch once; the priority
+        # panel reuses those lists instead of issuing the same two queries.
+        self.assertEqual(calls, [(False, True), (True, False)])
+
     def test_dashboard_request_query_volume_is_bounded(self):
         self.grant_role_action_permissions()
         self.step_one.assigned_to = self.user
