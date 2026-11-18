@@ -48,6 +48,6 @@ class NumberFormatService:
                 formatted = f"{number:,.{places}f}"
             if "." in formatted:
                 formatted = formatted.rstrip("0").rstrip(".")
-            return formatted
+            return formatted.replace(",", "٬")
         except (InvalidOperation, TypeError, ValueError, ArithmeticError):
             return str(value)
