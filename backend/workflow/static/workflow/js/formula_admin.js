@@ -40,7 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!normalized) return String(value);
         const match = normalized.match(/^([+-]?)(\d+)(\.\d*)?$/);
         if (!match) return normalized;
-        return match[1] + match[2].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (match[3] || "");
+        return match[1] + match[2].replace(/\B(?=(\d{3})+(?!\d))/g, "٬") + (match[3] || "");
     }
     function tokenText(token) { if(token.type==="field"){const field=fieldOptions.find(item=>Number(item.id)===Number(token.field_id));return field?field.label:`#${token.field_id}`;} if(token.type==="number")return displayFormulaNumber(token.value); if(token.type==="function")return token.value; if(token.type==="comma")return ","; return token.value || ""; }
     function render() { expression.innerHTML=""; tokens.forEach((token,index)=>{const chip=document.createElement("span");chip.className=`df-formula-token df-formula-token-${token.type}`;chip.textContent=tokenText(token);chip.title="حذف";chip.addEventListener("click",()=>{tokens.splice(index,1);render();});expression.appendChild(chip);}); const text=tokens.map(tokenText).join(" "); preview.textContent=text?`فرمول: ${text}`:"هنوز فرمولی ساخته نشده است."; sourceField.value=JSON.stringify({version:2,tokens,decimal_places:Math.max(0,Math.min(Number(decimalField.value||0),6))}); }
