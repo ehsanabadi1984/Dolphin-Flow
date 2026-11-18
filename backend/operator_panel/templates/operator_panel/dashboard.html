@@ -59,11 +59,11 @@
 
     <section class="df-kpis">
         <a href="{% url 'operator_panel:assigned_tasks' %}" class="df-card df-kpi">
-            <div class="df-kpi-label">وظایف من</div><div class="df-kpi-value">{{ summary.tasks }}</div><div class="df-kpi-meta">وظایف فعال اختصاص‌یافته به شما</div>
+            <div class="df-kpi-label">وظایف من</div><div class="df-kpi-value" data-df-number-display>{{ summary.tasks }}</div><div class="df-kpi-meta">وظایف فعال اختصاص‌یافته به شما</div>
         </a>
-        <div class="df-card df-kpi"><div class="df-kpi-label">قابل اقدام</div><div class="df-kpi-value">{{ summary.pending }}</div><div class="df-kpi-meta">فرآیندهایی که اکنون می‌توانید روی آن‌ها اقدام کنید</div></div>
-        <div class="df-card df-kpi"><div class="df-kpi-label">نزدیک به SLA</div><div class="df-kpi-value">{{ summary.sla_warning }}</div><div class="df-kpi-meta">مواردی که به سررسید نزدیک شده‌اند</div></div>
-        <div class="df-card df-kpi"><div class="df-kpi-label">عقب‌افتاده</div><div class="df-kpi-value">{{ summary.sla_breached }}</div><div class="df-kpi-meta">مواردی که SLA آن‌ها گذشته است</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">قابل اقدام</div><div class="df-kpi-value" data-df-number-display>{{ summary.pending }}</div><div class="df-kpi-meta">فرآیندهایی که اکنون می‌توانید روی آن‌ها اقدام کنید</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">نزدیک به SLA</div><div class="df-kpi-value" data-df-number-display>{{ summary.sla_warning }}</div><div class="df-kpi-meta">مواردی که به سررسید نزدیک شده‌اند</div></div>
+        <div class="df-card df-kpi"><div class="df-kpi-label">عقب‌افتاده</div><div class="df-kpi-value" data-df-number-display>{{ summary.sla_breached }}</div><div class="df-kpi-meta">مواردی که SLA آن‌ها گذشته است</div></div>
     </section>
 
     <section class="df-card df-panel">

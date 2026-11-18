@@ -191,6 +191,16 @@ class OperatorPanelFormPostAdapter:
 
         value = OperatorPanelFormPostAdapter._value(submitted_data, key)
 
+        if field.field_type == FormField.FieldType.NUMBER:
+            from workflow.number_format_services import NumberFormatService
+
+            try:
+                return NumberFormatService.normalize(value)
+            except ValueError as exc:
+                raise ValidationError(
+                    f"مقدار فیلد «{field.label}» باید یک عدد معتبر باشد."
+                ) from exc
+
         if field.field_type == FormField.FieldType.DATE:
             try:
                 return DateFieldService.to_canonical_date(

@@ -202,20 +202,14 @@ class DynamicFormService:
                 for item in value
             ]
 
-        if field.field_type == FormField.FieldType.NUMBER:
-            try:
-                from decimal import Decimal
+        if field.field_type in {
+            FormField.FieldType.NUMBER,
+            FormField.FieldType.FORMULA,
+        }:
+            from .number_format_services import NumberFormatService
 
-                decimal_value = Decimal(str(value))
-                places = field.decimal_places
-                formatted = f"{decimal_value:.{places}f}"
-
-                if "." in formatted:
-                    formatted = formatted.rstrip("0").rstrip(".")
-
-                return formatted
-            except (ArithmeticError, ValueError, TypeError):
-                return str(value)
+            places = field.decimal_places if field.field_type == FormField.FieldType.NUMBER else None
+            return NumberFormatService.format_display(value, decimal_places=places)
 
         if field.field_type == FormField.FieldType.DATE:
             try:

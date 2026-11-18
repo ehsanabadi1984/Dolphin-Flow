@@ -193,8 +193,10 @@ class FormDraftValueValidationService:
 
     @staticmethod
     def _validate_number(*, field, value):
+        from .number_format_services import NumberFormatService
+
         try:
-            decimal_value = value if isinstance(value, Decimal) else Decimal(str(value))
+            decimal_value = Decimal(NumberFormatService.normalize(value))
         except (InvalidOperation, TypeError, ValueError):
             raise ValidationError(
                 f"مقدار فیلد «{field.label}» باید یک عدد معتبر باشد."

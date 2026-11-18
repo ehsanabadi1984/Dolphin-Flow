@@ -767,3 +767,18 @@ class FormPostAdapterTests(TestCase):
 
         self.assertEqual(payload["date"], "2026-09-27")
 
+
+
+    def test_number_fields_accept_grouped_and_persian_digits(self):
+        FormField.objects.create(section=self.section, name="Amount", code="amount", label="مبلغ", field_type=FormField.FieldType.NUMBER, order=3)
+        post = QueryDict("", mutable=True)
+        post["amount"] = "۱۱,۳۰۰,۰۰۰"
+        payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
+        self.assertEqual(payload["amount"], "11300000")
+
+    def test_repeatable_number_fields_accept_grouped_decimal_input(self):
+        FormField.objects.create(section=self.section, repeatable_group=self.group, name="Amount", code="amount", label="مبلغ", field_type=FormField.FieldType.NUMBER, order=3)
+        post = QueryDict("", mutable=True)
+        post["items_0_amount"] = "-1,250,000.75"
+        payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
+        self.assertEqual(payload["items"][0]["amount"], "-1250000.75")

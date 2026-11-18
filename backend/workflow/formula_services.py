@@ -318,9 +318,11 @@ class FormulaService:
             return Decimal("0")
         if isinstance(value, bool):
             return Decimal("1") if value else Decimal("0")
+        from .number_format_services import NumberFormatService
+
         try:
-            return Decimal(str(value).strip())
-        except (InvalidOperation, AttributeError):
+            return Decimal(NumberFormatService.normalize(value))
+        except (InvalidOperation, AttributeError, TypeError, ValueError):
             raise FormulaError(f"مقدار «{value}» قابل محاسبه نیست.")
 
     @classmethod

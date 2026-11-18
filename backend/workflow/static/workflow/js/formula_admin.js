@@ -22,11 +22,31 @@ document.addEventListener("DOMContentLoaded", () => {
     sourceField.parentElement.appendChild(panel);
     const fieldSelect = panel.querySelector(".df-formula-field-select"), numberInput = panel.querySelector(".df-formula-number"), expression = panel.querySelector(".df-formula-expression"), preview = panel.querySelector(".df-formula-preview");
     function rebuildFieldSelect() { fieldSelect.innerHTML = '<option value="">انتخاب فیلد...</option>'; fieldOptions.forEach(field => { const option=document.createElement("option"); option.value=field.id; const scope=field.is_group_field ? `${field.section_label} / ${field.group_label || field.group_code}` : field.section_label || "فرم"; option.textContent=`${field.label} (${scope})`; fieldSelect.appendChild(option); }); }
-    function tokenText(token) { if(token.type==="field"){const field=fieldOptions.find(item=>Number(item.id)===Number(token.field_id));return field?field.label:`#${token.field_id}`;} if(token.type==="number")return token.value; if(token.type==="function")return token.value; if(token.type==="comma")return ","; return token.value || ""; }
+    function normalizeFormulaNumber(value) {
+        let normalized = String(value || "").trim()
+            .replace(/[۰-۹٠-٩]/g, digit => String("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩".indexOf(digit) % 10))
+            .replace(/٫/g, ".").replace(/٬/g, ",");
+        if (normalized.includes(",")) {
+            const sign = /^[+-]/.test(normalized) ? normalized[0] : "";
+            const unsigned = sign ? normalized.slice(1) : normalized;
+            const integer = unsigned.split(".")[0];
+            if (!/^\d{1,3}(,\d{3})+$/.test(integer)) return "";
+            normalized = sign + unsigned.replace(/,/g, "");
+        }
+        return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized) ? normalized : "";
+    }
+    function displayFormulaNumber(value) {
+        const normalized = normalizeFormulaNumber(value);
+        if (!normalized) return String(value);
+        const match = normalized.match(/^([+-]?)(\d+)(\.\d*)?$/);
+        if (!match) return normalized;
+        return match[1] + match[2].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (match[3] || "");
+    }
+    function tokenText(token) { if(token.type==="field"){const field=fieldOptions.find(item=>Number(item.id)===Number(token.field_id));return field?field.label:`#${token.field_id}`;} if(token.type==="number")return displayFormulaNumber(token.value); if(token.type==="function")return token.value; if(token.type==="comma")return ","; return token.value || ""; }
     function render() { expression.innerHTML=""; tokens.forEach((token,index)=>{const chip=document.createElement("span");chip.className=`df-formula-token df-formula-token-${token.type}`;chip.textContent=tokenText(token);chip.title="حذف";chip.addEventListener("click",()=>{tokens.splice(index,1);render();});expression.appendChild(chip);}); const text=tokens.map(tokenText).join(" "); preview.textContent=text?`فرمول: ${text}`:"هنوز فرمولی ساخته نشده است."; sourceField.value=JSON.stringify({version:2,tokens,decimal_places:Math.max(0,Math.min(Number(decimalField.value||0),6))}); }
     async function loadFieldOptions() { if(!optionsUrl)return; const params=new URLSearchParams({section_id:sectionField?.value||"",group_id:groupField?.value||"",exclude_id:document.getElementById("id_id")?.value||""}); try{const response=await fetch(`${optionsUrl}?${params.toString()}`,{headers:{"X-Requested-With":"XMLHttpRequest"}});if(!response.ok)return;const payload=await response.json();fieldOptions=Array.isArray(payload.fields)?payload.fields:[];rebuildFieldSelect();render();}catch(error){console.warn("Formula field options could not be loaded:",error);} }
     panel.querySelector("[data-add-field]").addEventListener("click",()=>{const id=Number(fieldSelect.value);if(id){tokens.push({type:"field",field_id:id});render();}});
-    panel.querySelector("[data-add-number]").addEventListener("click",()=>{const value=numberInput.value.trim().replace(/,/g,"");if(!value||!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value))return;tokens.push({type:"number",value});numberInput.value="";render();});
+    panel.querySelector("[data-add-number]").addEventListener("click",()=>{const value=normalizeFormulaNumber(numberInput.value);if(!value||!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value))return;tokens.push({type:"number",value});numberInput.value="";render();});
     panel.querySelectorAll("[data-operator]").forEach(button=>button.addEventListener("click",()=>{tokens.push({type:"operator",value:button.dataset.operator});render();}));
     panel.querySelectorAll("[data-paren]").forEach(button=>button.addEventListener("click",()=>{tokens.push({type:"paren",value:button.dataset.paren});render();}));
     panel.querySelector("[data-comma]").addEventListener("click",()=>{tokens.push({type:"comma",value:","});render();});
