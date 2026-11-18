@@ -17,7 +17,7 @@ class NumberFormatService:
         if value is None:
             return ""
         normalized = str(value).strip().translate(_DIGIT_TRANSLATION)
-        normalized = normalized.replace("٫", ".").replace("٬", ",")
+        normalized = normalized.replace("٫", ".").replace("٬", ",").replace("،", ",")
         if not normalized:
             return ""
         if "," in normalized:
@@ -48,6 +48,6 @@ class NumberFormatService:
                 formatted = f"{number:,.{places}f}"
             if "." in formatted:
                 formatted = formatted.rstrip("0").rstrip(".")
-            return formatted.replace(",", "٬")
+            return formatted.replace(",", "،")
         except (InvalidOperation, TypeError, ValueError, ArithmeticError):
             return str(value)
