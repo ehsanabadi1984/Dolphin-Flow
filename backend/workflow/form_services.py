@@ -204,7 +204,7 @@ class DynamicFormService:
 
         if field.field_type in {
             FormField.FieldType.NUMBER,
-            FormField.FieldType.FORMULA,
+            FormulaService.FIELD_TYPE,
         }:
             from .number_format_services import NumberFormatService
 
