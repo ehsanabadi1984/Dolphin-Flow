@@ -9,7 +9,12 @@ from .dashboard_services import DashboardService
 @login_required
 def dashboard(request):
     context = DashboardService(request.user).get_context()
-    context.update(DashboardEnhancementService(request.user).get_context())
+    context.update(
+        DashboardEnhancementService(request.user).get_context(
+            assigned_instances=context["my_tasks"],
+            other_actionable_instances=context["pending_actions"],
+        )
+    )
     return render(
         request,
         "operator_panel/dashboard.html",
