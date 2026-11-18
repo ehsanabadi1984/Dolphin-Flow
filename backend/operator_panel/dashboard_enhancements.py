@@ -18,13 +18,21 @@ class DashboardEnhancementService:
         self.user = user
         self.dashboard = DashboardService(user)
 
-    def get_context(self):
+    def get_context(
+        self,
+        *,
+        assigned_instances=None,
+        other_actionable_instances=None,
+    ):
         waiting_queryset = self.waiting_for_others_queryset()
         unfinished_queryset = self.unfinished_processes_queryset(include_hidden=False)
         unfinished_processes = list(unfinished_queryset[:UNFINISHED_PROCESSES_LIMIT])
         self.dashboard._attach_dashboard_state(unfinished_processes, now=timezone.now())
 
-        next_best_actions = self._next_best_actions()
+        next_best_actions = self._next_best_actions(
+            assigned_instances=assigned_instances,
+            other_actionable_instances=other_actionable_instances,
+        )
         summaries = ProcessSummaryService.get_for_instances(
             instances=next_best_actions,
             user=self.user,
