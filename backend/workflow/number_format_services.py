@@ -41,8 +41,11 @@ class NumberFormatService:
             number = Decimal(cls.normalize(value))
             if not number.is_finite():
                 return str(value)
-            places = max(0, min(int(decimal_places or 0), 12))
-            formatted = f"{number:,.{places}f}"
+            if decimal_places is None:
+                formatted = format(number, ",f")
+            else:
+                places = max(0, min(int(decimal_places or 0), 12))
+                formatted = f"{number:,.{places}f}"
             if "." in formatted:
                 formatted = formatted.rstrip("0").rstrip(".")
             return formatted
