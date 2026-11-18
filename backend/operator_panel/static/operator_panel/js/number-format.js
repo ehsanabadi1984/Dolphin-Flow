@@ -22,7 +22,7 @@
         if (normalized === "") return "";
         const match = normalized.match(/^([+-]?)(\d+)(\.\d*)?$/);
         if (!match) return normalized;
-        return match[1] + match[2].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (match[3] || "");
+        return match[1] + match[2].replace(/\B(?=(\d{3})+(?!\d))/g, "٬") + (match[3] || "");
     }
     function enhanceInput(input) {
         if (!input || input.dataset.dfNumberReady === "1") return;
