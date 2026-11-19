@@ -98,6 +98,13 @@ class WorkflowMembership(models.Model):
             f"{self.get_role_display()}"
         )
 class WorkflowStep(models.Model):
+    class AssignmentPolicy(models.TextChoices):
+        FIXED = "FIXED", "مسئول ثابت"
+        INSTANCE_STARTER = "INSTANCE_STARTER", "شروع‌کننده فرآیند"
+        STEP_COMPLETER = "STEP_COMPLETER", "تکمیل‌کننده مرحله مرجع"
+        PREVIOUS_COMPLETER_SELECTS = "PREVIOUS_COMPLETER_SELECTS", "انتخاب توسط تکمیل‌کننده مرحله قبل"
+        AUTO_SINGLE = "AUTO_SINGLE", "تخصیص خودکار در صورت وجود یک نامزد"
+
     workflow = models.ForeignKey(
         Workflow,
         on_delete=models.PROTECT,
@@ -110,6 +117,22 @@ class WorkflowStep(models.Model):
         null=True,
         blank=True,
         related_name="assigned_workflow_steps",
+    )
+
+    assignment_policy = models.CharField(
+        max_length=32,
+        choices=AssignmentPolicy.choices,
+        default=AssignmentPolicy.FIXED,
+        verbose_name="سیاست تخصیص مسئول",
+    )
+
+    assignment_source_step = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="dependent_assignment_steps",
+        verbose_name="مرحله مرجع تخصیص",
     )
 
     name = models.CharField(
@@ -494,6 +517,39 @@ class WorkflowStepExecution(models.Model):
         related_name="workflow_step_executions",
     )
 
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="assigned_step_executions",
+        verbose_name="مسئول این نوبت اجرا",
+    )
+
+    entered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="entered_step_executions",
+        verbose_name="ایجادکننده ورود به مرحله",
+    )
+
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="completed_step_executions",
+        verbose_name="تکمیل‌کننده این نوبت اجرا",
+    )
+
+    assigned_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="زمان تخصیص مسئول",
+    )
+
     performed_at = models.DateTimeField(
         auto_now_add=True,
     )
@@ -555,6 +611,78 @@ class WorkflowStepExecution(models.Model):
             f"{self.workflow_step.name} - "
             f"{self.performed_by}"
         )
+
+class WorkflowStepAssignmentHistory(models.Model):
+    class Source(models.TextChoices):
+        INITIAL = "INITIAL", "تخصیص اولیه"
+        POLICY = "POLICY", "سیاست تخصیص"
+        MANUAL = "MANUAL", "تغییر دستی"
+        ACCEPTANCE = "ACCEPTANCE", "پذیرش مرحله"
+        OVERRIDE = "OVERRIDE", "تغییر توسط مدیر"
+
+    step_execution = models.ForeignKey(
+        WorkflowStepExecution,
+        on_delete=models.PROTECT,
+        related_name="assignment_history",
+        verbose_name="نوبت اجرا",
+    )
+
+    previous_assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="previous_step_assignments",
+        verbose_name="مسئول قبلی",
+    )
+
+    new_assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="new_step_assignments",
+        verbose_name="مسئول جدید",
+    )
+
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="changed_step_assignments",
+        verbose_name="ثبت‌کننده تغییر",
+    )
+
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        verbose_name="منشأ تخصیص",
+    )
+
+    reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="علت تغییر",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="زمان ثبت",
+    )
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        verbose_name = "تاریخچه تخصیص مسئول مرحله"
+        verbose_name_plural = "تاریخچه تخصیص مسئولان مراحل"
+
+    def __str__(self):
+        return (
+            f"{self.step_execution} - "
+            f"{self.previous_assignee or '—'} → "
+            f"{self.new_assignee or '—'}"
+        )
+
 
 class WorkflowTransition(models.Model):
     workflow = models.ForeignKey(
