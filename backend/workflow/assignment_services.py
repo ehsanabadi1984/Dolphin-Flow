@@ -126,6 +126,8 @@ class WorkflowStepAssignmentService:
                 raise ValidationError("نوبت اجرای مبدأ برای انتخاب مسئول موجود نیست.")
             if previous_execution.instance_id != instance.pk:
                 raise ValidationError("نوبت اجرای مبدأ متعلق به این نمونه فرآیند نیست.")
+            if previous_execution.workflow_step.workflow_id != workflow.pk:
+                raise ValidationError("مرحله مبدأ متعلق به این فرآیند نیست.")
             if previous_execution.completed_by_id is None:
                 raise ValidationError("تکمیل‌کننده نوبت اجرای مبدأ مشخص نیست.")
             if selected_assignee is None:
@@ -164,11 +166,13 @@ class WorkflowStepAssignmentService:
     ):
         if source not in WorkflowStepAssignmentHistory.Source.values:
             raise ValidationError("منشأ تخصیص مسئول معتبر نیست.")
+        if not execution or not getattr(execution, "pk", None):
+            raise ValidationError("نوبت اجرای معتبری برای تخصیص ارائه نشده است.")
 
         locked_execution = (
             WorkflowStepExecution.objects
             .select_for_update()
-            .select_related("workflow_step__workflow", "assigned_to")
+            .select_related("workflow_step__workflow")
             .get(pk=execution.pk)
         )
         workflow = locked_execution.workflow_step.workflow
