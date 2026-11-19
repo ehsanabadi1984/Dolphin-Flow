@@ -1,10 +1,10 @@
 # ممیزی فاز اول و ماتریس رگرسیون چندمسئولی Workflow
 
-- نسخه: 1.5
+- نسخه: 1.6
 - تاریخ: 2026-11-19
 - سند مبنا: step-multi-assignee-design.md نسخه 1.7
 - شاخه: feature/unidentified-device-without-identifier
-- وضعیت: ممیزی خواندنی؛ چهار تصمیم معماری تأیید و ثبت شد؛ بدون تغییر کد، migration یا اجرای تست
+- وضعیت: فاز اول تکمیل؛ ممیزی، نگاشت تست‌ها و اجرای baseline انجام شد؛ بدون تغییر کد اجرایی یا migration
 
 ## 1. نتیجه اجرایی
 
@@ -89,7 +89,7 @@ HistoryBrowserService snapshotهای execution را می‌خواند و مجو�
 | چاپ و فایل | workflow/tests/test_form_print_services.py، test_file_share_authorization.py، test_file_share_drafts.py و test_file_share_response_views.py | assignment به‌تنهایی مجوز چاپ/Share Files ایجاد نکند |
 | سازگاری قدیمی | تست‌های فعلی Workflow، انتقال، کارتابل و SLA | migration بدون انتساب ساختگی و حفظ رفتار Workflow تک‌مسئولی |
 
-وجود تست در فهرست به معنی اجرای موفق آن نیست. در این ممیزی فقط فایل‌ها و قرارداد تست بررسی شده‌اند؛ تستی اجرا نشده است. فایل test_workflow_execution_roles.py توابع سطح ماژول دارد و نحوه اجرای آن باید جداگانه بررسی شود.
+وجود تست در فهرست به معنی اجرای موفق آن نیست. نتایج اجرای baseline در بخش 8 ثبت شده‌اند. فایل test_workflow_execution_roles.py یک اسکریپت مستقل است و با PYTHONPATH=. python workflow/tests/test_workflow_execution_roles.py اجرا شد؛ این اسکریپت دیتابیس تنظیم‌شده محیط را مستقیماً به‌کار می‌برد و جزو اجرای تست‌های استاندارد Django نیست.
 
 ## 5. ریسک‌های فنی
 
@@ -117,13 +117,63 @@ HistoryBrowserService snapshotهای execution را می‌خواند و مجو�
 
 - ممیزی فایل‌ها و وابستگی‌های اصلی: انجام شد.
 - نگاشت تست‌های موجود و شکاف‌های تستی: انجام شد.
-- اجرای تست‌ها: انجام نشده؛ در این فاز صرفاً inventory و test mapping انجام شده است.
+- اجرای baseline: انجام شد؛ نتایج تفصیلی در بخش 8 ثبت شده‌اند.
 - تصمیم بخش 6، مورد 1 (نامزدهای مسئول و منبع تخصیص): تأیید و در سند مبنا ثبت شد.
 - تصمیم بخش 6، مورد 2 (شرط ویرایش و Submit): تأیید و در سند مبنا ثبت شد.
 - تصمیم بخش 6، مورد 3 (ثبت ممیزی هر ذخیره موفق draft): تأیید و در سند مبنا ثبت شد.
 - تصمیم بخش 6، مورد 5 (انتقال نیازمند پذیرش و رفتار REJECT): تأیید و در سند مبنا ثبت شد.
-- تصمیم بخش 6، مورد 4 (مشاهده ثبت شخصی): فعلاً خارج از دامنه و غیرمسدودکننده؛ رفتار موجود بدون تغییر باقی می‌ماند.
+- تصمیم بخش 6، مورد 4 (مشاهده ثبت شخصی): خارج از دامنه و غیرمسدودکننده؛ رفتار موجود بدون تغییر می‌ماند.
 - تصمیم بخش 6، مورد 6 (نامزد نامعتبر): تأیید و در سند مبنا ثبت شد.
-- فاز 1 (ممیزی و test mapping): تکمیل شد.
-- اجرای تست‌های baseline: انجام نشده و باید پیش از آغاز فاز 2 اجرا و نتیجه آن بررسی شود.
-- فاز 2 (مدل و migration): تا اجرای موفق و بررسی تست‌های baseline آغاز نشود.
+- فاز 1 (ممیزی، test mapping و baseline): تکمیل شد.
+- هیچ کد اجرایی، تست، migration یا محیط Production در جریان baseline تغییر نکرد.
+- ورود به فاز 2 پس از ثبت نتایج baseline و تأیید کاربر مجاز است.
+
+## 8. نتایج اجرای baseline
+
+### 8.1 خلاصه
+
+| شاخص | تعداد |
+|---|---:|
+| تست‌های استاندارد Django اجراشده | 393 |
+| سناریوهای اسکریپت مستقل | 4 |
+| مجموع سناریوها | **397** |
+| موفق | **376** |
+| خطا (Error) | **14** |
+| شکست (Failure) | **7** |
+
+این اعداد حاصل اجرای دسته‌های مستقل هستند؛ همه 397 سناریو در یک فرمان یا یک test run واحد اجرا نشده‌اند. اجرای اسکریپت مستقل نیز با دیتابیس تنظیم‌شده محیط انجام شده و در شمار تست‌های استاندارد Django نیست.
+
+### 8.2 نتایج به تفکیک دسته
+
+| مجموعه | تعداد | موفق | خطا | شکست |
+|---|---:|---:|---:|---:|
+| start permission | 26 | 26 | 0 | 0 |
+| workflow execution + permission integration | 30 | 30 | 0 | 0 |
+| form draft save + submit | 48 | 39 | 9 | 0 |
+| history service + browser | 38 | 37 | 1 | 0 |
+| dashboard sidebar + permission contract + process views | 82 | 81 | 0 | 1 |
+| workflow instance POST + permission context | 56 | 56 | 0 | 0 |
+| pending acceptance | 32 | 32 | 0 | 0 |
+| notification service | 9 | 9 | 0 | 0 |
+| SLA integration + lifecycle + monitor | 26 | 22 | 0 | 4 |
+| workflow override | 9 | 9 | 0 | 0 |
+| print services + file share authorization/drafts/response | 37 | 31 | 4 | 2 |
+| execution role/user authorization script | 4 | 4 | 0 | 0 |
+| **مجموع** | **397** | **376** | **14** | **7** |
+
+### 8.3 موارد ناموفق ثبت‌شده
+
+1. **Draft/Submit — 9 Error:** در مجموعه test_form_draft_save_services و test_form_draft_submit_services. بنا به تصمیم کاربر، این موارد در baseline ثبت می‌شوند و در این مرحله برای رفع آن‌ها تغییری انجام نمی‌شود.
+2. **History — 1 Error:** test_nested_history_snapshot_survives_later_child_changes_and_deletion؛ مسیر RepeatableRowService.delete_row از FormFile.delete_for_row استفاده می‌کند، اما FormFile در ماژول import نشده است؛ خطای NameError.
+3. **Dashboard — 1 Failure:** AbandonedStartConsistencyTests.test_abandoned_start_excluded_everywhere؛ انتظار تست برای قالب قدیمی شماره فرم با قالب فعلی pk-ymd در صفحه ناسازگار است (#261119-000002 در برابر #2-261119). این شکست به‌عنوان ناسازگاری قرارداد تست/نمایش ثبت می‌شود، نه اثبات نقص فیلتر abandoned.
+4. **SLA — 4 Failure:** چهار تست اعلان در SLAMonitorServiceTests انتظار دو Notification دارند، اما فقط یک مورد ایجاد شده است: test_breach_creates_notifications، test_does_not_create_duplicate_breach_notifications، test_warning_creates_notifications و test_warning_notifies_only_assigned_executor.
+5. **Print — 4 Error:** چهار تست FormPrintDataServiceTests در test_form_print_services؛ مقدار instance.workflow در fixture از نوع SimpleNamespace است، اما سرویس آن را به فیلتر ORM روی رابطه Workflow می‌دهد و خطای تبدیل شناسه رخ می‌دهد.
+6. **File Sharing — 2 Failure:** در test_file_share_drafts، جزئیات فایل در payload پیام لغوشده برخلاف انتظار تست همچنان وجود دارد؛ همچنین درخواست جزئیات scoped پیام از سوی فرستنده به‌جای 404 پاسخ 200 دریافت می‌کند.
+
+### 8.4 تفسیر و محدودیت baseline
+
+- baseline وضعیت موجود شاخه را ثبت می‌کند و به معنی تأیید کامل صحت همه قابلیت‌ها نیست.
+- تست‌های موفق فقط رفتارهای پوشش‌داده‌شده در همان تست‌ها را تأیید می‌کنند.
+- خطاها و شکست‌های بالا پیش از تغییرات فاز 2 ثبت شده‌اند و باید هنگام ارزیابی رگرسیون‌های بعدی از baseline تفکیک شوند.
+- هیچ‌یک از موارد ناموفق برای سبزکردن baseline اصلاح نشدند.
+- اجرای اسکریپت مستقل با دیتابیس تنظیم‌شده محیط انجام شد؛ این اسکریپت داده‌های آزمایشی مشخص خود را ایجاد/پاک می‌کند.
