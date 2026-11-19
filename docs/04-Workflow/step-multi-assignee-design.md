@@ -1,6 +1,6 @@
 # طراحی چندمسئولی و تخصیص مستقل اجرای مراحل Workflow
 
-- وضعیت: سند مبنای طراحی و پیاده‌سازی
+- وضعیت: سند مبنا؛ [ضمیمه ممیزی فاز اول و ماتریس رگرسیون](step-multi-assignee-phase1-audit.md)
 - نسخه: 1.2
 - تاریخ: 2026-11-19
 - شاخه مبنا: `feature/unidentified-device-without-identifier`
