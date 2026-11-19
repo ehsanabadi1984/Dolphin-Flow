@@ -113,6 +113,16 @@
 ## 8. وضعیت
 
 - ممیزی و baseline فاز اول: تکمیل و ثبت‌شده در سند ممیزی نسخه 1.6.
-- مدل فعلی و نقاط ساخت execution در شاخه بررسی شده‌اند.
-- طرح schema و قرارداد سرویس تخصیص در این سند ثبت شده است.
-- تغییر کد و migration فاز دوم هنوز آغاز نشده؛ مانع migration باید پیش از اولین migration رفع شود.
+- زنجیره Migration شاخه توسعه یکپارچه و graph تا `0087` بررسی شد.
+- مدل‌های فاز دوم در `backend/workflow/models.py` اضافه شدند.
+- Migration `0088_workflowstep_assignment_policy_and_more` تولید، بازبینی و در محیط توسعه اجرا شد؛ فقط schema را تغییر می‌دهد و داده‌های تاریخی را backfill نمی‌کند.
+- Migration `0088` در شاخه توسعه ثبت شد (commit: `15cfc4f4ec3ac6b75c7acc013ef220dc4924d69d`).
+- سرویس مرکزی اولیه در `backend/workflow/assignment_services.py` پیاده‌سازی شد:
+  - استخراج نامزدها از `WorkflowAuthorizationService` با `STEP_ACTION / EXECUTE`
+  - اعتبارسنجی عضویت فعال، فعال‌بودن کاربر و مجوز مؤثر Step
+  - resolve پنج سیاست تخصیص
+  - تخصیص اتمیک و ثبت تاریخچه با idempotency
+- تست‌های مستقل سرویس در `backend/workflow/tests/test_step_assignment_services.py` اضافه شدند.
+- کد سرویس و تست‌ها در شاخه توسعه ثبت شده‌اند؛ اجرای محلی تست‌ها و بازبینی نهایی هنوز در انتظار است.
+- اتصال مسیرهای start/transition/accept/reject/override و مهاجرت مصرف‌کنندگان کارتابل، اعلان و SLA خارج از دامنه این گام است و به فاز 3 موکول می‌شود.
+- تا پایان تست‌های مستقل فاز 2، هیچ‌یک از مسیرهای اجرایی فعلی به سرویس جدید متصل نمی‌شوند.
