@@ -471,6 +471,10 @@ class WorkflowTransitionInline(admin.TabularInline):
         "is_active",
         "requires_acceptance",
         "reject_to_step",
+        "accept_notification_policy",
+        "accept_notification_user",
+        "reject_notification_policy",
+        "reject_notification_user",
         "code",
     )
 
@@ -478,6 +482,8 @@ class WorkflowTransitionInline(admin.TabularInline):
         "from_step",
         "to_step",
         "reject_to_step",
+        "accept_notification_user",
+        "reject_notification_user",
     )
 
     readonly_fields = (
@@ -520,6 +526,12 @@ class WorkflowTransitionInline(admin.TabularInline):
                 )
                 .order_by("order")
             )
+
+            active_users = get_user_model().objects.filter(
+                is_active=True,
+            ).order_by("username")
+            form.base_fields["accept_notification_user"].queryset = active_users
+            form.base_fields["reject_notification_user"].queryset = active_users
 
         return formset
 
