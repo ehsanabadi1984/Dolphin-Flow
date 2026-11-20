@@ -235,6 +235,7 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         WorkflowStepExecution.objects.filter(pk=own_execution.pk).update(
             performed_at=base_time - timedelta(hours=1)
         )
+        self.instance.refresh_from_db()
 
         events = build_instance_timeline_events(self.instance)
 
