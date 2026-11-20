@@ -1000,6 +1000,22 @@
       {% for transition in transitions %}
       <form method="post" data-workflow-transition action="{% url 'operator_panel:execute_transition' instance.pk transition.pk %}">
         {% csrf_token %}
+        {% if transition.to_step and transition.to_step.assignment_policy == "PREVIOUS_COMPLETER_SELECTS" %}
+          <div class="df-form-field df-transition-assignee">
+            <label for="transition-assignee-{{ transition.pk }}">مسئول مرحله «{{ transition.to_step.name }}»</label>
+            <select
+              id="transition-assignee-{{ transition.pk }}"
+              name="selected_assignee"
+              required
+              {% if edit_mode %}disabled{% endif %}
+            >
+              <option value="">انتخاب مسئول مرحله مقصد</option>
+              {% for candidate in transition.assignment_candidates %}
+                <option value="{{ candidate.pk }}">{{ candidate.get_full_name|default:candidate.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
         <button type="submit" class="df-button df-button-secondary"{% if edit_mode %} disabled{% endif %}>{{ transition.name }}</button>
         {% if transition.description %}<p>{{ transition.description }}</p>{% endif %}
       </form>
