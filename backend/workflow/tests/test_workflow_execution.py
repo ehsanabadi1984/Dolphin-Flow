@@ -1021,6 +1021,131 @@ class WorkflowExecutionTests(TestCase):
             ).exists()
         )
 
+    def test_accept_finalizes_proposed_assignee_with_acceptance_history(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.step_two.assignment_policy = (
+            WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        )
+        self.step_two.save(update_fields=["assignment_policy"])
+        self.transition_one.requires_acceptance = True
+        self.transition_one.reject_to_step = self.step_one
+        self.transition_one.save(
+            update_fields=["requires_acceptance", "reject_to_step"]
+        )
+
+        acceptor = User.objects.create_user(
+            username="acceptance_actor_manual",
+            password="test-password",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=acceptor,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        self.grant_step_action_permission(
+            user=acceptor,
+            step=self.step_two,
+            action_code="ACCEPT",
+        )
+
+        instance = self.start_instance()
+        pending = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+            selected_assignee=self.destination_user,
+        )
+        self.assertEqual(pending.proposed_assignee_id, self.destination_user.pk)
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_two,
+            ).exists()
+        )
+
+        WorkflowExecutionService.accept_transition_execution(
+            transition_execution=pending,
+            user=acceptor,
+        )
+
+        pending.refresh_from_db()
+        instance.refresh_from_db()
+        destination_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_two,
+        )
+        self.assertEqual(pending.status, WorkflowTransitionExecution.Status.ACCEPTED)
+        self.assertEqual(pending.accepted_by_id, acceptor.pk)
+        self.assertEqual(instance.current_step_id, self.step_two.pk)
+        self.assertEqual(destination_execution.performed_by_id, acceptor.pk)
+        self.assertEqual(destination_execution.entered_by_id, acceptor.pk)
+        self.assertEqual(destination_execution.assigned_to_id, self.destination_user.pk)
+        self.assertEqual(
+            destination_execution.assignment_history.get().source,
+            WorkflowStepAssignmentHistory.Source.ACCEPTANCE,
+        )
+
+    def test_accept_fails_if_proposed_assignee_is_no_longer_eligible(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.step_two.assignment_policy = (
+            WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        )
+        self.step_two.save(update_fields=["assignment_policy"])
+        self.transition_one.requires_acceptance = True
+        self.transition_one.reject_to_step = self.step_one
+        self.transition_one.save(
+            update_fields=["requires_acceptance", "reject_to_step"]
+        )
+
+        acceptor = User.objects.create_user(
+            username="acceptance_actor_invalidated",
+            password="test-password",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=acceptor,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        self.grant_step_action_permission(
+            user=acceptor,
+            step=self.step_two,
+            action_code="ACCEPT",
+        )
+
+        instance = self.start_instance()
+        pending = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+            selected_assignee=self.destination_user,
+        )
+        WorkflowMembership.objects.filter(
+            workflow=self.workflow,
+            user=self.destination_user,
+        ).update(is_active=False)
+
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.accept_transition_execution(
+                transition_execution=pending,
+                user=acceptor,
+            )
+
+        pending.refresh_from_db()
+        instance.refresh_from_db()
+        self.assertEqual(pending.status, WorkflowTransitionExecution.Status.PENDING)
+        self.assertIsNone(pending.accepted_by_id)
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_two,
+            ).exists()
+        )
+
     def _create_pending_acceptance_execution(self):
         self.grant_start_permission()
         self.grant_transition_permission(self.transition_one)
@@ -1755,7 +1880,9 @@ class WorkflowExecutionConcurrencyTests(TransactionTestCase):
         self.step_one.save(update_fields=["assigned_to"])
         self.step_two.assigned_to = self.user
         self.step_two.save(update_fields=["assigned_to"])
-        for step in (self.step_one, self.step_two):
+        self.step_three.assigned_to = self.user
+        self.step_three.save(update_fields=["assigned_to"])
+        for step in (self.step_one, self.step_two, self.step_three):
             WorkflowPermission.objects.create(
                 workflow=self.workflow,
                 step=step,
