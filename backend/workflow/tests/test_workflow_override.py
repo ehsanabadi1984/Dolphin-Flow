@@ -20,8 +20,11 @@ from workflow.models import (
     WorkflowStep,
     WorkflowStepAssignmentHistory,
     WorkflowStepExecution,
+    WorkflowTransition,
+    WorkflowTransitionExecution,
 )
 from workflow.override_services import WorkflowOverrideService
+from workflow.timeline_services import build_instance_timeline_events
 
 
 User = get_user_model()
@@ -190,6 +193,56 @@ class WorkflowOverrideServiceTests(TestCase):
         self.assertIsNone(self.instance.completed_at)
         self.assertEqual(self.instance.current_step_id, self.step_b.id)
         self.assertFalse(new_execution.is_submitted)
+
+    def test_timeline_preserves_completion_event_after_override_reopens_instance(self):
+        finish_transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="تکمیل",
+            code="OVERRIDE_FINISH",
+            from_step=self.step_c,
+            to_step=None,
+        )
+        finished_at = timezone.now()
+        WorkflowTransitionExecution.objects.create(
+            instance=self.instance,
+            transition=finish_transition,
+            performed_by=self.operator,
+            status=WorkflowTransitionExecution.Status.ACCEPTED,
+        )
+        finish_execution = WorkflowTransitionExecution.objects.get(
+            instance=self.instance,
+            transition=finish_transition,
+        )
+        finished_at = finish_execution.performed_at
+        self.instance.current_step = None
+        self.instance.status = WorkflowInstance.Status.COMPLETED
+        self.instance.completed_at = finished_at
+        self.instance.save(
+            update_fields=["current_step", "status", "completed_at"]
+        )
+
+        WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="بازگشت برای اصلاح پس از تکمیل",
+        )
+
+        self.instance.refresh_from_db()
+        events = build_instance_timeline_events(self.instance)
+        completion_events = [
+            event for event in events if event["type"] == "instance_completed"
+        ]
+
+        self.assertEqual(self.instance.status, WorkflowInstance.Status.ACTIVE)
+        self.assertIsNone(self.instance.completed_at)
+        self.assertEqual(len(completion_events), 1)
+        self.assertEqual(
+            completion_events[0]["id"],
+            f"instance-completed-transition-{finish_execution.pk}",
+        )
+        self.assertEqual(completion_events[0]["performed_at"], finished_at)
+        self.assertEqual(completion_events[0]["user"], "override_operator")
 
     def test_rejects_non_admin(self):
         with self.assertRaises(ValidationError):
