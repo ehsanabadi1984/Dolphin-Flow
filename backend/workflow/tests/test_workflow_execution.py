@@ -1827,6 +1827,8 @@ class WorkflowExecutionTests(TestCase):
             resolved.status,
             WorkflowTransitionExecution.Status.ACCEPTED,
         )
+        self.assertIsNotNone(resolved.resolved_at)
+        self.assertGreaterEqual(resolved.resolved_at, resolved.performed_at)
         self.assertEqual(resolved.accepted_by_id, self.destination_user.pk)
         self.assertIsNone(resolved.rejected_by_id)
         self.assertEqual(instance.current_step_id, self.step_three.pk)
@@ -1861,6 +1863,8 @@ class WorkflowExecutionTests(TestCase):
             resolved.status,
             WorkflowTransitionExecution.Status.REJECTED,
         )
+        self.assertIsNotNone(resolved.resolved_at)
+        self.assertGreaterEqual(resolved.resolved_at, resolved.performed_at)
         self.assertIsNone(resolved.accepted_by_id)
         self.assertEqual(resolved.rejected_by_id, self.destination_user.pk)
         self.assertEqual(instance.current_step_id, self.step_one.pk)
