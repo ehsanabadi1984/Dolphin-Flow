@@ -1451,6 +1451,70 @@ class WorkflowExecutionTests(TestCase):
             f"و فرآیند به مرحله «{self.step_one.name}» بازگشت.",
         )
 
+    def test_accept_uses_its_own_fixed_notification_recipient(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        fixed_recipient = User.objects.create_user(
+            username="accept-fixed-notification-recipient",
+            password="test-password",
+        )
+        self.transition_two.accept_notification_policy = (
+            WorkflowTransition.NotificationRecipientPolicy.FIXED_USER
+        )
+        self.transition_two.accept_notification_user = fixed_recipient
+        self.transition_two.save(update_fields=[
+            "accept_notification_policy",
+            "accept_notification_user",
+        ])
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+
+        WorkflowExecutionService.accept_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        notification = Notification.objects.get(
+            transition_execution=transition_execution,
+        )
+        self.assertEqual(notification.recipient, fixed_recipient)
+        self.assertNotEqual(notification.recipient, self.destination_user)
+        self.assertNotEqual(notification.recipient, self.user)
+
+    def test_reject_uses_its_own_fixed_notification_recipient(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        fixed_recipient = User.objects.create_user(
+            username="reject-fixed-notification-recipient",
+            password="test-password",
+        )
+        self.transition_two.reject_notification_policy = (
+            WorkflowTransition.NotificationRecipientPolicy.FIXED_USER
+        )
+        self.transition_two.reject_notification_user = fixed_recipient
+        self.transition_two.save(update_fields=[
+            "reject_notification_policy",
+            "reject_notification_user",
+        ])
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        WorkflowExecutionService.reject_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        notification = Notification.objects.get(
+            transition_execution=transition_execution,
+        )
+        self.assertEqual(notification.recipient, fixed_recipient)
+        self.assertNotEqual(notification.recipient, self.destination_user)
+        self.assertNotEqual(notification.recipient, self.user)
+
     def test_accept_succeeds_and_records_issue_when_source_completer_is_missing(self):
         transition_execution = self._create_pending_acceptance_execution()
         WorkflowStepExecution.objects.filter(
