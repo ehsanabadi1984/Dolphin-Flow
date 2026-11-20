@@ -7,7 +7,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workflow.admin import WorkflowInstanceAdmin, dolphin_admin_site
+from workflow.form_file_models import SharedFileAsset
 from workflow.models import (
+    FileShareMessage,
+    FileShareMessageEvent,
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
@@ -230,6 +233,92 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         response = self.client.get(self.timeline_url)
 
         self.assertEqual(response.status_code, 200)
+
+    def test_timeline_renders_dedicated_details_for_step_transition_resolution_and_file_share(self):
+        self.grant_workflow_view()
+        assigned_at = timezone.now() - timezone.timedelta(minutes=10)
+        submitted_at = timezone.now()
+        execution = WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step,
+            performed_by=self.viewer,
+            entered_by=self.viewer,
+            assigned_to=self.starter,
+            assigned_at=assigned_at,
+            completed_by=self.starter,
+            is_submitted=True,
+            submitted_at=submitted_at,
+        )
+        WorkflowStepAssignmentHistory.objects.create(
+            step_execution=execution,
+            previous_assignee=None,
+            new_assignee=self.starter,
+            changed_by=self.viewer,
+            source=WorkflowStepAssignmentHistory.Source.MANUAL,
+            reason="تخصیص برای بررسی",
+        )
+        target_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="مرحله مقصد",
+            code="TIMELINE_RENDER_TARGET",
+            order=2,
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="ارسال برای بررسی",
+            code="TIMELINE_RENDER_TRANSITION",
+            from_step=self.step,
+            to_step=target_step,
+        )
+        WorkflowTransitionExecution.objects.create(
+            instance=self.instance,
+            transition=transition,
+            performed_by=self.viewer,
+            status=WorkflowTransitionExecution.Status.ACCEPTED,
+            accepted_by=self.starter,
+            resolved_at=submitted_at,
+            notes="یادداشت تصمیم انتقال",
+        )
+        asset = SharedFileAsset.objects.create(
+            storage_name="timeline/render-test.pdf",
+            original_name="render-test.pdf",
+            file_size=100,
+            content_type="application/pdf",
+        )
+        message = FileShareMessage.objects.create(
+            asset=asset,
+            sender=self.viewer,
+            recipient=self.starter,
+            workflow_instance=self.instance,
+            workflow_step=self.step,
+            interaction_type=FileShareMessage.InteractionType.REVIEW,
+            subject="مدرک بررسی",
+        )
+        FileShareMessageEvent.objects.create(
+            message=message,
+            event_type=FileShareMessageEvent.EventType.SENT,
+            actor=self.viewer,
+            details={"note": "ارسال برای بررسی"},
+        )
+
+        response = self.client.get(self.timeline_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "اجرای مرحله")
+        self.assertContains(response, "مسئول اجرا")
+        self.assertContains(response, "زمان تخصیص")
+        self.assertContains(response, "تکمیل‌کننده")
+        self.assertContains(response, "زمان ثبت نهایی")
+        self.assertContains(response, "انتقال مرحله")
+        self.assertContains(response, "وضعیت انتقال")
+        self.assertContains(response, "یادداشت انتقال")
+        self.assertContains(response, "تعیین تکلیف انتقال")
+        self.assertContains(response, "تصمیم‌گیرنده")
+        self.assertContains(response, "رویداد اشتراک فایل")
+        self.assertContains(response, "نوع تعامل")
+        self.assertContains(response, "وضعیت پیام")
+        self.assertContains(response, "مدرک بررسی")
+        self.assertContains(response, "تغییر مسئول")
 
     def test_override_is_distinct_and_null_resolution_timestamp_does_not_break_timeline(self):
         self.grant_workflow_view()
