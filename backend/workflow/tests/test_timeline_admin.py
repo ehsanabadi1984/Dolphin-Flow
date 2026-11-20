@@ -4,6 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from workflow.admin import WorkflowInstanceAdmin, dolphin_admin_site
 from workflow.models import (
@@ -12,6 +13,10 @@ from workflow.models import (
     WorkflowMembership,
     WorkflowPermission,
     WorkflowStep,
+    WorkflowStepAssignmentHistory,
+    WorkflowStepExecution,
+    WorkflowTransition,
+    WorkflowTransitionExecution,
 )
 
 
@@ -225,3 +230,60 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         response = self.client.get(self.timeline_url)
 
         self.assertEqual(response.status_code, 200)
+
+    def test_override_is_distinct_and_null_resolution_timestamp_does_not_break_timeline(self):
+        self.grant_workflow_view()
+        target_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="مرحله دوم",
+            code="TIMELINE_ADMIN_STEP_2",
+            order=2,
+        )
+        override_time = timezone.now()
+        execution = WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=target_step,
+            performed_by=self.viewer,
+            entered_by=self.viewer,
+            assigned_to=self.starter,
+            performed_at=override_time,
+            notes=(
+                "اصلاح مسیر فرآیند: مرحله اول → مرحله دوم | "
+                "دلیل: اصلاح آزمایشی مسیر"
+            ),
+        )
+        WorkflowStepAssignmentHistory.objects.create(
+            step_execution=execution,
+            previous_assignee=None,
+            new_assignee=self.starter,
+            changed_by=self.viewer,
+            source=WorkflowStepAssignmentHistory.Source.OVERRIDE,
+            reason="اصلاح آزمایشی مسیر",
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="انتقال نیازمند تعیین تکلیف",
+            code="TIMELINE_PENDING_RESOLUTION",
+            from_step=self.step,
+            to_step=target_step,
+        )
+        WorkflowTransitionExecution.objects.create(
+            instance=self.instance,
+            transition=transition,
+            performed_by=self.viewer,
+            status=WorkflowTransitionExecution.Status.ACCEPTED,
+            accepted_by=self.viewer,
+            resolved_at=None,
+        )
+
+        response = self.client.get(self.timeline_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "اصلاح مدیریتی مسیر")
+        self.assertContains(response, "مرحله مبدأ")
+        self.assertContains(response, "مرحله مقصد")
+        self.assertContains(response, "مسئول مرحله مقصد")
+        self.assertContains(response, "اصلاح آزمایشی مسیر")
+        self.assertContains(response, "تغییر مسئول")
+        self.assertContains(response, "مسئول جدید")
+        self.assertContains(response, "زمان دقیق ثبت نشده است")
