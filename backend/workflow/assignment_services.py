@@ -105,16 +105,25 @@ class WorkflowStepAssignmentService:
                 raise ValidationError("شروع‌کننده نمونه فرآیند مشخص نیست.")
 
         elif policy == WorkflowStep.AssignmentPolicy.STEP_COMPLETER:
-            source_execution = (
-                WorkflowStepExecution.objects
-                .filter(
-                    instance=instance,
-                    workflow_step=step.assignment_source_step,
+            source_execution = None
+            if (
+                previous_execution is not None
+                and previous_execution.instance_id == instance.pk
+                and previous_execution.workflow_step_id
+                == step.assignment_source_step_id
+            ):
+                source_execution = previous_execution
+            else:
+                source_execution = (
+                    WorkflowStepExecution.objects
+                    .filter(
+                        instance=instance,
+                        workflow_step=step.assignment_source_step,
+                    )
+                    .select_related("completed_by")
+                    .order_by("-performed_at", "-pk")
+                    .first()
                 )
-                .select_related("completed_by")
-                .order_by("-performed_at", "-pk")
-                .first()
-            )
             if source_execution is None or source_execution.completed_by is None:
                 raise ValidationError(
                     "برای مرحله مرجع، تکمیل‌کننده معتبر و ثبت‌شده‌ای وجود ندارد."
