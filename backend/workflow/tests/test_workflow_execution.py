@@ -1313,13 +1313,15 @@ class WorkflowExecutionTests(TestCase):
     def test_active_execution_lookup_rejects_missing_execution(self):
         instance = self._create_execution_lookup_instance()
 
-        with self.assertRaisesMessage(
-            ValidationError,
-            "اجرای فعال و ارسال‌نشده‌ای برای مرحله فعلی پیدا نشد.",
-        ):
+        with self.assertRaises(ValidationError) as context:
             WorkflowExecutionService._get_active_step_execution(
                 instance=instance,
             )
+
+        self.assertEqual(
+            context.exception.messages,
+            ["اجرای فعال و ارسال‌نشده‌ای برای مرحله فعلی پیدا نشد."],
+        )
 
     def test_active_execution_lookup_returns_only_unsubmitted_execution(self):
         instance = self._create_execution_lookup_instance()
