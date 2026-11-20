@@ -1518,6 +1518,47 @@ class WorkflowExecutionTests(TestCase):
             self.destination_user.pk,
         )
         self.assertFalse(returned_execution.is_submitted)
+        self.assertEqual(returned_execution.entered_by_id, self.destination_user.pk)
+        self.assertEqual(returned_execution.assigned_to_id, self.user.pk)
+        self.assertIsNotNone(returned_execution.assigned_at)
+        self.assertEqual(
+            returned_execution.assignment_history.get().source,
+            WorkflowStepAssignmentHistory.Source.POLICY,
+        )
+
+    def test_reject_execution_assignment_policy_does_not_change_admin_notification_recipient(self):
+        transition_execution = self._create_pending_acceptance_execution()
+
+        self.step_one.assignment_policy = WorkflowStep.AssignmentPolicy.AUTO_SINGLE
+        self.step_one.save(update_fields=["assignment_policy"])
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_one,
+            action_code="EXECUTE",
+        )
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        WorkflowExecutionService.reject_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        returned_execution = WorkflowStepExecution.objects.filter(
+            instance_id=transition_execution.instance_id,
+            workflow_step=self.step_one,
+        ).order_by("-pk").first()
+        self.assertEqual(returned_execution.assigned_to_id, self.destination_user.pk)
+
+        notification = Notification.objects.get(
+            workflow_instance_id=transition_execution.instance_id,
+            transition_execution=transition_execution,
+            workflow_step=self.step_one,
+        )
+        self.assertEqual(notification.recipient_id, self.user.pk)
 
     def test_accept_transition_execution_requires_accept_permission(self):
         transition_execution = self._create_pending_acceptance_execution()
