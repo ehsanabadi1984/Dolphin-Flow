@@ -173,3 +173,55 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         other_response = self.client.get(other_url)
 
         self.assertEqual(other_response.status_code, 403)
+ 
+    def test_superuser_can_view_timeline_without_workflow_membership(self):
+        superuser = User.objects.create_superuser(
+            username="timeline-superuser",
+            password="test-password",
+        )
+        WorkflowMembership.objects.filter(
+            workflow=self.workflow,
+            user=superuser,
+        ).delete()
+        client = Client()
+        client.force_login(superuser)
+
+        response = client.get(self.timeline_url)
+
+        self.assertEqual(response.status_code, 200)
+
+
+    def test_group_permission_grants_global_timeline_access(self):
+        from django.contrib.auth.models import Group
+
+        permission = Permission.objects.get(
+            content_type=ContentType.objects.get_for_model(WorkflowInstance),
+            codename="view_all_workflowinstance_timelines",
+        )
+        group = Group.objects.create(name="Timeline auditors")
+        group.permissions.add(permission)
+        self.viewer.groups.add(group)
+        WorkflowMembership.objects.filter(
+            workflow=self.workflow,
+            user=self.viewer,
+        ).delete()
+
+        response = self.client.get(self.timeline_url)
+
+        self.assertEqual(response.status_code, 200)
+
+
+    def test_global_timeline_permission_can_be_assigned_directly(self):
+        permission = Permission.objects.get(
+            content_type=ContentType.objects.get_for_model(WorkflowInstance),
+            codename="view_all_workflowinstance_timelines",
+        )
+        self.viewer.user_permissions.add(permission)
+        WorkflowMembership.objects.filter(
+            workflow=self.workflow,
+            user=self.viewer,
+        ).delete()
+
+        response = self.client.get(self.timeline_url)
+
+        self.assertEqual(response.status_code, 200)
