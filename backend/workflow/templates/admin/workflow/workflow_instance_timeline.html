@@ -65,6 +65,12 @@
                         ↪
                     {% elif event.type == "assignment" %}
                         👤
+                    {% elif event.type == "transition_resolution" %}
+                        ✓
+                    {% elif event.type == "file_share" %}
+                        📎
+                    {% elif event.type == "instance_completed" %}
+                        ■
                     {% else %}
                         ●
                     {% endif %}
@@ -85,8 +91,16 @@
                                     اصلاح مدیریتی مسیر
                                 {% elif event.type == "assignment" %}
                                     تغییر مسئول
-                                {% else %}
+                                {% elif event.type == "transition_resolution" %}
+                                    تعیین تکلیف انتقال
+                                {% elif event.type == "file_share" %}
+                                    رویداد اشتراک فایل
+                                {% elif event.type == "instance_completed" %}
+                                    تکمیل فرآیند
+                                {% elif event.type == "step" %}
                                     اجرای مرحله
+                                {% else %}
+                                    رویداد فرآیند
                                 {% endif %}
                             </div>
 
@@ -97,7 +111,11 @@
                         </div>
 
                         <div class="timeline-event-time">
-                            {{ event.performed_at|date:"Y/m/d H:i:s" }}
+                            {% if event.performed_at %}
+                                {{ event.performed_at|date:"Y/m/d H:i:s" }}
+                            {% else %}
+                                زمان دقیق ثبت نشده است
+                            {% endif %}
                         </div>
 
                     </div>
@@ -219,7 +237,126 @@
 
                     {% endif %}
 
-                    {% if event.type == "transition" %}
+                    {% if event.type == "step" %}
+
+                        <div class="timeline-detail-grid">
+                            <div>
+                                <span>مسئول اجرا</span>
+                                <strong>{{ event.assigned_to|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span>زمان تخصیص</span>
+                                <strong>
+                                    {% if event.assigned_at %}
+                                        {{ event.assigned_at|date:"Y/m/d H:i:s" }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </strong>
+                            </div>
+                            <div>
+                                <span>تکمیل‌کننده</span>
+                                <strong>{{ event.completed_by|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span>زمان ثبت نهایی</span>
+                                <strong>
+                                    {% if event.submitted_at %}
+                                        {{ event.submitted_at|date:"Y/m/d H:i:s" }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </strong>
+                            </div>
+                        </div>
+
+                    {% elif event.type == "transition" %}
+
+                        <div class="timeline-transition-details">
+                            <div class="timeline-detail-grid">
+                                <div>
+                                    <span>مسیر</span>
+                                    <strong>{{ event.from_step|default:"—" }} ← {{ event.to_step|default:"—" }}</strong>
+                                </div>
+                                <div>
+                                    <span>وضعیت انتقال</span>
+                                    <strong>{{ event.transition_status|default:"—" }}</strong>
+                                </div>
+                            </div>
+                            {% if event.notes %}
+                                <div class="timeline-transition-notes">
+                                    <span>یادداشت انتقال</span>
+                                    <p>{{ event.notes }}</p>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                    {% elif event.type == "transition_resolution" %}
+
+                        <div class="timeline-resolution-details">
+                            <div>
+                                <span>نتیجه</span>
+                                <strong>{{ event.title }}</strong>
+                            </div>
+                            <div>
+                                <span>مسیر انتقال</span>
+                                <strong>{{ event.from_step|default:"—" }} ← {{ event.to_step|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span>تصمیم‌گیرنده</span>
+                                <strong>{{ event.user|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span>زمان تصمیم</span>
+                                <strong>
+                                    {% if event.resolved_at %}
+                                        {{ event.resolved_at|date:"Y/m/d H:i:s" }}
+                                    {% else %}
+                                        زمان دقیق ثبت نشده است
+                                    {% endif %}
+                                </strong>
+                            </div>
+                        </div>
+
+                    {% elif event.type == "file_share" %}
+
+                        <div class="timeline-file-share-details">
+                            <div>
+                                <span>فرستنده</span>
+                                <strong>{{ event.sender|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span>گیرنده</span>
+                                <strong>{{ event.recipient|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span>نوع تعامل</span>
+                                <strong>{{ event.interaction_type|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span>وضعیت پیام</span>
+                                <strong>{{ event.message_status|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span>مرحله مرتبط</span>
+                                <strong>{{ event.workflow_step|default:"—" }}</strong>
+                            </div>
+                        </div>
+                        {% if event.details %}
+                            <div class="timeline-file-share-details-json">
+                                <span>جزئیات رویداد</span>
+                                <pre>{{ event.details }}</pre>
+                            </div>
+                        {% endif %}
+
+                    {% elif event.type == "instance_completed" %}
+
+                        <div class="timeline-completion-details">
+                            <span>انجام‌دهنده تکمیل</span>
+                            <strong>{{ event.user|default:"—" }}</strong>
+                        </div>
+
+                    {% elif event.type == "override" %}
 
                         <div class="timeline-transition">
                             {{ event.description }}
@@ -271,7 +408,7 @@
                     {% endif %}
 
 
-                    {% if event.description %}
+                    {% if event.description and event.type != "transition" %}
 
                         <div class="timeline-notes">
                             {{ event.description }}
