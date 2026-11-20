@@ -720,6 +720,7 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
                     from_step=instance.current_step,
                 )
             )
+            transitions = _attach_transition_assignment_candidates(transitions)
 
             # Validation failure means the form must remain
             # editable so the operator can correct it.
