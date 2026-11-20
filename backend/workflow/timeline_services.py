@@ -94,36 +94,36 @@ def build_instance_timeline_events(instance):
             or "—"
         )
         event = _event(
-                "override" if is_override else "step",
-                f"step-{execution.pk}",
-                execution.performed_at,
-                (
-                    "اصلاح مسیر فرآیند"
-                    if is_override
-                    else f"ورود به مرحله «{execution.workflow_step.name}»"
-                ),
-                execution.entered_by or execution.performed_by,
-                "" if is_override else execution.notes,
-                execution_id=execution.pk,
-                override_from_step=override_from_step,
-                override_to_step=override_to_step,
-                override_reason=override_reason,
-                entered_by=_user_label(execution.entered_by),
-                assigned_to=_user_label(execution.assigned_to),
-                assigned_at=execution.assigned_at,
-                completed_by=_user_label(execution.completed_by),
-                submitted_at=execution.submitted_at,
-                is_submitted=execution.is_submitted,
-                history=(execution.data or {}).get("history"),
-                sla_started_at=execution.sla_started_at,
-                sla_due_at=execution.sla_due_at,
-                sla_warning_at=execution.sla_warning_at,
-                sla_warning_sent_at=execution.sla_warning_sent_at,
-                sla_completed_at=execution.sla_completed_at,
-                sla_breached_at=execution.sla_breached_at,
-                sla_completed=bool(execution.sla_completed_at),
-                sla_breached=bool(execution.sla_breached_at),
-            )
+            "override" if is_override else "step",
+            f"step-{execution.pk}",
+            execution.performed_at,
+            (
+                "اصلاح مسیر فرآیند"
+                if is_override
+                else f"ورود به مرحله «{execution.workflow_step.name}»"
+            ),
+            execution.entered_by or execution.performed_by,
+            "" if is_override else execution.notes,
+            execution_id=execution.pk,
+            override_from_step=override_from_step,
+            override_to_step=override_to_step,
+            override_reason=override_reason,
+            entered_by=_user_label(execution.entered_by),
+            assigned_to=_user_label(execution.assigned_to),
+            assigned_at=execution.assigned_at,
+            completed_by=_user_label(execution.completed_by),
+            submitted_at=execution.submitted_at,
+            is_submitted=execution.is_submitted,
+            history=(execution.data or {}).get("history"),
+            sla_started_at=execution.sla_started_at,
+            sla_due_at=execution.sla_due_at,
+            sla_warning_at=execution.sla_warning_at,
+            sla_warning_sent_at=execution.sla_warning_sent_at,
+            sla_completed_at=execution.sla_completed_at,
+            sla_breached_at=execution.sla_breached_at,
+            sla_completed=bool(execution.sla_completed_at),
+            sla_breached=bool(execution.sla_breached_at),
+        )
         events.append(event)
 
     assignments = (
