@@ -5,8 +5,10 @@ from django.utils import timezone
 from .models import (
     Notification,
     WorkflowInstance,
+    WorkflowStepAssignmentHistory,
     WorkflowStepExecution,
 )
+from .assignment_services import WorkflowStepAssignmentService
 from .notification_services import NotificationService
 from .realtime_services import WorkflowRealtimeService
 from .sla_services import SLAService
@@ -20,7 +22,14 @@ class WorkflowOverrideService:
 
     @staticmethod
     @transaction.atomic
-    def override_instance_step(*, instance, target_step, performed_by, reason):
+    def override_instance_step(
+        *,
+        instance,
+        target_step,
+        performed_by,
+        reason,
+        selected_assignee=None,
+    ):
         # Lock only the WorkflowInstance row. current_step is nullable, so
         # select_related("current_step") would introduce a LEFT OUTER JOIN
         # that PostgreSQL cannot combine with FOR UPDATE.
@@ -74,13 +83,29 @@ class WorkflowOverrideService:
             f"دلیل: {reason}"
         )
 
+        assignee = WorkflowStepAssignmentService.resolve_override_assignee(
+            workflow=instance.workflow,
+            step=target_step,
+            instance=instance,
+            selected_assignee=selected_assignee,
+        )
+
         step_execution = WorkflowStepExecution.objects.create(
             instance=instance,
             workflow_step=target_step,
             performed_by=performed_by,
+            entered_by=performed_by,
             performed_at=now,
             notes=override_note,
             is_submitted=False,
+        )
+
+        WorkflowStepAssignmentService.assign_execution(
+            execution=step_execution,
+            assignee=assignee,
+            changed_by=performed_by,
+            source=WorkflowStepAssignmentHistory.Source.OVERRIDE,
+            reason=reason,
         )
 
         SLAService.start_sla_if_configured(
@@ -98,7 +123,7 @@ class WorkflowOverrideService:
 
         instance.save(update_fields=update_fields)
 
-        recipient = target_step.assigned_to
+        recipient = step_execution.assigned_to
         if (
             recipient
             and recipient.is_active
