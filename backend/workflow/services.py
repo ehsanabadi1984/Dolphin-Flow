@@ -8,6 +8,7 @@ from .sla_services import SLAService
 from .realtime_services import WorkflowRealtimeService
 from .models import (
     WorkflowInstance,
+    WorkflowStep,
     WorkflowPermission,
     WorkflowStepExecution,
     WorkflowStepAssignmentHistory,
@@ -564,7 +565,7 @@ class WorkflowExecutionService:
         manual_destination = (
             not is_finish
             and transition.to_step.assignment_policy
-            == transition.to_step.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+            == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
         )
         if selected_assignee is not None and not manual_destination:
             raise ValidationError(
