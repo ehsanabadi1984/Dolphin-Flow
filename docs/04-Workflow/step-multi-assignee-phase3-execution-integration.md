@@ -1,6 +1,6 @@
 # برنامه اجرایی فاز سوم — اتصال تخصیص مسئول به چرخه اجرای Workflow
 
-- نسخه: 0.1
+- نسخه: 0.2
 - تاریخ: 2026-11-20
 - سند مادر: `step-multi-assignee-design.md` نسخه 1.7
 - پیش‌نیاز: `step-multi-assignee-phase2-model-design.md`
@@ -46,6 +46,9 @@
 
 تغییر لازم:
 - انتخاب Execution جاری باید به invariant اجرای فعال متکی باشد، نه صرفاً timestamp؛ وجود بیش از یک Execution فعال یا نبود Execution باید خطای سازگار و قابل تشخیص بدهد.
+- در مدل فعلی محصول، Submit فرم و اجرای Transition دو اقدام جداگانه کاربر نیستند؛ هر دو در یک عملیات `execute_transition` انجام می‌شوند.
+- actor این عملیات باید همان مسئول ثبت‌شده در `assigned_to` برای Execution فعال باشد و در زمان اقدام نیز اعتبار `EXECUTE` او بررسی شود.
+- همان actor علاوه بر مسئولیت اجرای فعال، باید مجوز مستقل `TRANSITION` برای Transition انتخاب‌شده را هم داشته باشد. مجوز TRANSITION به‌تنهایی نه اجازه Submit می‌دهد و نه مسئولیت Execution را منتقل می‌کند.
 - فقط پس از اعتبارسنجی موفق Submit، `completed_by=user` ثبت شود.
 - در انتقال عادی، مسئول مقصد پیش از commit resolve و اعتبارسنجی شود؛ Execution مقصد با `entered_by=user` ساخته و مسئول آن با منشأ `POLICY` یا `MANUAL` ثبت شود.
 - در Finish، Execution مبدأ تکمیل شود ولی Execution مقصدی ساخته نشود.
@@ -97,7 +100,7 @@
 | `WorkflowStepExecution.assigned_at` | زمان تخصیص مسئول |
 | `WorkflowStepExecution.completed_by` | فقط کاربری که Submit موفق اجرای مبدأ را انجام داده است |
 
-مجوز اقدام و مجوز Submit باید همچنان سمت سرور بررسی شوند. داشتن `assigned_to` جایگزین FieldAccess، RepeatableGroupAccess یا اعتبارسنجی فرم نیست.
+در مسیر فعلی، Submit و Transition یک اقدام واحد در رابط کاربر هستند؛ بنابراین actor هر دو یکی است. او باید مسئول Execution فعال باشد، اعتبار `EXECUTE` داشته باشد و مجوز مستقل `TRANSITION` را نیز بگذراند. داشتن مجوز TRANSITION به‌تنهایی کافی نیست. داشتن `assigned_to` نیز جایگزین FieldAccess، RepeatableGroupAccess یا اعتبارسنجی فرم نیست.
 
 ## 5. انتخاب دستی مسئول مقصد
 
