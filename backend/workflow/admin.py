@@ -38,6 +38,7 @@ from .models import (
     WorkflowInstance,
     WorkflowTransition,
     WorkflowTransitionExecution,
+    WorkflowTransitionNotificationIssue,
     WorkflowPermission,
     WorkflowStepSLA,
 
@@ -1884,6 +1885,85 @@ class WorkflowTransitionAdmin(admin.ModelAdmin):
                 )
             instance.save()
         formset.save_m2m()
+
+
+@admin.register(
+    WorkflowTransitionNotificationIssue,
+    site=dolphin_admin_site,
+)
+class WorkflowTransitionNotificationIssueAdmin(admin.ModelAdmin):
+
+    admin_category = "executions"
+    admin_section = "execution"
+
+    list_display = (
+        "created_at",
+        "outcome",
+        "instance_display",
+        "transition_display",
+        "policy",
+        "error_code",
+        "details_summary",
+    )
+
+    list_filter = (
+        "outcome",
+        "policy",
+        "error_code",
+        "created_at",
+    )
+
+    date_hierarchy = "created_at"
+
+    search_fields = (
+        "error_code",
+        "details",
+        "transition_execution__transition__name",
+        "transition_execution__instance__workflow__name",
+        "transition_execution__instance__workflow__code",
+        "transition_execution__performed_by__username",
+    )
+
+    list_select_related = (
+        "transition_execution",
+        "transition_execution__transition",
+        "transition_execution__instance",
+        "transition_execution__instance__workflow",
+    )
+
+    readonly_fields = (
+        "transition_execution",
+        "outcome",
+        "policy",
+        "error_code",
+        "details",
+        "created_at",
+    )
+
+    fields = readonly_fields
+    ordering = ("-created_at", "-pk")
+    list_per_page = 50
+
+    @admin.display(description="فرآیند")
+    def instance_display(self, obj):
+        return obj.transition_execution.instance
+
+    @admin.display(description="انتقال")
+    def transition_display(self, obj):
+        return obj.transition_execution.transition
+
+    @admin.display(description="شرح خطا")
+    def details_summary(self, obj):
+        return (obj.details or "").strip()[:120] or "—"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 # ============================================================
 # Workflow Permission
