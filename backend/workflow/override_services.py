@@ -97,6 +97,16 @@ class WorkflowOverrideService:
             entered_by=performed_by,
             performed_at=now,
             notes=override_note,
+            data={
+                "override": {
+                    "version": 1,
+                    "from_step_id": from_step.pk if from_step else None,
+                    "from_step_name": from_step_name,
+                    "to_step_id": target_step.pk,
+                    "to_step_name": target_step.name,
+                    "reason": reason,
+                }
+            },
             is_submitted=False,
         )
 
