@@ -19,6 +19,43 @@ from .form_draft_submit_services import FormDraftSubmitService
 class WorkflowExecutionService:
 
     @staticmethod
+    def _get_active_step_execution(*, instance):
+        """
+        Return the single actionable execution for the instance's current step.
+
+        The caller must lock the WorkflowInstance before calling this helper.
+        Locking the execution rows protects the selected execution while the
+        surrounding transition transaction is in progress.
+        """
+        if instance.current_step_id is None:
+            raise ValidationError(
+                "این نمونه مرحله فعالی برای اجرا ندارد."
+            )
+
+        executions = list(
+            instance.step_executions
+            .select_for_update()
+            .filter(
+                workflow_step_id=instance.current_step_id,
+                is_submitted=False,
+            )
+            .order_by("pk")[:2]
+        )
+
+        if not executions:
+            raise ValidationError(
+                "اجرای فعال و ارسال‌نشده‌ای برای مرحله فعلی پیدا نشد."
+            )
+
+        if len(executions) > 1:
+            raise ValidationError(
+                "برای مرحله فعلی بیش از یک اجرای فعال پیدا شد؛ "
+                "ادامه عملیات ایمن نیست."
+            )
+
+        return executions[0]
+
+    @staticmethod
     @transaction.atomic
     def accept_transition_execution(
         *,
@@ -445,24 +482,10 @@ class WorkflowExecutionService:
             )
 
         current_step_execution = (
-            instance.step_executions
-            .select_for_update()
-            .filter(
-                workflow_step=instance.current_step,
+            WorkflowExecutionService._get_active_step_execution(
+                instance=instance,
             )
-            .order_by("-performed_at")
-            .first()
         )
-
-        if current_step_execution is None:
-            raise ValidationError(
-                "اجرای مرحله فعلی این Workflow پیدا نشد."
-            )
-
-        if current_step_execution.is_submitted:
-            raise ValidationError(
-                "فرم این مرحله قبلاً ارسال شده است."
-            )
 
         WorkflowAuthorizationService.require_permission(
             user=user,
