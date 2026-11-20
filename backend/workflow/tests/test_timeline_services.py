@@ -243,6 +243,100 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         self.assertEqual(events[0]["performed_at"], base_time - timedelta(hours=2))
         self.assertEqual(events[1]["execution_id"], own_execution.pk)
 
+    def test_override_event_uses_structured_metadata_and_assignment_history(self):
+        execution = WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step_two,
+            performed_by=self.reviewer,
+            entered_by=self.reviewer,
+            notes="متن یادداشت می‌تواند هر چیزی باشد.",
+            data={
+                "history": {"fields": ["preserve-me"]},
+                "override": {
+                    "version": 1,
+                    "from_step_id": self.step_one.pk,
+                    "from_step_name": self.step_one.name,
+                    "to_step_id": self.step_two.pk,
+                    "to_step_name": self.step_two.name,
+                    "reason": "اصلاح ساختاری مسیر",
+                },
+            },
+        )
+        WorkflowStepAssignmentHistory.objects.create(
+            step_execution=execution,
+            previous_assignee=None,
+            new_assignee=self.assignee,
+            changed_by=self.reviewer,
+            source=WorkflowStepAssignmentHistory.Source.OVERRIDE,
+            reason="اصلاح ساختاری مسیر",
+        )
+
+        event = next(
+            item for item in build_instance_timeline_events(self.instance)
+            if item["id"] == f"step-{execution.pk}"
+        )
+
+        self.assertEqual(event["type"], "override")
+        self.assertEqual(event["title"], "اصلاح مسیر فرآیند")
+        self.assertEqual(event["override_from_step"], "مرحله اول")
+        self.assertEqual(event["override_to_step"], "مرحله دوم")
+        self.assertEqual(event["override_reason"], "اصلاح ساختاری مسیر")
+        self.assertEqual(event["description"], "")
+        self.assertEqual(event["history"], {"fields": ["preserve-me"]})
+
+    def test_legacy_override_is_detected_from_assignment_history_without_note_prefix(self):
+        execution = WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step_two,
+            performed_by=self.reviewer,
+            notes="یادداشت قدیمی یا تغییر یافته",
+        )
+        WorkflowStepAssignmentHistory.objects.create(
+            step_execution=execution,
+            previous_assignee=None,
+            new_assignee=self.assignee,
+            changed_by=self.reviewer,
+            source=WorkflowStepAssignmentHistory.Source.OVERRIDE,
+            reason="دلیل ثبت‌شده در سابقه تخصیص",
+        )
+
+        event = next(
+            item for item in build_instance_timeline_events(self.instance)
+            if item["id"] == f"step-{execution.pk}"
+        )
+
+        self.assertEqual(event["type"], "override")
+        self.assertEqual(event["override_from_step"], "—")
+        self.assertEqual(event["override_to_step"], "مرحله دوم")
+        self.assertEqual(event["override_reason"], "دلیل ثبت‌شده در سابقه تخصیص")
+
+    def test_equal_timestamp_step_events_use_numeric_id_order(self):
+        timestamp = timezone.now()
+        executions = [
+            WorkflowStepExecution.objects.create(
+                instance=self.instance,
+                workflow_step=self.step_one,
+                performed_by=self.starter,
+            )
+            for _ in range(12)
+        ]
+        WorkflowStepExecution.objects.filter(
+            pk__in=[item.pk for item in executions]
+        ).update(performed_at=timestamp)
+        WorkflowInstance.objects.filter(pk=self.instance.pk).update(
+            started_at=timestamp - timedelta(minutes=1)
+        )
+        self.instance.refresh_from_db()
+
+        events = build_instance_timeline_events(self.instance)
+        step_ids = [
+            int(event["id"].rsplit("-", 1)[-1])
+            for event in events
+            if event["type"] == "step"
+        ]
+
+        self.assertEqual(step_ids, sorted(step_ids))
+
     def test_rejects_non_instance_argument(self):
         with self.assertRaises(TypeError):
             build_instance_timeline_events(None)
