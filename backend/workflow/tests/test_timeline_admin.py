@@ -18,7 +18,7 @@ from workflow.models import (
 User = get_user_model()
 
 
-class WorkflowInstanceTimelineAdminTests(TestCase):
+class WorkflowInstanceTimelineAdminSetup:
     def setUp(self):
         self.viewer = User.objects.create_user(
             username="timeline-admin-viewer",
@@ -79,6 +79,7 @@ class WorkflowInstanceTimelineAdminTests(TestCase):
         request.user = self.viewer
         return request
 
+class WorkflowInstanceTimelineAdminTests(WorkflowInstanceTimelineAdminSetup, TestCase):
     def test_timeline_uses_aggregated_service_for_authorized_user(self):
         self.grant_workflow_view()
 
@@ -121,7 +122,7 @@ class WorkflowInstanceTimelineAdminTests(TestCase):
             )
 
 
-class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminTests):
+class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, TestCase):
     def setUp(self):
         super().setUp()
         self.client = Client()
