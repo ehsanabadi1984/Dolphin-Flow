@@ -2,7 +2,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
-from django.test import RequestFactory, TestCase
+from django.test import Client, RequestFactory, TestCase
+from django.urls import reverse
 
 from workflow.admin import WorkflowInstanceAdmin, dolphin_admin_site
 from workflow.models import (
@@ -118,3 +119,56 @@ class WorkflowInstanceTimelineAdminTests(TestCase):
                 self.get_request(),
                 str(self.instance.pk),
             )
+
+
+class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminTests):
+    def setUp(self):
+        super().setUp()
+        self.client = Client()
+        self.client.force_login(self.viewer)
+        self.timeline_url = reverse(
+            "admin:workflow_workflowinstance_timeline",
+            args=[self.instance.pk],
+        )
+
+    def test_authorized_user_can_open_timeline_through_admin_url(self):
+        self.grant_workflow_view()
+
+        response = self.client.get(self.timeline_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "تاریخچه اجرای")
+
+    def test_user_without_workflow_view_gets_forbidden_over_http(self):
+        response = self.client.get(self.timeline_url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_user_without_admin_model_view_gets_forbidden_over_http(self):
+        self.grant_workflow_view()
+        self.viewer.user_permissions.clear()
+
+        response = self.client.get(self.timeline_url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_instance_starter_implicit_view_is_limited_to_that_instance(self):
+        self.instance.started_by = self.viewer
+        self.instance.save(update_fields=["started_by"])
+
+        own_response = self.client.get(self.timeline_url)
+        self.assertEqual(own_response.status_code, 200)
+
+        other_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+            started_by=self.starter,
+        )
+        other_url = reverse(
+            "admin:workflow_workflowinstance_timeline",
+            args=[other_instance.pk],
+        )
+
+        other_response = self.client.get(other_url)
+
+        self.assertEqual(other_response.status_code, 403)
