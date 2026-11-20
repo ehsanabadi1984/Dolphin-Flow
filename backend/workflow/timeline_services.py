@@ -63,15 +63,51 @@ def build_instance_timeline_events(instance):
         .prefetch_related("assignment_history")
     )
     for execution in executions:
-        events.append(
-            _event(
-                "step",
+        assignment_history = list(execution.assignment_history.all())
+        override_assignment = next(
+            (
+                item for item in assignment_history
+                if item.source == WorkflowStepAssignmentHistory.Source.OVERRIDE
+            ),
+            None,
+        )
+        execution_data = execution.data or {}
+        override_metadata = execution_data.get("override")
+        is_override = (
+            override_assignment is not None
+            or isinstance(override_metadata, dict)
+        )
+        override_metadata = (
+            override_metadata if isinstance(override_metadata, dict) else {}
+        )
+        override_from_step = (
+            override_metadata.get("from_step_name")
+            or "—"
+        )
+        override_to_step = (
+            override_metadata.get("to_step_name")
+            or execution.workflow_step.name
+        )
+        override_reason = (
+            override_metadata.get("reason")
+            or (override_assignment.reason if override_assignment else "")
+            or "—"
+        )
+        event = _event(
+                "override" if is_override else "step",
                 f"step-{execution.pk}",
                 execution.performed_at,
-                f"ورود به مرحله «{execution.workflow_step.name}»",
+                (
+                    "اصلاح مسیر فرآیند"
+                    if is_override
+                    else f"ورود به مرحله «{execution.workflow_step.name}»"
+                ),
                 execution.entered_by or execution.performed_by,
-                execution.notes,
+                "" if is_override else execution.notes,
                 execution_id=execution.pk,
+                override_from_step=override_from_step,
+                override_to_step=override_to_step,
+                override_reason=override_reason,
                 entered_by=_user_label(execution.entered_by),
                 assigned_to=_user_label(execution.assigned_to),
                 assigned_at=execution.assigned_at,
@@ -88,7 +124,7 @@ def build_instance_timeline_events(instance):
                 sla_completed=bool(execution.sla_completed_at),
                 sla_breached=bool(execution.sla_breached_at),
             )
-        )
+        events.append(event)
 
     assignments = (
         WorkflowStepAssignmentHistory.objects.filter(
@@ -266,13 +302,32 @@ def build_instance_timeline_events(instance):
             )
         )
 
-    # Stable tie-breakers prevent events with identical timestamps from
-    # changing order between requests.
+    # Keep equal-timestamp events in a stable, semantic order. The final
+    # identifier component is numeric so step-10 follows step-9, not step-1.
+    event_type_order = {
+        "start": 0,
+        "step": 10,
+        "override": 11,
+        "assignment": 20,
+        "transition": 30,
+        "transition_resolution": 40,
+        "file_share": 50,
+        "instance_completed": 60,
+    }
+
+    def numeric_event_id(event_id):
+        suffix = str(event_id).rsplit("-", 1)[-1]
+        try:
+            return (0, int(suffix))
+        except (TypeError, ValueError):
+            return (1, str(event_id))
+
     events.sort(
         key=lambda item: (
             item["performed_at"] is None,
             item["performed_at"],
-            item["type"],
+            event_type_order.get(item["type"], 99),
+            numeric_event_id(item["id"]),
             item["id"],
         )
     )
