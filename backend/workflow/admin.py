@@ -17,6 +17,7 @@ from django.core.exceptions import PermissionDenied
 
 import json
 
+from .authorization import WorkflowAuthorizationService
 from .form_workspace import get_valid_parent_group_queryset
 from .sms_provider_registry import (
     activate_provider,
@@ -2190,7 +2191,25 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    def has_view_permission(self, request, obj=None):
+        if not super().has_view_permission(request, obj):
+            return False
+
+        if obj is None:
+            return True
+
+        return WorkflowAuthorizationService.has_permission(
+            user=request.user,
+            workflow=obj.workflow,
+            action=WorkflowPermission.Action.VIEW,
+            instance=obj,
+        )
+
     def timeline_view(self, request, object_id):
+        # Check the Django admin model permission before loading the object.
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
         instance = get_object_or_404(
             WorkflowInstance.objects.select_related(
                 "workflow",
@@ -2200,143 +2219,14 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
             pk=object_id,
         )
 
-        step_events = list(
-            WorkflowStepExecution.objects
-            .filter(instance=instance)
-            .select_related(
-                "workflow_step",
-                "performed_by",
-            )
-            .values(
-                "id",
-                "performed_at",
-                "workflow_step__name",
-                "performed_by__username",
-                "performed_by__first_name",
-                "performed_by__last_name",
-                "notes",
-                "is_submitted",
-                "data",
+        # Staff status alone is not sufficient: the user must also have
+        # effective VIEW permission for this exact workflow instance.
+        if not self.has_view_permission(request, instance):
+            raise PermissionDenied
 
-                "sla_started_at",
-                "sla_due_at",
-                "sla_warning_at",
-                "sla_warning_sent_at",
-                "sla_completed_at",
-                "sla_breached_at",
-            )
-        )
+        from .timeline_services import build_instance_timeline_events
 
-        transition_events = list(
-            WorkflowTransitionExecution.objects
-            .filter(instance=instance)
-            .select_related(
-                "transition",
-                "transition__from_step",
-                "transition__to_step",
-                "performed_by",
-            )
-            .values(
-                "id",
-                "performed_at",
-                "transition__name",
-                "transition__from_step__name",
-                "transition__to_step__name",
-                "performed_by__username",
-                "performed_by__first_name",
-                "performed_by__last_name",
-                "notes",
-            )
-        )
-
-        events = [
-            {
-                "type": "start",
-                "id": f"instance-{instance.pk}",
-                "performed_at": instance.started_at,
-                "user": str(instance.started_by or "—"),
-                "title": "شروع فرآیند",
-                "description": (
-                    f"Workflow «{instance.workflow.name}» "
-                    "شروع شد."
-                ),
-                "is_submitted": False,
-                "sla_completed": False,
-                "sla_breached": False,
-            }
-        ]
-
-        for event in step_events:
-            events.append(
-                {
-                    "type": "step",
-                    "id": event["id"],
-                    "performed_at": event["performed_at"],
-                    "user": (
-                        event["performed_by__first_name"]
-                        or event["performed_by__last_name"]
-                        or event["performed_by__username"]
-                    ),
-                    "title": (
-                        f"ورود به مرحله "
-                        f"«{event['workflow_step__name']}»"
-                    ),
-                    "description": event["notes"],
-                    "history": (
-                        event["data"].get("history")
-                        if event["data"]
-                        else None
-                    ),
-
-                    "is_submitted": event["is_submitted"],
-
-                    "sla_started_at": event["sla_started_at"],
-                    "sla_due_at": event["sla_due_at"],
-                    "sla_warning_at": event["sla_warning_at"],
-                    "sla_warning_sent_at": (
-                        event["sla_warning_sent_at"]
-                    ),
-                    "sla_completed_at": event["sla_completed_at"],
-                    "sla_breached_at": event["sla_breached_at"],
-
-                    "sla_completed": bool(
-                        event["sla_completed_at"]
-                    ),
-                    "sla_breached": bool(
-                        event["sla_breached_at"]
-                    ),
-                }
-            )
-
-        for event in transition_events:
-            events.append(
-                {
-                    "type": "transition",
-                    "id": event["id"],
-                    "performed_at": event["performed_at"],
-                    "user": (
-                        event["performed_by__first_name"]
-                        or event["performed_by__last_name"]
-                        or event["performed_by__username"]
-                    ),
-                    "title": event["transition__name"],
-                    "description": (
-                        f"{event['transition__from_step__name']}"
-                        f" → "
-                        f"{event['transition__to_step__name']}"
-                        if event['transition__to_step__name']
-                        else f"{event['transition__from_step__name']}"
-                        f" → [تکمیل فرآیند]"
-                    ),
-                    "is_submitted": False,
-                    "sla_completed": False,
-                    "sla_breached": False,
-                }
-            )
-
-        events.sort(
-            key=lambda event: event["performed_at"]
-        )
+        events = build_instance_timeline_events(instance)
 
         context = {
             **self.admin_site.each_context(request),
