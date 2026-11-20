@@ -467,3 +467,93 @@
         justify-self: start;
     }
 }
+
+
+/* Timeline event detail panels */
+.timeline-detail-grid,
+.timeline-resolution-details,
+.timeline-file-share-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    margin-top: 14px;
+}
+
+.timeline-detail-grid > div,
+.timeline-resolution-details > div,
+.timeline-file-share-details > div,
+.timeline-transition-notes,
+.timeline-file-share-details-json,
+.timeline-completion-details {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    padding: 10px 12px;
+    border-radius: 7px;
+    background: var(--body-bg);
+}
+
+.timeline-detail-grid span,
+.timeline-resolution-details span,
+.timeline-file-share-details span,
+.timeline-transition-notes > span,
+.timeline-file-share-details-json > span,
+.timeline-completion-details > span {
+    color: var(--body-quiet-color);
+    font-size: 11px;
+}
+
+.timeline-detail-grid strong,
+.timeline-resolution-details strong,
+.timeline-file-share-details strong,
+.timeline-completion-details strong {
+    overflow-wrap: anywhere;
+    font-size: 13px;
+}
+
+.timeline-transition-details,
+.timeline-file-share-details-json,
+.timeline-completion-details {
+    margin-top: 12px;
+}
+
+.timeline-transition-notes p {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.timeline-file-share-details-json pre {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: inherit;
+    font-size: 12px;
+}
+
+.timeline-marker-transition_resolution {
+    background: #0f766e;
+    border-color: #0f766e;
+    color: #ffffff;
+}
+
+.timeline-marker-file_share {
+    background: #a16207;
+    border-color: #a16207;
+    color: #ffffff;
+}
+
+.timeline-marker-instance_completed {
+    background: #198754;
+    border-color: #198754;
+    color: #ffffff;
+}
+
+@media (max-width: 700px) {
+    .timeline-detail-grid,
+    .timeline-resolution-details,
+    .timeline-file-share-details {
+        grid-template-columns: 1fr;
+    }
+}
