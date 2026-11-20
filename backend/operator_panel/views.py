@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
@@ -36,8 +37,26 @@ from workflow.models import (
 )
 
 from workflow.services import WorkflowExecutionService
+from workflow.assignment_services import WorkflowStepAssignmentService
 from workflow.instance_device_services import InstanceDeviceService
 from .form_post_adapter import OperatorPanelFormPostAdapter
+
+
+def _attach_transition_assignment_candidates(transitions):
+    for transition in transitions:
+        transition.assignment_candidates = []
+        if (
+            transition.to_step_id
+            and transition.to_step.assignment_policy
+            == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        ):
+            transition.assignment_candidates = (
+                WorkflowStepAssignmentService.get_eligible_assignees(
+                    workflow=transition.workflow,
+                    step=transition.to_step,
+                )
+            )
+    return transitions
 
 
 def formfield_model_fields(request):
@@ -445,6 +464,7 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
             from_step=instance.current_step,
         )
     )
+    transitions = _attach_transition_assignment_candidates(transitions)
 
     # ---------------------------------------------------------
     # Read-context step
@@ -955,11 +975,31 @@ def execute_transition(request, instance_id, transition_id):
     )
 
     try:
+        selected_assignee = None
+        selected_assignee_id = request.POST.get("selected_assignee", "").strip()
+        if (
+            transition.to_step_id
+            and transition.to_step.assignment_policy
+            == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        ):
+            if not selected_assignee_id.isdigit():
+                raise ValidationError("انتخاب مسئول مرحله مقصد الزامی است.")
+            selected_assignee = (
+                get_user_model().objects
+                .filter(pk=int(selected_assignee_id))
+                .first()
+            )
+            if selected_assignee is None:
+                raise ValidationError("کاربر انتخاب‌شده برای مسئول مقصد وجود ندارد.")
+        elif selected_assignee_id:
+            raise ValidationError("انتخاب مسئول دستی برای این مرحله مجاز نیست.")
+
         WorkflowExecutionService.execute_transition(
             instance=instance,
             transition=transition,
             user=request.user,
             notes=request.POST.get("notes", ""),
+            selected_assignee=selected_assignee,
         )
 
     except PermissionDenied:
@@ -995,6 +1035,7 @@ def execute_transition(request, instance_id, transition_id):
                 from_step=instance.current_step,
             )
         )
+        transitions = _attach_transition_assignment_candidates(transitions)
 
         return render(
             request,
