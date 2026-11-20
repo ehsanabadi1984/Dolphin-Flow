@@ -120,14 +120,15 @@ class WorkflowExecutionTests(TestCase):
             )
 
         # Keep a second eligible executor available for destination-policy tests.
-        WorkflowPermission.objects.create(
-            workflow=self.workflow,
-            step=self.step_two,
-            user=self.destination_user,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
-            effect=WorkflowPermission.Effect.ALLOW,
-        )
+        for step in (self.step_one, self.step_two):
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                step=step,
+                user=self.destination_user,
+                action=WorkflowPermission.Action.STEP_ACTION,
+                action_code="EXECUTE",
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
 
     def grant_execute_permission(self):
         WorkflowPermission.objects.create(
@@ -1310,6 +1311,54 @@ class WorkflowExecutionTests(TestCase):
             "POLICY",
         )
 
+    def test_invalid_destination_assignment_rolls_back_submit_and_transition(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        instance = self.start_instance()
+
+        WorkflowPermission.objects.filter(
+            workflow=self.workflow,
+            step=self.step_two,
+            user=self.user,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="EXECUTE",
+        ).delete()
+        WorkflowPermission.objects.filter(
+            workflow=self.workflow,
+            step=self.step_two,
+            user=self.destination_user,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="EXECUTE",
+        ).delete()
+
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            )
+
+        instance.refresh_from_db()
+        source_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_one,
+        )
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
+        self.assertFalse(source_execution.is_submitted)
+        self.assertIsNone(source_execution.completed_by_id)
+        self.assertFalse(
+            WorkflowTransitionExecution.objects.filter(
+                instance=instance,
+                transition=self.transition_one,
+            ).exists()
+        )
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_two,
+            ).exists()
+        )
+
     def test_finish_transition_records_completer_without_creating_destination_execution(self):
         self.grant_start_permission()
         finish_transition = WorkflowTransition.objects.create(
@@ -1381,6 +1430,12 @@ class WorkflowExecutionTests(TestCase):
         self.assertFalse(
             notification.is_read,
         )
+        destination_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_two,
+        )
+        self.assertEqual(destination_execution.assigned_to_id, self.destination_user.pk)
+        self.assertEqual(destination_execution.entered_by_id, self.user.pk)
 
 
     def _create_execution_lookup_instance(self):
