@@ -281,6 +281,19 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
             resolved_at=submitted_at,
             notes="یادداشت تصمیم انتقال",
         )
+        finish_transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="تکمیل فرآیند",
+            code="TIMELINE_RENDER_FINISH",
+            from_step=target_step,
+            to_step=None,
+        )
+        WorkflowTransitionExecution.objects.create(
+            instance=self.instance,
+            transition=finish_transition,
+            performed_by=self.viewer,
+            status=WorkflowTransitionExecution.Status.ACCEPTED,
+        )
         asset = SharedFileAsset.objects.create(
             storage_name="timeline/render-test.pdf",
             original_name="render-test.pdf",
@@ -320,6 +333,8 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         self.assertContains(response, "نوع تعامل")
         self.assertContains(response, "وضعیت پیام")
         self.assertContains(response, "مدرک بررسی")
+        self.assertContains(response, "تکمیل فرآیند")
+        self.assertContains(response, "انجام‌دهنده تکمیل")
         self.assertContains(response, "تغییر مسئول")
 
     def test_override_is_distinct_and_null_resolution_timestamp_does_not_break_timeline(self):
