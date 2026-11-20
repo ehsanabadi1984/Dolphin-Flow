@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 
 from workflow.models import (
     Notification,
@@ -17,10 +18,7 @@ from workflow.notification_services import WorkflowTransitionNotificationService
 
 class WorkflowTransitionNotificationServiceTests(TestCase):
     def setUp(self):
-        User = __import__(
-            "django.contrib.auth",
-            fromlist=["get_user_model"],
-        ).get_user_model()
+        User = get_user_model()
 
         self.starter = User.objects.create_user(
             username="workflow-starter",
@@ -209,6 +207,66 @@ class WorkflowTransitionNotificationServiceTests(TestCase):
         self.assertEqual(notification.recipient, self.completer)
         self.assertEqual(notification.transition_execution, self.transition_execution)
         self.assertEqual(WorkflowTransitionNotificationIssue.objects.count(), 0)
+
+
+    def test_reject_fixed_user_is_independent_from_accept_fixed_user(self):
+        reject_user = get_user_model().objects.create_user(
+            username="reject-fixed-recipient",
+            password="test-password",
+        )
+        self.transition.accept_notification_policy = WorkflowTransition.NotificationRecipientPolicy.FIXED_USER
+        self.transition.accept_notification_user = self.fixed_user
+        self.transition.reject_notification_policy = WorkflowTransition.NotificationRecipientPolicy.FIXED_USER
+        self.transition.reject_notification_user = reject_user
+        self.transition.save(update_fields=[
+            "accept_notification_policy",
+            "accept_notification_user",
+            "reject_notification_policy",
+            "reject_notification_user",
+        ])
+
+        result = WorkflowTransitionNotificationService.resolve_recipient(
+            transition=self.transition,
+            instance=self.instance,
+            outcome="REJECT",
+            source_execution=self.source_execution,
+            result_execution=self.result_execution,
+        )
+
+        self.assertEqual(result["recipient"], reject_user)
+        self.assertNotEqual(result["recipient"], self.fixed_user)
+
+    def test_missing_source_execution_returns_failure(self):
+        result = self.resolve(
+            "ACCEPT",
+            WorkflowTransition.NotificationRecipientPolicy.SOURCE_COMPLETER,
+            source_execution=None,
+        )
+
+        self.assertIsNone(result["recipient"])
+        self.assertEqual(result["error_code"], "SOURCE_EXECUTION_MISSING")
+
+    def test_missing_result_execution_returns_failure(self):
+        result = self.resolve(
+            "REJECT",
+            WorkflowTransition.NotificationRecipientPolicy.RETURN_STEP_ASSIGNEE,
+            result_execution=None,
+        )
+
+        self.assertIsNone(result["recipient"])
+        self.assertEqual(result["error_code"], "RESULT_EXECUTION_MISSING")
+
+    def test_missing_workflow_starter_returns_failure(self):
+        self.instance.started_by = None
+        self.instance.save(update_fields=["started_by"])
+
+        result = self.resolve(
+            "ACCEPT",
+            WorkflowTransition.NotificationRecipientPolicy.WORKFLOW_STARTER,
+        )
+
+        self.assertIsNone(result["recipient"])
+        self.assertEqual(result["error_code"], "WORKFLOW_STARTER_MISSING")
 
     def test_invalid_outcome_is_rejected(self):
         with self.assertRaises(ValueError):
