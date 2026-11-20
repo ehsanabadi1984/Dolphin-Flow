@@ -231,7 +231,30 @@ def build_instance_timeline_events(instance):
             )
         )
 
-    if instance.completed_at:
+    # A finish transition is the durable record of each completion cycle.
+    # Keep these events even if an Override later reopens the instance and
+    # clears WorkflowInstance.completed_at.
+    finish_executions = [
+        item for item in transitions
+        if item.transition.to_step_id is None
+        and item.status == WorkflowTransitionExecution.Status.ACCEPTED
+    ]
+    for finish_execution in finish_executions:
+        events.append(
+            _event(
+                "instance_completed",
+                f"instance-completed-transition-{finish_execution.pk}",
+                finish_execution.performed_at,
+                "تکمیل فرآیند",
+                finish_execution.performed_by,
+                f"فرآیند «{instance.workflow.name}» تکمیل شد.",
+                transition_execution_id=finish_execution.pk,
+            )
+        )
+
+    # Compatibility for older completed instances that predate persisted
+    # finish-transition records. Do not duplicate a recorded completion.
+    if instance.completed_at and not finish_executions:
         events.append(
             _event(
                 "instance_completed",
