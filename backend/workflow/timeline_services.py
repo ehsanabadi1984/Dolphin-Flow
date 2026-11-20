@@ -130,7 +130,7 @@ def build_instance_timeline_events(instance):
             transition.to_step.name if transition.to_step_id
             else "تکمیل فرآیند"
         )
-        route = f"{transition.from_step.name} ← {destination}"
+        route = f"{transition.from_step.name} → {destination}"
         events.append(
             _event(
                 "transition",
