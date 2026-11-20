@@ -460,6 +460,115 @@ class WorkflowStepInline(admin.TabularInline):
         "order",
     )
 
+class WorkflowTransitionAdminForm(forms.ModelForm):
+
+    class Meta:
+        model = WorkflowTransition
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        workflow_id = None
+
+        if self.instance and self.instance.pk:
+            workflow_id = self.instance.workflow_id
+
+        if self.data.get("workflow"):
+            workflow_id = self.data.get("workflow")
+
+        if workflow_id:
+            steps = (
+                WorkflowStep.objects
+                .filter(
+                    workflow_id=workflow_id,
+                    is_active=True,
+                )
+                .order_by("order")
+            )
+
+            self.fields["from_step"].queryset = steps
+            self.fields["to_step"].queryset = steps
+            self.fields["reject_to_step"].queryset = steps
+
+        else:
+            self.fields["from_step"].queryset = (
+                WorkflowStep.objects.none()
+            )
+
+            self.fields["to_step"].queryset = (
+                WorkflowStep.objects.none()
+            )
+
+            self.fields["reject_to_step"].queryset = (
+                WorkflowStep.objects.none()
+            )
+
+        active_users = get_user_model().objects.filter(
+            is_active=True,
+        ).order_by("username")
+
+        self.fields["accept_notification_user"].queryset = active_users
+        self.fields["reject_notification_user"].queryset = active_users
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        workflow = cleaned_data.get("workflow")
+        from_step = cleaned_data.get("from_step")
+        to_step = cleaned_data.get("to_step")
+        requires_acceptance = cleaned_data.get("requires_acceptance")
+        reject_to_step = cleaned_data.get("reject_to_step")
+
+        for outcome in ("accept", "reject"):
+            policy_field = f"{outcome}_notification_policy"
+            user_field = f"{outcome}_notification_user"
+            policy = cleaned_data.get(policy_field)
+            recipient = cleaned_data.get(user_field)
+
+            if (
+                policy == WorkflowTransition.NotificationRecipientPolicy.FIXED_USER
+                and recipient is None
+            ):
+                self.add_error(
+                    user_field,
+                    "برای سیاست «کاربر ثابت»، انتخاب یک کاربر فعال الزامی است.",
+                )
+            elif policy != WorkflowTransition.NotificationRecipientPolicy.FIXED_USER:
+                cleaned_data[user_field] = None
+
+        if workflow and from_step:
+            if from_step.workflow_id != workflow.id:
+                raise forms.ValidationError(
+                    "مرحله مبدأ باید متعلق به همین Workflow باشد."
+                )
+
+        if workflow and to_step:
+            if to_step.workflow_id != workflow.id:
+                raise forms.ValidationError(
+                    "مرحله مقصد باید متعلق به همین Workflow باشد."
+                )
+
+        if workflow and reject_to_step:
+            if reject_to_step.workflow_id != workflow.id:
+                raise forms.ValidationError(
+                    "مرحله بازگشت پس از رد باید متعلق به همین Workflow باشد."
+                )
+
+        if reject_to_step and not requires_acceptance:
+            raise forms.ValidationError(
+                "مرحله بازگشت پس از رد فقط برای Transitionهای نیازمند تأیید قابل تنظیم است."
+            )
+
+        if from_step and to_step:
+            if from_step.pk == to_step.pk:
+                raise forms.ValidationError(
+                    "مرحله مبدأ و مقصد نمی‌توانند یکسان باشند."
+                )
+
+        return cleaned_data
+
+
 class WorkflowTransitionInline(admin.TabularInline):
     model = WorkflowTransition
     form = WorkflowTransitionAdminForm
@@ -1702,114 +1811,6 @@ class WorkflowDynamicStepsAdminView(admin.ModelAdmin):
 # ============================================================
 # Workflow Transition
 # ============================================================
-
-class WorkflowTransitionAdminForm(forms.ModelForm):
-
-    class Meta:
-        model = WorkflowTransition
-        fields = "__all__"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        workflow_id = None
-
-        if self.instance and self.instance.pk:
-            workflow_id = self.instance.workflow_id
-
-        if self.data.get("workflow"):
-            workflow_id = self.data.get("workflow")
-
-        if workflow_id:
-            steps = (
-                WorkflowStep.objects
-                .filter(
-                    workflow_id=workflow_id,
-                    is_active=True,
-                )
-                .order_by("order")
-            )
-
-            self.fields["from_step"].queryset = steps
-            self.fields["to_step"].queryset = steps
-            self.fields["reject_to_step"].queryset = steps
-
-        else:
-            self.fields["from_step"].queryset = (
-                WorkflowStep.objects.none()
-            )
-
-            self.fields["to_step"].queryset = (
-                WorkflowStep.objects.none()
-            )
-
-            self.fields["reject_to_step"].queryset = (
-                WorkflowStep.objects.none()
-            )
-
-        active_users = get_user_model().objects.filter(
-            is_active=True,
-        ).order_by("username")
-
-        self.fields["accept_notification_user"].queryset = active_users
-        self.fields["reject_notification_user"].queryset = active_users
-
-    def clean(self):
-        cleaned_data = super().clean()
-
-        workflow = cleaned_data.get("workflow")
-        from_step = cleaned_data.get("from_step")
-        to_step = cleaned_data.get("to_step")
-        requires_acceptance = cleaned_data.get("requires_acceptance")
-        reject_to_step = cleaned_data.get("reject_to_step")
-
-        for outcome in ("accept", "reject"):
-            policy_field = f"{outcome}_notification_policy"
-            user_field = f"{outcome}_notification_user"
-            policy = cleaned_data.get(policy_field)
-            recipient = cleaned_data.get(user_field)
-
-            if (
-                policy == WorkflowTransition.NotificationRecipientPolicy.FIXED_USER
-                and recipient is None
-            ):
-                self.add_error(
-                    user_field,
-                    "برای سیاست «کاربر ثابت»، انتخاب یک کاربر فعال الزامی است.",
-                )
-            elif policy != WorkflowTransition.NotificationRecipientPolicy.FIXED_USER:
-                cleaned_data[user_field] = None
-
-        if workflow and from_step:
-            if from_step.workflow_id != workflow.id:
-                raise forms.ValidationError(
-                    "مرحله مبدأ باید متعلق به همین Workflow باشد."
-                )
-
-        if workflow and to_step:
-            if to_step.workflow_id != workflow.id:
-                raise forms.ValidationError(
-                    "مرحله مقصد باید متعلق به همین Workflow باشد."
-                )
-
-        if workflow and reject_to_step:
-            if reject_to_step.workflow_id != workflow.id:
-                raise forms.ValidationError(
-                    "مرحله بازگشت پس از رد باید متعلق به همین Workflow باشد."
-                )
-
-        if reject_to_step and not requires_acceptance:
-            raise forms.ValidationError(
-                "مرحله بازگشت پس از رد فقط برای Transitionهای نیازمند تأیید قابل تنظیم است."
-            )
-
-        if from_step and to_step:
-            if from_step.pk == to_step.pk:
-                raise forms.ValidationError(
-                    "مرحله مبدأ و مقصد نمی‌توانند یکسان باشند."
-                )
-
-        return cleaned_data
 
 @admin.register(
     WorkflowTransition,
