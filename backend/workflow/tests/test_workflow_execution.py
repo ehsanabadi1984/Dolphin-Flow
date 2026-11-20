@@ -1376,11 +1376,8 @@ class WorkflowExecutionTests(TestCase):
             Notification.NotificationType.ACTION_REQUIRED,
         )
 
-    def test_accept_transition_execution_notifies_reject_target_assignee(self):
+    def test_accept_transition_execution_notifies_destination_assignee(self):
         transition_execution = self._create_pending_acceptance_execution()
-
-        self.step_one.assigned_to = self.user
-        self.step_one.save(update_fields=["assigned_to"])
 
         self.grant_step_action_permission(
             user=self.destination_user,
@@ -1396,7 +1393,7 @@ class WorkflowExecutionTests(TestCase):
         notification = Notification.objects.get(
             recipient=self.user,
             workflow_instance_id=transition_execution.instance_id,
-            workflow_step=self.step_one,
+            workflow_step=self.step_three,
             transition_execution=transition_execution,
         )
         self.assertEqual(
@@ -1410,7 +1407,7 @@ class WorkflowExecutionTests(TestCase):
         self.assertEqual(
             notification.message,
             f"فرآیند «{self.workflow.name}» تأیید شد و "
-            f"برای اطلاع شما در مرحله «{self.step_one.name}» قرار گرفت.",
+            f"برای اقدام در مرحله «{self.step_three.name}» به شما تخصیص یافت.",
         )
 
     def test_reject_transition_execution_notifies_reject_target_assignee(self):
