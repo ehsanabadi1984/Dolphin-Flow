@@ -152,6 +152,17 @@ class WorkflowOverrideServiceTests(TestCase):
         )
         self.assertIn("C → B", new_execution.notes)
         self.assertIn("اصلاح اشتباه مسیر", new_execution.notes)
+        self.assertEqual(
+            new_execution.data["override"],
+            {
+                "version": 1,
+                "from_step_id": self.step_c.pk,
+                "from_step_name": "C",
+                "to_step_id": self.step_b.pk,
+                "to_step_name": "B",
+                "reason": "اصلاح اشتباه مسیر",
+            },
+        )
         self.assertTrue(self.current_execution.pk != new_execution.pk)
         self.assertFalse(self.current_execution.is_submitted)
 
