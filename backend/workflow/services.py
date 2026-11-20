@@ -206,11 +206,13 @@ class WorkflowExecutionService:
         )
         transition_execution.accepted_by = user
         transition_execution.rejected_by = None
+        transition_execution.resolved_at = timezone.now()
         transition_execution.save(
             update_fields=[
                 "status",
                 "accepted_by",
                 "rejected_by",
+                "resolved_at",
             ]
         )
 
@@ -376,11 +378,13 @@ class WorkflowExecutionService:
         )
         transition_execution.accepted_by = None
         transition_execution.rejected_by = user
+        transition_execution.resolved_at = timezone.now()
         transition_execution.save(
             update_fields=[
                 "status",
                 "accepted_by",
                 "rejected_by",
+                "resolved_at",
             ]
         )
 
