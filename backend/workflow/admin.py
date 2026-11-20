@@ -2219,9 +2219,19 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
             pk=object_id,
         )
 
-        # Staff status alone is not sufficient: the user must also have
-        # effective VIEW permission for this exact workflow instance.
-        if not self.has_view_permission(request, instance):
+        # Superusers and users with the dedicated global timeline permission
+        # may inspect every instance without workflow membership or VIEW.
+        # All other users remain subject to instance-level workflow VIEW.
+        can_view_all_timelines = (
+            request.user.is_superuser
+            or request.user.has_perm(
+                "workflow.view_all_workflowinstance_timelines"
+            )
+        )
+        if (
+            not can_view_all_timelines
+            and not self.has_view_permission(request, instance)
+        ):
             raise PermissionDenied
 
         from .timeline_services import build_instance_timeline_events
