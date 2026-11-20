@@ -219,9 +219,16 @@ class WorkflowExecutionService:
         instance.current_step = transition.to_step
         instance.save(update_fields=["current_step"])
 
-        if assignee != user:
+        # The notification recipient is configured in the admin through
+        # the transition's reject_to_step, for both ACCEPT and REJECT.
+        notification_step = transition.reject_to_step
+        recipient = (
+            notification_step.assigned_to
+            if notification_step is not None else None
+        )
+        if recipient is not None and recipient.is_active:
             NotificationService.create(
-                recipient=assignee,
+                recipient=recipient,
                 notification_type=(
                     Notification.NotificationType.ACTION_REQUIRED
                 ),
@@ -229,11 +236,12 @@ class WorkflowExecutionService:
                     f"فرآیند «{instance.workflow.name}» تأیید شد"
                 ),
                 message=(
-                    f"فرآیند «{instance.workflow.name}» تأیید شد و "
-                    f"برای اقدام در مرحله «{transition.to_step.name}» به شما تخصیص یافت."
+                    f"فرآیند «{instance.workflow.name}» تأیید شد. "
+                    f"این اعلان طبق مسئول تعیین‌شده در تنظیمات «مرحله بازگشت» "
+                    f"برای شما ارسال شده است."
                 ),
                 workflow_instance=instance,
-                workflow_step=transition.to_step,
+                workflow_step=notification_step,
                 transition_execution=transition_execution,
             )
 
