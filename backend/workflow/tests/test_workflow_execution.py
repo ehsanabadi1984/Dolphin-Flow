@@ -767,6 +767,11 @@ class WorkflowExecutionTests(TestCase):
         self.grant_start_permission()
         self.step_one.assigned_to = self.user
         self.step_one.save(update_fields=["assigned_to"])
+        self.grant_step_action_permission(
+            user=self.user,
+            step=self.step_one,
+            action_code="EXECUTE",
+        )
 
         instance = self.start_instance()
 
@@ -1474,6 +1479,17 @@ class WorkflowExecutionConcurrencyTests(TransactionTestCase):
                 role=WorkflowMembership.Role.EXECUTOR,
                 is_active=True,
             )
+
+        self.step_one.assigned_to = self.user
+        self.step_one.save(update_fields=["assigned_to"])
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_one,
+            user=self.user,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="EXECUTE",
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
 
         WorkflowPermission.objects.create(
             workflow=self.workflow,
