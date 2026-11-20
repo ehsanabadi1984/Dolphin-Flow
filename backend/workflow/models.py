@@ -795,6 +795,15 @@ class WorkflowTransitionExecution(models.Model):
         related_name="executions",
     )
 
+    proposed_assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="proposed_workflow_transition_executions",
+        verbose_name="مسئول پیشنهادی مرحله مقصد",
+    )
+
     performed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
