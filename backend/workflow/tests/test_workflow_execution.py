@@ -1517,6 +1517,10 @@ class WorkflowExecutionTests(TestCase):
 
     def test_accept_notifies_assignee_of_new_destination_execution(self):
         transition_execution = self._create_pending_acceptance_execution()
+        self.transition_two.accept_notification_policy = (
+            WorkflowTransition.NotificationRecipientPolicy.RETURN_STEP_ASSIGNEE
+        )
+        self.transition_two.save(update_fields=["accept_notification_policy"])
         self.step_three.assigned_to = self.destination_user
         self.step_three.save(update_fields=["assigned_to"])
         self.grant_step_action_permission(
@@ -1548,6 +1552,10 @@ class WorkflowExecutionTests(TestCase):
 
     def test_reject_notifies_assignee_of_new_return_execution(self):
         transition_execution = self._create_pending_acceptance_execution()
+        self.transition_two.reject_notification_policy = (
+            WorkflowTransition.NotificationRecipientPolicy.RETURN_STEP_ASSIGNEE
+        )
+        self.transition_two.save(update_fields=["reject_notification_policy"])
         self.step_one.assignment_policy = WorkflowStep.AssignmentPolicy.AUTO_SINGLE
         self.step_one.save(update_fields=["assignment_policy"])
         WorkflowPermission.objects.filter(
@@ -1586,6 +1594,10 @@ class WorkflowExecutionTests(TestCase):
 
     def test_accept_notifies_workflow_starter(self):
         transition_execution = self._create_pending_acceptance_execution()
+        self.transition_two.accept_notification_policy = (
+            WorkflowTransition.NotificationRecipientPolicy.WORKFLOW_STARTER
+        )
+        self.transition_two.save(update_fields=["accept_notification_policy"])
         starter = User.objects.create_user(
             username="accept-workflow-starter-recipient",
             password="test-password",
@@ -1612,6 +1624,10 @@ class WorkflowExecutionTests(TestCase):
 
     def test_reject_notifies_workflow_starter(self):
         transition_execution = self._create_pending_acceptance_execution()
+        self.transition_two.reject_notification_policy = (
+            WorkflowTransition.NotificationRecipientPolicy.WORKFLOW_STARTER
+        )
+        self.transition_two.save(update_fields=["reject_notification_policy"])
         starter = User.objects.create_user(
             username="reject-workflow-starter-recipient",
             password="test-password",
