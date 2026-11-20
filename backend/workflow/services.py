@@ -139,16 +139,15 @@ class WorkflowExecutionService:
             step=transition.to_step,
         )
 
-        # Recover the exact submitted source execution that produced this
-        # pending transition. The transition actor is the submitter in this
-        # workflow path, so it disambiguates repeated visits to the source.
+        # Recover the latest submitted source execution preceding this
+        # transition. Do not filter by completed_by: a missing completer must
+        # become a notification issue, not block acceptance.
         previous_execution = (
             WorkflowStepExecution.objects
             .filter(
                 instance=instance,
                 workflow_step=transition.from_step,
                 is_submitted=True,
-                completed_by_id=transition_execution.performed_by_id,
                 submitted_at__lte=transition_execution.performed_at,
             )
             .order_by("-submitted_at", "-pk")
@@ -332,15 +331,15 @@ class WorkflowExecutionService:
             step=transition.to_step,
         )
 
-        # Resolve the exact submitted source execution that produced this
-        # pending transition, rather than relying on the rejecting actor.
+        # Recover the latest submitted source execution preceding this
+        # transition. Do not filter by completed_by: a missing completer must
+        # become a notification issue, not block rejection.
         previous_execution = (
             WorkflowStepExecution.objects
             .filter(
                 instance=instance,
                 workflow_step=transition.from_step,
                 is_submitted=True,
-                completed_by_id=transition_execution.performed_by_id,
                 submitted_at__lte=transition_execution.performed_at,
             )
             .order_by("-submitted_at", "-pk")
