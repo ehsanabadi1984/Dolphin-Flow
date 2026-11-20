@@ -276,7 +276,7 @@
                             <div class="timeline-detail-grid">
                                 <div>
                                     <span>مسیر</span>
-                                    <strong>{{ event.from_step|default:"—" }} ← {{ event.to_step|default:"—" }}</strong>
+                                    <strong>{{ event.from_step|default:"—" }} → {{ event.to_step|default:"—" }}</strong>
                                 </div>
                                 <div>
                                     <span>وضعیت انتقال</span>
@@ -300,7 +300,7 @@
                             </div>
                             <div>
                                 <span>مسیر انتقال</span>
-                                <strong>{{ event.from_step|default:"—" }} ← {{ event.to_step|default:"—" }}</strong>
+                                <strong>{{ event.from_step|default:"—" }} → {{ event.to_step|default:"—" }}</strong>
                             </div>
                             <div>
                                 <span>تصمیم‌گیرنده</span>
@@ -364,7 +364,7 @@
                                     <span>مرحله مبدأ</span>
                                     <strong>{{ event.override_from_step|default:"—" }}</strong>
                                 </div>
-                                <div class="timeline-override-arrow">←</div>
+                                <div class="timeline-override-arrow">→</div>
                                 <div>
                                     <span>مرحله مقصد</span>
                                     <strong>{{ event.override_to_step|default:"—" }}</strong>
