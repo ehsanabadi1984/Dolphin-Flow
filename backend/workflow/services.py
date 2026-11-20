@@ -10,10 +10,12 @@ from .models import (
     WorkflowInstance,
     WorkflowPermission,
     WorkflowStepExecution,
+    WorkflowStepAssignmentHistory,
     WorkflowTransitionExecution,
     Notification,
 )
 from .form_draft_submit_services import FormDraftSubmitService
+from .assignment_services import WorkflowStepAssignmentService
 
 
 class WorkflowExecutionService:
@@ -395,10 +397,25 @@ class WorkflowExecutionService:
             status=WorkflowInstance.Status.ACTIVE,
         )
 
+        assignee = WorkflowStepAssignmentService.resolve_assignee(
+            workflow=workflow,
+            step=first_step,
+            instance=instance,
+        )
+
         step_execution = WorkflowStepExecution.objects.create(
             instance=instance,
             workflow_step=first_step,
             performed_by=user,
+            entered_by=user,
+        )
+
+        WorkflowStepAssignmentService.assign_execution(
+            execution=step_execution,
+            assignee=assignee,
+            changed_by=user,
+            source=WorkflowStepAssignmentHistory.Source.INITIAL,
+            reason="تخصیص اولیه هنگام شروع فرآیند",
         )
 
         SLAService.start_sla_if_configured(
