@@ -22,6 +22,7 @@ from workflow.models import (
     WorkflowPermission,
     WorkflowStep,
     WorkflowStepExecution,
+    WorkflowStepAssignmentHistory,
     WorkflowTransition,
     WorkflowTransitionExecution,
 )
@@ -189,6 +190,156 @@ class WorkflowExecutionTests(TestCase):
         self.assertEqual(
             instance.current_step_id,
             self.step_two.pk,
+        )
+
+    def test_manual_destination_assignee_is_selected_by_previous_completer(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.step_two.assignment_policy = (
+            WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        )
+        self.step_two.save(update_fields=["assignment_policy"])
+
+        instance = self.start_instance()
+        transition_execution = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+            selected_assignee=self.destination_user,
+        )
+
+        instance.refresh_from_db()
+        source_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_one,
+        )
+        destination_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_two,
+        )
+        self.assertEqual(instance.current_step_id, self.step_two.pk)
+        self.assertEqual(source_execution.completed_by_id, self.user.pk)
+        self.assertEqual(destination_execution.entered_by_id, self.user.pk)
+        self.assertEqual(
+            destination_execution.assigned_to_id,
+            self.destination_user.pk,
+        )
+        assignment_history = destination_execution.assignment_history.get()
+        self.assertEqual(
+            assignment_history.source,
+            WorkflowStepAssignmentHistory.Source.MANUAL,
+        )
+        self.assertEqual(transition_execution.performed_by_id, self.user.pk)
+
+    def test_manual_destination_assignee_is_required_and_failure_rolls_back(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.step_two.assignment_policy = (
+            WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        )
+        self.step_two.save(update_fields=["assignment_policy"])
+        instance = self.start_instance()
+
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            )
+
+        instance.refresh_from_db()
+        source_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_one,
+        )
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
+        self.assertFalse(source_execution.is_submitted)
+        self.assertIsNone(source_execution.completed_by_id)
+        self.assertFalse(
+            WorkflowTransitionExecution.objects.filter(instance=instance).exists()
+        )
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_two,
+            ).exists()
+        )
+
+    def test_manual_destination_rejects_ineligible_selected_user(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.step_two.assignment_policy = (
+            WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        )
+        self.step_two.save(update_fields=["assignment_policy"])
+        ineligible_user = User.objects.create_user(
+            username="manual-ineligible-destination",
+            password="test-password",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=ineligible_user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        instance = self.start_instance()
+
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+                selected_assignee=ineligible_user,
+            )
+
+        instance.refresh_from_db()
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
+        self.assertFalse(
+            WorkflowTransitionExecution.objects.filter(instance=instance).exists()
+        )
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_two,
+            ).exists()
+        )
+
+    def test_pending_manual_selection_is_stored_without_creating_destination_execution(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.step_two.assignment_policy = (
+            WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        )
+        self.step_two.save(update_fields=["assignment_policy"])
+        self.transition_one.requires_acceptance = True
+        self.transition_one.reject_to_step = self.step_one
+        self.transition_one.save(
+            update_fields=["requires_acceptance", "reject_to_step"]
+        )
+        instance = self.start_instance()
+
+        transition_execution = WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+            selected_assignee=self.destination_user,
+        )
+
+        instance.refresh_from_db()
+        self.assertEqual(
+            transition_execution.status,
+            WorkflowTransitionExecution.Status.PENDING,
+        )
+        self.assertEqual(
+            transition_execution.proposed_assignee_id,
+            self.destination_user.pk,
+        )
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_two,
+            ).exists()
         )
 
     def _create_repeatable_form(
