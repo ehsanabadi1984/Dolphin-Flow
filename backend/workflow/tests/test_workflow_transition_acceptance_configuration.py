@@ -1,8 +1,18 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 
-from workflow.admin import WorkflowTransitionAdminForm, WorkflowTransitionInline
-from workflow.models import Workflow, WorkflowStep, WorkflowTransition
+from workflow.admin import (
+    WorkflowTransitionAdminForm,
+    WorkflowTransitionInline,
+    WorkflowTransitionNotificationIssueAdmin,
+    dolphin_admin_site,
+)
+from workflow.models import (
+    Workflow,
+    WorkflowStep,
+    WorkflowTransition,
+    WorkflowTransitionNotificationIssue,
+)
 
 
 class WorkflowTransitionAcceptanceConfigurationTests(TestCase):
@@ -183,3 +193,52 @@ class WorkflowTransitionAcceptanceConfigurationTests(TestCase):
         self.assertIn("accept_notification_user", WorkflowTransitionInline.fields)
         self.assertIn("reject_notification_policy", WorkflowTransitionInline.fields)
         self.assertIn("reject_notification_user", WorkflowTransitionInline.fields)
+
+
+
+class WorkflowTransitionNotificationIssueAdminTests(TestCase):
+    def test_issue_model_is_registered_in_dolphin_admin(self):
+        self.assertIn(
+            WorkflowTransitionNotificationIssue,
+            dolphin_admin_site._registry,
+        )
+        self.assertIsInstance(
+            dolphin_admin_site._registry[WorkflowTransitionNotificationIssue],
+            WorkflowTransitionNotificationIssueAdmin,
+        )
+
+    def test_issue_admin_is_read_only(self):
+        model_admin = WorkflowTransitionNotificationIssueAdmin(
+            WorkflowTransitionNotificationIssue,
+            dolphin_admin_site,
+        )
+
+        self.assertEqual(
+            model_admin.get_readonly_fields(request=None),
+            (
+                "transition_execution",
+                "outcome",
+                "policy",
+                "error_code",
+                "details",
+                "created_at",
+            ),
+        )
+        self.assertFalse(model_admin.has_add_permission(request=None))
+        self.assertFalse(model_admin.has_change_permission(request=None))
+        self.assertFalse(model_admin.has_delete_permission(request=None))
+
+    def test_issue_admin_exposes_required_filters_and_date_navigation(self):
+        self.assertIn("outcome", WorkflowTransitionNotificationIssueAdmin.list_filter)
+        self.assertIn("policy", WorkflowTransitionNotificationIssueAdmin.list_filter)
+        self.assertIn("error_code", WorkflowTransitionNotificationIssueAdmin.list_filter)
+        self.assertIn("created_at", WorkflowTransitionNotificationIssueAdmin.list_filter)
+        self.assertEqual(
+            WorkflowTransitionNotificationIssueAdmin.date_hierarchy,
+            "created_at",
+        )
+
+    def test_issue_admin_displays_workflow_and_transition_context(self):
+        self.assertIn("instance_display", WorkflowTransitionNotificationIssueAdmin.list_display)
+        self.assertIn("transition_display", WorkflowTransitionNotificationIssueAdmin.list_display)
+        self.assertIn("details_summary", WorkflowTransitionNotificationIssueAdmin.list_display)
