@@ -173,6 +173,35 @@ class WorkflowExecutionTests(TestCase):
             effect=WorkflowPermission.Effect.ALLOW,
         )
 
+    def test_submit_preserves_structured_override_metadata(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        instance = self.start_instance()
+        active_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_one,
+        )
+        override_metadata = {
+            "version": 1,
+            "from_step_id": self.step_three.pk,
+            "from_step_name": self.step_three.name,
+            "to_step_id": self.step_one.pk,
+            "to_step_name": self.step_one.name,
+            "reason": "اصلاح مسیر آزمایشی",
+        }
+        active_execution.data = {"override": override_metadata}
+        active_execution.save(update_fields=["data"])
+
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.user,
+        )
+
+        active_execution.refresh_from_db()
+        self.assertEqual(active_execution.data["override"], override_metadata)
+        self.assertIn("history", active_execution.data)
+
     def test_allow(self):
         self.grant_execute_permission()
         self.grant_start_permission()
