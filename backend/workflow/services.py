@@ -226,7 +226,7 @@ class WorkflowExecutionService:
             notification_step.assigned_to
             if notification_step is not None else None
         )
-        if recipient is not None and recipient.is_active:
+        if recipient is not None:
             NotificationService.create(
                 recipient=recipient,
                 notification_type=(
@@ -407,7 +407,7 @@ class WorkflowExecutionService:
         # Notification recipient is the admin-configured reject_to assignee,
         # independent of the assignee resolved for the new execution.
         recipient = reject_to_step.assigned_to
-        if recipient and recipient.is_active:
+        if recipient:
             NotificationService.create(
                 recipient=recipient,
                 notification_type=(
