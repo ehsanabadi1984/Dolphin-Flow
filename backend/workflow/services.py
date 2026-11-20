@@ -441,6 +441,7 @@ class WorkflowExecutionService:
         user,
         notes="",
         data=None,
+        selected_assignee=None,
     ):
         """
         Execute a workflow transition for a workflow instance.
@@ -560,12 +561,39 @@ class WorkflowExecutionService:
             step_execution=current_step_execution,
         )
 
+        manual_destination = (
+            not is_finish
+            and transition.to_step.assignment_policy
+            == transition.to_step.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        )
+        if selected_assignee is not None and not manual_destination:
+            raise ValidationError(
+                "انتخاب مسئول دستی برای سیاست تخصیص این مرحله مجاز نیست."
+            )
+
+        manually_resolved_assignee = None
+        if manual_destination:
+            manually_resolved_assignee = (
+                WorkflowStepAssignmentService.resolve_assignee(
+                    workflow=instance.workflow,
+                    step=transition.to_step,
+                    instance=instance,
+                    previous_execution=current_step_execution,
+                    selected_assignee=selected_assignee,
+                )
+            )
+
         transition_execution = WorkflowTransitionExecution.objects.create(
             instance=instance,
             transition=transition,
             performed_by=user,
             notes=notes,
             data=data or {},
+            proposed_assignee=(
+                manually_resolved_assignee
+                if transition.requires_acceptance and manual_destination
+                else None
+            ),
             status=(
                 WorkflowTransitionExecution.Status.PENDING
                 if transition.requires_acceptance
@@ -648,11 +676,15 @@ class WorkflowExecutionService:
                 transition_execution=transition_execution,
             )
         else:
-            assignee = WorkflowStepAssignmentService.resolve_assignee(
-                workflow=instance.workflow,
-                step=transition.to_step,
-                instance=instance,
-                previous_execution=current_step_execution,
+            assignee = (
+                manually_resolved_assignee
+                if manual_destination
+                else WorkflowStepAssignmentService.resolve_assignee(
+                    workflow=instance.workflow,
+                    step=transition.to_step,
+                    instance=instance,
+                    previous_execution=current_step_execution,
+                )
             )
 
             step_execution = WorkflowStepExecution.objects.create(
@@ -666,8 +698,16 @@ class WorkflowExecutionService:
                 execution=step_execution,
                 assignee=assignee,
                 changed_by=user,
-                source=WorkflowStepAssignmentHistory.Source.POLICY,
-                reason="تخصیص مسئول هنگام ورود به مرحله",
+                source=(
+                    WorkflowStepAssignmentHistory.Source.MANUAL
+                    if manual_destination
+                    else WorkflowStepAssignmentHistory.Source.POLICY
+                ),
+                reason=(
+                    "انتخاب مسئول مقصد توسط تکمیل‌کننده مرحله مبدأ"
+                    if manual_destination
+                    else "تخصیص مسئول هنگام ورود به مرحله"
+                ),
             )
 
             SLAService.start_sla_if_configured(
