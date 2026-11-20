@@ -78,6 +78,43 @@ class WorkflowStepAssignmentService:
             )
 
     @staticmethod
+    def resolve_override_assignee(
+        *,
+        workflow,
+        step,
+        instance,
+        selected_assignee=None,
+    ):
+        """Resolve an assignee for an administrative step override."""
+        if not workflow or not step or step.workflow_id != workflow.pk:
+            raise ValidationError("مرحله مقصد متعلق به فرآیند مشخص‌شده نیست.")
+        if not instance or instance.workflow_id != workflow.pk:
+            raise ValidationError("نمونه فرآیند با فرآیند مرحله مقصد هم‌خوانی ندارد.")
+
+        WorkflowStepAssignmentService._validate_policy_configuration(step=step)
+
+        if step.assignment_policy == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS:
+            if selected_assignee is None:
+                raise ValidationError("برای اصلاح مسیر، انتخاب مسئول مرحله مقصد توسط Admin الزامی است.")
+            assignee = selected_assignee
+            return WorkflowStepAssignmentService.validate_assignee(
+                workflow=workflow,
+                step=step,
+                assignee=assignee,
+            )
+
+        if selected_assignee is not None:
+            raise ValidationError(
+                "انتخاب دستی مسئول فقط برای سیاست انتخاب توسط تکمیل‌کننده مرحله قبل مجاز است."
+            )
+
+        return WorkflowStepAssignmentService.resolve_assignee(
+            workflow=workflow,
+            step=step,
+            instance=instance,
+        )
+
+    @staticmethod
     def resolve_assignee(
         *,
         workflow,
