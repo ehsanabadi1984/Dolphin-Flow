@@ -178,3 +178,177 @@ class NotificationService:
             )
             .order_by("-created_at")
         )
+
+class WorkflowTransitionNotificationService:
+    """
+    Resolve and deliver ACCEPT/REJECT notifications independently from
+    workflow-step assignment. Resolution failures are recorded, not raised.
+    """
+
+    @staticmethod
+    def _failure(*, policy, error_code, details):
+        return {
+            "recipient": None,
+            "policy": policy,
+            "error_code": error_code,
+            "details": details,
+        }
+
+    @classmethod
+    def resolve_recipient(
+        cls,
+        *,
+        transition,
+        instance,
+        outcome,
+        source_execution,
+        result_execution,
+    ):
+        from .models import WorkflowTransition
+
+        if outcome == "ACCEPT":
+            policy = transition.accept_notification_policy
+            fixed_user = transition.accept_notification_user
+        elif outcome == "REJECT":
+            policy = transition.reject_notification_policy
+            fixed_user = transition.reject_notification_user
+        else:
+            raise ValueError("outcome must be ACCEPT or REJECT")
+
+        recipient = None
+
+        if policy == WorkflowTransition.NotificationRecipientPolicy.SOURCE_COMPLETER:
+            if source_execution is None:
+                return cls._failure(
+                    policy=policy,
+                    error_code="SOURCE_EXECUTION_MISSING",
+                    details="اجرای مبدأ مرتبط با این انتقال پیدا نشد.",
+                )
+            recipient = source_execution.completed_by
+            if recipient is None:
+                return cls._failure(
+                    policy=policy,
+                    error_code="SOURCE_COMPLETER_MISSING",
+                    details="برای اجرای مبدأ، تکمیل‌کننده ثبت نشده است.",
+                )
+
+        elif policy == WorkflowTransition.NotificationRecipientPolicy.FIXED_USER:
+            recipient = fixed_user
+            if recipient is None:
+                return cls._failure(
+                    policy=policy,
+                    error_code="FIXED_USER_MISSING",
+                    details="کاربر ثابت برای این نتیجه تنظیم نشده است.",
+                )
+
+        elif policy == WorkflowTransition.NotificationRecipientPolicy.RETURN_STEP_ASSIGNEE:
+            if result_execution is None:
+                return cls._failure(
+                    policy=policy,
+                    error_code="RESULT_EXECUTION_MISSING",
+                    details="اجرای مقصد یا بازگشت ایجاد نشده است.",
+                )
+            recipient = result_execution.assigned_to
+            if recipient is None:
+                return cls._failure(
+                    policy=policy,
+                    error_code="RESULT_ASSIGNEE_MISSING",
+                    details="برای اجرای مقصد یا بازگشت، مسئولی تخصیص نیافته است.",
+                )
+
+        elif policy == WorkflowTransition.NotificationRecipientPolicy.WORKFLOW_STARTER:
+            recipient = instance.started_by
+            if recipient is None:
+                return cls._failure(
+                    policy=policy,
+                    error_code="WORKFLOW_STARTER_MISSING",
+                    details="شروع‌کننده فرآیند ثبت نشده است.",
+                )
+
+        else:
+            return cls._failure(
+                policy=policy,
+                error_code="UNKNOWN_POLICY",
+                details=f"سیاست گیرنده اعلان ناشناخته است: {policy}",
+            )
+
+        if not recipient.is_active:
+            return cls._failure(
+                policy=policy,
+                error_code="RECIPIENT_INACTIVE",
+                details="کاربر تعیین‌شده برای دریافت اعلان غیرفعال است.",
+            )
+
+        return {
+            "recipient": recipient,
+            "policy": policy,
+            "error_code": None,
+            "details": "",
+        }
+
+    @classmethod
+    def notify_outcome(
+        cls,
+        *,
+        transition,
+        transition_execution,
+        instance,
+        outcome,
+        source_execution,
+        result_execution,
+    ):
+        from .models import (
+            Notification,
+            WorkflowTransitionNotificationIssue,
+        )
+
+        result = cls.resolve_recipient(
+            transition=transition,
+            instance=instance,
+            outcome=outcome,
+            source_execution=source_execution,
+            result_execution=result_execution,
+        )
+
+        if result["recipient"] is None:
+            WorkflowTransitionNotificationIssue.objects.create(
+                transition_execution=transition_execution,
+                outcome=outcome,
+                policy=result["policy"],
+                error_code=result["error_code"],
+                details=result["details"],
+            )
+            return result
+
+        recipient = result["recipient"]
+        if outcome == "ACCEPT":
+            title = f"فرآیند «{instance.workflow.name}» تأیید شد"
+            message = (
+                f"درخواست انتقال در فرآیند «{instance.workflow.name}» "
+                "تأیید شد."
+            )
+        else:
+            step_name = (
+                result_execution.workflow_step.name
+                if result_execution is not None else transition.from_step.name
+            )
+            title = f"فرآیند «{instance.workflow.name}» رد شد"
+            message = (
+                f"درخواست انتقال در فرآیند «{instance.workflow.name}» رد شد "
+                f"و فرآیند به مرحله «{step_name}» بازگشت."
+            )
+
+        notification = NotificationService.create(
+            recipient=recipient,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title=title,
+            message=message,
+            workflow_instance=instance,
+            workflow_step=(
+                result_execution.workflow_step
+                if result_execution is not None else None
+            ),
+            transition_execution=transition_execution,
+        )
+        result["notification"] = notification
+        return result
