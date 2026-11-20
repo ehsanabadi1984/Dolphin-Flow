@@ -1734,6 +1734,13 @@ class WorkflowTransitionAdminForm(forms.ModelForm):
                 WorkflowStep.objects.none()
             )
 
+        active_users = get_user_model().objects.filter(
+            is_active=True,
+        ).order_by("username")
+
+        self.fields["accept_notification_user"].queryset = active_users
+        self.fields["reject_notification_user"].queryset = active_users
+
     def clean(self):
         cleaned_data = super().clean()
 
@@ -1742,6 +1749,23 @@ class WorkflowTransitionAdminForm(forms.ModelForm):
         to_step = cleaned_data.get("to_step")
         requires_acceptance = cleaned_data.get("requires_acceptance")
         reject_to_step = cleaned_data.get("reject_to_step")
+
+        for outcome in ("accept", "reject"):
+            policy_field = f"{outcome}_notification_policy"
+            user_field = f"{outcome}_notification_user"
+            policy = cleaned_data.get(policy_field)
+            recipient = cleaned_data.get(user_field)
+
+            if (
+                policy == WorkflowTransition.NotificationRecipientPolicy.FIXED_USER
+                and recipient is None
+            ):
+                self.add_error(
+                    user_field,
+                    "برای سیاست «کاربر ثابت»، انتخاب یک کاربر فعال الزامی است.",
+                )
+            elif policy != WorkflowTransition.NotificationRecipientPolicy.FIXED_USER:
+                cleaned_data[user_field] = None
 
         if workflow and from_step:
             if from_step.workflow_id != workflow.id:
