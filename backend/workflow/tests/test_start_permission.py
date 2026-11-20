@@ -48,6 +48,11 @@ class StartPermissionBaseTestCase(TestCase):
             is_active=True,
         )
 
+        self.assignee = User.objects.create_user(
+            username="start_perm_assignee",
+            password="test-password",
+        )
+
         self.transition = WorkflowTransition.objects.create(
             workflow=self.workflow,
             name="Transition One",
@@ -62,6 +67,22 @@ class StartPermissionBaseTestCase(TestCase):
             user=self.user,
             role=WorkflowMembership.Role.EXECUTOR,
             is_active=True,
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.assignee,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        self.step_one.assigned_to = self.assignee
+        self.step_one.save(update_fields=["assigned_to"])
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_one,
+            user=self.assignee,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="EXECUTE",
+            effect=WorkflowPermission.Effect.ALLOW,
         )
 
 
@@ -86,6 +107,48 @@ class StartPermissionServiceTests(StartPermissionBaseTestCase):
         self.assertEqual(instance.workflow, self.workflow)
         self.assertEqual(instance.started_by, self.user)
         self.assertEqual(instance.status, WorkflowInstance.Status.ACTIVE)
+        execution = instance.step_executions.get()
+        self.assertEqual(execution.performed_by, self.user)
+        self.assertEqual(execution.entered_by, self.user)
+        self.assertEqual(execution.assigned_to, self.assignee)
+        self.assertIsNotNone(execution.assigned_at)
+        self.assertTrue(
+            execution.assignment_history.filter(
+                new_assignee=self.assignee,
+                changed_by=self.user,
+                source="INITIAL",
+            ).exists()
+        )
+
+    def test_start_fails_without_a_valid_assignee_and_rolls_back(self):
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            action=WorkflowPermission.Action.START,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.filter(
+            workflow=self.workflow,
+            step=self.step_one,
+            user=self.assignee,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="EXECUTE",
+        ).delete()
+
+        from django.core.exceptions import ValidationError
+
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.start_workflow(
+                workflow=self.workflow,
+                user=self.user,
+            )
+
+        self.assertFalse(
+            WorkflowInstance.objects.filter(
+                workflow=self.workflow,
+                started_by=self.user,
+            ).exists()
+        )
 
     def test_user_without_start_cannot_start_workflow(self):
         """User without START permission cannot start a workflow."""
