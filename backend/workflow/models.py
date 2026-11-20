@@ -685,6 +685,13 @@ class WorkflowStepAssignmentHistory(models.Model):
 
 
 class WorkflowTransition(models.Model):
+
+    class NotificationRecipientPolicy(models.TextChoices):
+        SOURCE_COMPLETER = "SOURCE_COMPLETER", "تکمیل‌کننده اجرای مبدأ"
+        FIXED_USER = "FIXED_USER", "کاربر ثابت"
+        RETURN_STEP_ASSIGNEE = "RETURN_STEP_ASSIGNEE", "مسئول مرحله مقصد/بازگشت"
+        WORKFLOW_STARTER = "WORKFLOW_STARTER", "شروع‌کننده فرآیند"
+
     workflow = models.ForeignKey(
         Workflow,
         on_delete=models.PROTECT,
@@ -735,6 +742,38 @@ class WorkflowTransition(models.Model):
         related_name="acceptance_reject_target_transitions",
     )
 
+    accept_notification_policy = models.CharField(
+        max_length=32,
+        choices=NotificationRecipientPolicy.choices,
+        default=NotificationRecipientPolicy.SOURCE_COMPLETER,
+        verbose_name="سیاست گیرنده اعلان پذیرش",
+    )
+
+    accept_notification_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="workflow_transition_accept_notification_targets",
+        verbose_name="گیرنده ثابت اعلان پذیرش",
+    )
+
+    reject_notification_policy = models.CharField(
+        max_length=32,
+        choices=NotificationRecipientPolicy.choices,
+        default=NotificationRecipientPolicy.SOURCE_COMPLETER,
+        verbose_name="سیاست گیرنده اعلان رد",
+    )
+
+    reject_notification_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="workflow_transition_reject_notification_targets",
+        verbose_name="گیرنده ثابت اعلان رد",
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )
@@ -750,6 +789,32 @@ class WorkflowTransition(models.Model):
             models.UniqueConstraint(
                 fields=["workflow", "code"],
                 name="unique_workflow_transition_code",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        accept_notification_policy="FIXED_USER",
+                        accept_notification_user__isnull=False,
+                    )
+                    | (
+                        ~models.Q(accept_notification_policy="FIXED_USER")
+                        & models.Q(accept_notification_user__isnull=True)
+                    )
+                ),
+                name="wf_trans_accept_notif_user_ck",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        reject_notification_policy="FIXED_USER",
+                        reject_notification_user__isnull=False,
+                    )
+                    | (
+                        ~models.Q(reject_notification_policy="FIXED_USER")
+                        & models.Q(reject_notification_user__isnull=True)
+                    )
+                ),
+                name="wf_trans_reject_notif_user_ck",
             ),
         ]
 
@@ -848,6 +913,58 @@ class WorkflowTransitionExecution(models.Model):
             f"{self.transition.name} - "
             f"{self.performed_by}"
         )
+
+class WorkflowTransitionNotificationIssue(models.Model):
+
+    class Outcome(models.TextChoices):
+        ACCEPT = "ACCEPT", "پذیرش"
+        REJECT = "REJECT", "رد"
+
+    transition_execution = models.ForeignKey(
+        WorkflowTransitionExecution,
+        on_delete=models.PROTECT,
+        related_name="notification_issues",
+        verbose_name="اجرای انتقال",
+    )
+
+    outcome = models.CharField(
+        max_length=10,
+        choices=Outcome.choices,
+        verbose_name="نتیجه انتقال",
+    )
+
+    policy = models.CharField(
+        max_length=32,
+        choices=WorkflowTransition.NotificationRecipientPolicy.choices,
+        verbose_name="سیاست گیرنده",
+    )
+
+    error_code = models.CharField(
+        max_length=64,
+        verbose_name="کد خطا",
+    )
+
+    details = models.TextField(
+        verbose_name="شرح خطا",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="زمان ثبت",
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = "خطای تعیین گیرنده اعلان انتقال"
+        verbose_name_plural = "خطاهای تعیین گیرنده اعلان انتقال"
+
+    def __str__(self):
+        return (
+            f"{self.transition_execution} - "
+            f"{self.get_outcome_display()} - "
+            f"{self.error_code}"
+        )
+
 
 class WorkflowPermission(models.Model):
     class Action(models.TextChoices):
