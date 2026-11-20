@@ -462,6 +462,7 @@ class WorkflowStepInline(admin.TabularInline):
 
 class WorkflowTransitionInline(admin.TabularInline):
     model = WorkflowTransition
+    form = WorkflowTransitionAdminForm
     extra = 0
 
     fields = (
