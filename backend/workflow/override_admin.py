@@ -138,16 +138,24 @@ class WorkflowInstanceOverrideAdmin(WorkflowInstanceAdmin):
             path_text, separator, reason = details.partition("| دلیل:")
             reason = reason.strip() if separator else "—"
 
-            event = event_by_id.get(step_execution.pk)
+            event = event_by_id.get(f"step-{step_execution.pk}")
             if event is None:
                 continue
 
+            from_step_name, separator, to_step_name = path_text.partition(" → ")
+            event["type"] = "override"
             event["title"] = "اصلاح مسیر فرآیند"
-            event["description"] = (
-                f"{path_text.strip()} | دلیل: {reason}"
+            event["override_from_step"] = (
+                from_step_name.strip() if separator else "—"
             )
+            event["override_to_step"] = (
+                to_step_name.strip() if separator else path_text.strip()
+            )
+            event["override_reason"] = reason
+            event["description"] = ""
 
-        events.sort(key=lambda event: event["performed_at"])
+        # The timeline service already returns a stable chronological order.
+        # Do not sort again here: some legitimate events have no timestamp.
         response.context_data["events"] = events
         return response
 
