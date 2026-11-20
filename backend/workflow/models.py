@@ -895,6 +895,12 @@ class WorkflowTransitionExecution(models.Model):
         auto_now_add=True,
     )
 
+    resolved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="زمان تعیین تکلیف",
+    )
+
     notes = models.TextField(
         blank=True,
     )
