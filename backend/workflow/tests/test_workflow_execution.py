@@ -1515,6 +1515,215 @@ class WorkflowExecutionTests(TestCase):
         self.assertNotEqual(notification.recipient, self.destination_user)
         self.assertNotEqual(notification.recipient, self.user)
 
+    def test_accept_notifies_assignee_of_new_destination_execution(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        self.step_three.assigned_to = self.destination_user
+        self.step_three.save(update_fields=["assigned_to"])
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="EXECUTE",
+        )
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+
+        WorkflowExecutionService.accept_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        destination_execution = WorkflowStepExecution.objects.get(
+            instance_id=transition_execution.instance_id,
+            workflow_step=self.step_three,
+        )
+        notification = Notification.objects.get(
+            transition_execution=transition_execution,
+        )
+        self.assertEqual(destination_execution.assigned_to_id, self.destination_user.pk)
+        self.assertEqual(notification.recipient_id, destination_execution.assigned_to_id)
+        self.assertNotEqual(notification.recipient_id, self.user.pk)
+
+    def test_reject_notifies_assignee_of_new_return_execution(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        self.step_one.assignment_policy = WorkflowStep.AssignmentPolicy.AUTO_SINGLE
+        self.step_one.save(update_fields=["assignment_policy"])
+        WorkflowPermission.objects.filter(
+            workflow=self.workflow,
+            step=self.step_one,
+            user=self.user,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="EXECUTE",
+        ).delete()
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_one,
+            action_code="REJECT",
+        )
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        WorkflowExecutionService.reject_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        returned_execution = WorkflowStepExecution.objects.filter(
+            instance_id=transition_execution.instance_id,
+            workflow_step=self.step_one,
+        ).order_by("-pk").first()
+        notification = Notification.objects.get(
+            transition_execution=transition_execution,
+        )
+        self.assertEqual(returned_execution.assigned_to_id, self.destination_user.pk)
+        self.assertEqual(notification.recipient_id, returned_execution.assigned_to_id)
+        self.assertNotEqual(notification.recipient_id, self.user.pk)
+
+    def test_accept_notifies_workflow_starter(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        starter = User.objects.create_user(
+            username="accept-workflow-starter-recipient",
+            password="test-password",
+        )
+        WorkflowInstance.objects.filter(
+            pk=transition_execution.instance_id,
+        ).update(started_by=starter)
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+
+        WorkflowExecutionService.accept_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        notification = Notification.objects.get(
+            transition_execution=transition_execution,
+        )
+        self.assertEqual(notification.recipient_id, starter.pk)
+        self.assertNotEqual(notification.recipient_id, self.user.pk)
+
+    def test_reject_notifies_workflow_starter(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        starter = User.objects.create_user(
+            username="reject-workflow-starter-recipient",
+            password="test-password",
+        )
+        WorkflowInstance.objects.filter(
+            pk=transition_execution.instance_id,
+        ).update(started_by=starter)
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        WorkflowExecutionService.reject_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        notification = Notification.objects.get(
+            transition_execution=transition_execution,
+        )
+        self.assertEqual(notification.recipient_id, starter.pk)
+        self.assertNotEqual(notification.recipient_id, self.user.pk)
+
+    def test_accept_succeeds_and_records_issue_for_inactive_fixed_recipient(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        inactive_recipient = User.objects.create_user(
+            username="inactive-accept-notification-recipient",
+            password="test-password",
+            is_active=False,
+        )
+        self.transition_two.accept_notification_policy = (
+            WorkflowTransition.NotificationRecipientPolicy.FIXED_USER
+        )
+        self.transition_two.accept_notification_user = inactive_recipient
+        self.transition_two.save(update_fields=[
+            "accept_notification_policy",
+            "accept_notification_user",
+        ])
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+
+        resolved = WorkflowExecutionService.accept_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        resolved.refresh_from_db()
+        self.assertEqual(resolved.status, WorkflowTransitionExecution.Status.ACCEPTED)
+        self.assertTrue(
+            WorkflowStepExecution.objects.filter(
+                instance_id=resolved.instance_id,
+                workflow_step=self.step_three,
+            ).exists()
+        )
+        self.assertEqual(
+            WorkflowTransitionNotificationIssue.objects.get(
+                transition_execution=resolved,
+            ).error_code,
+            "RECIPIENT_INACTIVE",
+        )
+        self.assertFalse(
+            Notification.objects.filter(transition_execution=resolved).exists()
+        )
+
+    def test_reject_succeeds_and_records_issue_for_inactive_fixed_recipient(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        inactive_recipient = User.objects.create_user(
+            username="inactive-reject-notification-recipient",
+            password="test-password",
+            is_active=False,
+        )
+        self.transition_two.reject_notification_policy = (
+            WorkflowTransition.NotificationRecipientPolicy.FIXED_USER
+        )
+        self.transition_two.reject_notification_user = inactive_recipient
+        self.transition_two.save(update_fields=[
+            "reject_notification_policy",
+            "reject_notification_user",
+        ])
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        resolved = WorkflowExecutionService.reject_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        resolved.refresh_from_db()
+        self.assertEqual(resolved.status, WorkflowTransitionExecution.Status.REJECTED)
+        self.assertTrue(
+            WorkflowStepExecution.objects.filter(
+                instance_id=resolved.instance_id,
+                workflow_step=self.step_one,
+            ).exists()
+        )
+        self.assertEqual(
+            WorkflowTransitionNotificationIssue.objects.get(
+                transition_execution=resolved,
+            ).error_code,
+            "RECIPIENT_INACTIVE",
+        )
+        self.assertFalse(
+            Notification.objects.filter(transition_execution=resolved).exists()
+        )
+
     def test_accept_succeeds_and_records_issue_when_source_completer_is_missing(self):
         transition_execution = self._create_pending_acceptance_execution()
         WorkflowStepExecution.objects.filter(
