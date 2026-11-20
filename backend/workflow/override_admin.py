@@ -7,7 +7,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 
 from .admin import WorkflowInstanceAdmin, dolphin_admin_site
-from .models import WorkflowInstance, WorkflowStep, WorkflowStepExecution
+from .models import WorkflowInstance, WorkflowStep
 from .override_services import WorkflowOverrideService
 
 
@@ -111,53 +111,6 @@ class WorkflowInstanceOverrideAdmin(WorkflowInstanceAdmin):
             "admin/workflow/workflow_instance_override.html",
             context,
         )
-
-    def timeline_view(self, request, object_id):
-        response = super().timeline_view(request, object_id)
-        events = list(response.context_data.get("events", []))
-        instance = response.context_data["instance"]
-
-        step_executions = (
-            WorkflowStepExecution.objects
-            .filter(instance=instance)
-            .select_related(
-                "workflow_step",
-                "performed_by",
-            )
-        )
-
-        event_by_id = {event["id"]: event for event in events}
-        prefix = WorkflowOverrideService.OVERRIDE_NOTE_PREFIX
-
-        for step_execution in step_executions:
-            notes = (step_execution.notes or "").strip()
-            if not notes.startswith(prefix):
-                continue
-
-            details = notes[len(prefix):].strip()
-            path_text, separator, reason = details.partition("| دلیل:")
-            reason = reason.strip() if separator else "—"
-
-            event = event_by_id.get(f"step-{step_execution.pk}")
-            if event is None:
-                continue
-
-            from_step_name, separator, to_step_name = path_text.partition(" → ")
-            event["type"] = "override"
-            event["title"] = "اصلاح مسیر فرآیند"
-            event["override_from_step"] = (
-                from_step_name.strip() if separator else "—"
-            )
-            event["override_to_step"] = (
-                to_step_name.strip() if separator else path_text.strip()
-            )
-            event["override_reason"] = reason
-            event["description"] = ""
-
-        # The timeline service already returns a stable chronological order.
-        # Do not sort again here: some legitimate events have no timestamp.
-        response.context_data["events"] = events
-        return response
 
     def get_urls(self):
         urls = super().get_urls()
