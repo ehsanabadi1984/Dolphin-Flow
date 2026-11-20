@@ -1602,14 +1602,17 @@ class WorkflowExecutionConcurrencyTests(TransactionTestCase):
 
         self.step_one.assigned_to = self.user
         self.step_one.save(update_fields=["assigned_to"])
-        WorkflowPermission.objects.create(
-            workflow=self.workflow,
-            step=self.step_one,
-            user=self.user,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
-            effect=WorkflowPermission.Effect.ALLOW,
-        )
+        self.step_two.assigned_to = self.user
+        self.step_two.save(update_fields=["assigned_to"])
+        for step in (self.step_one, self.step_two):
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                step=step,
+                user=self.user,
+                action=WorkflowPermission.Action.STEP_ACTION,
+                action_code="EXECUTE",
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
 
         WorkflowPermission.objects.create(
             workflow=self.workflow,
