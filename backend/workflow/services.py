@@ -504,6 +504,17 @@ class WorkflowExecutionService:
             )
         )
 
+        if current_step_execution.assigned_to_id != user.pk:
+            raise ValidationError(
+                "فقط مسئول اجرای فعال این مرحله می‌تواند فرم را ارسال و فرآیند را منتقل کند."
+            )
+
+        WorkflowStepAssignmentService.validate_assignee(
+            workflow=instance.workflow,
+            step=instance.current_step,
+            assignee=user,
+        )
+
         WorkflowAuthorizationService.require_permission(
             user=user,
             workflow=instance.workflow,
@@ -529,6 +540,7 @@ class WorkflowExecutionService:
 
         now = timezone.now()
 
+        current_step_execution.completed_by = user
         current_step_execution.is_submitted = True
         current_step_execution.submitted_at = now
         current_step_execution.data = {
@@ -537,6 +549,7 @@ class WorkflowExecutionService:
 
         current_step_execution.save(
             update_fields=[
+                "completed_by",
                 "is_submitted",
                 "submitted_at",
                 "data",
@@ -635,10 +648,26 @@ class WorkflowExecutionService:
                 transition_execution=transition_execution,
             )
         else:
+            assignee = WorkflowStepAssignmentService.resolve_assignee(
+                workflow=instance.workflow,
+                step=transition.to_step,
+                instance=instance,
+                previous_execution=current_step_execution,
+            )
+
             step_execution = WorkflowStepExecution.objects.create(
                 instance=instance,
                 workflow_step=transition.to_step,
                 performed_by=user,
+                entered_by=user,
+            )
+
+            WorkflowStepAssignmentService.assign_execution(
+                execution=step_execution,
+                assignee=assignee,
+                changed_by=user,
+                source=WorkflowStepAssignmentHistory.Source.POLICY,
+                reason="تخصیص مسئول هنگام ورود به مرحله",
             )
 
             SLAService.start_sla_if_configured(
@@ -653,7 +682,7 @@ class WorkflowExecutionService:
                 ]
             )
 
-            recipient = transition.to_step.assigned_to
+            recipient = assignee
 
             if (
                 recipient
