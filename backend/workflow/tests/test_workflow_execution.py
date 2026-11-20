@@ -1531,6 +1531,13 @@ class WorkflowExecutionTests(TestCase):
 
         self.step_one.assignment_policy = WorkflowStep.AssignmentPolicy.AUTO_SINGLE
         self.step_one.save(update_fields=["assignment_policy"])
+        WorkflowPermission.objects.filter(
+            workflow=self.workflow,
+            step=self.step_one,
+            user=self.user,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="EXECUTE",
+        ).delete()
         self.grant_step_action_permission(
             user=self.destination_user,
             step=self.step_one,
