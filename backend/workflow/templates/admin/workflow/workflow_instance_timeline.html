@@ -61,6 +61,10 @@
                         ▶
                     {% elif event.type == "transition" %}
                         →
+                    {% elif event.type == "override" %}
+                        ↪
+                    {% elif event.type == "assignment" %}
+                        👤
                     {% else %}
                         ●
                     {% endif %}
@@ -76,7 +80,11 @@
                                 {% if event.type == "start" %}
                                     شروع فرآیند
                                 {% elif event.type == "transition" %}
-                                    تغییر مرحله
+                                    انتقال مرحله
+                                {% elif event.type == "override" %}
+                                    اصلاح مدیریتی مسیر
+                                {% elif event.type == "assignment" %}
+                                    تغییر مسئول
                                 {% else %}
                                     اجرای مرحله
                                 {% endif %}
@@ -213,6 +221,49 @@
 
                         <div class="timeline-transition">
                             {{ event.description }}
+                        </div>
+
+                    {% elif event.type == "override" %}
+
+                        <div class="timeline-override-details">
+                            <div class="timeline-override-route">
+                                <div>
+                                    <span>مرحله مبدأ</span>
+                                    <strong>{{ event.override_from_step|default:"—" }}</strong>
+                                </div>
+                                <div class="timeline-override-arrow">←</div>
+                                <div>
+                                    <span>مرحله مقصد</span>
+                                    <strong>{{ event.override_to_step|default:"—" }}</strong>
+                                </div>
+                            </div>
+                            <div class="timeline-override-meta">
+                                <div>
+                                    <span>مسئول مرحله مقصد</span>
+                                    <strong>{{ event.assigned_to|default:"—" }}</strong>
+                                </div>
+                                <div>
+                                    <span>دلیل اصلاح مسیر</span>
+                                    <strong>{{ event.override_reason|default:"—" }}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                    {% elif event.type == "assignment" %}
+
+                        <div class="timeline-assignment-details">
+                            <div>
+                                <span>مسئول قبلی</span>
+                                <strong>{{ event.previous_assignee|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span>مسئول جدید</span>
+                                <strong>{{ event.new_assignee|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span>روش تخصیص</span>
+                                <strong>{{ event.assignment_source|default:"—" }}</strong>
+                            </div>
                         </div>
 
                     {% endif %}
