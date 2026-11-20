@@ -1302,6 +1302,92 @@ class WorkflowExecutionTests(TestCase):
         )
 
 
+    def _create_execution_lookup_instance(self):
+        return WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step_one,
+            started_by=self.user,
+            status=WorkflowInstance.Status.ACTIVE,
+        )
+
+    def test_active_execution_lookup_rejects_missing_execution(self):
+        instance = self._create_execution_lookup_instance()
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "اجرای فعال و ارسال‌نشده‌ای برای مرحله فعلی پیدا نشد.",
+        ):
+            WorkflowExecutionService._get_active_step_execution(
+                instance=instance,
+            )
+
+    def test_active_execution_lookup_returns_only_unsubmitted_execution(self):
+        instance = self._create_execution_lookup_instance()
+        submitted_execution = WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_one,
+            performed_by=self.user,
+            is_submitted=True,
+        )
+        active_execution = WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_one,
+            performed_by=self.user,
+            is_submitted=False,
+        )
+
+        result = WorkflowExecutionService._get_active_step_execution(
+            instance=instance,
+        )
+
+        self.assertEqual(result.pk, active_execution.pk)
+        self.assertNotEqual(result.pk, submitted_execution.pk)
+
+    def test_active_execution_lookup_rejects_multiple_unsubmitted_executions(self):
+        instance = self._create_execution_lookup_instance()
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_one,
+            performed_by=self.user,
+            is_submitted=False,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_one,
+            performed_by=self.user,
+            is_submitted=False,
+        )
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "برای مرحله فعلی بیش از یک اجرای فعال پیدا شد؛ ادامه عملیات ایمن نیست.",
+        ):
+            WorkflowExecutionService._get_active_step_execution(
+                instance=instance,
+            )
+
+    def test_active_execution_lookup_ignores_executions_from_other_steps(self):
+        instance = self._create_execution_lookup_instance()
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_two,
+            performed_by=self.user,
+            is_submitted=False,
+        )
+        active_execution = WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step_one,
+            performed_by=self.user,
+            is_submitted=False,
+        )
+
+        result = WorkflowExecutionService._get_active_step_execution(
+            instance=instance,
+        )
+
+        self.assertEqual(result.pk, active_execution.pk)
+
+
 class WorkflowExecutionConcurrencyTests(TransactionTestCase):
     reset_sequences = True
 
