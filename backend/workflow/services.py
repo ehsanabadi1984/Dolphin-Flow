@@ -344,6 +344,46 @@ class WorkflowExecutionService:
             step=transition.to_step,
         )
 
+        # Resolve the exact submitted source execution that produced this
+        # pending transition, rather than relying on the rejecting actor.
+        previous_execution = (
+            WorkflowStepExecution.objects
+            .filter(
+                instance=instance,
+                workflow_step=transition.from_step,
+                is_submitted=True,
+                completed_by_id=transition_execution.performed_by_id,
+                submitted_at__lte=transition_execution.performed_at,
+            )
+            .order_by("-submitted_at", "-pk")
+            .first()
+        )
+        if previous_execution is None:
+            raise ValidationError(
+                "اجرای تکمیل‌شده مرحله مبدأ برای این درخواست رد پیدا نشد."
+            )
+
+        assignee = WorkflowStepAssignmentService.resolve_assignee(
+            workflow=instance.workflow,
+            step=reject_to_step,
+            instance=instance,
+            previous_execution=previous_execution,
+        )
+
+        step_execution = WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=reject_to_step,
+            performed_by=user,
+            entered_by=user,
+        )
+        WorkflowStepAssignmentService.assign_execution(
+            execution=step_execution,
+            assignee=assignee,
+            changed_by=user,
+            source=WorkflowStepAssignmentHistory.Source.POLICY,
+            reason="تخصیص مسئول مرحله بازگشت پس از رد انتقال",
+        )
+
         transition_execution.status = (
             WorkflowTransitionExecution.Status.REJECTED
         )
@@ -357,12 +397,6 @@ class WorkflowExecutionService:
             ]
         )
 
-        step_execution = WorkflowStepExecution.objects.create(
-            instance=instance,
-            workflow_step=reject_to_step,
-            performed_by=user,
-        )
-
         SLAService.start_sla_if_configured(
             step_execution=step_execution,
         )
@@ -370,12 +404,10 @@ class WorkflowExecutionService:
         instance.current_step = reject_to_step
         instance.save(update_fields=["current_step"])
 
+        # Notification recipient is the admin-configured reject_to assignee,
+        # independent of the assignee resolved for the new execution.
         recipient = reject_to_step.assigned_to
-        if (
-            recipient
-            and recipient.is_active
-            and recipient != user
-        ):
+        if recipient and recipient.is_active:
             NotificationService.create(
                 recipient=recipient,
                 notification_type=(
