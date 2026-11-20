@@ -69,6 +69,10 @@ class WorkflowTransitionAcceptanceConfigurationTests(TestCase):
                 "is_active": True,
                 "requires_acceptance": False,
                 "reject_to_step": self.step_a.pk,
+                "accept_notification_policy": "SOURCE_COMPLETER",
+                "accept_notification_user": "",
+                "reject_notification_policy": "SOURCE_COMPLETER",
+                "reject_notification_user": "",
             }
         )
 
@@ -85,6 +89,10 @@ class WorkflowTransitionAcceptanceConfigurationTests(TestCase):
                 "is_active": True,
                 "requires_acceptance": True,
                 "reject_to_step": self.step_a.pk,
+                "accept_notification_policy": "SOURCE_COMPLETER",
+                "accept_notification_user": "",
+                "reject_notification_policy": "SOURCE_COMPLETER",
+                "reject_notification_user": "",
             }
         )
 
