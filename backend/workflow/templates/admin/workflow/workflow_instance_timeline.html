@@ -107,7 +107,8 @@
                         {{ event.user|default:"—" }}
                     </div>
 
-                    {% if event.type == "step" and event.sla_started_at %}
+                    {% if event.type == "step" or event.type == "override" %}
+                    {% if event.sla_started_at %}
 
                         <div class="timeline-sla">
 
@@ -214,6 +215,7 @@
                             {% endif %}
 
                         </div>
+                    {% endif %}
 
                     {% endif %}
 
@@ -352,7 +354,7 @@
                     {% endif %}
 
 
-                    {% if event.type == "step" %}
+                    {% if event.type == "step" or event.type == "override" %}
 
                         <div class="timeline-status">
 
