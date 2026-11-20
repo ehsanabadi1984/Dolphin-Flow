@@ -107,11 +107,22 @@ class WorkflowExecutionTests(TestCase):
             is_active=True,
         )
 
-        self.step_one.assigned_to = self.destination_user
-        self.step_one.save(update_fields=["assigned_to"])
+        for step in (self.step_one, self.step_two, self.step_three):
+            step.assigned_to = self.user
+            step.save(update_fields=["assigned_to"])
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                step=step,
+                user=self.user,
+                action=WorkflowPermission.Action.STEP_ACTION,
+                action_code="EXECUTE",
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
+
+        # Keep a second eligible executor available for destination-policy tests.
         WorkflowPermission.objects.create(
             workflow=self.workflow,
-            step=self.step_one,
+            step=self.step_two,
             user=self.destination_user,
             action=WorkflowPermission.Action.STEP_ACTION,
             action_code="EXECUTE",
@@ -743,24 +754,29 @@ class WorkflowExecutionTests(TestCase):
             self.step_one.pk,
         )
 
-    def test_transition_permission_works_without_execute_permission(self):
-        """TRANSITION authorizes mutation independently from EXECUTE."""
+    def test_transition_permission_alone_does_not_authorize_submission(self):
+        """A transition grant cannot replace the active execution assignment."""
         self.grant_start_permission()
         self.grant_transition_permission(self.transition_one)
 
         instance = self.start_instance()
-
-        WorkflowExecutionService.execute_transition(
-            instance=instance,
-            transition=self.transition_one,
+        WorkflowPermission.objects.filter(
+            workflow=self.workflow,
+            step=self.step_one,
             user=self.user,
-        )
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="EXECUTE",
+        ).delete()
+
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            )
 
         instance.refresh_from_db()
-        self.assertEqual(
-            instance.current_step_id,
-            self.step_two.pk,
-        )
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
 
     def test_assigned_to_does_not_grant_transition_permission(self):
         """Step assignment is routing, not authorization."""
@@ -788,8 +804,8 @@ class WorkflowExecutionTests(TestCase):
             self.step_one.pk,
         )
 
-    def test_transition_permission_does_not_require_step_assignment(self):
-        """A user may execute an authorized transition when not assigned to the step."""
+    def test_transition_permission_does_not_replace_active_step_assignment(self):
+        """A transition-authorized user cannot submit another user's execution."""
         self.grant_start_permission()
         self.grant_transition_permission(self.transition_one)
 
@@ -798,17 +814,15 @@ class WorkflowExecutionTests(TestCase):
 
         instance = self.start_instance()
 
-        WorkflowExecutionService.execute_transition(
-            instance=instance,
-            transition=self.transition_one,
-            user=self.user,
-        )
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            )
 
         instance.refresh_from_db()
-        self.assertEqual(
-            instance.current_step_id,
-            self.step_two.pk,
-        )
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
 
     def test_acceptance_transition_stays_pending_at_source_step(self):
         self.grant_start_permission()
@@ -1274,11 +1288,60 @@ class WorkflowExecutionTests(TestCase):
             instance.current_step_id,
             self.step_two.pk,
         )
-        self.assertTrue(
-            WorkflowStepExecution.objects.filter(
-                instance=instance,
-                workflow_step=self.step_two,
-            ).exists()
+        source_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_one,
+        )
+        destination_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_two,
+        )
+        self.assertEqual(source_execution.completed_by_id, self.user.pk)
+        self.assertTrue(source_execution.is_submitted)
+        self.assertIsNotNone(source_execution.submitted_at)
+        self.assertEqual(destination_execution.performed_by_id, self.user.pk)
+        self.assertEqual(destination_execution.entered_by_id, self.user.pk)
+        self.assertEqual(destination_execution.assigned_to_id, self.user.pk)
+        self.assertIsNotNone(destination_execution.assigned_at)
+        assignment = destination_execution.assignment_history.get()
+        self.assertEqual(assignment.new_assignee_id, self.user.pk)
+        self.assertEqual(
+            assignment.source,
+            "POLICY",
+        )
+
+    def test_finish_transition_records_completer_without_creating_destination_execution(self):
+        self.grant_start_permission()
+        finish_transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="Finish Workflow",
+            code="AUTH_EXEC_FINISH",
+            from_step=self.step_one,
+            to_step=None,
+            is_active=True,
+        )
+        self.grant_transition_permission(finish_transition)
+
+        instance = self.start_instance()
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=finish_transition,
+            user=self.user,
+        )
+
+        instance.refresh_from_db()
+        source_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_one,
+        )
+        self.assertEqual(instance.status, WorkflowInstance.Status.COMPLETED)
+        self.assertIsNone(instance.current_step_id)
+        self.assertEqual(source_execution.completed_by_id, self.user.pk)
+        self.assertTrue(source_execution.is_submitted)
+        self.assertIsNotNone(source_execution.submitted_at)
+        self.assertEqual(
+            WorkflowStepExecution.objects.filter(instance=instance).count(),
+            1,
         )
 
     def test_transition_creates_notification_for_destination_executors(self):
@@ -1289,6 +1352,8 @@ class WorkflowExecutionTests(TestCase):
         # Assign destination step to a different user
         self.step_two.assigned_to = self.destination_user
         self.step_two.save(update_fields=["assigned_to"])
+        # The fixed destination assignee must independently hold EXECUTE.
+        # (The base fixture grants this permission for the destination step.)
 
         instance = self.start_instance()
 
