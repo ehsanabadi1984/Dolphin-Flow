@@ -107,6 +107,17 @@ class WorkflowExecutionTests(TestCase):
             is_active=True,
         )
 
+        self.step_one.assigned_to = self.destination_user
+        self.step_one.save(update_fields=["assigned_to"])
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_one,
+            user=self.destination_user,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="EXECUTE",
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
     def grant_execute_permission(self):
         WorkflowPermission.objects.create(
             workflow=self.workflow,
