@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
@@ -236,7 +238,7 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
 
     def test_timeline_renders_dedicated_details_for_step_transition_resolution_and_file_share(self):
         self.grant_workflow_view()
-        assigned_at = timezone.now() - timezone.timedelta(minutes=10)
+        assigned_at = timezone.now() - timedelta(minutes=10)
         submitted_at = timezone.now()
         execution = WorkflowStepExecution.objects.create(
             instance=self.instance,
