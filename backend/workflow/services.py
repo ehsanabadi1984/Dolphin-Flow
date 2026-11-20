@@ -608,6 +608,7 @@ class WorkflowExecutionService:
         current_step_execution.is_submitted = True
         current_step_execution.submitted_at = now
         current_step_execution.data = {
+            **(current_step_execution.data or {}),
             "history": history_snapshot,
         }
 
