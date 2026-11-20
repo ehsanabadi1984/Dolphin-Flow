@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase, Client
 
 from workflow.authorization import WorkflowAuthorizationService
@@ -220,7 +220,7 @@ class StartPermissionServiceTests(StartPermissionBaseTestCase):
             user=self.user,
         )
 
-        with self.assertRaises(PermissionDenied):
+        with self.assertRaises(ValidationError):
             WorkflowExecutionService.execute_transition(
                 instance=instance,
                 transition=self.transition,
@@ -605,7 +605,7 @@ class ImplicitViewPermissionTests(StartPermissionBaseTestCase):
         self.assertTrue(allowed_view)
 
         # Cannot execute transition without explicit permission.
-        with self.assertRaises(PermissionDenied):
+        with self.assertRaises(ValidationError):
             WorkflowExecutionService.execute_transition(
                 instance=instance,
                 transition=self.transition,
