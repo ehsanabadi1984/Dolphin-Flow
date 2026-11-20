@@ -82,7 +82,7 @@ class WorkflowExecutionService:
         transition_execution = (
             WorkflowTransitionExecution.objects
             .select_for_update()
-            .select_related("transition")
+            .select_related("transition", "proposed_assignee")
             .get(pk=transition_execution.pk)
         )
 
@@ -128,23 +128,75 @@ class WorkflowExecutionService:
                 "این Transition Execution دیگر مربوط به مرحله فعلی نیست."
             )
 
-        reject_to_step = transition.reject_to_step
-        if reject_to_step is None:
-            raise ValidationError(
-                "برای تأیید این Transition مرحله مربوطه تنظیم نشده است."
-            )
-
-        if reject_to_step.workflow_id != instance.workflow_id:
-            raise ValidationError(
-                "مرحله مربوطه متعلق به Workflow این Instance نیست."
-            )
-
         WorkflowAuthorizationService.require_permission(
             user=user,
             workflow=instance.workflow,
             action=WorkflowPermission.Action.STEP_ACTION,
             action_code="ACCEPT",
             step=transition.to_step,
+        )
+
+        # Recover the exact submitted source execution that produced this
+        # pending transition. The transition actor is the submitter in this
+        # workflow path, so it disambiguates repeated visits to the source.
+        previous_execution = (
+            WorkflowStepExecution.objects
+            .filter(
+                instance=instance,
+                workflow_step=transition.from_step,
+                is_submitted=True,
+                completed_by_id=transition_execution.performed_by_id,
+                submitted_at__lte=transition_execution.performed_at,
+            )
+            .order_by("-submitted_at", "-pk")
+            .first()
+        )
+        if previous_execution is None:
+            raise ValidationError(
+                "اجرای تکمیل‌شده مرحله مبدأ برای این درخواست پذیرش پیدا نشد."
+            )
+
+        manual_selection = (
+            transition.to_step.assignment_policy
+            == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        )
+        if manual_selection and transition_execution.proposed_assignee_id is None:
+            raise ValidationError(
+                "مسئول پیشنهادی مرحله مقصد برای این درخواست ثبت نشده است."
+            )
+        if (
+            not manual_selection
+            and transition_execution.proposed_assignee_id is not None
+        ):
+            raise ValidationError(
+                "برای سیاست تخصیص این مرحله، مسئول پیشنهادی دستی مجاز نیست."
+            )
+
+        assignee = WorkflowStepAssignmentService.resolve_assignee(
+            workflow=instance.workflow,
+            step=transition.to_step,
+            instance=instance,
+            previous_execution=previous_execution,
+            selected_assignee=(
+                transition_execution.proposed_assignee
+                if manual_selection else None
+            ),
+        )
+
+        # Assignment is finalized only now, after the proposed/resolved user
+        # has been revalidated against current membership and EXECUTE access.
+        step_execution = WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=transition.to_step,
+            performed_by=user,
+            entered_by=user,
+        )
+        WorkflowStepAssignmentService.assign_execution(
+            execution=step_execution,
+            assignee=assignee,
+            changed_by=user,
+            source=WorkflowStepAssignmentHistory.Source.ACCEPTANCE,
+            reason="تخصیص مسئول مقصد هنگام پذیرش انتقال",
         )
 
         transition_execution.status = (
@@ -160,12 +212,6 @@ class WorkflowExecutionService:
             ]
         )
 
-        step_execution = WorkflowStepExecution.objects.create(
-            instance=instance,
-            workflow_step=transition.to_step,
-            performed_by=user,
-        )
-
         SLAService.start_sla_if_configured(
             step_execution=step_execution,
         )
@@ -173,14 +219,9 @@ class WorkflowExecutionService:
         instance.current_step = transition.to_step
         instance.save(update_fields=["current_step"])
 
-        recipient = reject_to_step.assigned_to
-        if (
-            recipient
-            and recipient.is_active
-            and recipient != user
-        ):
+        if assignee != user:
             NotificationService.create(
-                recipient=recipient,
+                recipient=assignee,
                 notification_type=(
                     Notification.NotificationType.ACTION_REQUIRED
                 ),
@@ -189,10 +230,10 @@ class WorkflowExecutionService:
                 ),
                 message=(
                     f"فرآیند «{instance.workflow.name}» تأیید شد و "
-                    f"برای اطلاع شما در مرحله «{reject_to_step.name}» قرار گرفت."
+                    f"برای اقدام در مرحله «{transition.to_step.name}» به شما تخصیص یافت."
                 ),
                 workflow_instance=instance,
-                workflow_step=reject_to_step,
+                workflow_step=transition.to_step,
                 transition_execution=transition_execution,
             )
 
