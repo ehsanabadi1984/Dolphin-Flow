@@ -239,6 +239,12 @@ class WorkflowInstance(models.Model):
 
     class Meta:
         ordering = ["-started_at"]
+        permissions = [
+            (
+                "view_all_workflowinstance_timelines",
+                "Can view all workflow instance timelines",
+            ),
+        ]
 
     def __str__(self):
         return (
