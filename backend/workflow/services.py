@@ -1,7 +1,10 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
-from .notification_services import NotificationService
+from .notification_services import (
+    NotificationService,
+    WorkflowTransitionNotificationService,
+)
 
 from .authorization import WorkflowAuthorizationService
 from .sla_services import SLAService
@@ -219,31 +222,16 @@ class WorkflowExecutionService:
         instance.current_step = transition.to_step
         instance.save(update_fields=["current_step"])
 
-        # The notification recipient is configured in the admin through
-        # the transition's reject_to_step, for both ACCEPT and REJECT.
-        notification_step = transition.reject_to_step
-        recipient = (
-            notification_step.assigned_to
-            if notification_step is not None else None
+        # Resolve the ACCEPT recipient only after the destination execution
+        # has been created, assigned, and the transition has been finalized.
+        WorkflowTransitionNotificationService.notify_outcome(
+            transition=transition,
+            transition_execution=transition_execution,
+            instance=instance,
+            outcome="ACCEPT",
+            source_execution=previous_execution,
+            result_execution=step_execution,
         )
-        if recipient is not None:
-            NotificationService.create(
-                recipient=recipient,
-                notification_type=(
-                    Notification.NotificationType.ACTION_REQUIRED
-                ),
-                title=(
-                    f"فرآیند «{instance.workflow.name}» تأیید شد"
-                ),
-                message=(
-                    f"فرآیند «{instance.workflow.name}» تأیید شد. "
-                    f"این اعلان طبق مسئول تعیین‌شده در تنظیمات «مرحله بازگشت» "
-                    f"برای شما ارسال شده است."
-                ),
-                workflow_instance=instance,
-                workflow_step=notification_step,
-                transition_execution=transition_execution,
-            )
 
         transaction.on_commit(
             lambda: WorkflowRealtimeService.notify_instance_changed(
@@ -404,26 +392,16 @@ class WorkflowExecutionService:
         instance.current_step = reject_to_step
         instance.save(update_fields=["current_step"])
 
-        # Notification recipient is the admin-configured reject_to assignee,
-        # independent of the assignee resolved for the new execution.
-        recipient = reject_to_step.assigned_to
-        if recipient:
-            NotificationService.create(
-                recipient=recipient,
-                notification_type=(
-                    Notification.NotificationType.ACTION_REQUIRED
-                ),
-                title=(
-                    f"فرآیند جدید «{instance.workflow.name}»"
-                ),
-                message=(
-                    f"فرآیند «{instance.workflow.name}» به مرحله "
-                    f"«{reject_to_step.name}» بازگشت و نیازمند بررسی شماست."
-                ),
-                workflow_instance=instance,
-                workflow_step=reject_to_step,
-                transition_execution=transition_execution,
-            )
+        # Resolve the REJECT recipient only after the return execution
+        # has been created, assigned, and the transition has been finalized.
+        WorkflowTransitionNotificationService.notify_outcome(
+            transition=transition,
+            transition_execution=transition_execution,
+            instance=instance,
+            outcome="REJECT",
+            source_execution=previous_execution,
+            result_execution=step_execution,
+        )
 
         transaction.on_commit(
             lambda: WorkflowRealtimeService.notify_instance_changed(
