@@ -25,6 +25,7 @@ from workflow.models import (
     WorkflowStepAssignmentHistory,
     WorkflowTransition,
     WorkflowTransitionExecution,
+    WorkflowTransitionNotificationIssue,
 )
 from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.services import WorkflowExecutionService
@@ -1376,7 +1377,7 @@ class WorkflowExecutionTests(TestCase):
             Notification.NotificationType.ACTION_REQUIRED,
         )
 
-    def test_accept_transition_execution_notifies_admin_configured_reject_to_assignee(self):
+    def test_accept_transition_execution_notifies_source_completer(self):
         transition_execution = self._create_pending_acceptance_execution()
 
         self.transition_two.reject_to_step = self.step_one
@@ -1398,7 +1399,7 @@ class WorkflowExecutionTests(TestCase):
         notification = Notification.objects.get(
             recipient=self.user,
             workflow_instance_id=transition_execution.instance_id,
-            workflow_step=self.step_one,
+            workflow_step=self.step_three,
             transition_execution=transition_execution,
         )
         self.assertEqual(
@@ -1410,7 +1411,7 @@ class WorkflowExecutionTests(TestCase):
             f"فرآیند «{self.workflow.name}» تأیید شد",
         )
 
-    def test_reject_transition_execution_notifies_reject_target_assignee(self):
+    def test_reject_transition_execution_notifies_source_completer(self):
         transition_execution = self._create_pending_acceptance_execution()
 
         self.transition_two.reject_to_step = self.step_one
@@ -1442,12 +1443,78 @@ class WorkflowExecutionTests(TestCase):
         )
         self.assertEqual(
             notification.title,
-            f"فرآیند جدید «{self.workflow.name}»",
+            f"فرآیند «{self.workflow.name}» رد شد",
         )
         self.assertEqual(
             notification.message,
-            f"فرآیند «{self.workflow.name}» به مرحله "
-            f"«{self.step_one.name}» بازگشت و نیازمند بررسی شماست.",
+            f"درخواست انتقال در فرآیند «{self.workflow.name}» رد شد "
+            f"و فرآیند به مرحله «{self.step_one.name}» بازگشت.",
+        )
+
+    def test_accept_succeeds_and_records_issue_when_source_completer_is_missing(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        WorkflowStepExecution.objects.filter(
+            instance_id=transition_execution.instance_id,
+            workflow_step=self.step_two,
+            is_submitted=True,
+        ).update(completed_by=None)
+
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+
+        resolved = WorkflowExecutionService.accept_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        resolved.refresh_from_db()
+        self.assertEqual(resolved.status, WorkflowTransitionExecution.Status.ACCEPTED)
+        self.assertEqual(
+            WorkflowTransitionNotificationIssue.objects.filter(
+                transition_execution=resolved,
+                outcome="ACCEPT",
+                error_code="SOURCE_COMPLETER_MISSING",
+            ).count(),
+            1,
+        )
+        self.assertFalse(
+            Notification.objects.filter(transition_execution=resolved).exists()
+        )
+
+    def test_reject_succeeds_and_records_issue_when_source_completer_is_missing(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        WorkflowStepExecution.objects.filter(
+            instance_id=transition_execution.instance_id,
+            workflow_step=self.step_two,
+            is_submitted=True,
+        ).update(completed_by=None)
+
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        resolved = WorkflowExecutionService.reject_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+        )
+
+        resolved.refresh_from_db()
+        self.assertEqual(resolved.status, WorkflowTransitionExecution.Status.REJECTED)
+        self.assertEqual(
+            WorkflowTransitionNotificationIssue.objects.filter(
+                transition_execution=resolved,
+                outcome="REJECT",
+                error_code="SOURCE_COMPLETER_MISSING",
+            ).count(),
+            1,
+        )
+        self.assertFalse(
+            Notification.objects.filter(transition_execution=resolved).exists()
         )
 
     def test_accept_transition_execution_resolves_pending_transition(self):
