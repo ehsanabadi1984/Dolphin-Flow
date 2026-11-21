@@ -45,7 +45,7 @@ class RestoreQuiescenceCommandTests(TestCase):
         call_command(
             "verify_restore_quiescence",
             operation_id="b" * 32,
-            service_unit=["dolphinplus-daphne.service", "dolphinplus-celery.service"],
+            service_units=["dolphinplus-daphne.service", "dolphinplus-celery.service"],
             stdout=output,
         )
 
@@ -66,6 +66,6 @@ class RestoreQuiescenceCommandTests(TestCase):
             call_command(
                 "verify_restore_quiescence",
                 operation_id="d" * 32,
-                service_unit=["dolphinplus-celery.service"],
+                service_units=["dolphinplus-celery.service"],
                 stdout=StringIO(),
             )
