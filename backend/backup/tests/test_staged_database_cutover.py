@@ -62,6 +62,9 @@ class StagedDatabaseCutoverPostgreSQLTests(TransactionTestCase):
         self.config.pop("TEST", None)
         self.live_name = f"cutover_live_{secrets.token_hex(5)}"
         self.staging_name = f"dolphinflow_restore_1_{secrets.token_hex(5)}"
+        # Django's test runner rewrites NAME to test_<database>; this test
+        # creates its own disposable live DB and must point the cutover there.
+        self.config["NAME"] = self.live_name
         self.previous_name = None
         self.admin = self._admin_connection()
         with self.admin.cursor() as cursor:
