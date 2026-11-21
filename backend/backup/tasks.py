@@ -16,6 +16,7 @@ from .models import (
     generate_backup_filename,
 )
 from .restore_services import RestoreError, RestoreService
+from .staged_restore_preparation import StagedRestorePreparationService
 from .services import BackupService, sanitize_message
 from .storage import BackupStorageError, LocalBackupStorage, NetworkBackupStorage
 
@@ -340,4 +341,6 @@ def run_restore(restore_id):
         )
         return {"status": "missing", "restore_id": restore_id}
 
-    return MigratingRestoreService(restore).run()
+    # Celery performs preparation only. The destructive cutover is a separate
+    # management-process operation after maintenance and service quiescence.
+    return StagedRestorePreparationService(restore).run()
