@@ -1,0 +1,202 @@
+"""Independent end-to-end orchestrator for a prepared staged restore."""
+import subprocess
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+from django.conf import settings
+from django.core.management import call_command
+from django.core.management.base import BaseCommand, CommandError
+from django.db import connections
+
+from backup.restore_journal import RestoreJournal
+from backup.restore_lock import RestoreOperationLock
+from backup.restore_maintenance import activate_maintenance, deactivate_maintenance, read_maintenance_state
+from backup.restore_quiescence import assert_database_quiescent, assert_systemd_services_stopped, close_restore_worker_connection
+from backup.restore_services import RestoreError
+from backup.staged_restore_cutover import StagedRestoreCutover
+from backup.staged_restore_recovery import StagedRestoreRecovery
+from .cutover_staged_restore import _finalize_restore_audit
+
+
+class Command(BaseCommand):
+    help = "اجرای کامل و خودکار Restore آماده‌شده با Rollback در صورت شکست."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--operation-id", required=True)
+        parser.add_argument("--service-unit", action="append", dest="service_units", required=True)
+        parser.add_argument("--health-url", default="")
+        parser.add_argument("--health-timeout", type=int, default=15)
+
+    @staticmethod
+    def _run_systemctl(action, unit):
+        try:
+            result = subprocess.run(
+                ["systemctl", action, unit], capture_output=True, text=True,
+                check=False, timeout=60,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RestoreError(f"systemctl {action} برای {unit} ناموفق بود: {exc}") from exc
+        if result.returncode:
+            detail = (result.stderr or result.stdout or "").strip()
+            raise RestoreError(f"systemctl {action} برای {unit}: {detail or result.returncode}")
+        return result
+
+    @staticmethod
+    def _active_units(units):
+        active = []
+        for unit in units:
+            try:
+                result = subprocess.run(
+                    ["systemctl", "is-active", unit], capture_output=True,
+                    text=True, check=False, timeout=10,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise RestoreError(f"بررسی سرویس {unit} ناموفق بود: {exc}") from exc
+            state = (result.stdout or "").strip()
+            if result.returncode == 0 and state == "active":
+                active.append(unit)
+            elif state not in {"inactive", "failed"}:
+                raise RestoreError(f"وضعیت سرویس {unit} نامشخص است: {state or 'نامعلوم'}")
+        return active
+
+    @classmethod
+    def _stop(cls, units):
+        for unit in reversed(units):
+            cls._run_systemctl("stop", unit)
+
+    @classmethod
+    def _start(cls, units):
+        for unit in units:
+            cls._run_systemctl("start", unit)
+
+    @staticmethod
+    def _health_check(health_url="", timeout=15):
+        call_command("check", verbosity=0)
+        connections["default"].close()
+        with connections["default"].cursor() as cursor:
+            cursor.execute("SELECT 1")
+            if cursor.fetchone()[0] != 1:
+                raise RestoreError("آزمون دیتابیس ناموفق بود.")
+        if not Path(settings.MEDIA_ROOT).is_dir():
+            raise RestoreError("MEDIA_ROOT در دسترس نیست.")
+        if health_url:
+            try:
+                request = urllib.request.Request(
+                    health_url, headers={"User-Agent": "Dolphin-Flow-Restore-HealthCheck"}
+                )
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    if not 200 <= response.status < 300:
+                        raise RestoreError(f"Health URL با کد {response.status} پاسخ داد.")
+            except (OSError, urllib.error.URLError) as exc:
+                raise RestoreError(f"Health Check HTTP ناموفق بود: {exc}") from exc
+
+    def handle(self, *args, **options):
+        operation_id = options["operation_id"]
+        units = options["service_units"]
+        health_url = options["health_url"]
+        timeout = options["health_timeout"]
+        if len(set(units)) != len(units):
+            raise CommandError("نام سرویس systemd تکراری است.")
+        if not 1 <= timeout <= 120:
+            raise CommandError("--health-timeout باید بین ۱ تا ۱۲۰ باشد.")
+
+        root = getattr(settings, "RESTORE_JOURNAL_ROOT", Path(settings.BACKUP_ROOT) / ".restore-journal")
+        journal = RestoreJournal(operation_id, root=root)
+        maintenance_owned = False
+        active_units = []
+        database_state = None
+
+        try:
+            with RestoreOperationLock(root=root, operation_id=operation_id):
+                payload = journal.read()
+                if payload["phase"] != "PREPARED":
+                    raise RestoreError(f"Journal باید PREPARED باشد؛ وضعیت فعلی: {payload['phase']}")
+                if not payload["database"].get("prepared"):
+                    raise RestoreError("دیتابیس staging آماده نیست.")
+                if payload["media"].get("included") and not payload["media"].get("prepared"):
+                    raise RestoreError("Media staging آماده نیست.")
+                if read_maintenance_state() is not None:
+                    raise RestoreError("Maintenance از قبل فعال است؛ مالکیت آن متعلق به این عملیات نیست.")
+
+                activate_maintenance(operation_id)
+                maintenance_owned = True
+                active_units = self._active_units(units)
+                if not active_units:
+                    raise RestoreError("هیچ سرویس برنامه‌ای فعال نیست؛ توقف کامل قابل اثبات نیست.")
+
+                self.stdout.write("۱/۶ توقف Daphne، Celery و سرویس‌های اعلام‌شده...")
+                self._stop(active_units)
+                assert_systemd_services_stopped(units)
+                close_restore_worker_connection()
+                database_state = assert_database_quiescent()
+
+                self.stdout.write("۲/۶ Cutover هماهنگ دیتابیس و Media...")
+                result = StagedRestoreCutover(journal).run()
+                if result.get("status") != "COMPLETED":
+                    raise RestoreError("Cutover کامل نشد.")
+
+                self.stdout.write("۳/۶ اجرای Migration...")
+                close_restore_worker_connection()
+                call_command("migrate", interactive=False, verbosity=1)
+
+                self.stdout.write("۴/۶ بررسی دیتابیس و Media...")
+                self._health_check(timeout=timeout)
+
+                self.stdout.write("۵/۶ راه‌اندازی سرویس‌ها...")
+                self._start(active_units)
+                if set(self._active_units(active_units)) != set(active_units):
+                    raise RestoreError("همه سرویس‌ها فعال نشدند.")
+
+                self.stdout.write("۶/۶ Health Check نهایی و پایان Maintenance...")
+                self._health_check(health_url=health_url, timeout=timeout)
+                _finalize_restore_audit(journal)
+                deactivate_maintenance(operation_id)
+                maintenance_owned = False
+
+                self.stdout.write(self.style.SUCCESS(
+                    f"Restore #{payload['restore_id']} با موفقیت کامل شد."
+                ))
+                self.stdout.write(
+                    f"اتصال‌های دیتابیس هنگام Cutover: {database_state['active_sessions']}. "
+                    "نسخه‌های قبلی DB و Media حفظ شده‌اند."
+                )
+
+        except Exception as exc:
+            self.stderr.write(self.style.ERROR(f"Restore ناموفق بود: {exc}"))
+            if maintenance_owned:
+                try:
+                    # Re-stop any units that may have been started before a health failure.
+                    if active_units:
+                        currently_active = self._active_units(units)
+                        self._stop(currently_active)
+                        assert_systemd_services_stopped(units)
+                    close_restore_worker_connection()
+
+                    phase = journal.read()["phase"]
+                    if phase in {"DATABASE_SWAPPED", "MEDIA_SWAPPED", "COMPLETED", "ROLLBACK_REQUIRED"}:
+                        self.stderr.write("در حال بازگرداندن دیتابیس و Media قبلی...")
+                        StagedRestoreRecovery(journal).rollback(service_units=units)
+                        close_restore_worker_connection()
+                        call_command("migrate", interactive=False, verbosity=0)
+
+                    if active_units:
+                        self._start(active_units)
+                        if set(self._active_units(active_units)) != set(active_units):
+                            raise RestoreError("راه‌اندازی مجدد سرویس‌ها کامل نشد.")
+                    self._health_check(health_url=health_url, timeout=timeout)
+                    deactivate_maintenance(operation_id)
+                    maintenance_owned = False
+                    self.stderr.write(self.style.WARNING(
+                        "نسخه قبلی بازیابی شد؛ بررسی سلامت موفق بود و Maintenance برداشته شد."
+                    ))
+                except Exception as recovery_exc:
+                    self.stderr.write(self.style.ERROR(
+                        "Recovery کامل نشد؛ Maintenance عمداً فعال باقی ماند. "
+                        "سرویس‌ها را دستی راه‌اندازی نکنید. " + str(recovery_exc)
+                    ))
+            try:
+                journal.update(error=str(exc))
+            except Exception:
+                pass
+            raise CommandError(str(exc)) from exc
