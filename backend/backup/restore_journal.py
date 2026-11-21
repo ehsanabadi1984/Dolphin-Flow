@@ -8,6 +8,7 @@ import json
 import os
 import re
 import secrets
+import stat
 import tempfile
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -147,11 +148,24 @@ class RestoreJournal:
                     pass
 
     def read(self):
+        """Read only a regular journal file; never follow a symbolic link."""
+        descriptor = None
         try:
-            with self.path.open("r", encoding="utf-8") as handle:
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(self.path, flags)
+            file_stat = os.fstat(descriptor)
+            if not stat.S_ISREG(file_stat.st_mode):
+                raise RestoreError("فایل Journal باید یک فایل معمولی باشد.")
+            with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                descriptor = None
                 payload = json.load(handle)
-        except (OSError, json.JSONDecodeError) as exc:
+        except RestoreError:
+            raise
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise RestoreError("خواندن Journal بازیابی ناموفق بود: " + str(exc)) from exc
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
         return deepcopy(self._validate(payload))
 
     def update(self, phase=None, error=None, database=None, media=None):
