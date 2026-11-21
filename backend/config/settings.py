@@ -56,6 +56,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "backup.restore_maintenance_middleware.RestoreMaintenanceMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -234,7 +235,7 @@ CHANNEL_LAYERS = {
             "capacity": 1500,
             "expiry": 10,
         },
-    },
+    }
 }
 
 CELERY_BROKER_URL = (
