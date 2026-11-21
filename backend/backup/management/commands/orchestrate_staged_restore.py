@@ -8,6 +8,7 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
+from django.utils import timezone
 
 from backup.models import Restore
 from backup.restore_journal import RestoreJournal
@@ -244,6 +245,13 @@ class Command(BaseCommand):
                         StagedRestoreRecovery(journal).rollback(service_units=units)
                         close_restore_worker_connection()
                         call_command("migrate", interactive=False, verbosity=0)
+                        phase = "ROLLED_BACK"
+                    if phase == "ROLLED_BACK":
+                        Restore.objects.filter(pk=journal.read()["restore_id"]).update(
+                            status=Restore.Status.FAILED,
+                            error_message=("Restore ناموفق بود و نسخه قبلی با موفقیت بازگردانده شد: " + str(exc))[:4000],
+                            completed_at=timezone.now(),
+                        )
 
                     if active_units:
                         self._start(active_units)
