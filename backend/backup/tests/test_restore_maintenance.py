@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
+from celery import Celery
 from celery.exceptions import Ignore
 from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase, override_settings
@@ -128,6 +129,7 @@ class RestoreMaintenanceGateTests(SimpleTestCase):
 
     def test_celery_tasks_run_without_gate(self):
         task = RestoreMaintenanceAwareTask()
+        task.bind(Celery("restore-maintenance-tests"))
         task.run = Mock(return_value="ran")
 
         self.assertEqual(task(), "ran")
