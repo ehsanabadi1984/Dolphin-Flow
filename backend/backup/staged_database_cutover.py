@@ -12,7 +12,11 @@ from copy import deepcopy
 from django.conf import settings
 from django.db.backends.postgresql.base import DatabaseWrapper
 
-from .restore_quiescence import MAINTENANCE_DATABASE, assert_database_quiescent
+from .restore_quiescence import (
+    MAINTENANCE_DATABASE,
+    assert_database_quiescent,
+    close_restore_worker_connection,
+)
 from .restore_services import RestoreError
 from .staged_restore import STAGING_DATABASE_PREFIX
 
@@ -74,7 +78,9 @@ class StagedDatabaseCutover:
         if database_stage is not None:
             database_stage.close()
 
+        close_restore_worker_connection()
         assert_database_quiescent(self.config)
+        self.journal.update(phase="QUIESCING")
         admin = self._admin()
         try:
             with admin.cursor() as cursor:
