@@ -210,6 +210,7 @@ class StagedDatabaseRestore:
             self._connection = None
         if self.alias in connections:
             del connections[self.alias]
+        connections.databases.pop(self.alias, None)
 
     def drop_database(self):
         """Drop this service's own staging DB; never targets default DB."""
