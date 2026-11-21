@@ -41,11 +41,24 @@ class RestoreJournalTests(SimpleTestCase):
                 "QUIESCING",
                 "DATABASE_SWAPPED",
                 "MEDIA_SWAPPED",
+                "VALIDATING",
                 "COMPLETED",
             ):
                 payload = journal.update(phase=phase)
 
             self.assertEqual(payload["phase"], "COMPLETED")
+
+    def test_completed_restore_can_roll_back_after_post_cutover_failure(self):
+        with TemporaryDirectory() as temp:
+            journal = RestoreJournal.new(131, root=Path(temp) / "journal")
+            for phase in ("QUIESCING", "DATABASE_SWAPPED", "MEDIA_SWAPPED", "VALIDATING", "COMPLETED"):
+                journal.update(phase=phase)
+
+            journal.update(phase="ROLLBACK_REQUIRED", error="health check failed")
+            payload = journal.update(phase="ROLLED_BACK")
+
+            self.assertEqual(payload["phase"], "ROLLED_BACK")
+            self.assertEqual(payload["error"], "health check failed")
 
     def test_invalid_phase_transition_is_rejected(self):
         with TemporaryDirectory() as temp:
