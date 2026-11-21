@@ -37,6 +37,50 @@ class RestoreRecoveryInventoryTests(SimpleTestCase):
             self.assertTrue(inventory[0]["recovery_required"])
             self.assertEqual(journal.path.read_bytes(), before)
 
+    def test_interrupted_media_preparation_exposes_staging_path(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "journal"
+            stage_path = Path(temp) / ".media.restore-203-token"
+            journal = RestoreJournal.new(
+                203,
+                root=root,
+                database={
+                    "original_name": "dolphinflow",
+                    "staging_name": "dolphinflow_restore_203_token",
+                    "prepared": False,
+                },
+                media={
+                    "included": True,
+                    "media_root": str(Path(temp) / "media"),
+                },
+            )
+
+            # This mirrors the callback: persist the intended path before mkdir.
+            journal.update(
+                media={
+                    "staging_path": str(stage_path),
+                    "stage_created": True,
+                }
+            )
+            stage_path.mkdir()
+            (stage_path / "partial.bin").write_bytes(b"partial")
+
+            # Simulate process death: no service cleanup runs.
+            inventory = inspect_restore_journals(root=root)
+
+            self.assertEqual(len(inventory), 1)
+            self.assertTrue(inventory[0]["recovery_required"])
+            self.assertEqual(
+                inventory[0]["database"]["staging_name"],
+                "dolphinflow_restore_203_token",
+            )
+            self.assertEqual(
+                inventory[0]["media"]["staging_path"],
+                str(stage_path),
+            )
+            self.assertTrue(stage_path.exists())
+            self.assertTrue((stage_path / "partial.bin").exists())
+
     def test_terminal_journals_do_not_require_recovery(self):
         with TemporaryDirectory() as temp:
             root = Path(temp) / "journal"
