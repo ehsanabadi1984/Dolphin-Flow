@@ -12,7 +12,10 @@ from pathlib import Path
 
 from django.conf import settings
 
-from .restore_services import RestoreError
+class RestoreMaintenanceError(Exception):
+    """A maintenance gate could not be read or safely changed."""
+
+
 
 
 MARKER_NAME = ".restore-maintenance"
@@ -30,12 +33,12 @@ def read_maintenance_state():
     except FileNotFoundError:
         return None
     except OSError as exc:
-        raise RestoreError("خواندن وضعیت Maintenance ناموفق بود: " + str(exc)) from exc
+        raise RestoreMaintenanceError("خواندن وضعیت Maintenance ناموفق بود: " + str(exc)) from exc
 
     try:
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode):
-            raise RestoreError("نشانگر Maintenance باید یک فایل معمولی باشد.")
+            raise RestoreMaintenanceError("نشانگر Maintenance باید یک فایل معمولی باشد.")
         raw = b""
         while len(raw) <= 16384:
             chunk = os.read(fd, 4096)
@@ -43,16 +46,16 @@ def read_maintenance_state():
                 break
             raw += chunk
         if len(raw) > 16384:
-            raise RestoreError("محتوای نشانگر Maintenance بیش از حد مجاز است.")
+            raise RestoreMaintenanceError("محتوای نشانگر Maintenance بیش از حد مجاز است.")
     finally:
         os.close(fd)
 
     try:
         state = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as exc:
-        raise RestoreError("نشانگر Maintenance معتبر نیست.") from exc
+        raise RestoreMaintenanceError("نشانگر Maintenance معتبر نیست.") from exc
     if not isinstance(state, dict) or not isinstance(state.get("operation_id"), str):
-        raise RestoreError("ساختار نشانگر Maintenance معتبر نیست.")
+        raise RestoreMaintenanceError("ساختار نشانگر Maintenance معتبر نیست.")
     return state
 
 
@@ -68,7 +71,7 @@ def activate_maintenance(operation_id=None):
         or len(operation_id) != 32
         or any(char not in "0123456789abcdef" for char in operation_id)
     ):
-        raise RestoreError("شناسه عملیات Maintenance معتبر نیست.")
+        raise RestoreMaintenanceError("شناسه عملیات Maintenance معتبر نیست.")
 
     path = maintenance_marker_path()
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -85,7 +88,7 @@ def activate_maintenance(operation_id=None):
     try:
         fd = os.open(path, flags, 0o600)
     except FileExistsError as exc:
-        raise RestoreError("Maintenance از قبل فعال است؛ نشانگر موجود بازنویسی نشد.") from exc
+        raise RestoreMaintenanceError("Maintenance از قبل فعال است؛ نشانگر موجود بازنویسی نشد.") from exc
     try:
         os.write(fd, payload)
         os.fsync(fd)
@@ -113,7 +116,7 @@ def deactivate_maintenance(operation_id):
     if state is None:
         return False
     if state.get("operation_id") != operation_id:
-        raise RestoreError("شناسه عملیات با نشانگر Maintenance مطابقت ندارد.")
+        raise RestoreMaintenanceError("شناسه عملیات با نشانگر Maintenance مطابقت ندارد.")
     path = maintenance_marker_path()
     path.unlink()
     directory_fd = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
