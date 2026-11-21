@@ -96,6 +96,17 @@ class CutoverStagedRestoreCommandTests(TestCase):
     ):
         with TemporaryDirectory() as temp:
             journal, backup_root = self._environment(temp)
+            existing_restore = Restore.objects.create(
+                id=501,
+                archive_filename="source.dfbak",
+                product_version="1.0.0",
+                database_engine="postgresql",
+                database_backup_format="custom",
+                includes_media=False,
+                started_at="2026-11-21T10:00:00+00:00",
+                requested_by_username="operator",
+                status=Restore.Status.PREPARED,
+            )
             activate_maintenance(journal.operation_id)
 
             def complete_journal():
@@ -127,7 +138,16 @@ class CutoverStagedRestoreCommandTests(TestCase):
                 requested_by_username="operator",
                 status=Restore.Status.SUCCESS,
             )
+            self.assertEqual(audit.pk, existing_restore.pk)
             self.assertIsNotNone(audit.completed_at)
+            self.assertEqual(audit.error_message, "")
+            self.assertEqual(
+                Restore.objects.filter(
+                    archive_filename="source.dfbak",
+                    requested_by_username="operator",
+                ).count(),
+                1,
+            )
             self.assertIn("Maintenance همچنان فعال است", output.getvalue())
             services_check.assert_called_once_with(["dolphinplus-daphne.service"])
             database_check.assert_called_once()
