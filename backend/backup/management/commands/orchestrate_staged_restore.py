@@ -190,6 +190,7 @@ class Command(BaseCommand):
                             "Cutover و Health Check موفق بوده‌اند؛ فقط مرحله پایانی با خطا مواجه شد: "
                             + str(exc)
                         ))
+                        return
                     if not active_units:
                         raise RestoreError(
                             "وضعیت سرویس‌های فعال قابل تأیید نیست؛ Maintenance برای ایمنی باقی می‌ماند."
