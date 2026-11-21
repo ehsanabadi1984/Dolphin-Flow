@@ -158,11 +158,17 @@ class Command(BaseCommand):
                 if read_maintenance_state() is not None:
                     raise RestoreError("Maintenance از قبل فعال است؛ مالکیت آن متعلق به این عملیات نیست.")
 
-                activate_maintenance(operation_id)
-                maintenance_owned = True
                 active_units = self._active_units(units)
                 if not active_units:
                     raise RestoreError("هیچ سرویس برنامه‌ای فعال نیست؛ توقف کامل قابل اثبات نیست.")
+                journal.update(restore={
+                    "orchestrator": {
+                        "service_units": list(units),
+                        "previously_active_units": list(active_units),
+                    }
+                })
+                activate_maintenance(operation_id)
+                maintenance_owned = True
 
                 self.stdout.write("۱/۶ توقف Daphne، Celery و سرویس‌های اعلام‌شده...")
                 self._stop(active_units)
