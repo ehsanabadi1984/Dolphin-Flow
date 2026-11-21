@@ -54,7 +54,7 @@ class RestoreQuiescenceTests(TestCase):
 
     def test_inactive_systemd_services_pass(self):
         runner = mock.Mock(return_value=SimpleNamespace(
-            returncode=3, stdout="inactive\\n"
+            returncode=3, stdout="inactive\n"
         ))
         result = assert_systemd_services_stopped(
             ["dolphinplus-daphne.service", "dolphinplus-celery.service"],
@@ -67,7 +67,7 @@ class RestoreQuiescenceTests(TestCase):
 
     def test_active_systemd_service_blocks_quiescence(self):
         runner = mock.Mock(return_value=SimpleNamespace(
-            returncode=0, stdout="active\\n"
+            returncode=0, stdout="active\n"
         ))
         with self.assertRaisesRegex(RestoreError, "هنوز متوقف"):
             assert_systemd_services_stopped(
@@ -76,7 +76,7 @@ class RestoreQuiescenceTests(TestCase):
 
     def test_unknown_systemd_service_state_blocks_quiescence(self):
         runner = mock.Mock(return_value=SimpleNamespace(
-            returncode=4, stdout="unknown\\n"
+            returncode=4, stdout="unknown\n"
         ))
         with self.assertRaises(RestoreError):
             assert_systemd_services_stopped(
