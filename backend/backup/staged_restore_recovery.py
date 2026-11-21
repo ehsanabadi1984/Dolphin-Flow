@@ -76,21 +76,26 @@ class StagedRestoreRecovery:
             live_path = Path(media.get("live_path") or media.get("media_root") or self.media_root)
             stage_value = media.get("staging_path")
             previous_value = media.get("previous_path")
-            if not stage_value or not previous_value:
-                raise RestoreError("اطلاعات مسیر رسانه برای Recovery کافی نیست.")
+            if not stage_value:
+                raise RestoreError("اطلاعات مسیر staging رسانه برای Recovery کافی نیست.")
             stage_path = Path(stage_value)
-            previous_path = Path(previous_value)
-            if live_path != self.media_root or live_path.parent != stage_path.parent or live_path.parent != previous_path.parent:
+            previous_path = Path(previous_value) if previous_value else None
+            if (
+                live_path != self.media_root
+                or live_path.parent != stage_path.parent
+                or (previous_path is not None and live_path.parent != previous_path.parent)
+            ):
                 raise RestoreError("مسیرهای رسانه ثبت‌شده با MEDIA_ROOT هم‌خوانی ندارند.")
             if not stage_path.name.startswith(f".{live_path.name}.restore-"):
                 raise RestoreError("مسیر staging رسانه متعلق به Restore نیست.")
-            if not previous_path.name.startswith(f".{live_path.name}.previous-"):
+            if previous_path is not None and not previous_path.name.startswith(f".{live_path.name}.previous-"):
                 raise RestoreError("مسیر رسانه قبلی معتبر نیست.")
-            if any(path.is_symlink() for path in (live_path, stage_path, previous_path)):
+            checked_paths = (live_path, stage_path) + ((previous_path,) if previous_path else ())
+            if any(path.is_symlink() for path in checked_paths):
                 raise RestoreError("Recovery مسیرهای Symlink را نمی‌پذیرد.")
             media_state = {
                 "live": live_path.exists() and live_path.is_dir(),
-                "previous": previous_path.exists() and previous_path.is_dir(),
+                "previous": previous_path is not None and previous_path.exists() and previous_path.is_dir(),
                 "staging": stage_path.exists() and stage_path.is_dir(),
             }
 
@@ -105,7 +110,7 @@ class StagedRestoreRecovery:
             },
             "paths": {
                 "live_media": str(self.media_root),
-                "previous_media": str(previous_path) if media_state else None,
+                "previous_media": str(previous_path) if previous_path is not None else None,
                 "staging_media": str(stage_path) if media_state else None,
             },
         }
@@ -125,8 +130,8 @@ class StagedRestoreRecovery:
 
     def rollback(self, *, service_units):
         payload = self.journal.read()
-        if payload["phase"] in {"COMPLETED", "ROLLED_BACK"}:
-            raise RestoreError("عملیات نهایی‌شده نیاز به Recovery ندارد.")
+        if payload["phase"] in {"PREPARED", "COMPLETED", "ROLLED_BACK"}:
+            raise RestoreError("این مرحله از عملیات نیاز به Crash Recovery Cutover ندارد.")
         state = read_maintenance_state()
         if state is None or state.get("operation_id") != self.journal.operation_id:
             raise RestoreError("Maintenance فعال و متعلق به همین Journal نیست.")
@@ -173,7 +178,7 @@ class StagedRestoreRecovery:
                 finally:
                     admin.close()
 
-                if media_class is not None:
+                if media_class is not None and media_class != "NOT_SWAPPED":
                     live = Path(actual["paths"]["live_media"])
                     previous = Path(actual["paths"]["previous_media"])
                     staging = Path(actual["paths"]["staging_media"])
