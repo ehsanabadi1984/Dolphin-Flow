@@ -48,6 +48,33 @@ class StagedRestoreRecoveryClassificationTests(TestCase):
         )
 
 
+    def test_classifies_media_states_at_each_rename_boundary(self):
+        cases = (
+            ({"live": True, "previous": False, "staging": True}, "NOT_SWAPPED"),
+            ({"live": False, "previous": True, "staging": True}, "OLD_MOVED"),
+            ({"live": True, "previous": True, "staging": False}, "NEW_PROMOTED"),
+        )
+        for state, expected in cases:
+            with self.subTest(state=state):
+                self.assertEqual(
+                    StagedRestoreRecovery._classify_resource(state, "media"),
+                    expected,
+                )
+
+    def test_rejects_every_ambiguous_media_state(self):
+        cases = (
+            {"live": False, "previous": False, "staging": True},
+            {"live": True, "previous": True, "staging": True},
+            {"live": False, "previous": True, "staging": False},
+            {"live": False, "previous": False, "staging": False},
+        )
+        for state in cases:
+            with self.subTest(state=state):
+                with self.assertRaises(RestoreError):
+                    StagedRestoreRecovery._classify_resource(state, "media")
+
+
+
 class _FakeCursor:
     def __init__(self, databases):
         self.databases = databases
