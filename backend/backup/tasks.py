@@ -24,61 +24,21 @@ logger = logging.getLogger(__name__)
 
 
 class MigratingRestoreService(RestoreService):
-    """Run pending Django migrations after replacing the database dump.
+    """Backward-compatible entry point for older callers.
 
-    The dump may have been created before the current application schema.
-    pg_restore restores that historical schema, so migrations must run
-    before post-restore model operations such as recreating the safety-backup
-    row.
+    Historical restores used RestoreService._run_pg_restore(), which invoked
+    pg_restore against the live database with --clean/--if-exists. That can
+    fail when dependent foreign keys reference a primary-key index being
+    dropped (and is unsafe for a live application database).
+
+    All restore entry points must now use isolated staging preparation. Keep
+    this class as a compatibility shim so any older internal caller is routed
+    through the same safe pipeline instead of silently reviving the legacy
+    in-place restore implementation.
     """
 
-    def _run_pg_restore(self, dump_path):
-        super()._run_pg_restore(dump_path)
-        connection.close()
-        try:
-            call_command("migrate", interactive=False, verbosity=0)
-        except Exception as exc:
-            raise RestoreError(
-                "اجرای migrationهای Django پس از بازیابی پایگاه داده ناموفق بود: "
-                + str(exc)
-            ) from exc
-
-        self._normalize_restored_backup_states()
-
-    def _normalize_restored_backup_states(self):
-        """Mark RUNNING backups restored from another system as failed."""
-        now = timezone.now()
-
-        updated = Backup.objects.filter(
-            status=Backup.Status.RUNNING,
-        ).update(
-            status=Backup.Status.FAILED,
-            completed_at=now,
-            error_message=(
-                "این پشتیبان‌گیری در سیستم مبدأ در وضعیت RUNNING بوده و "
-                "پس از بازیابی، Worker مربوط به آن وجود ندارد."
-            ),
-            updated_at=now,
-        )
-
-        if updated:
-            logger.info(
-                "Restore #%s: normalized %s stale RUNNING backup(s)",
-                self.restore.pk,
-                updated,
-            )
-
-    def _recreate_safety_backup_row(self):
-        super()._recreate_safety_backup_row()
-        if not self._safety_snapshot:
-            return
-        if not Backup.objects.filter(
-            filename=self._safety_snapshot["filename"],
-            storage_path=self._safety_snapshot["storage_path"],
-        ).exists():
-            raise RestoreError(
-                "رکورد پشتیبان امنیتی پس از بازیابی قابل بازسازی نبود."
-            )
+    def run(self):
+        return StagedRestorePreparationService(self.restore).run()
 
 
 @shared_task
