@@ -153,7 +153,13 @@ class Command(BaseCommand):
                 self.stdout.write("۶/۶ Health Check نهایی و پایان Maintenance...")
                 self._health_check(health_url=health_url, timeout=timeout)
                 journal.update(phase="COMPLETED")
-                _finalize_restore_audit(journal)
+                try:
+                    _finalize_restore_audit(journal)
+                except Exception as audit_exc:
+                    self.stderr.write(self.style.WARNING(
+                        "Restore سالم است، اما ثبت ردیف Audit نیازمند تلاش مجدد است: "
+                        + str(audit_exc)
+                    ))
                 deactivate_maintenance(operation_id)
                 maintenance_owned = False
 
@@ -169,6 +175,20 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR(f"Restore ناموفق بود: {exc}"))
             if maintenance_owned:
                 try:
+                    if journal.read()["phase"] == "COMPLETED":
+                        # Cutover, migrations and health checks have all passed.
+                        # A marker-removal/audit issue must not roll back a healthy system.
+                        if active_units:
+                            current = self._active_units(units)
+                            self._start([unit for unit in active_units if unit not in current])
+                            if set(self._active_units(active_units)) != set(active_units):
+                                raise RestoreError("سرویس‌ها پس از تکمیل Restore فعال نیستند.")
+                        self._health_check(health_url=health_url, timeout=timeout)
+                        deactivate_maintenance(operation_id)
+                        maintenance_owned = False
+                        raise CommandError(
+                            "Restore با موفقیت انجام شده، اما خطای مرحله پایانی رخ داد: " + str(exc)
+                        ) from exc
                     if not active_units:
                         raise RestoreError(
                             "وضعیت سرویس‌های فعال قابل تأیید نیست؛ Maintenance برای ایمنی باقی می‌ماند."
