@@ -196,3 +196,107 @@ class StagedRestoreRecoveryRollbackTests(TestCase):
             self.assertEqual((media_root / "old.txt").read_text(encoding="utf-8"), "old")
             self.assertEqual((stage_media / "new.txt").read_text(encoding="utf-8"), "new")
             self.assertFalse(previous_media.exists())
+
+    def test_recovery_can_resume_after_interruption_during_media_rollback(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            backup_root = root / "backups"
+            journal_root = root / "journals"
+            media_root = root / "media"
+            media_root.mkdir()
+            stage_media = root / ".media.restore-43-token"
+            previous_media = root / ".media.previous-token"
+            previous_media.mkdir()
+            (media_root / "new.txt").write_text("new", encoding="utf-8")
+            (previous_media / "old.txt").write_text("old", encoding="utf-8")
+
+            override = override_settings(
+                BACKUP_ROOT=backup_root,
+                RESTORE_JOURNAL_ROOT=journal_root,
+                MEDIA_ROOT=media_root,
+                DATABASES={
+                    "default": {
+                        "ENGINE": "django.db.backends.postgresql",
+                        "NAME": "dolphinflow",
+                        "USER": "dolphin",
+                        "PASSWORD": "test",
+                        "HOST": "127.0.0.1",
+                        "PORT": "5432",
+                        "OPTIONS": {},
+                    }
+                },
+            )
+            override.enable()
+            self.addCleanup(override.disable)
+
+            journal = RestoreJournal.new(
+                43,
+                root=journal_root,
+                database={
+                    "live_name": "dolphinflow",
+                    "previous_name": "dolphinflow_previous",
+                    "staging_name": "dolphinflow_restore_43_token",
+                    "prepared": True,
+                },
+                media={
+                    "included": True,
+                    "live_path": str(media_root),
+                    "staging_path": str(stage_media),
+                    "previous_path": str(previous_media),
+                    "prepared": True,
+                },
+            )
+            journal.update(phase="QUIESCING")
+            journal.update(phase="DATABASE_SWAPPED")
+            journal.update(phase="MEDIA_SWAPPED")
+            activate_maintenance(journal.operation_id)
+            self.addCleanup(deactivate_maintenance, journal.operation_id)
+
+            databases = {"dolphinflow", "dolphinflow_previous"}
+            admin = _FakeAdmin(databases)
+            recovery = StagedRestoreRecovery(journal)
+            common_patches = (
+                patch.object(recovery, "_admin", return_value=admin),
+                patch("backup.staged_restore_recovery.assert_systemd_services_stopped"),
+                patch("backup.staged_restore_recovery.assert_database_quiescent"),
+                patch("backup.staged_restore_recovery.close_restore_worker_connection"),
+            )
+
+            for mocked in common_patches:
+                mocked.start()
+                self.addCleanup(mocked.stop)
+
+            path_type = type(media_root)
+            original_rename = path_type.rename
+            fail_once = {"value": True}
+
+            def interrupt_media_rollback(path_object, target):
+                if path_object == media_root and fail_once["value"]:
+                    fail_once["value"] = False
+                    raise OSError("simulated process interruption during media rollback")
+                return original_rename(path_object, target)
+
+            with patch.object(
+                path_type,
+                "rename",
+                autospec=True,
+                side_effect=interrupt_media_rollback,
+            ):
+                with self.assertRaises(OSError):
+                    recovery.rollback(service_units=["dolphinplus-daphne.service"])
+
+            # Database rollback completed before media rollback was interrupted.
+            self.assertEqual(databases, {"dolphinflow", "dolphinflow_restore_43_token"})
+            self.assertEqual(journal.read()["phase"], "ROLLBACK_REQUIRED")
+            self.assertTrue((media_root / "new.txt").exists())
+            self.assertTrue((previous_media / "old.txt").exists())
+
+            # A second invocation observes the actual partial state and finishes.
+            result = recovery.rollback(service_units=["dolphinplus-daphne.service"])
+
+            self.assertEqual(result["status"], "ROLLED_BACK")
+            self.assertEqual(journal.read()["phase"], "ROLLED_BACK")
+            self.assertEqual(databases, {"dolphinflow", "dolphinflow_restore_43_token"})
+            self.assertEqual((media_root / "old.txt").read_text(encoding="utf-8"), "old")
+            self.assertEqual((stage_media / "new.txt").read_text(encoding="utf-8"), "new")
+            self.assertFalse(previous_media.exists())
