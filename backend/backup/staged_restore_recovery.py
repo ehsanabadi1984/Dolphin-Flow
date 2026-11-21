@@ -5,6 +5,7 @@ recorded names/paths form an unambiguous state produced by the staged rename
 protocol. It never drops a database or deletes a media tree.
 """
 from pathlib import Path
+from contextlib import nullcontext
 
 from django.conf import settings
 from django.db.backends.postgresql.base import DatabaseWrapper
@@ -130,7 +131,7 @@ class StagedRestoreRecovery:
             f"وضعیت {label} مبهم یا ناقص است؛ Recovery خودکار برای جلوگیری از آسیب متوقف شد."
         )
 
-    def rollback(self, *, service_units):
+    def rollback(self, *, service_units, lock_held=False):
         payload = self.journal.read()
         if payload["phase"] in {"PREPARED", "ROLLED_BACK"}:
             raise RestoreError("این مرحله از عملیات نیاز به Crash Recovery Cutover ندارد.")
@@ -142,7 +143,7 @@ class StagedRestoreRecovery:
             operation_id=self.journal.operation_id,
             restore_id=payload["restore_id"],
         )
-        with operation_lock:
+        with (nullcontext() if lock_held else operation_lock):
             assert_systemd_services_stopped(service_units)
             close_restore_worker_connection()
             assert_database_quiescent(self.config)
