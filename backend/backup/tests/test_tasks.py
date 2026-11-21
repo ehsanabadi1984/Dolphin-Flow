@@ -123,19 +123,19 @@ class BackupTaskTests(TestCase):
             {"status": "missing", "restore_id": 999_999},
         )
 
-    def test_runs_restore_service(self):
+    def test_runs_staged_restore_preparation_service(self):
         restore = Restore.objects.create(
             archive_filename="DolphinFlow_Backup_x.dfbak"
         )
 
         with mock.patch(
-            "backup.tasks.RestoreService.run",
+            "backup.tasks.StagedRestorePreparationService.run",
             return_value={
-                "status": Restore.Status.SUCCESS,
+                "status": "PREPARED",
                 "restore_id": restore.pk,
             },
         ) as mocked_run:
             result = run_restore(restore.pk)
 
         mocked_run.assert_called_once_with()
-        self.assertEqual(result["status"], Restore.Status.SUCCESS)
+        self.assertEqual(result["status"], "PREPARED")
