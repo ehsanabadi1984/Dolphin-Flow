@@ -26,6 +26,8 @@ class InspectRestoreRecoveryCommandTests(SimpleTestCase):
             root = Path(temp) / "journal"
             journal = RestoreJournal.new(301, root=root)
             journal.update(phase="QUIESCING")
+            journal.update(phase="DATABASE_SWAPPED")
+            journal.update(phase="MEDIA_SWAPPED")
             journal.update(phase="COMPLETED")
             with patch(
                 "backup.management.commands.inspect_restore_recovery.inspect_restore_journals",
