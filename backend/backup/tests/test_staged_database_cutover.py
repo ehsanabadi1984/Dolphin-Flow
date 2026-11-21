@@ -45,14 +45,15 @@ import tempfile
 from pathlib import Path
 
 from django.db import connections
-from django.test import SimpleTestCase, skipUnlessDBFeature
+from django.test import TransactionTestCase, skipUnlessDBFeature
 from django.db.backends.postgresql.base import DatabaseWrapper
 
 from backup.restore_journal import RestoreJournal
 
 
 @skipUnlessDBFeature("supports_transactions")
-class StagedDatabaseCutoverPostgreSQLTests(SimpleTestCase):
+class StagedDatabaseCutoverPostgreSQLTests(TransactionTestCase):
+    databases = {"default"}
     """Exercise real PostgreSQL renames using disposable databases only."""
 
     def setUp(self):
