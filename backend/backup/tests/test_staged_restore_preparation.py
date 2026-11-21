@@ -57,6 +57,11 @@ class StagedRestorePreparationTests(TestCase):
         media.total_bytes = 120
         journal_new.return_value.operation_id = "a" * 32
 
+        def prepare_media(archive_path):
+            callback = media_class.call_args.kwargs["on_stage_created"]
+            callback(Path("/tmp/.media.restore-456-token"))
+
+        media.prepare.side_effect = prepare_media
         result = self.service.run()
 
         self.assertEqual(result["status"], "PREPARED")
@@ -65,6 +70,14 @@ class StagedRestorePreparationTests(TestCase):
         database.close.assert_called_once_with()
         database.drop_database.assert_not_called()
         media.prepare.assert_called_once_with(Path("/tmp/media.tar.gz"))
+        media_class.assert_called_once()
+        self.assertEqual(
+            journal_new.return_value.update.call_args_list[0].kwargs["media"]["staging_path"],
+            "/tmp/.media.restore-456-token",
+        )
+        self.assertTrue(
+            journal_new.return_value.update.call_args_list[0].kwargs["media"]["stage_created"]
+        )
         media.cleanup.assert_not_called()
         journal_new.assert_called_once()
         self.service._mark_terminal.assert_not_called()
