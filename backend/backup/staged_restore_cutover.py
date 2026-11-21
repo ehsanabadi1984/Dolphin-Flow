@@ -1,8 +1,9 @@
 """Coordinate the staged database and media cutover as one recoverable unit.
 
 This is an orchestration primitive, not the runtime task integration. The
-caller must hold RestoreOperationLock and externally quiesce every web/worker
-process before invoking run().
+caller must hold RestoreOperationLock, activate the matching maintenance gate,
+and stop the configured systemd services. run() then takes the exclusive
+drain lock and refuses cutover until all in-flight application leases end.
 """
 
 from pathlib import Path
