@@ -5,7 +5,7 @@ from unittest import mock
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from backup.models import Backup, BackupSchedule, Restore
+from backup.models import Backup, BackupSchedule, BackupStorageDestination, Restore
 from backup.tasks import replicate_backup_to_network, run_backup, run_restore
 
 
@@ -59,6 +59,11 @@ class BackupTaskTests(TestCase):
             source = Path(local_root) / "backup.dfbak"
             source.write_bytes(payload)
 
+            destination = BackupStorageDestination.objects.create(
+                name="Test mounted network destination",
+                backend_type=BackupStorageDestination.BackendType.MOUNTED_FOLDER,
+                remote_path=network_root,
+            )
             backup = Backup.objects.create(
                 filename=source.name,
                 status=Backup.Status.SUCCESS,
@@ -66,6 +71,7 @@ class BackupTaskTests(TestCase):
                 size=len(payload),
                 checksum="",
                 destination=Backup.Destination.NETWORK,
+                network_storage=destination,
                 network_status=Backup.NetworkStatus.PENDING,
             )
 
