@@ -19,6 +19,7 @@ from backup.restore_maintenance import (
 )
 from backup.restore_maintenance_middleware import RestoreMaintenanceMiddleware
 from backup.restore_maintenance_tasks import RestoreMaintenanceAwareTask
+from backup.restore_drain import RestoreDrainLock, acquire_application_work_lease
 
 
 class RestoreMaintenanceGateTests(SimpleTestCase):
@@ -116,6 +117,46 @@ class RestoreMaintenanceGateTests(SimpleTestCase):
 
         asyncio.run(run())
         app.assert_called_once()
+
+    def test_exclusive_drain_waits_for_inflight_shared_work(self):
+        shared = acquire_application_work_lease()
+        try:
+            with self.assertRaises(RestoreMaintenanceError):
+                RestoreDrainLock.acquire(exclusive=True, timeout=0)
+        finally:
+            shared.release()
+
+        with RestoreDrainLock.acquire(exclusive=True, timeout=0):
+            with self.assertRaises(RestoreMaintenanceError):
+                acquire_application_work_lease(timeout=0)
+
+    def test_http_request_holds_lease_until_response_is_built(self):
+        def application(_request):
+            with self.assertRaises(RestoreMaintenanceError):
+                RestoreDrainLock.acquire(exclusive=True, timeout=0)
+            return HttpResponse("application")
+
+        middleware = RestoreMaintenanceMiddleware(application)
+        response = middleware(RequestFactory().get("/"))
+        self.assertEqual(response.status_code, 200)
+
+        with RestoreDrainLock.acquire(exclusive=True, timeout=0):
+            self.assertTrue(True)
+
+    def test_streaming_http_response_holds_lease_until_closed(self):
+        from django.http import StreamingHttpResponse
+
+        middleware = RestoreMaintenanceMiddleware(
+            lambda _request: StreamingHttpResponse(iter([b"chunk"]))
+        )
+        response = middleware(RequestFactory().get("/"))
+
+        with self.assertRaises(RestoreMaintenanceError):
+            RestoreDrainLock.acquire(exclusive=True, timeout=0)
+
+        response.close()
+        with RestoreDrainLock.acquire(exclusive=True, timeout=0):
+            self.assertTrue(True)
 
     def test_new_celery_tasks_are_ignored_during_maintenance(self):
         activate_maintenance("e" * 32)
