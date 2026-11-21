@@ -49,6 +49,15 @@ def inspect_restore_journals(root=None):
             continue
 
         operation_id = path.stem
+        if path.is_symlink():
+            inventory.append({
+                "operation_id": operation_id,
+                "status": "INVALID",
+                "recovery_required": True,
+                "error": "فایل Journal نمی‌تواند Symlink باشد.",
+            })
+            continue
+
         try:
             payload = RestoreJournal(operation_id, root=journal_root).read()
         except RestoreError as exc:
