@@ -127,6 +127,16 @@ class RestoreMaintenanceGateTests(SimpleTestCase):
 
         task.run.assert_not_called()
 
+    def test_worker_task_hook_ignores_tasks_during_maintenance(self):
+        activate_maintenance("f" * 32)
+        task = RestoreMaintenanceAwareTask()
+        task.run = Mock(return_value="ran")
+
+        with self.assertRaises(Ignore):
+            task.before_start("task-id", (), {})
+
+        task.run.assert_not_called()
+
     def test_celery_tasks_run_without_gate(self):
         task = RestoreMaintenanceAwareTask()
         task.bind(Celery("restore-maintenance-tests"))
