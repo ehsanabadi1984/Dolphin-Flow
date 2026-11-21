@@ -24,7 +24,6 @@ from django.db.migrations.loader import MigrationLoader
 from .restore_services import (
     POST_RESTORE_REQUIRED_TABLES,
     RestoreError,
-    _assert_safe_member,
 )
 from .services import sanitize_message
 
@@ -204,7 +203,7 @@ class StagedDatabaseRestore:
             self._connection.close()
             self._connection = None
         if self.alias in connections:
-            connections.pop(self.alias, None)
+            del connections[self.alias]
 
     def drop_database(self):
         """Drop this service's own staging DB; never targets default DB."""
