@@ -44,14 +44,13 @@ def _finalize_restore_audit(journal):
     started_at = parse_datetime(started_at_raw) if started_at_raw else None
     requested_by_username = restore_data.get("requested_by_username", "")
 
-    restore_id = payload.get("restore_id")
-    audit = Restore.objects.filter(pk=restore_id).first() if restore_id else None
-    if audit is None:
-        audit = Restore.objects.filter(
-            archive_filename=archive_filename,
-            started_at=started_at,
-            requested_by_username=requested_by_username,
-        ).exclude(status=Restore.Status.SUCCESS).first()
+    # Do not match by primary key: the restored archive may contain an
+    # unrelated historical Restore row with the same ID.
+    audit = Restore.objects.filter(
+        archive_filename=archive_filename,
+        started_at=started_at,
+        requested_by_username=requested_by_username,
+    ).exclude(status=Restore.Status.SUCCESS).first()
 
     if audit is not None:
         if audit.status != Restore.Status.SUCCESS:
