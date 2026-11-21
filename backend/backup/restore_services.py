@@ -282,6 +282,7 @@ class RestoreService:
                     status__in=(
                         Restore.Status.QUEUED,
                         Restore.Status.RESTORING,
+                        Restore.Status.PREPARED,
                     )
                 )
                 .order_by("pk")
@@ -296,7 +297,10 @@ class RestoreService:
                 None,
             )
 
-            if self_row is None or self_row.status == Restore.Status.RESTORING:
+            if self_row is None or self_row.status in (
+                Restore.Status.RESTORING,
+                Restore.Status.PREPARED,
+            ):
                 return False
 
             others = [
