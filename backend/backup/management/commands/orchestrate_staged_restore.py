@@ -208,7 +208,7 @@ class Command(BaseCommand):
                             self._start([unit for unit in active_units if unit not in current])
                             if set(self._active_units(active_units)) != set(active_units):
                                 raise RestoreError("سرویس‌ها پس از تکمیل Restore فعال نیستند.")
-                        self._health_check(health_url=health_url, timeout=timeout)
+                        self._health_check()
                         deactivate_maintenance(operation_id)
                         maintenance_owned = False
                         self.stderr.write(self.style.WARNING(
@@ -245,7 +245,7 @@ class Command(BaseCommand):
                         self._start(active_units)
                         if set(self._active_units(active_units)) != set(active_units):
                             raise RestoreError("راه‌اندازی مجدد سرویس‌ها کامل نشد.")
-                    self._health_check(health_url=health_url, timeout=timeout)
+                    self._health_check()
                     deactivate_maintenance(operation_id)
                     maintenance_owned = False
                     self.stderr.write(self.style.WARNING(
