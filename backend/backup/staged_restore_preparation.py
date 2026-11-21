@@ -96,13 +96,19 @@ class StagedRestorePreparationService(RestoreService):
                     }
                 )
 
+            journal_safety_snapshot = dict(self._safety_snapshot)
+            for field in ("started_at", "completed_at"):
+                value = journal_safety_snapshot.get(field)
+                if value is not None:
+                    journal_safety_snapshot[field] = value.isoformat()
+
             self.journal = RestoreJournal.new(
                 restore_id=self.restore.pk,
                 database={
                     "original_name": database_config["NAME"],
                     "staging_name": self.database_stage.database_name,
                     "prepared": True,
-                    "safety_backup": self._safety_snapshot,
+                    "safety_backup": journal_safety_snapshot,
                 },
                 media=media_info,
             )
