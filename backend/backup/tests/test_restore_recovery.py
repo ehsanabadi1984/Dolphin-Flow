@@ -75,6 +75,27 @@ class RestoreRecoveryInventoryTests(SimpleTestCase):
 
             self.assertEqual(inspect_restore_journals(root=root), [])
 
+
+    def test_symlink_journal_is_reported_invalid_without_reading_target(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "journal"
+            root.mkdir()
+            external = Path(temp) / "external.json"
+            external.write_text(
+                '{"schema_version":1,"operation_id":"%s","restore_id":777,'
+                '"phase":"PREPARED","created_at":"now","updated_at":"now",'
+                '"database":{},"media":{},"error":""}' % ("c" * 32),
+                encoding="utf-8",
+            )
+            (root / f'{"c" * 32}.json').symlink_to(external)
+
+            inventory = inspect_restore_journals(root=root)
+
+            self.assertEqual(len(inventory), 1)
+            self.assertEqual(inventory[0]["status"], "INVALID")
+            self.assertTrue(inventory[0]["recovery_required"])
+            self.assertIn("Symlink", inventory[0]["error"])
+
     def test_non_directory_journal_path_is_rejected(self):
         with TemporaryDirectory() as temp:
             root = Path(temp) / "not-a-directory"
