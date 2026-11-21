@@ -150,3 +150,39 @@ class CutoverStagedRestoreCommandTests(TestCase):
                 ).count(),
                 1,
             )
+
+    @mock.patch(
+        "backup.management.commands.cutover_staged_restore.assert_database_quiescent",
+        return_value={"database": "dolphinflow", "active_sessions": 0},
+    )
+    @mock.patch(
+        "backup.management.commands.cutover_staged_restore.close_restore_worker_connection"
+    )
+    @mock.patch(
+        "backup.management.commands.cutover_staged_restore.StagedRestoreCutover"
+    )
+    def test_wsl_manual_service_attestation_uses_same_cutover(
+        self, cutover_class, close_connection, database_check
+    ):
+        with TemporaryDirectory() as temp:
+            journal, _ = self._environment(temp)
+            activate_maintenance(journal.operation_id)
+
+            def complete_journal():
+                journal.update(phase="QUIESCING")
+                journal.update(phase="DATABASE_SWAPPED")
+                journal.update(phase="COMPLETED")
+                return {"status": "COMPLETED", "operation_id": journal.operation_id}
+
+            cutover_class.return_value.run.side_effect = complete_journal
+            output = StringIO()
+            call_command(
+                "cutover_staged_restore",
+                operation_id=journal.operation_id,
+                services_stopped=True,
+                stdout=output,
+            )
+            self.assertEqual(journal.read()["phase"], "COMPLETED")
+            self.assertIn("operator-attestation", output.getvalue())
+            database_check.assert_called_once()
+            self.assertGreaterEqual(close_connection.call_count, 2)
