@@ -137,13 +137,25 @@ def deactivate_maintenance(operation_id):
 
 
 class RestoreMaintenanceASGIMiddleware:
-    """Reject new WebSocket connections while restore maintenance is active."""
+    """Hold a shared drain lease for each WebSocket connection lifetime."""
 
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope.get("type") == "websocket" and maintenance_is_active():
+        if scope.get("type") != "websocket":
+            await self.app(scope, receive, send)
+            return
+
+        from .restore_drain import acquire_application_work_lease
+
+        try:
+            lease = acquire_application_work_lease(timeout=0)
+        except RestoreMaintenanceError:
             await send({"type": "websocket.close", "code": 1013})
             return
-        await self.app(scope, receive, send)
+
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            lease.release()
