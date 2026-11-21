@@ -52,7 +52,7 @@ class StagedMediaRestore:
     @staticmethod
     def _normalized_member_name(member):
         name = member.name
-        if not name or "\\\\" in name or "\\x00" in name:
+        if not name or "\\\\" in name or chr(0) in name:
             raise RestoreError("نام فایل نامعتبر در بایگانی رسانه یافت شد.")
 
         path = PurePosixPath(name)
@@ -70,6 +70,8 @@ class StagedMediaRestore:
         if not archive_path.is_file() or archive_path.stat().st_size == 0:
             raise RestoreError("فایل آرشیو رسانه یافت نشد یا خالی است.")
 
+        self.file_count = 0
+        self.total_bytes = 0
         stage = self._create_stage_directory()
         seen = set()
         file_paths = set()
