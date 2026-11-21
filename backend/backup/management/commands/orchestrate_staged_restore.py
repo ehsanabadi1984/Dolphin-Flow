@@ -1,7 +1,5 @@
 """Independent end-to-end orchestrator for a prepared staged restore."""
 import subprocess
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 from django.conf import settings
@@ -31,8 +29,6 @@ class Command(BaseCommand):
         target.add_argument("--restore-id", type=int)
         target.add_argument("--operation-id")
         parser.add_argument("--service-unit", action="append", dest="service_units", required=True)
-        parser.add_argument("--health-url", default="")
-        parser.add_argument("--health-timeout", type=int, default=15)
 
     @staticmethod
     def _run_systemctl(action, unit):
@@ -77,7 +73,7 @@ class Command(BaseCommand):
             cls._run_systemctl("start", unit)
 
     @staticmethod
-    def _health_check(health_url="", timeout=15):
+    def _health_check():
         call_command("check", verbosity=0)
         connections["default"].close()
         with connections["default"].cursor() as cursor:
@@ -86,16 +82,6 @@ class Command(BaseCommand):
                 raise RestoreError("آزمون دیتابیس ناموفق بود.")
         if not Path(settings.MEDIA_ROOT).is_dir():
             raise RestoreError("MEDIA_ROOT در دسترس نیست.")
-        if health_url:
-            try:
-                request = urllib.request.Request(
-                    health_url, headers={"User-Agent": "Dolphin-Flow-Restore-HealthCheck"}
-                )
-                with urllib.request.urlopen(request, timeout=timeout) as response:
-                    if not 200 <= response.status < 300:
-                        raise RestoreError(f"Health URL با کد {response.status} پاسخ داد.")
-            except (OSError, urllib.error.URLError) as exc:
-                raise RestoreError(f"Health Check HTTP ناموفق بود: {exc}") from exc
 
     def handle(self, *args, **options):
         operation_id = options["operation_id"]
@@ -131,14 +117,10 @@ class Command(BaseCommand):
                     f"آماده‌سازی Restore #{restore.pk} کامل شد؛ اجرای Cutover آغاز می‌شود."
                 ))
         units = options["service_units"]
-        health_url = options["health_url"]
-        timeout = options["health_timeout"]
         if len(set(units)) != len(units):
             raise CommandError("نام سرویس systemd تکراری است.")
         if any(not unit or unit.startswith("-") or any(ch.isspace() for ch in unit) for unit in units):
             raise CommandError("نام یکی از واحدهای systemd نامعتبر است.")
-        if not 1 <= timeout <= 120:
-            raise CommandError("--health-timeout باید بین ۱ تا ۱۲۰ باشد.")
 
         root = getattr(settings, "RESTORE_JOURNAL_ROOT", Path(settings.BACKUP_ROOT) / ".restore-journal")
         journal = RestoreJournal(operation_id, root=root)
@@ -186,7 +168,7 @@ class Command(BaseCommand):
                 call_command("migrate", interactive=False, verbosity=1)
 
                 self.stdout.write("۴/۶ بررسی دیتابیس و Media...")
-                self._health_check(timeout=timeout)
+                self._health_check()
 
                 self.stdout.write("۵/۶ راه‌اندازی سرویس‌ها...")
                 self._start(active_units)
@@ -194,7 +176,7 @@ class Command(BaseCommand):
                     raise RestoreError("همه سرویس‌ها فعال نشدند.")
 
                 self.stdout.write("۶/۶ Health Check نهایی و پایان Maintenance...")
-                self._health_check(health_url=health_url, timeout=timeout)
+                self._health_check()
                 journal.update(phase="COMPLETED")
                 try:
                     _finalize_restore_audit(journal)
