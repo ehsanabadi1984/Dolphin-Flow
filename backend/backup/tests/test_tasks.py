@@ -86,7 +86,7 @@ class BackupTaskTests(TestCase):
 
             self.assertEqual(result["status"], "success")
             self.assertEqual(backup.network_status, Backup.NetworkStatus.SUCCESS)
-            self.assertEqual(backup.network_storage_path, source.name)
+            self.assertEqual(backup.network_storage_path, str(target))
             self.assertEqual(backup.network_size, len(payload))
             self.assertEqual(backup.network_checksum, backup.checksum)
             self.assertTrue(target.is_file())
