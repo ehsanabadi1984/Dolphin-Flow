@@ -44,7 +44,7 @@ class StagedRestorePreparationService(RestoreService):
 
         try:
             inventory = inspect_restore_journals()
-            if any(item.get("recovery_required") for item in inventory):
+            if any(item.get("blocks_new_restore", True) for item in inventory):
                 raise RestoreError(
                     "یک عملیات Restore قبلی نیازمند بررسی/بازیابی است؛ "
                     "تا تعیین تکلیف آن عملیات جدید آغاز نمی‌شود."
