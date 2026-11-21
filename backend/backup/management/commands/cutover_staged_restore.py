@@ -44,26 +44,38 @@ def _finalize_restore_audit(journal):
     started_at = parse_datetime(started_at_raw) if started_at_raw else None
     requested_by_username = restore_data.get("requested_by_username", "")
 
-    existing = Restore.objects.filter(
-        archive_filename=archive_filename,
-        started_at=started_at,
-        requested_by_username=requested_by_username,
-        status=Restore.Status.SUCCESS,
-    ).exists()
-    if not existing:
-        Restore.objects.create(
+    restore_id = payload.get("restore_id")
+    audit = Restore.objects.filter(pk=restore_id).first() if restore_id else None
+    if audit is None:
+        audit = Restore.objects.filter(
             archive_filename=archive_filename,
-            product_version=restore_data.get("product_version", ""),
-            database_engine=restore_data.get("database_engine", ""),
-            database_backup_format=restore_data.get("database_backup_format", ""),
-            includes_media=restore_data.get("includes_media", False),
             started_at=started_at,
-            completed_at=timezone.now(),
             requested_by_username=requested_by_username,
-            pre_restore_backup_filename=restore_data.get(
-                "pre_restore_backup_filename", ""
-            ),
+        ).exclude(status=Restore.Status.SUCCESS).first()
+
+    if audit is not None:
+        if audit.status != Restore.Status.SUCCESS:
+            audit.status = Restore.Status.SUCCESS
+            audit.completed_at = timezone.now()
+            audit.error_message = ""
+            audit.save(update_fields=["status", "completed_at", "error_message", "updated_at"])
+    else:
+        Restore.objects.get_or_create(
+            archive_filename=archive_filename,
+            started_at=started_at,
+            requested_by_username=requested_by_username,
             status=Restore.Status.SUCCESS,
+            defaults={
+                "product_version": restore_data.get("product_version", ""),
+                "database_engine": restore_data.get("database_engine", ""),
+                "database_backup_format": restore_data.get("database_backup_format", ""),
+                "includes_media": restore_data.get("includes_media", False),
+                "completed_at": timezone.now(),
+                "pre_restore_backup_filename": restore_data.get(
+                    "pre_restore_backup_filename", ""
+                ),
+                "error_message": "",
+            },
         )
 
 
