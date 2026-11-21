@@ -80,6 +80,8 @@ class Command(BaseCommand):
             previously_active = orchestrator.get("previously_active_units") or []
             if not units or not previously_active or not set(previously_active).issubset(set(units)):
                 raise RestoreError("اطلاعات سرویس‌ها در Journal ناقص است؛ Recovery خودکار امن نیست.")
+            if any(not unit or unit.startswith("-") or any(ch.isspace() for ch in unit) for unit in units):
+                raise RestoreError("نام سرویس ثبت‌شده در Journal معتبر نیست.")
 
             with RestoreOperationLock(root=root, operation_id=operation_id):
                 phase = journal.read()["phase"]
