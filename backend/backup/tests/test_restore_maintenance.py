@@ -1,0 +1,134 @@
+import asyncio
+import tempfile
+from pathlib import Path
+from unittest.mock import Mock
+
+from celery.exceptions import Ignore
+from django.http import HttpResponse
+from django.test import RequestFactory, SimpleTestCase, override_settings
+
+from backup.restore_maintenance import (
+    RestoreMaintenanceASGIMiddleware,
+    RestoreMaintenanceError,
+    activate_maintenance,
+    deactivate_maintenance,
+    maintenance_marker_path,
+    maintenance_is_active,
+    read_maintenance_state,
+)
+from backup.restore_maintenance_middleware import RestoreMaintenanceMiddleware
+from backup.restore_maintenance_tasks import RestoreMaintenanceAwareTask
+
+
+class RestoreMaintenanceGateTests(SimpleTestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.settings_override = override_settings(
+            BACKUP_ROOT=Path(self.temp_dir.name) / "backups"
+        )
+        self.settings_override.enable()
+        self.addCleanup(self.settings_override.disable)
+
+    def test_gate_is_persistent_and_requires_matching_owner_to_clear(self):
+        operation_id = "a" * 32
+        self.assertFalse(maintenance_is_active())
+
+        self.assertEqual(activate_maintenance(operation_id), operation_id)
+        self.assertTrue(maintenance_is_active())
+        self.assertEqual(read_maintenance_state()["operation_id"], operation_id)
+
+        with self.assertRaises(RestoreMaintenanceError):
+            activate_maintenance("b" * 32)
+        with self.assertRaises(RestoreMaintenanceError):
+            deactivate_maintenance("b" * 32)
+
+        self.assertTrue(deactivate_maintenance(operation_id))
+        self.assertFalse(maintenance_is_active())
+
+    def test_marker_rejects_invalid_operation_id(self):
+        with self.assertRaises(RestoreMaintenanceError):
+            activate_maintenance("../unsafe")
+
+    def test_marker_rejects_symlink(self):
+        marker = maintenance_marker_path()
+        marker.parent.mkdir(parents=True)
+        target = marker.parent / "target"
+        target.write_text('{"operation_id":"' + ("a" * 32) + '"}')
+        marker.symlink_to(target)
+
+        with self.assertRaises(RestoreMaintenanceError):
+            maintenance_is_active()
+
+    def test_http_requests_are_rejected_while_gate_is_active(self):
+        activate_maintenance("c" * 32)
+        middleware = RestoreMaintenanceMiddleware(
+            lambda request: HttpResponse("application")
+        )
+        response = middleware(RequestFactory().get("/"))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response["Retry-After"], "60")
+
+    def test_http_requests_continue_without_gate(self):
+        middleware = RestoreMaintenanceMiddleware(
+            lambda request: HttpResponse("application")
+        )
+        response = middleware(RequestFactory().get("/"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"application")
+
+    def test_websocket_handshake_is_closed_while_gate_is_active(self):
+        activate_maintenance("d" * 32)
+        app = Mock()
+        middleware = RestoreMaintenanceASGIMiddleware(app)
+        sent = []
+
+        async def receive():
+            return {"type": "websocket.connect"}
+
+        async def send(message):
+            sent.append(message)
+
+        asyncio.run(
+            middleware(
+                {"type": "websocket", "path": "/ws/"},
+                receive,
+                send,
+            )
+        )
+
+        self.assertEqual(sent, [{"type": "websocket.close", "code": 1013}])
+        app.assert_not_called()
+
+    def test_websocket_passes_through_without_gate(self):
+        app = Mock()
+        middleware = RestoreMaintenanceASGIMiddleware(app)
+
+        async def run():
+            await middleware(
+                {"type": "websocket", "path": "/ws/"},
+                Mock(),
+                Mock(),
+            )
+
+        asyncio.run(run())
+        app.assert_called_once()
+
+    def test_new_celery_tasks_are_ignored_during_maintenance(self):
+        activate_maintenance("e" * 32)
+        task = RestoreMaintenanceAwareTask()
+        task.run = Mock(return_value="ran")
+
+        with self.assertRaises(Ignore):
+            task()
+
+        task.run.assert_not_called()
+
+    def test_celery_tasks_run_without_gate(self):
+        task = RestoreMaintenanceAwareTask()
+        task.run = Mock(return_value="ran")
+
+        self.assertEqual(task(), "ran")
+        task.run.assert_called_once()
