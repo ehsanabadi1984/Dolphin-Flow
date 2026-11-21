@@ -6,6 +6,7 @@ verifies that no other client sessions remain on the live database.
 """
 
 import secrets
+import subprocess
 from copy import deepcopy
 
 from django.conf import settings
@@ -76,3 +77,52 @@ def assert_database_quiescent(database_settings=None):
         ) from exc
     finally:
         admin.close()
+
+
+
+def assert_systemd_services_stopped(service_units, runner=subprocess.run):
+    """Require every explicitly configured systemd unit to be inactive.
+
+    This is a verification-only check. It never starts or stops services.
+    """
+    units = list(service_units or [])
+    if not units:
+        raise RestoreError(
+            "نام سرویس‌های لازم برای توقف مشخص نشده است؛ بررسی امن ممکن نیست."
+        )
+
+    results = []
+    for unit in units:
+        if (
+            not isinstance(unit, str)
+            or not unit.strip()
+            or unit.startswith("-")
+            or any(char.isspace() for char in unit)
+        ):
+            raise RestoreError("نام یکی از سرویس‌های systemd معتبر نیست.")
+
+        try:
+            result = runner(
+                ["systemctl", "is-active", unit],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=10,
+            )
+        except FileNotFoundError as exc:
+            raise RestoreError(
+                "systemctl در این محیط در دسترس نیست؛ وضعیت سرویس‌ها قابل تأیید نیست."
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise RestoreError(
+                f"بررسی وضعیت سرویس {unit} با Timeout مواجه شد."
+            ) from exc
+
+        state = (result.stdout or "").strip()
+        if result.returncode == 0 or state not in {"inactive", "failed"}:
+            raise RestoreError(
+                f"سرویس {unit} هنوز متوقف بودنش تأیید نشده است (وضعیت: {state or 'نامشخص'})."
+            )
+        results.append({"service": unit, "state": state})
+
+    return results
