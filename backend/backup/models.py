@@ -513,6 +513,7 @@ class Restore(models.Model):
     class Status(models.TextChoices):
         QUEUED = "QUEUED", "در صف"
         RESTORING = "RESTORING", "در حال بازیابی"
+        PREPARED = "PREPARED", "آماده انتقال (Cutover)"
         SUCCESS = "SUCCESS", "موفق"
         FAILED = "FAILED", "ناموفق"
 
