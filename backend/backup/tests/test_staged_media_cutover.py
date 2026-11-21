@@ -45,7 +45,9 @@ class StagedMediaCutoverTests(SimpleTestCase):
 
             self.assertEqual((live / "old.txt").read_text(), "old-content")
             self.assertEqual((stage / "new.txt").read_text(), "new-content")
-            journal.update.assert_any_call(phase="ROLLBACK_REQUIRED")
+            self.assertTrue(
+                any(call.kwargs.get("phase") == "ROLLBACK_REQUIRED" for call in journal.update.call_args_list)
+            )
 
     def test_rejects_stage_outside_media_parent(self):
         with TemporaryDirectory() as temp:
