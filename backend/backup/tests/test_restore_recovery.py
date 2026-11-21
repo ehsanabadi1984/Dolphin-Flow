@@ -81,6 +81,26 @@ class RestoreRecoveryInventoryTests(SimpleTestCase):
             self.assertTrue(stage_path.exists())
             self.assertTrue((stage_path / "partial.bin").exists())
 
+    def test_fully_prepared_journal_is_ready_not_interrupted(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "journal"
+            journal = RestoreJournal.new(
+                204,
+                root=root,
+                database={"staging_name": "restore_204", "prepared": True},
+                media={"included": True, "staging_path": "/tmp/.media.restore-204",
+                       "prepared": True, "file_count": 505, "total_bytes": 1162010},
+            )
+
+            inventory = inspect_restore_journals(root=root)
+
+            self.assertEqual(len(inventory), 1)
+            self.assertEqual(inventory[0]["phase"], "PREPARED")
+            self.assertEqual(inventory[0]["status"], "PREPARED")
+            self.assertFalse(inventory[0]["recovery_required"])
+            self.assertTrue(inventory[0]["blocks_new_restore"])
+            self.assertEqual(journal.read()["phase"], "PREPARED")
+
     def test_terminal_journals_do_not_require_recovery(self):
         with TemporaryDirectory() as temp:
             root = Path(temp) / "journal"
