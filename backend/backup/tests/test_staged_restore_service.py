@@ -91,6 +91,7 @@ class StagedDatabaseRestoreTests(SimpleTestCase):
         loader_class.return_value.check_consistent_history.assert_called_once_with(
             stage_connection
         )
+        loader_class.return_value.detect_conflicts.return_value = {}
 
     def test_prepare_cleans_up_staging_database_when_restore_fails(self):
         service = StagedDatabaseRestore(12, self.database_settings)
