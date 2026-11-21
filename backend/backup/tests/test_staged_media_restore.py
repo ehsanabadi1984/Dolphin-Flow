@@ -56,6 +56,28 @@ class StagedMediaRestoreTests(SimpleTestCase):
             self.assertFalse(stage.exists())
             self.assertEqual((root / "existing.txt").read_text(), "keep")
 
+    def test_stage_path_callback_runs_before_directory_creation(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "media"
+            root.mkdir()
+            archive = Path(temp) / "media.tar.gz"
+            self._write_archive(archive, [("a.txt", b"a", "file")])
+            observed = {}
+
+            def record_stage_path(path):
+                observed["path"] = path
+                observed["exists_before_creation"] = path.exists()
+
+            service = StagedMediaRestore(
+                82, media_root=root, on_stage_created=record_stage_path
+            )
+            stage = service.prepare(archive)
+
+            self.assertEqual(observed["path"], stage)
+            self.assertFalse(observed["exists_before_creation"])
+            self.assertTrue(stage.is_dir())
+            service.cleanup()
+
     def test_prepare_rejects_path_traversal_and_cleans_stage(self):
         with TemporaryDirectory() as temp:
             root = Path(temp) / "media"
