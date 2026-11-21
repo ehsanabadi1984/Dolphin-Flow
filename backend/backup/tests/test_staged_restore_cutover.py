@@ -2,7 +2,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
+
+from backup.restore_maintenance import activate_maintenance, deactivate_maintenance
 
 from backup.restore_journal import RestoreJournal
 from backup.restore_services import RestoreError
@@ -10,6 +12,13 @@ from backup.staged_restore_cutover import StagedRestoreCutover
 
 
 class StagedRestoreCutoverTests(SimpleTestCase):
+    def _enable_maintenance(self, root, journal):
+        override = override_settings(BACKUP_ROOT=Path(root) / "backups")
+        override.enable()
+        self.addCleanup(override.disable)
+        activate_maintenance(journal.operation_id)
+        self.addCleanup(deactivate_maintenance, journal.operation_id)
+
     def _journal(self, root, media_included=True):
         parent = Path(root)
         media_root = parent / "media"
@@ -36,6 +45,7 @@ class StagedRestoreCutoverTests(SimpleTestCase):
     ):
         with TemporaryDirectory() as temp:
             journal, media_root = self._journal(temp)
+            self._enable_maintenance(temp, journal)
             def successful_database_swap():
                 journal.update(phase="QUIESCING")
                 journal.update(phase="DATABASE_SWAPPED")
@@ -62,6 +72,7 @@ class StagedRestoreCutoverTests(SimpleTestCase):
     ):
         with TemporaryDirectory() as temp:
             journal, media_root = self._journal(temp)
+            self._enable_maintenance(temp, journal)
             database_cls.return_value.swap.side_effect = lambda: (
                 journal.update(phase="QUIESCING"),
                 journal.update(phase="DATABASE_SWAPPED"),
@@ -76,9 +87,17 @@ class StagedRestoreCutoverTests(SimpleTestCase):
             database_cls.return_value.rollback.assert_called_once_with(finalize_journal=False)
             self.assertEqual(journal.read()["phase"], "ROLLED_BACK")
 
+    def test_cutover_requires_maintenance_owned_by_journal(self):
+        with TemporaryDirectory() as temp:
+            journal, media_root = self._journal(temp)
+            with self.assertRaises(RestoreError):
+                StagedRestoreCutover(journal, media_root=media_root).run()
+            self.assertEqual(journal.read()["phase"], "PREPARED")
+
     def test_unprepared_journal_is_rejected_before_cutover(self):
         with TemporaryDirectory() as temp:
             journal, media_root = self._journal(temp)
+            self._enable_maintenance(temp, journal)
             journal.update(database={"prepared": False})
 
             with self.assertRaises(RestoreError):
