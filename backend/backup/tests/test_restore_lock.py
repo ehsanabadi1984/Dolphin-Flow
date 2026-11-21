@@ -65,3 +65,18 @@ class RestoreOperationLockTests(SimpleTestCase):
             with override_settings(MEDIA_ROOT=media_root):
                 with self.assertRaises(RestoreError):
                     RestoreOperationLock(root=media_root / ".journal")
+    
+    def test_lock_is_released_when_metadata_write_fails(self):
+        from unittest.mock import patch
+
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "journal"
+            first = RestoreOperationLock(root=root)
+            second = RestoreOperationLock(root=root)
+
+            with patch("backup.restore_lock.os.write", side_effect=OSError("disk error")):
+                with self.assertRaises(RestoreError):
+                    first.acquire()
+
+            with second:
+                self.assertTrue(second.acquired)
