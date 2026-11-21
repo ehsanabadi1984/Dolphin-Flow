@@ -156,8 +156,12 @@ class StagedDatabaseCutover:
         )
         self.journal.update(phase="ROLLED_BACK")
 
-    def rollback(self):
-        """Explicitly restore the preserved database after a later cutover failure."""
+    def rollback(self, finalize_journal=True):
+        """Restore the preserved database after a later cutover failure.
+
+        Coordinators may defer the terminal journal transition until every
+        resource (including media) has been restored.
+        """
         admin = self._admin()
         try:
             with admin.cursor() as cursor:
@@ -174,7 +178,8 @@ class StagedDatabaseCutover:
                 phase="ROLLBACK_REQUIRED",
                 database={"staging_renamed": False, "old_renamed": False},
             )
-            self.journal.update(phase="ROLLED_BACK")
+            if finalize_journal:
+                self.journal.update(phase="ROLLED_BACK")
         except RestoreError:
             raise
         except Exception as exc:
