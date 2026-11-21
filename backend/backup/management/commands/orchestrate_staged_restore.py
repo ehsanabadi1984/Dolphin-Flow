@@ -9,6 +9,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
 
+from backup.models import Restore
 from backup.restore_journal import RestoreJournal
 from backup.restore_lock import RestoreOperationLock
 from backup.restore_maintenance import activate_maintenance, deactivate_maintenance, read_maintenance_state
@@ -16,6 +17,7 @@ from backup.restore_quiescence import assert_database_quiescent, assert_systemd_
 from backup.restore_services import RestoreError
 from backup.staged_restore_cutover import StagedRestoreCutover
 from backup.staged_restore_recovery import StagedRestoreRecovery
+from backup.staged_restore_preparation import StagedRestorePreparationService
 from .cutover_staged_restore import _finalize_restore_audit
 
 
@@ -23,7 +25,9 @@ class Command(BaseCommand):
     help = "اجرای کامل و خودکار Restore آماده‌شده با Rollback در صورت شکست."
 
     def add_arguments(self, parser):
-        parser.add_argument("--operation-id", required=True)
+        target = parser.add_mutually_exclusive_group(required=True)
+        target.add_argument("--restore-id", type=int)
+        target.add_argument("--operation-id")
         parser.add_argument("--service-unit", action="append", dest="service_units", required=True)
         parser.add_argument("--health-url", default="")
         parser.add_argument("--health-timeout", type=int, default=15)
@@ -93,6 +97,21 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         operation_id = options["operation_id"]
+        if options["restore_id"] is not None:
+            try:
+                restore = Restore.objects.get(pk=options["restore_id"])
+            except Restore.DoesNotExist as exc:
+                raise CommandError("درخواست Restore پیدا نشد.") from exc
+            prepared = StagedRestorePreparationService(restore).run()
+            if prepared.get("status") != "PREPARED" or not prepared.get("operation_id"):
+                raise CommandError(
+                    "آماده‌سازی Restore انجام نشد یا در حال اجراست: "
+                    + str(prepared.get("status", "نامشخص"))
+                )
+            operation_id = prepared["operation_id"]
+            self.stdout.write(self.style.SUCCESS(
+                f"آماده‌سازی Restore #{restore.pk} کامل شد؛ اجرای Cutover آغاز می‌شود."
+            ))
         units = options["service_units"]
         health_url = options["health_url"]
         timeout = options["health_timeout"]
