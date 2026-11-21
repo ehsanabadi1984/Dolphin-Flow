@@ -12,10 +12,9 @@ from pathlib import Path
 
 from django.conf import settings
 
+
 class RestoreMaintenanceError(Exception):
     """A maintenance gate could not be read or safely changed."""
-
-
 
 
 MARKER_NAME = ".restore-maintenance"
@@ -54,7 +53,12 @@ def read_maintenance_state():
         state = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as exc:
         raise RestoreMaintenanceError("نشانگر Maintenance معتبر نیست.") from exc
-    if not isinstance(state, dict) or not isinstance(state.get("operation_id"), str):
+    operation_id = state.get("operation_id") if isinstance(state, dict) else None
+    if (
+        not isinstance(operation_id, str)
+        or len(operation_id) != 32
+        or any(char not in "0123456789abcdef" for char in operation_id)
+    ):
         raise RestoreMaintenanceError("ساختار نشانگر Maintenance معتبر نیست.")
     return state
 
@@ -90,7 +94,12 @@ def activate_maintenance(operation_id=None):
     except FileExistsError as exc:
         raise RestoreMaintenanceError("Maintenance از قبل فعال است؛ نشانگر موجود بازنویسی نشد.") from exc
     try:
-        os.write(fd, payload)
+        remaining = memoryview(payload)
+        while remaining:
+            written = os.write(fd, remaining)
+            if written <= 0:
+                raise OSError("نشانگر Maintenance به‌طور کامل نوشته نشد.")
+            remaining = remaining[written:]
         os.fsync(fd)
     except OSError:
         os.close(fd)
