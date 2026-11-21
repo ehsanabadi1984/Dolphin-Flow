@@ -74,6 +74,8 @@ class StagedRestorePreparationTests(TestCase):
         result = self.service.run()
 
         self.assertEqual(result["status"], "PREPARED")
+        self.assertEqual(self.restore.status, Restore.Status.PREPARED)
+        self.restore.save.assert_called_with(update_fields=["status", "updated_at"])
         self.assertEqual(result["staging_database"], database.database_name)
         database.prepare.assert_called_once_with(Path("/tmp/database.dump"))
         database.close.assert_called_once_with()
