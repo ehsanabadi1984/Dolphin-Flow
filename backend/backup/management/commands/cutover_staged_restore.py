@@ -79,13 +79,19 @@ class Command(BaseCommand):
             "--service-unit",
             action="append",
             dest="service_units",
-            required=True,
-            help="نام هر واحد systemd؛ برای هر سرویس یک بار تکرار شود.",
+            default=None,
+            help="بررسی خودکار واحد systemd؛ برای هر سرویس یک بار تکرار شود.",
+        )
+        parser.add_argument(
+            "--services-stopped",
+            action="store_true",
+            help="تأیید اپراتور مبنی بر توقف تمام فرایندهای برنامه در محیط فاقد systemd.",
         )
 
     def handle(self, *args, **options):
         operation_id = options["operation_id"]
         service_units = options["service_units"]
+        services_stopped = options["services_stopped"]
         journal_root = getattr(
             settings,
             "RESTORE_JOURNAL_ROOT",
@@ -113,7 +119,23 @@ class Command(BaseCommand):
                         + payload["phase"]
                     )
 
-                services = assert_systemd_services_stopped(service_units)
+                if service_units:
+                    if services_stopped:
+                        raise RestoreError(
+                            "از --service-unit یا --services-stopped استفاده کن، نه هر دو."
+                        )
+                    services = assert_systemd_services_stopped(service_units)
+                    service_check_mode = "systemd"
+                elif services_stopped:
+                    # Explicit WSL/container operator attestation. Database session
+                    # verification and the exclusive drain lock remain mandatory.
+                    services = [{"service": "operator-attestation", "state": "stopped"}]
+                    service_check_mode = "operator-attestation"
+                else:
+                    raise RestoreError(
+                        "توقف سرویس‌ها تأیید نشده است؛ پس از توقف تمام فرایندهای "
+                        "برنامه از --services-stopped استفاده کن."
+                    )
                 close_restore_worker_connection()
                 database = assert_database_quiescent()
 
@@ -140,7 +162,7 @@ class Command(BaseCommand):
             f"Cutover complete: {operation_id} | Journal: COMPLETED"
         ))
         self.stdout.write(
-            f"Verified services: {len(services)} | "
+            f"Service verification: {service_check_mode} ({len(services)}) | "
             f"Database sessions: {database['active_sessions']}"
         )
         self.stdout.write(
