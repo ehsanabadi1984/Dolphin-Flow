@@ -166,7 +166,7 @@ class BackupAdmin(ModelAdmin):
             "can_download_backup": self._has_perm(request, "download_backup"),
             "can_delete_backup": self._has_perm(request, "delete_backup"),
             "can_restore_backup": self._has_perm(request, "restore_backup"),
-            "has_active_restore": Restore.objects.filter(status__in=(Restore.Status.QUEUED, Restore.Status.RESTORING)).exists(),
+            "has_active_restore": Restore.objects.filter(status__in=(Restore.Status.QUEUED, Restore.Status.RESTORING, Restore.Status.PREPARED)).exists(),
             "can_manage_retention": request.user.has_perm("backup.change_backupretentionpolicy"),
             "retention_policy": BackupRetentionPolicy.get_solo(),
             "title": "پشتیبان‌گیری",
@@ -523,7 +523,7 @@ class RestoreAdmin(ModelAdmin):
         extra_context.update({
             "opts": self.model._meta,
             "restores": list(Restore.objects.select_related("backup").order_by("-created_at")[:100]),
-            "has_active_restore": Restore.objects.filter(status__in=(Restore.Status.QUEUED, Restore.Status.RESTORING)).exists(),
+            "has_active_restore": Restore.objects.filter(status__in=(Restore.Status.QUEUED, Restore.Status.RESTORING, Restore.Status.PREPARED)).exists(),
             "title": "بازیابی",
         })
         return TemplateResponse(request, "admin/backup/restore/change_list.html", {
