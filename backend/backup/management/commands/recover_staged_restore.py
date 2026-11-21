@@ -2,8 +2,10 @@
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+from pathlib import Path
 
 from backup.restore_journal import RestoreJournal
+from backup.restore_maintenance import RestoreMaintenanceError
 from backup.restore_services import RestoreError
 from backup.staged_restore_recovery import StagedRestoreRecovery
 
@@ -31,13 +33,13 @@ class Command(BaseCommand):
                 root=getattr(
                     settings,
                     "RESTORE_JOURNAL_ROOT",
-                    settings.BACKUP_ROOT / ".restore-journal",
+                    Path(settings.BACKUP_ROOT) / ".restore-journal",
                 ),
             )
             result = StagedRestoreRecovery(journal).rollback(
                 service_units=options["service_units"]
             )
-        except RestoreError as exc:
+        except (RestoreError, RestoreMaintenanceError) as exc:
             raise CommandError(str(exc)) from exc
 
         self.stdout.write(self.style.SUCCESS(
