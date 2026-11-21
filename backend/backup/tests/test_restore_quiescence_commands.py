@@ -31,7 +31,6 @@ class RestoreQuiescenceCommandTests(TestCase):
         "backup.management.commands.verify_restore_quiescence.assert_systemd_services_stopped",
         return_value=[
             {"service": "dolphinplus-daphne.service", "state": "inactive"},
-            {"service": "dolphinplus-celery.service", "state": "inactive"},
         ],
     )
     @mock.patch(
@@ -45,7 +44,7 @@ class RestoreQuiescenceCommandTests(TestCase):
         call_command(
             "verify_restore_quiescence",
             operation_id="b" * 32,
-            service_units=["dolphinplus-daphne.service", "dolphinplus-celery.service"],
+            service_units=["dolphinplus-daphne.service"],
             stdout=output,
         )
 
@@ -53,7 +52,6 @@ class RestoreQuiescenceCommandTests(TestCase):
         self.assertIn("بررسی Quiescence موفق بود", output.getvalue())
         service_check.assert_called_once_with([
             "dolphinplus-daphne.service",
-            "dolphinplus-celery.service",
         ])
         database_check.assert_called_once_with()
 
