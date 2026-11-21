@@ -102,6 +102,21 @@ class StagedRestorePreparationService(RestoreService):
                     "safety_backup": journal_safety_snapshot,
                 },
                 media=media_info,
+                restore={
+                    "archive_filename": self.restore.archive_filename or "",
+                    "product_version": self.restore.product_version or "",
+                    "database_engine": self.restore.database_engine or "",
+                    "database_backup_format": self.restore.database_backup_format or "",
+                    "includes_media": bool(self.restore.includes_media),
+                    "started_at": (
+                        self.restore.started_at.isoformat()
+                        if self.restore.started_at else ""
+                    ),
+                    "requested_by_username": self.restore.requested_by_username or "",
+                    "pre_restore_backup_filename": (
+                        self.restore.pre_restore_backup_filename or ""
+                    ),
+                },
             )
 
             self.database_stage.prepare(dump_path)
