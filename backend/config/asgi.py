@@ -13,6 +13,7 @@ django_asgi_app = get_asgi_application()
 from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
 
+from backup.restore_maintenance import RestoreMaintenanceASGIMiddleware
 from operator_panel.routing import websocket_urlpatterns
 
 
@@ -31,3 +32,7 @@ application = ProtocolTypeRouter(
 application = ASGIStaticFilesHandler(
     application
 )
+
+# Keep this outermost so new WebSocket handshakes are rejected before auth
+# middleware or any consumer can open application/database resources.
+application = RestoreMaintenanceASGIMiddleware(application)
