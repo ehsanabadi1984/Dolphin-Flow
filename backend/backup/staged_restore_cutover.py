@@ -20,10 +20,11 @@ from .staged_media_cutover import StagedMediaCutover
 class StagedRestoreCutover:
     """Promote prepared resources and roll both back if either promotion fails."""
 
-    def __init__(self, journal, database_settings=None, media_root=None):
+    def __init__(self, journal, database_settings=None, media_root=None, defer_completion=False):
         self.journal = journal
         self.database_settings = database_settings
         self.media_root = Path(media_root or settings.MEDIA_ROOT).absolute()
+        self.defer_completion = bool(defer_completion)
 
     def _prepared_resources(self):
         payload = self.journal.read()
@@ -79,9 +80,10 @@ class StagedRestoreCutover:
                 media_attempted = True
                 media_result = media_cutover.swap()
 
-            self.journal.update(phase="COMPLETED")
+            final_phase = "VALIDATING" if self.defer_completion else "COMPLETED"
+            self.journal.update(phase=final_phase)
             return {
-                "status": "COMPLETED",
+                "status": final_phase,
                 "operation_id": self.journal.operation_id,
                 "database": database_result,
                 "media": media_result,
