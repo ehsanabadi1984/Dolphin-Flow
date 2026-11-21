@@ -94,7 +94,7 @@ class StagedMediaRestoreTests(SimpleTestCase):
             service = StagedMediaRestore(
                 83, media_root=root, on_stage_created=occupy_intended_path
             )
-            with self.assertRaises(FileExistsError):
+            with self.assertRaises(RestoreError):
                 service.prepare(archive)
 
             self.assertEqual((unowned["path"] / "keep.txt").read_text(), "not mine")
