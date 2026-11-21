@@ -17,4 +17,8 @@ app.config_from_object(
     namespace="CELERY",
 )
 
+from backup.restore_maintenance_tasks import RestoreMaintenanceAwareTask
+
+app.Task = RestoreMaintenanceAwareTask
+
 app.autodiscover_tasks()
