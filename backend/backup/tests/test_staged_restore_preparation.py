@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase, mock
 
-from django.db.models import TextChoices
+from django.utils import timezone
 
 from backup.models import Restore
 from backup.restore_services import RestoreError
@@ -27,7 +27,7 @@ class StagedRestorePreparationTests(TestCase):
             return_value=SimpleNamespace(pk=77, filename="safety.dfbak")
         )
         self.service._capture_backup_state = mock.Mock(
-            return_value={"filename": "safety.dfbak", "storage_path": "safety.dfbak"}
+            return_value={\n                "filename": "safety.dfbak",\n                "storage_path": "safety.dfbak",\n                "started_at": timezone.now(),\n                "completed_at": None,\n            }
         )
         self.service._materialize = mock.Mock(
             return_value=(Path("/tmp/database.dump"), Path("/tmp/media.tar.gz"))
