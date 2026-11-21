@@ -37,6 +37,21 @@ class Command(BaseCommand):
             )
             if item.get("updated_at"):
                 self.stdout.write(f"Updated at: {item['updated_at']}")
+
+            database = item.get("database") or {}
+            if database.get("staging_name"):
+                self.stdout.write(
+                    f"Staging database: {database['staging_name']}"
+                )
+            media = item.get("media") or {}
+            if media.get("staging_path"):
+                self.stdout.write(
+                    f"Staging media path: {media['staging_path']}"
+                )
+                self.stdout.write(
+                    "Media staging prepared: "
+                    + ("YES" if media.get("prepared") else "NO")
+                )
             if item.get("error"):
                 self.stdout.write(f"Error: {item['error']}")
 
