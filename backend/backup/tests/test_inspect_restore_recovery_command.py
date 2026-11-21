@@ -54,6 +54,11 @@ class InspectRestoreRecoveryCommandTests(SimpleTestCase):
                 "operation_id": "a" * 32,
                 "restore_id": 302,
                 "phase": "DATABASE_SWAPPED",
+                "database": {"staging_name": "dolphinflow_restore_302_token"},
+                "media": {
+                    "staging_path": "/srv/app/.media.restore-302-token",
+                    "prepared": False,
+                },
                 "status": "INTERRUPTED",
                 "recovery_required": True,
                 "error": "",
@@ -65,3 +70,6 @@ class InspectRestoreRecoveryCommandTests(SimpleTestCase):
 
         self.assertIn("Status: INTERRUPTED", output.getvalue())
         self.assertIn("Recovery required: YES", output.getvalue())
+        self.assertIn("Staging database: dolphinflow_restore_302_token", output.getvalue())
+        self.assertIn("Staging media path: /srv/app/.media.restore-302-token", output.getvalue())
+        self.assertIn("Media staging prepared: NO", output.getvalue())
