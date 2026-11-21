@@ -13,6 +13,7 @@ from backup.models import Restore
 from backup.restore_journal import RestoreJournal
 from backup.restore_lock import RestoreOperationLock
 from backup.restore_maintenance import activate_maintenance, deactivate_maintenance, read_maintenance_state
+from backup.restore_recovery import inspect_restore_journals
 from backup.restore_quiescence import assert_database_quiescent, assert_systemd_services_stopped, close_restore_worker_connection
 from backup.restore_services import RestoreError
 from backup.staged_restore_cutover import StagedRestoreCutover
@@ -102,16 +103,32 @@ class Command(BaseCommand):
                 restore = Restore.objects.get(pk=options["restore_id"])
             except Restore.DoesNotExist as exc:
                 raise CommandError("درخواست Restore پیدا نشد.") from exc
-            prepared = StagedRestorePreparationService(restore).run()
-            if prepared.get("status") != "PREPARED" or not prepared.get("operation_id"):
-                raise CommandError(
-                    "آماده‌سازی Restore انجام نشد یا در حال اجراست: "
-                    + str(prepared.get("status", "نامشخص"))
+            if restore.status == Restore.Status.PREPARED:
+                prepared_journals = [
+                    item for item in inspect_restore_journals()
+                    if item.get("restore_id") == restore.pk
+                    and item.get("phase") == "PREPARED"
+                    and item.get("status") == "PREPARED"
+                ]
+                if len(prepared_journals) != 1:
+                    raise CommandError(
+                        "برای این Restore دقیقاً یک Journal آماده و معتبر پیدا نشد."
+                    )
+                operation_id = prepared_journals[0]["operation_id"]
+                self.stdout.write(
+                    f"Restore #{restore.pk} از قبل آماده است؛ Cutover آغاز می‌شود."
                 )
-            operation_id = prepared["operation_id"]
-            self.stdout.write(self.style.SUCCESS(
-                f"آماده‌سازی Restore #{restore.pk} کامل شد؛ اجرای Cutover آغاز می‌شود."
-            ))
+            else:
+                prepared = StagedRestorePreparationService(restore).run()
+                if prepared.get("status") != "PREPARED" or not prepared.get("operation_id"):
+                    raise CommandError(
+                        "آماده‌سازی Restore انجام نشد یا در حال اجراست: "
+                        + str(prepared.get("status", "نامشخص"))
+                    )
+                operation_id = prepared["operation_id"]
+                self.stdout.write(self.style.SUCCESS(
+                    f"آماده‌سازی Restore #{restore.pk} کامل شد؛ اجرای Cutover آغاز می‌شود."
+                ))
         units = options["service_units"]
         health_url = options["health_url"]
         timeout = options["health_timeout"]
