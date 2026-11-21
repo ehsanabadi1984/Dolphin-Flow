@@ -59,7 +59,7 @@ class StagedDatabaseRestore:
     def _admin_connection_config(database_settings):
         config = deepcopy(database_settings)
         config["NAME"] = MAINTENANCE_DATABASE
-        config.setdefault("OPTIONS", {})
+        config["OPTIONS"] = config.get("OPTIONS") or {}
         return config
 
     def _open_admin_connection(self):
@@ -193,7 +193,13 @@ class StagedDatabaseRestore:
             self.validate()
         except Exception:
             self.close()
-            self.drop_database()
+            try:
+                self.drop_database()
+            except Exception:
+                logger.exception(
+                    "Staging database cleanup failed after preparation error: %s",
+                    self.database_name,
+                )
             raise
         return self.database_name
 
