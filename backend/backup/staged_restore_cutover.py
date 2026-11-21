@@ -10,6 +10,8 @@ from pathlib import Path
 from django.conf import settings
 
 from .restore_services import RestoreError
+from .restore_maintenance import RestoreMaintenanceError, read_maintenance_state
+from .restore_drain import RestoreDrainLock
 from .staged_database_cutover import StagedDatabaseCutover
 from .staged_media_cutover import StagedMediaCutover
 
@@ -38,6 +40,23 @@ class StagedRestoreCutover:
         return database, media
 
     def run(self):
+        state = read_maintenance_state()
+        if state is None or state.get("operation_id") != self.journal.operation_id:
+            raise RestoreError(
+                "Cutover فقط با Maintenance فعال و متعلق به همین Journal مجاز است."
+            )
+        try:
+            with RestoreDrainLock.acquire(
+                exclusive=True,
+                timeout=getattr(settings, "RESTORE_DRAIN_TIMEOUT_SECONDS", 30),
+            ):
+                return self._run_locked()
+        except RestoreMaintenanceError as exc:
+            raise RestoreError(
+                "تخلیه درخواست‌ها و وظایف جاری کامل نشد؛ Cutover انجام نشد: " + str(exc)
+            ) from exc
+
+    def _run_locked(self):
         database, media = self._prepared_resources()
         database_cutover = StagedDatabaseCutover(
             database["staging_name"], self.journal, self.database_settings
