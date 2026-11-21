@@ -72,6 +72,8 @@ class StagedRestoreRecovery:
             admin.close()
 
         media_state = None
+        previous_path = None
+        stage_path = None
         if media.get("included"):
             live_path = Path(media.get("live_path") or media.get("media_root") or self.media_root)
             stage_value = media.get("staging_path")
