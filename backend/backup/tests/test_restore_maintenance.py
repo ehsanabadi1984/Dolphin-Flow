@@ -196,6 +196,18 @@ class RestoreMaintenanceGateTests(SimpleTestCase):
 
         task.run.assert_not_called()
 
+    def test_worker_task_holds_drain_lease_until_after_return(self):
+        task = RestoreMaintenanceAwareTask()
+        task.bind(Celery("restore-drain-tests"))
+        task.before_start("active-task", (), {})
+
+        with self.assertRaises(RestoreMaintenanceError):
+            RestoreDrainLock.acquire(exclusive=True, timeout=0)
+
+        task.after_return("SUCCESS", "done", "active-task", (), {}, None)
+        with RestoreDrainLock.acquire(exclusive=True, timeout=0):
+            self.assertTrue(True)
+
     def test_celery_tasks_run_without_gate(self):
         task = RestoreMaintenanceAwareTask()
         task.bind(Celery("restore-maintenance-tests"))
