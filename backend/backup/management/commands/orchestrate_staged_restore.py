@@ -186,9 +186,10 @@ class Command(BaseCommand):
                         self._health_check(health_url=health_url, timeout=timeout)
                         deactivate_maintenance(operation_id)
                         maintenance_owned = False
-                        raise CommandError(
-                            "Restore با موفقیت انجام شده، اما خطای مرحله پایانی رخ داد: " + str(exc)
-                        ) from exc
+                        self.stderr.write(self.style.WARNING(
+                            "Cutover و Health Check موفق بوده‌اند؛ فقط مرحله پایانی با خطا مواجه شد: "
+                            + str(exc)
+                        ))
                     if not active_units:
                         raise RestoreError(
                             "وضعیت سرویس‌های فعال قابل تأیید نیست؛ Maintenance برای ایمنی باقی می‌ماند."
