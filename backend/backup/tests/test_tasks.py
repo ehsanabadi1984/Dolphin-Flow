@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
@@ -69,7 +70,7 @@ class BackupTaskTests(TestCase):
                 status=Backup.Status.SUCCESS,
                 storage_path=source.name,
                 size=len(payload),
-                checksum="",
+                checksum=hashlib.sha256(payload).hexdigest(),
                 destination=Backup.Destination.NETWORK,
                 network_storage=destination,
                 network_status=Backup.NetworkStatus.PENDING,
