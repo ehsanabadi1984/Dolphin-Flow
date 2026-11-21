@@ -66,7 +66,7 @@ class RestoreJournal:
             raise RestoreError("محل Journal نباید داخل MEDIA_ROOT باشد.")
 
     @classmethod
-    def new(cls, restore_id, root=None, database=None, media=None):
+    def new(cls, restore_id, root=None, database=None, media=None, restore=None):
         operation_id = secrets.token_hex(16)
         journal = cls(operation_id, root=root)
         now = _utc_now()
@@ -79,6 +79,7 @@ class RestoreJournal:
             "updated_at": now,
             "database": deepcopy(database or {}),
             "media": deepcopy(media or {}),
+            "restore": deepcopy(restore or {}),
             "error": "",
         }
         journal._validate(payload)
@@ -99,6 +100,8 @@ class RestoreJournal:
         for key in ("database", "media"):
             if not isinstance(payload.get(key), dict):
                 raise RestoreError(f"بخش {key} در Journal معتبر نیست.")
+        if "restore" in payload and not isinstance(payload["restore"], dict):
+            raise RestoreError("بخش restore در Journal معتبر نیست.")
         if not isinstance(payload.get("error", ""), str):
             raise RestoreError("شرح خطای Journal معتبر نیست.")
         return payload
@@ -168,7 +171,7 @@ class RestoreJournal:
                 os.close(descriptor)
         return deepcopy(self._validate(payload))
 
-    def update(self, phase=None, error=None, database=None, media=None):
+    def update(self, phase=None, error=None, database=None, media=None, restore=None):
         payload = self.read()
         current = payload["phase"]
 
@@ -190,6 +193,11 @@ class RestoreJournal:
             if not isinstance(media, dict):
                 raise RestoreError("اطلاعات رسانه Journal باید یک شیء باشد.")
             payload["media"].update(deepcopy(media))
+
+        if restore is not None:
+            if not isinstance(restore, dict):
+                raise RestoreError("اطلاعات Restore در Journal باید یک شیء باشد.")
+            payload.setdefault("restore", {}).update(deepcopy(restore))
 
         if error is not None:
             payload["error"] = str(error)[:2000]
