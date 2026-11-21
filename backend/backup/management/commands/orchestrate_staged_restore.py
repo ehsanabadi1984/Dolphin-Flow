@@ -98,6 +98,8 @@ class Command(BaseCommand):
         timeout = options["health_timeout"]
         if len(set(units)) != len(units):
             raise CommandError("نام سرویس systemd تکراری است.")
+        if any(not unit or unit.startswith("-") or any(ch.isspace() for ch in unit) for unit in units):
+            raise CommandError("نام یکی از واحدهای systemd نامعتبر است.")
         if not 1 <= timeout <= 120:
             raise CommandError("--health-timeout باید بین ۱ تا ۱۲۰ باشد.")
 
@@ -166,6 +168,10 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR(f"Restore ناموفق بود: {exc}"))
             if maintenance_owned:
                 try:
+                    if not active_units:
+                        raise RestoreError(
+                            "وضعیت سرویس‌های فعال قابل تأیید نیست؛ Maintenance برای ایمنی باقی می‌ماند."
+                        )
                     # Re-stop any units that may have been started before a health failure.
                     if active_units:
                         currently_active = self._active_units(units)
