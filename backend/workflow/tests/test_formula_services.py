@@ -170,3 +170,19 @@ class FormulaServiceTests(SimpleTestCase):
     def test_result_rounding(self):
         result = FormulaService.format_result(Decimal("10.125"), 2)
         self.assertEqual(result, "10.13")
+
+    def test_scientific_decimal_values_remain_calculable(self):
+        cases = [
+            (Decimal("0E-12"), Decimal("0")),
+            (Decimal("1E-12"), Decimal("1E-12")),
+            (Decimal("-0E-12"), Decimal("0")),
+            ("1.25E+3", Decimal("1250")),
+            ("1.5e-6", Decimal("0.0000015")),
+        ]
+
+        for value, expected in cases:
+            with self.subTest(value=value):
+                self.assertEqual(
+                    FormulaService._to_decimal(value),
+                    expected,
+                )

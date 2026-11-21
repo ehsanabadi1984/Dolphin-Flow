@@ -5,7 +5,9 @@ _DIGIT_TRANSLATION = str.maketrans(
     "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
     "01234567890123456789",
 )
-_NUMBER_PATTERN = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$")
+_NUMBER_PATTERN = re.compile(
+    r"^[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$"
+)
 _GROUPED_INTEGER_PATTERN = re.compile(r"^\d{1,3}(?:,\d{3})+$")
 
 
