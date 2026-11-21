@@ -70,6 +70,11 @@
     color: #92400e;
 }
 
+.df-restore-badge-prepared {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
 .df-restore-badge-success {
     background: #dcfce7;
     color: #15803d;
@@ -191,7 +196,11 @@
 
     {% if has_active_restore %}
         <p class="df-restore-note">
-            یک بازیابی در حال اجراست؛ صفحه به‌صورت خودکار به‌روزرسانی می‌شود.
+            {% if restores.0.status == "PREPARED" %}
+                بازیابی آماده انتقال است؛ برای نهایی‌شدن باید مرحله Cutover با توقف کنترل‌شده سرویس‌ها اجرا شود.
+            {% else %}
+                یک بازیابی در حال اجراست؛ صفحه به‌صورت خودکار به‌روزرسانی می‌شود.
+            {% endif %}
         </p>
     {% endif %}
 
