@@ -1,5 +1,13 @@
+import re
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
+from django.test import override_settings
+
+from backup.restore_journal import RestoreJournal
+from backup.restore_maintenance import activate_maintenance, deactivate_maintenance
 from backup.restore_services import RestoreError
 from backup.staged_restore_recovery import StagedRestoreRecovery
 
@@ -38,3 +46,126 @@ class StagedRestoreRecoveryClassificationTests(TestCase):
             StagedRestoreRecovery._classify_resource(observed, "database"),
             "NEW_PROMOTED",
         )
+
+
+class _FakeCursor:
+    def __init__(self, databases):
+        self.databases = databases
+        self.row = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def execute(self, sql, params=None):
+        if sql.startswith("SELECT 1 FROM pg_database"):
+            self.row = (1,) if params[0] in self.databases else None
+            return
+        match = re.match(
+            r'ALTER DATABASE "([^"]+)" RENAME TO "([^"]+)"',
+            sql,
+        )
+        if not match:
+            raise AssertionError(f"Unexpected SQL: {sql}")
+        old, new = match.groups()
+        if old not in self.databases or new in self.databases:
+            raise AssertionError(f"Invalid fake database rename: {old} -> {new}")
+        self.databases.remove(old)
+        self.databases.add(new)
+
+    def fetchone(self):
+        return self.row
+
+
+class _FakeAdmin:
+    def __init__(self, databases):
+        self.databases = databases
+        self.ops = self
+
+    def quote_name(self, name):
+        return f'"{name}"'
+
+    def cursor(self):
+        return _FakeCursor(self.databases)
+
+    def close(self):
+        pass
+
+
+class StagedRestoreRecoveryRollbackTests(TestCase):
+    def test_crash_after_both_promotions_restores_previous_db_and_media(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            backup_root = root / "backups"
+            journal_root = root / "journals"
+            media_root = root / "media"
+            media_root.mkdir()
+            stage_media = root / ".media.restore-42-token"
+            previous_media = root / ".media.previous-token"
+            media_root.mkdir(exist_ok=True)
+            previous_media.mkdir()
+            (media_root / "new.txt").write_text("new", encoding="utf-8")
+            (previous_media / "old.txt").write_text("old", encoding="utf-8")
+
+            override = override_settings(
+                BACKUP_ROOT=backup_root,
+                RESTORE_JOURNAL_ROOT=journal_root,
+                MEDIA_ROOT=media_root,
+                DATABASES={
+                    "default": {
+                        "ENGINE": "django.db.backends.postgresql",
+                        "NAME": "dolphinflow",
+                        "USER": "dolphin",
+                        "PASSWORD": "test",
+                        "HOST": "127.0.0.1",
+                        "PORT": "5432",
+                        "OPTIONS": {},
+                    }
+                },
+            )
+            override.enable()
+            self.addCleanup(override.disable)
+
+            journal = RestoreJournal.new(
+                42,
+                root=journal_root,
+                database={
+                    "live_name": "dolphinflow",
+                    "previous_name": "dolphinflow_previous",
+                    "staging_name": "dolphinflow_restore_42_token",
+                    "prepared": True,
+                },
+                media={
+                    "included": True,
+                    "live_path": str(media_root),
+                    "staging_path": str(stage_media),
+                    "previous_path": str(previous_media),
+                    "prepared": True,
+                },
+            )
+            journal.update(phase="QUIESCING")
+            journal.update(phase="DATABASE_SWAPPED")
+            journal.update(phase="MEDIA_SWAPPED")
+            activate_maintenance(journal.operation_id)
+            self.addCleanup(deactivate_maintenance, journal.operation_id)
+
+            databases = {"dolphinflow", "dolphinflow_previous"}
+            admin = _FakeAdmin(databases)
+            recovery = StagedRestoreRecovery(journal)
+
+            with (
+                patch.object(recovery, "_admin", return_value=admin),
+                patch("backup.staged_restore_recovery.assert_systemd_services_stopped"),
+                patch("backup.staged_restore_recovery.assert_database_quiescent"),
+                patch("backup.staged_restore_recovery.close_restore_worker_connection"),
+            ):
+                result = recovery.rollback(service_units=["dolphinplus-daphne.service"])
+
+            self.assertEqual(result["status"], "ROLLED_BACK")
+            self.assertEqual(journal.read()["phase"], "ROLLED_BACK")
+            self.assertEqual(databases, {"dolphinflow", "dolphinflow_restore_42_token"})
+            self.assertEqual((media_root / "old.txt").read_text(encoding="utf-8"), "old")
+            self.assertEqual((stage_media / "new.txt").read_text(encoding="utf-8"), "new")
+            self.assertFalse(previous_media.exists())
