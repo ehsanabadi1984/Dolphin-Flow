@@ -78,6 +78,28 @@ class StagedMediaRestoreTests(SimpleTestCase):
             self.assertTrue(stage.is_dir())
             service.cleanup()
 
+    def test_cleanup_does_not_remove_unowned_path_when_creation_collides(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "media"
+            root.mkdir()
+            archive = Path(temp) / "media.tar.gz"
+            self._write_archive(archive, [("a.txt", b"a", "file")])
+            unowned = {}
+
+            def occupy_intended_path(path):
+                path.mkdir()
+                (path / "keep.txt").write_text("not mine")
+                unowned["path"] = path
+
+            service = StagedMediaRestore(
+                83, media_root=root, on_stage_created=occupy_intended_path
+            )
+            with self.assertRaises(FileExistsError):
+                service.prepare(archive)
+
+            self.assertEqual((unowned["path"] / "keep.txt").read_text(), "not mine")
+            self.assertIsNone(service.stage_dir)
+
     def test_prepare_rejects_path_traversal_and_cleans_stage(self):
         with TemporaryDirectory() as temp:
             root = Path(temp) / "media"
