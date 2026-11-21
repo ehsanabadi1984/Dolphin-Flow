@@ -104,6 +104,24 @@ class RestoreMaintenanceGateTests(SimpleTestCase):
         self.assertEqual(sent, [{"type": "websocket.close", "code": 1013}])
         app.assert_not_called()
 
+    def test_websocket_holds_drain_lease_for_connection_lifetime(self):
+        async def app(scope, receive, send):
+            with self.assertRaises(RestoreMaintenanceError):
+                RestoreDrainLock.acquire(exclusive=True, timeout=0)
+
+        middleware = RestoreMaintenanceASGIMiddleware(app)
+
+        async def run():
+            await middleware(
+                {"type": "websocket", "path": "/ws/"},
+                Mock(),
+                Mock(),
+            )
+
+        asyncio.run(run())
+        with RestoreDrainLock.acquire(exclusive=True, timeout=0):
+            self.assertTrue(True)
+
     def test_websocket_passes_through_without_gate(self):
         app = AsyncMock()
         middleware = RestoreMaintenanceASGIMiddleware(app)
