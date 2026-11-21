@@ -20,10 +20,11 @@ logger = logging.getLogger(__name__)
 class StagedMediaRestore:
     """Extract and validate media without modifying the live MEDIA_ROOT."""
 
-    def __init__(self, restore_id, media_root=None):
+    def __init__(self, restore_id, media_root=None, on_stage_created=None):
         self.restore_id = int(restore_id)
         self.media_root = Path(media_root or settings.MEDIA_ROOT).absolute()
         self.stage_dir = None
+        self.on_stage_created = on_stage_created
         self._prepared = False
         self.file_count = 0
         self.total_bytes = 0
@@ -41,12 +42,16 @@ class StagedMediaRestore:
 
         token = secrets.token_hex(8)
         stage = parent / f".{root.name}.restore-{self.restore_id}-{token}"
+        self.stage_dir = stage
+        # Persist the intended path before creating/extracting anything. If the
+        # worker exits immediately afterward, recovery can still locate it.
+        if self.on_stage_created is not None:
+            self.on_stage_created(stage)
         stage.mkdir(mode=0o700)
         if stage.stat().st_dev != parent.stat().st_dev:
             shutil.rmtree(stage, ignore_errors=True)
             raise RestoreError("پوشه staging رسانه روی فایل‌سیستم مناسبی ساخته نشد.")
 
-        self.stage_dir = stage
         return stage
 
     @staticmethod
@@ -72,12 +77,12 @@ class StagedMediaRestore:
 
         self.file_count = 0
         self.total_bytes = 0
-        stage = self._create_stage_directory()
         seen = set()
         file_paths = set()
         directory_paths = set()
 
         try:
+            stage = self._create_stage_directory()
             with tarfile.open(archive_path, "r:gz") as archive:
                 members = archive.getmembers()
                 for member in members:
