@@ -134,8 +134,8 @@ class Command(BaseCommand):
                 database_state = assert_database_quiescent()
 
                 self.stdout.write("۲/۶ Cutover هماهنگ دیتابیس و Media...")
-                result = StagedRestoreCutover(journal).run()
-                if result.get("status") != "COMPLETED":
+                result = StagedRestoreCutover(journal, defer_completion=True).run()
+                if result.get("status") != "VALIDATING":
                     raise RestoreError("Cutover کامل نشد.")
 
                 self.stdout.write("۳/۶ اجرای Migration...")
@@ -152,6 +152,7 @@ class Command(BaseCommand):
 
                 self.stdout.write("۶/۶ Health Check نهایی و پایان Maintenance...")
                 self._health_check(health_url=health_url, timeout=timeout)
+                journal.update(phase="COMPLETED")
                 _finalize_restore_audit(journal)
                 deactivate_maintenance(operation_id)
                 maintenance_owned = False
@@ -180,7 +181,7 @@ class Command(BaseCommand):
                     close_restore_worker_connection()
 
                     phase = journal.read()["phase"]
-                    if phase in {"DATABASE_SWAPPED", "MEDIA_SWAPPED", "COMPLETED", "ROLLBACK_REQUIRED"}:
+                    if phase in {"DATABASE_SWAPPED", "MEDIA_SWAPPED", "VALIDATING", "COMPLETED", "ROLLBACK_REQUIRED"}:
                         self.stderr.write("در حال بازگرداندن دیتابیس و Media قبلی...")
                         StagedRestoreRecovery(journal).rollback(service_units=units)
                         close_restore_worker_connection()
