@@ -18,6 +18,17 @@ _OPERATION_FILE_RE = re.compile(r"^[a-f0-9]{32}\.json$")
 _TERMINAL_PHASES = {"COMPLETED", "ROLLED_BACK"}
 
 
+def _is_fully_prepared(payload):
+    """A PREPARED phase is final only after every included resource is ready."""
+    database = payload["database"]
+    media = payload["media"]
+    return (
+        payload["phase"] == "PREPARED"
+        and database.get("prepared") is True
+        and (not media.get("included") or media.get("prepared") is True)
+    )
+
+
 def inspect_restore_journals(root=None):
     """Return a deterministic, read-only inventory of journal files."""
     configured_root = root or getattr(
@@ -70,6 +81,8 @@ def inspect_restore_journals(root=None):
             continue
 
         phase = payload["phase"]
+        fully_prepared = _is_fully_prepared(payload)
+        terminal = phase in _TERMINAL_PHASES
         inventory.append({
             "operation_id": operation_id,
             "restore_id": payload["restore_id"],
@@ -78,8 +91,13 @@ def inspect_restore_journals(root=None):
             "database": payload["database"],
             "media": payload["media"],
             "error": payload["error"],
-            "status": "TERMINAL" if phase in _TERMINAL_PHASES else "INTERRUPTED",
-            "recovery_required": phase not in _TERMINAL_PHASES,
+            "status": (
+                "TERMINAL" if terminal
+                else "PREPARED" if fully_prepared
+                else "INTERRUPTED"
+            ),
+            "recovery_required": not (terminal or fully_prepared),
+            "blocks_new_restore": not terminal,
         })
 
     return inventory
