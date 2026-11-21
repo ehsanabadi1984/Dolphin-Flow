@@ -151,6 +151,8 @@ class StagedRestorePreparationService(RestoreService):
                 database={"prepared": True},
                 media=media_info,
             )
+            self.restore.status = self.restore.Status.PREPARED
+            self.restore.save(update_fields=["status", "updated_at"])
             self._prepared = True
             logger.info(
                 "Restore #%s prepared in staging database %s; no cutover performed",
