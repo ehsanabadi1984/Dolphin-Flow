@@ -1,7 +1,7 @@
 import asyncio
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 from celery.exceptions import Ignore
 from django.http import HttpResponse
@@ -103,7 +103,7 @@ class RestoreMaintenanceGateTests(SimpleTestCase):
         app.assert_not_called()
 
     def test_websocket_passes_through_without_gate(self):
-        app = Mock()
+        app = AsyncMock()
         middleware = RestoreMaintenanceASGIMiddleware(app)
 
         async def run():
