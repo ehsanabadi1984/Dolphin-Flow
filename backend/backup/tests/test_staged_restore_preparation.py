@@ -15,6 +15,15 @@ class StagedRestorePreparationTests(TestCase):
         self.restore.pk = 456
         self.restore.status = Restore.Status.QUEUED
         self.restore.Status = Restore.Status
+        # Keep metadata fields realistic: MagicMock values are not JSON serializable
+        # when the preparation service persists the restore audit snapshot.
+        self.restore.archive_filename = "source.dfbak"
+        self.restore.product_version = "1.0.0"
+        self.restore.database_engine = "postgresql"
+        self.restore.database_backup_format = "custom"
+        self.restore.includes_media = True
+        self.restore.started_at = None
+        self.restore.requested_by_username = "restore-user"
 
         self.service = StagedRestorePreparationService(self.restore)
         self.service._claim_slot = mock.Mock(return_value=True)
