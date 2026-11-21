@@ -81,7 +81,7 @@ class StagedDatabaseRestoreTests(SimpleTestCase):
         executor = executor_class.return_value
         executor.loader.graph.leaf_nodes.return_value = [("accounts", "0001_initial")]
 
-        loader_class.return_value.detect_conflicts.return_value = {}\n\n        service.apply_migrations()
+\n        service.apply_migrations()
 
         executor_class.assert_called_once_with(stage_connection)
         executor.migrate.assert_called_once_with(
