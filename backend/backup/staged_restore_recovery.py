@@ -132,7 +132,7 @@ class StagedRestoreRecovery:
 
     def rollback(self, *, service_units):
         payload = self.journal.read()
-        if payload["phase"] in {"PREPARED", "COMPLETED", "ROLLED_BACK"}:
+        if payload["phase"] in {"PREPARED", "ROLLED_BACK"}:
             raise RestoreError("این مرحله از عملیات نیاز به Crash Recovery Cutover ندارد.")
         state = read_maintenance_state()
         if state is None or state.get("operation_id") != self.journal.operation_id:
