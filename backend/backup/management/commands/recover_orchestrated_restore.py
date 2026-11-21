@@ -1,7 +1,5 @@
 """Resume a crashed restore orchestrator using its durable service metadata."""
 import subprocess
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 from django.conf import settings
@@ -25,8 +23,6 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--operation-id", required=True)
-        parser.add_argument("--health-url", default="")
-        parser.add_argument("--health-timeout", type=int, default=15)
 
     @staticmethod
     def _systemctl(action, unit):
@@ -60,7 +56,7 @@ class Command(BaseCommand):
         return active
 
     @staticmethod
-    def _health(health_url, timeout):
+    def _health():
         call_command("check", verbosity=0)
         connections["default"].close()
         with connections["default"].cursor() as cursor:
@@ -69,23 +65,9 @@ class Command(BaseCommand):
                 raise RestoreError("آزمون دیتابیس ناموفق بود.")
         if not Path(settings.MEDIA_ROOT).is_dir():
             raise RestoreError("MEDIA_ROOT در دسترس نیست.")
-        if health_url:
-            try:
-                request = urllib.request.Request(
-                    health_url, headers={"User-Agent": "Dolphin-Flow-Restore-Recovery"}
-                )
-                with urllib.request.urlopen(request, timeout=timeout) as response:
-                    if not 200 <= response.status < 300:
-                        raise RestoreError(f"Health URL با کد {response.status} پاسخ داد.")
-            except (OSError, urllib.error.URLError) as exc:
-                raise RestoreError(f"Health Check HTTP ناموفق بود: {exc}") from exc
 
     def handle(self, *args, **options):
         operation_id = options["operation_id"]
-        timeout = options["health_timeout"]
-        if not 1 <= timeout <= 120:
-            raise CommandError("--health-timeout باید بین ۱ تا ۱۲۰ باشد.")
-
         root = getattr(settings, "RESTORE_JOURNAL_ROOT", Path(settings.BACKUP_ROOT) / ".restore-journal")
         journal = RestoreJournal(operation_id, root=root)
         try:
@@ -135,7 +117,7 @@ class Command(BaseCommand):
                     self._systemctl("start", unit)
                 if set(self._active_units(previously_active)) != set(previously_active):
                     raise RestoreError("راه‌اندازی مجدد همه سرویس‌ها تأیید نشد.")
-                self._health(options["health_url"], timeout)
+                self._health()
 
                 if phase == "COMPLETED":
                     try:
