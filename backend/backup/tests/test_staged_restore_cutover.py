@@ -36,8 +36,17 @@ class StagedRestoreCutoverTests(SimpleTestCase):
     ):
         with TemporaryDirectory() as temp:
             journal, media_root = self._journal(temp)
-            database_cls.return_value.swap.return_value = {"live_database": "dolphinflow"}
-            media_cls.return_value.swap.return_value = {"live_path": str(media_root)}
+            def successful_database_swap():
+                journal.update(phase="QUIESCING")
+                journal.update(phase="DATABASE_SWAPPED")
+                return {"live_database": "dolphinflow"}
+
+            def successful_media_swap():
+                journal.update(phase="MEDIA_SWAPPED")
+                return {"live_path": str(media_root)}
+
+            database_cls.return_value.swap.side_effect = successful_database_swap
+            media_cls.return_value.swap.side_effect = successful_media_swap
 
             result = StagedRestoreCutover(journal, media_root=media_root).run()
 
