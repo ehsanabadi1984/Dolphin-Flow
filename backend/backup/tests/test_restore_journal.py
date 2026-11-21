@@ -114,6 +114,19 @@ class RestoreJournalTests(SimpleTestCase):
             with self.assertRaises(RestoreError):
                 journal.read()
 
+
+    def test_read_rejects_symbolic_link_to_external_file(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "journal"
+            root.mkdir()
+            external = Path(temp) / "external.json"
+            external.write_text("{}", encoding="utf-8")
+            operation_id = "b" * 32
+            (root / f"{operation_id}.json").symlink_to(external)
+
+            with self.assertRaises(RestoreError):
+                RestoreJournal(operation_id, root=root).read()
+
     def test_delete_removes_only_its_journal(self):
         with TemporaryDirectory() as temp:
             root = Path(temp) / "journal"
