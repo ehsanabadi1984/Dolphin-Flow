@@ -24,6 +24,7 @@ class StagedMediaRestore:
         self.restore_id = int(restore_id)
         self.media_root = Path(media_root or settings.MEDIA_ROOT).absolute()
         self.stage_dir = None
+        self._stage_created = False
         self.on_stage_created = on_stage_created
         self._prepared = False
         self.file_count = 0
@@ -48,8 +49,11 @@ class StagedMediaRestore:
         if self.on_stage_created is not None:
             self.on_stage_created(stage)
         stage.mkdir(mode=0o700)
+        self._stage_created = True
         if stage.stat().st_dev != parent.stat().st_dev:
             shutil.rmtree(stage, ignore_errors=True)
+            self._stage_created = False
+            self.stage_dir = None
             raise RestoreError("پوشه staging رسانه روی فایل‌سیستم مناسبی ساخته نشد.")
 
         return stage
@@ -153,6 +157,9 @@ class StagedMediaRestore:
     def cleanup(self):
         """Remove only this instance's staging directory."""
         if self.stage_dir is not None:
-            shutil.rmtree(self.stage_dir, ignore_errors=True)
+            # Never remove a path unless this instance successfully created it.
+            if self._stage_created:
+                shutil.rmtree(self.stage_dir, ignore_errors=True)
             self.stage_dir = None
+        self._stage_created = False
         self._prepared = False
