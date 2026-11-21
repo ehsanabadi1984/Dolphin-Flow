@@ -27,7 +27,12 @@ class StagedRestorePreparationTests(TestCase):
             return_value=SimpleNamespace(pk=77, filename="safety.dfbak")
         )
         self.service._capture_backup_state = mock.Mock(
-            return_value={\n                "filename": "safety.dfbak",\n                "storage_path": "safety.dfbak",\n                "started_at": timezone.now(),\n                "completed_at": None,\n            }
+            return_value={
+                "filename": "safety.dfbak",
+                "storage_path": "safety.dfbak",
+                "started_at": timezone.now(),
+                "completed_at": None,
+            }
         )
         self.service._materialize = mock.Mock(
             return_value=(Path("/tmp/database.dump"), Path("/tmp/media.tar.gz"))
