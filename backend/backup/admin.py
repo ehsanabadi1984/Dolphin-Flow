@@ -276,7 +276,7 @@ class BackupAdmin(ModelAdmin):
     def _active_operation_message(self):
         if Backup.objects.filter(status__in=(Backup.Status.QUEUED, Backup.Status.RUNNING)).exists():
             return "هم‌اکنون یک پشتیبان‌گیری در حال اجراست؛ پس از اتمام آن دوباره تلاش کنید."
-        if Restore.objects.filter(status__in=(Restore.Status.QUEUED, Restore.Status.RESTORING)).exists():
+        if Restore.objects.filter(status__in=(Restore.Status.QUEUED, Restore.Status.RESTORING, Restore.Status.PREPARED)).exists():
             return "هم‌اکنون یک بازیابی در حال اجراست؛ پس از اتمام آن دوباره تلاش کنید."
         return None
 
