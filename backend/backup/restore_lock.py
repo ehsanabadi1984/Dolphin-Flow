@@ -46,13 +46,17 @@ class RestoreOperationLock:
         os.chmod(self.root, 0o700)
         flags = os.O_CREAT | os.O_RDWR
         flags |= getattr(os, "O_NOFOLLOW", 0)
+        fd = None
+        lock_acquired = False
         try:
             fd = os.open(self.path, flags, 0o600)
+            if not os.path.isfile(self.path):
+                raise RestoreError("فایل قفل Restore معتبر نیست.")
             os.fchmod(fd, 0o600)
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock_acquired = True
             except BlockingIOError as exc:
-                os.close(fd)
                 raise RestoreError(
                     "یک عملیات Restore دیگر در حال اجراست؛ عملیات جدید آغاز نشد."
                 ) from exc
@@ -73,8 +77,16 @@ class RestoreOperationLock:
             self._fd = fd
             return self
         except RestoreError:
+            if fd is not None:
+                if lock_acquired:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                os.close(fd)
             raise
         except OSError as exc:
+            if fd is not None:
+                if lock_acquired:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                os.close(fd)
             raise RestoreError("دریافت قفل Restore ناموفق بود: " + str(exc)) from exc
 
     def release(self):
