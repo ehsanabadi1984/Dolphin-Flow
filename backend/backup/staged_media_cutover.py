@@ -115,19 +115,25 @@ class StagedMediaCutover:
             self._live_moved = False
         self._fsync_directory(self.live_path.parent)
 
-    def rollback(self):
-        """Restore previous media tree; never delete the staged/new tree."""
+    def rollback(self, update_journal=True):
+        """Restore previous media tree; never delete the staged/new tree.
+
+        A coordinator can defer journal updates until all resources are rolled
+        back, avoiding a false terminal state between database and media.
+        """
         try:
             self._rollback_paths()
-            self.journal.update(
-                phase="ROLLBACK_REQUIRED",
-                media={"live_moved": False, "staging_moved": False},
-            )
+            if update_journal:
+                self.journal.update(
+                    phase="ROLLBACK_REQUIRED",
+                    media={"live_moved": False, "staging_moved": False},
+                )
         except Exception as exc:
-            try:
-                self.journal.update(phase="ROLLBACK_REQUIRED", error=str(exc))
-            except Exception:
-                pass
+            if update_journal:
+                try:
+                    self.journal.update(phase="ROLLBACK_REQUIRED", error=str(exc))
+                except Exception:
+                    pass
             if isinstance(exc, RestoreError):
                 raise
             raise RestoreError("بازگشت پوشه رسانه ناموفق بود: " + str(exc)) from exc
