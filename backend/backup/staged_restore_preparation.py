@@ -79,12 +79,33 @@ class StagedRestorePreparationService(RestoreService):
 
             database_config = settings.DATABASES["default"]
             self.database_stage = StagedDatabaseRestore(self.restore.pk)
-            self.database_stage.prepare(dump_path)
+
+            journal_safety_snapshot = dict(self._safety_snapshot)
+            for field in ("started_at", "completed_at"):
+                value = journal_safety_snapshot.get(field)
+                if value is not None:
+                    journal_safety_snapshot[field] = value.isoformat()
 
             media_info = {
                 "included": bool(self._manifest["includes_media"]),
                 "media_root": str(Path(settings.MEDIA_ROOT).absolute()),
             }
+            # Persist the intended staging database before creating it. If the
+            # worker exits mid-prepare, recovery inspection can still identify
+            # the resource that may have been left behind.
+            self.journal = RestoreJournal.new(
+                restore_id=self.restore.pk,
+                database={
+                    "original_name": database_config["NAME"],
+                    "staging_name": self.database_stage.database_name,
+                    "prepared": False,
+                    "safety_backup": journal_safety_snapshot,
+                },
+                media=media_info,
+            )
+
+            self.database_stage.prepare(dump_path)
+
             if self._manifest["includes_media"]:
                 self.media_stage = StagedMediaRestore(self.restore.pk)
                 self.media_stage.prepare(media_path)
@@ -96,20 +117,8 @@ class StagedRestorePreparationService(RestoreService):
                     }
                 )
 
-            journal_safety_snapshot = dict(self._safety_snapshot)
-            for field in ("started_at", "completed_at"):
-                value = journal_safety_snapshot.get(field)
-                if value is not None:
-                    journal_safety_snapshot[field] = value.isoformat()
-
-            self.journal = RestoreJournal.new(
-                restore_id=self.restore.pk,
-                database={
-                    "original_name": database_config["NAME"],
-                    "staging_name": self.database_stage.database_name,
-                    "prepared": True,
-                    "safety_backup": journal_safety_snapshot,
-                },
+            self.journal.update(
+                database={"prepared": True},
                 media=media_info,
             )
             self._prepared = True
