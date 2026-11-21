@@ -107,13 +107,28 @@ class StagedRestorePreparationService(RestoreService):
             self.database_stage.prepare(dump_path)
 
             if self._manifest["includes_media"]:
-                self.media_stage = StagedMediaRestore(self.restore.pk)
+                def record_media_stage_path(stage_path):
+                    media_info.update(
+                        {
+                            "staging_path": str(stage_path),
+                            "stage_created": True,
+                        }
+                    )
+                    # This callback runs before the directory is created and
+                    # before archive extraction begins.
+                    self.journal.update(media=media_info)
+
+                self.media_stage = StagedMediaRestore(
+                    self.restore.pk,
+                    on_stage_created=record_media_stage_path,
+                )
                 self.media_stage.prepare(media_path)
                 media_info.update(
                     {
                         "staging_path": str(self.media_stage.stage_dir),
                         "file_count": self.media_stage.file_count,
                         "total_bytes": self.media_stage.total_bytes,
+                        "prepared": True,
                     }
                 )
 
