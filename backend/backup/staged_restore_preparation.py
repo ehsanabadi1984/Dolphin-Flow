@@ -42,12 +42,23 @@ def recover_interrupted_restore_preparation(restore):
         )
         return {"status": "RETRY_PREPARATION", "restore_id": restore.pk}
 
-    if len(matches) != 1 or matches[0].get("status") == "INVALID":
+    active_matches = [
+        item for item in matches
+        if item.get("status") != "TERMINAL"
+    ]
+    if len(active_matches) > 1:
         raise RestoreError(
-            "وضعیت Journal آماده‌سازی مبهم است؛ منابع موقت برای جلوگیری از حذف اشتباه حفظ شدند."
+            "چند Journal غیرنهایی برای این Restore وجود دارد؛ منابع موقت حفظ شدند."
         )
-
-    item = matches[0]
+    item = (
+        active_matches[0]
+        if active_matches
+        else max(matches, key=lambda entry: entry.get("updated_at", ""))
+    )
+    if item.get("status") == "INVALID":
+        raise RestoreError(
+            "Journal آماده‌سازی معتبر نیست؛ منابع موقت برای جلوگیری از حذف اشتباه حفظ شدند."
+        )
     journal = RestoreJournal(item["operation_id"], root=root)
     payload = journal.read()
     phase = payload["phase"]
@@ -132,6 +143,8 @@ def recover_interrupted_restore_preparation(restore):
         staged_media.stage_dir = stage_path
         staged_media._stage_created = True
         staged_media.cleanup()
+        if stage_path.exists():
+            raise RestoreError("پاک‌سازی پوشه staging رسانه تأیید نشد.")
 
     journal.update(phase="ROLLED_BACK", error="Interrupted staging resources cleaned safely.")
     restore.__class__.objects.filter(
