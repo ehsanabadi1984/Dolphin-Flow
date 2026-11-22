@@ -356,10 +356,34 @@ def run_restore_cutover(self, restore_id, operation_id):
             "اجرای Restore متوقف شد و داده اصلی تغییر نکرد."
         )
 
+    Restore.objects.filter(
+        pk=restore_id,
+        status__in=(Restore.Status.PREPARED, Restore.Status.RESTORING),
+    ).update(
+        status=Restore.Status.RESTORING,
+        started_at=timezone.now(),
+        error_message="در حال توقف امن سرویس‌ها و آماده‌سازی انتقال نهایی.",
+        updated_at=timezone.now(),
+    )
     command_options = ["--operation-id", operation_id]
     for unit in service_units:
         command_options.extend(["--service-unit", unit])
-    call_command("orchestrate_staged_restore", *command_options, verbosity=1)
+    try:
+        call_command("orchestrate_staged_restore", *command_options, verbosity=1)
+    except Exception as exc:
+        # A failure before maintenance/cutover is safe to report as terminal.
+        # If maintenance is still owned, keep the operation visible for recovery.
+        if read_maintenance_state() is None and journal.read()["phase"] == "PREPARED":
+            Restore.objects.filter(
+                pk=restore_id,
+                status=Restore.Status.RESTORING,
+            ).update(
+                status=Restore.Status.FAILED,
+                error_message=("اجرای Cutover آغاز نشد: " + str(exc))[:4000],
+                completed_at=timezone.now(),
+                updated_at=timezone.now(),
+            )
+        raise
 
     final_phase = journal.read()["phase"]
     return {
