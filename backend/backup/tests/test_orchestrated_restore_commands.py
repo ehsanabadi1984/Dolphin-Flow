@@ -214,3 +214,37 @@ class RecoverOrchestratedRestoreCommandTests(TestCase):
 
             self.assertEqual(read_maintenance_state()["operation_id"], journal.operation_id)
             systemctl.assert_any_call("stop", unit)
+
+    @mock.patch("backup.management.commands.recover_orchestrated_restore.call_command")
+    @mock.patch("backup.management.commands.recover_orchestrated_restore.Command._health")
+    @mock.patch("backup.management.commands.recover_orchestrated_restore.Command._active_units")
+    @mock.patch("backup.management.commands.recover_orchestrated_restore.Command._systemctl")
+    @mock.patch("backup.management.commands.recover_orchestrated_restore.assert_systemd_services_stopped")
+    @mock.patch("backup.management.commands.recover_orchestrated_restore.close_restore_worker_connection")
+    @mock.patch("backup.management.commands.recover_orchestrated_restore.StagedRestoreRecovery")
+    def test_crash_after_cutover_started_rolls_back_before_restarting_services(
+        self, recovery_class, close_connection, services_stopped, systemctl,
+        active_units, health, management_call
+    ):
+        with TemporaryDirectory() as temp:
+            restore, journal, unit = self._environment(temp, phase="QUIESCING")
+            active_units.return_value = [unit]
+
+            def rollback(**kwargs):
+                journal.update(phase="ROLLBACK_REQUIRED")
+                journal.update(phase="ROLLED_BACK")
+
+            recovery_class.return_value.rollback.side_effect = rollback
+
+            call_command("recover_orchestrated_restore", operation_id=journal.operation_id)
+
+            recovery_class.return_value.rollback.assert_called_once_with(
+                service_units=[unit],
+                lock_held=True,
+            )
+            management_call.assert_called_once_with("migrate", interactive=False, verbosity=0)
+            systemctl.assert_any_call("start", unit)
+            self.assertIsNone(read_maintenance_state())
+            self.assertEqual(journal.read()["phase"], "ROLLED_BACK")
+            restore.refresh_from_db()
+            self.assertEqual(restore.status, Restore.Status.FAILED)
