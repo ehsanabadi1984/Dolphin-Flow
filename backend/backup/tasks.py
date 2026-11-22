@@ -17,6 +17,9 @@ from .models import (
 )
 from .restore_services import RestoreError, RestoreService
 from .staged_restore_preparation import StagedRestorePreparationService
+from .restore_journal import RestoreJournal
+from .restore_maintenance import read_maintenance_state
+from .restore_recovery import inspect_restore_journals
 from .services import BackupService, sanitize_message
 from .storage import BackupStorageError, LocalBackupStorage, NetworkBackupStorage
 
@@ -289,9 +292,86 @@ def run_backup_retention():
     }
 
 
+def _prepared_journal_for_restore(restore_id):
+    matches = [
+        item for item in inspect_restore_journals()
+        if item.get("restore_id") == restore_id
+        and item.get("phase") == "PREPARED"
+        and item.get("status") == "PREPARED"
+    ]
+    if len(matches) != 1:
+        raise RestoreError(
+            "برای درخواست بازیابی دقیقاً یک Journal آماده و معتبر پیدا نشد."
+        )
+    return matches[0]
+
+
+@shared_task(bind=True, acks_late=True, reject_on_worker_lost=True)
+def run_restore_cutover(self, restore_id, operation_id):
+    """Run destructive cutover on the dedicated restore-only Celery worker.
+
+    This worker is intentionally not among RESTORE_SERVICE_UNITS, so stopping
+    the normal web and Celery services cannot terminate the restore itself.
+    If the worker is killed, late acknowledgement allows the durable journal
+    to drive recovery when the dedicated worker is restarted.
+    """
+    root = getattr(
+        settings,
+        "RESTORE_JOURNAL_ROOT",
+        Path(settings.BACKUP_ROOT) / ".restore-journal",
+    )
+    journal = RestoreJournal(operation_id, root=root)
+    payload = journal.read()
+    if payload["restore_id"] != int(restore_id):
+        raise RestoreError("شناسه Restore با Journal عملیات مطابقت ندارد.")
+
+    phase = payload["phase"]
+    if phase in {"COMPLETED", "ROLLED_BACK"}:
+        return {"status": phase, "restore_id": restore_id, "operation_id": operation_id}
+
+    # If the worker died after the maintenance gate was raised, recover the
+    # interrupted attempt first. PREPARED is then safe to orchestrate again;
+    # any phase after cutover began is rolled back by the recovery command.
+    if read_maintenance_state() is not None:
+        call_command(
+            "recover_orchestrated_restore",
+            operation_id=operation_id,
+            verbosity=0,
+        )
+        payload = journal.read()
+        phase = payload["phase"]
+        if phase in {"COMPLETED", "ROLLED_BACK"}:
+            return {"status": phase, "restore_id": restore_id, "operation_id": operation_id}
+
+    if phase != "PREPARED":
+        raise RestoreError(
+            "عملیات Restore در وضعیت قابل شروع مجدد نیست؛ "
+            f"مرحله Journal: {phase}."
+        )
+
+    service_units = list(getattr(settings, "RESTORE_SERVICE_UNITS", []) or [])
+    if not service_units:
+        raise RestoreError(
+            "سرویس‌های برنامه برای Cutover پیکربندی نشده‌اند؛ "
+            "اجرای Restore متوقف شد و داده اصلی تغییر نکرد."
+        )
+
+    command_options = ["--operation-id", operation_id]
+    for unit in service_units:
+        command_options.extend(["--service-unit", unit])
+    call_command("orchestrate_staged_restore", *command_options, verbosity=1)
+
+    final_phase = journal.read()["phase"]
+    return {
+        "status": final_phase,
+        "restore_id": restore_id,
+        "operation_id": operation_id,
+    }
+
+
 @shared_task
 def run_restore(restore_id):
-    """Execute the restore pipeline for the given Restore record."""
+    """Prepare the archive, then hand cutover to the dedicated worker queue."""
     try:
         restore = Restore.objects.get(pk=restore_id)
     except Restore.DoesNotExist:
@@ -301,6 +381,30 @@ def run_restore(restore_id):
         )
         return {"status": "missing", "restore_id": restore_id}
 
-    # Celery performs preparation only. The destructive cutover is a separate
-    # management-process operation after maintenance and service quiescence.
-    return StagedRestorePreparationService(restore).run()
+    if restore.status == Restore.Status.PREPARED:
+        prepared = {
+            "status": "PREPARED",
+            "restore_id": restore.pk,
+            "operation_id": _prepared_journal_for_restore(restore.pk)["operation_id"],
+        }
+    elif restore.status == Restore.Status.QUEUED:
+        prepared = StagedRestorePreparationService(restore).run()
+    else:
+        return {"status": restore.status, "restore_id": restore_id}
+
+    if prepared.get("status") != "PREPARED" or not prepared.get("operation_id"):
+        return prepared
+
+    # Stable task ID makes dispatch idempotent across a worker crash between
+    # preparation and publishing the cutover message.
+    operation_id = prepared["operation_id"]
+    run_restore_cutover.apply_async(
+        args=(restore.pk, operation_id),
+        queue="restore_cutover",
+        task_id=f"restore-cutover-{operation_id}",
+    )
+    return {
+        "status": "CUTOVER_QUEUED",
+        "restore_id": restore.pk,
+        "operation_id": operation_id,
+    }
