@@ -5,6 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from celery import Task, shared_task
+from django.conf import settings
 from django.core.management import call_command
 from django.db import connection, transaction
 from django.utils import timezone
@@ -17,7 +18,10 @@ from .models import (
     generate_backup_filename,
 )
 from .restore_services import RestoreError, RestoreService
-from .staged_restore_preparation import StagedRestorePreparationService
+from .staged_restore_preparation import (
+    StagedRestorePreparationService,
+    recover_interrupted_restore_preparation,
+)
 from .restore_journal import RestoreJournal
 from .restore_maintenance import read_maintenance_state
 from .restore_recovery import inspect_restore_journals
