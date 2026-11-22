@@ -1,0 +1,10 @@
+# Install as /etc/sudoers.d/dolphinplus-restore (mode 0440).
+# The dedicated restore worker runs as ehsan and may only stop/start the
+# application services during the guarded restore workflow. Do not grant
+# control over the restore-worker unit itself.
+ehsan ALL=(root) NOPASSWD: /usr/bin/systemctl stop dolphinplus-daphne
+ehsan ALL=(root) NOPASSWD: /usr/bin/systemctl start dolphinplus-daphne
+ehsan ALL=(root) NOPASSWD: /usr/bin/systemctl stop dolphinplus-celery
+ehsan ALL=(root) NOPASSWD: /usr/bin/systemctl start dolphinplus-celery
+ehsan ALL=(root) NOPASSWD: /usr/bin/systemctl stop dolphinplus-celery-beat
+ehsan ALL=(root) NOPASSWD: /usr/bin/systemctl start dolphinplus-celery-beat
