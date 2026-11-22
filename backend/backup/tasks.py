@@ -441,7 +441,16 @@ def run_restore(restore_id):
     elif restore.status == Restore.Status.QUEUED:
         prepared = StagedRestorePreparationService(restore).run()
     elif restore.status == Restore.Status.RESTORING:
-        recovered = recover_interrupted_restore_preparation(restore)
+        try:
+            recovered = recover_interrupted_restore_preparation(restore)
+        except Exception as exc:
+            Restore.objects.filter(
+                pk=restore.pk,
+                status=Restore.Status.RESTORING,
+            ).update(
+                error_message=("بازیابی خودکار مرحله آماده‌سازی متوقف شد: " + str(exc))[:4000],
+            )
+            raise
         if recovered.get("status") == "RETRY_PREPARATION":
             restore.refresh_from_db()
             prepared = StagedRestorePreparationService(restore).run()
