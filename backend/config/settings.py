@@ -164,6 +164,17 @@ PG_DUMP_PATH = env("PG_DUMP_PATH", default="pg_dump")
 # pg_restore binary; override with an absolute path when it is not on PATH.
 PG_RESTORE_PATH = env("PG_RESTORE_PATH", default="pg_restore")
 
+# Services stopped during the destructive cutover. The dedicated restore
+# worker must NOT be listed here; it owns the operation while these stop.
+RESTORE_SERVICE_UNITS = env.list(
+    "RESTORE_SERVICE_UNITS",
+    default=[
+        "dolphinplus-daphne",
+        "dolphinplus-celery",
+        "dolphinplus-celery-beat",
+    ],
+)
+
 # PARKED: Optional n8n notification integration. Keep disabled until approved
 # for inclusion in the main product.
 # N8N_NOTIFICATION_WEBHOOK_URL = env(
