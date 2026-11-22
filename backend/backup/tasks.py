@@ -416,6 +416,7 @@ def run_restore_cutover(self, restore_id, operation_id):
         raise
 
 
+@shared_task(acks_late=True, reject_on_worker_lost=True)
 def run_restore(restore_id):
     """Prepare the archive, then hand cutover to the dedicated worker queue."""
     try:
@@ -435,10 +436,17 @@ def run_restore(restore_id):
         }
     elif restore.status == Restore.Status.QUEUED:
         prepared = StagedRestorePreparationService(restore).run()
+    elif restore.status == Restore.Status.RESTORING:
+        recovered = recover_interrupted_restore_preparation(restore)
+        if recovered.get("status") == "RETRY_PREPARATION":
+            restore.refresh_from_db()
+            prepared = StagedRestorePreparationService(restore).run()
+        else:
+            prepared = recovered
     else:
         return {"status": restore.status, "restore_id": restore_id}
 
-    if prepared.get("status") != "PREPARED" or not prepared.get("operation_id"):
+    if prepared.get("status") not in {"PREPARED", "CUTOVER_PENDING"} or not prepared.get("operation_id"):
         return prepared
 
     # Stable task ID makes dispatch idempotent across a worker crash between
