@@ -154,6 +154,7 @@ class RestoreModelTests(TestCase):
             {
                 "QUEUED": "در صف",
                 "RESTORING": "در حال بازیابی",
+                "PREPARED": "آماده انتقال (Cutover)",
                 "SUCCESS": "موفق",
                 "FAILED": "ناموفق",
             },
