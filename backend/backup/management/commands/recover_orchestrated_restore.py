@@ -28,8 +28,8 @@ class Command(BaseCommand):
     def _systemctl(action, unit):
         try:
             result = subprocess.run(
-                ["systemctl", action, unit], capture_output=True,
-                text=True, check=False, timeout=60,
+                ["sudo", "-n", "/usr/bin/systemctl", action, unit],
+                capture_output=True, text=True, check=False, timeout=60,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise RestoreError(f"systemctl {action} برای {unit} ناموفق بود: {exc}") from exc
