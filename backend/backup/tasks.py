@@ -351,7 +351,7 @@ def run_restore_cutover(self, restore_id, operation_id):
         # If the worker died after the maintenance gate was raised, recover the
         # interrupted attempt first. PREPARED is then safe to orchestrate again;
         # any phase after cutover began is rolled back by the recovery command.
-        if read_maintenance_state() is not None:
+        if read_maintenance_state() is not None and phase != "PREPARED":
             call_command(
                 "recover_orchestrated_restore",
                 operation_id=operation_id,
