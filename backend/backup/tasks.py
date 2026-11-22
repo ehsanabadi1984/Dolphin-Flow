@@ -4,7 +4,7 @@ import shutil
 from datetime import timedelta
 from pathlib import Path
 
-from celery import shared_task
+from celery import Task, shared_task
 from django.core.management import call_command
 from django.db import connection, transaction
 from django.utils import timezone
@@ -25,6 +25,17 @@ from .services import BackupService, sanitize_message
 from .storage import BackupStorageError, LocalBackupStorage, NetworkBackupStorage
 
 logger = logging.getLogger(__name__)
+
+
+class RestoreCutoverTask(Task):
+    """Dedicated recovery task must remain runnable while maintenance is active.
+
+    Normal application tasks use RestoreMaintenanceAwareTask and are rejected
+    during maintenance. The isolated restore queue is the sole intentional
+    exception so it can resume the journal after a worker restart.
+    """
+
+    abstract = True
 
 
 class MigratingRestoreService(RestoreService):
@@ -307,7 +318,13 @@ def _prepared_journal_for_restore(restore_id):
     return matches[0]
 
 
-@shared_task(bind=True, acks_late=True, reject_on_worker_lost=True, max_retries=None)
+@shared_task(
+    bind=True,
+    base=RestoreCutoverTask,
+    acks_late=True,
+    reject_on_worker_lost=True,
+    max_retries=None,
+)
 def run_restore_cutover(self, restore_id, operation_id):
     """Run destructive cutover on the dedicated restore-only Celery worker.
 
