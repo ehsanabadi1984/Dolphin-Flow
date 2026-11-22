@@ -11,6 +11,14 @@ from backup.tasks import replicate_backup_to_network, run_backup, run_restore
 
 
 class BackupTaskTests(TestCase):
+    def test_restore_cutover_task_can_resume_during_maintenance(self):
+        from backup.restore_maintenance_tasks import RestoreMaintenanceAwareTask
+        from backup.tasks import RestoreCutoverTask
+
+        self.assertFalse(
+            issubclass(RestoreCutoverTask, RestoreMaintenanceAwareTask)
+        )
+
     def test_missing_backup_returns_missing_status(self):
         result = run_backup(999_999)
         self.assertEqual(
