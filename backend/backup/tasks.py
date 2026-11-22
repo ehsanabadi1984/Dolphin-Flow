@@ -307,7 +307,7 @@ def _prepared_journal_for_restore(restore_id):
     return matches[0]
 
 
-@shared_task(bind=True, acks_late=True, reject_on_worker_lost=True)
+@shared_task(bind=True, acks_late=True, reject_on_worker_lost=True, max_retries=None)
 def run_restore_cutover(self, restore_id, operation_id):
     """Run destructive cutover on the dedicated restore-only Celery worker.
 
@@ -330,81 +330,76 @@ def run_restore_cutover(self, restore_id, operation_id):
     if phase in {"COMPLETED", "ROLLED_BACK"}:
         return {"status": phase, "restore_id": restore_id, "operation_id": operation_id}
 
-    # If the worker died after the maintenance gate was raised, recover the
-    # interrupted attempt first. PREPARED is then safe to orchestrate again;
-    # any phase after cutover began is rolled back by the recovery command.
-    if read_maintenance_state() is not None:
-        call_command(
-            "recover_orchestrated_restore",
-            operation_id=operation_id,
-            verbosity=0,
-        )
-        payload = journal.read()
-        phase = payload["phase"]
-        if phase in {"COMPLETED", "ROLLED_BACK"}:
-            return {"status": phase, "restore_id": restore_id, "operation_id": operation_id}
+    try:
+        # If the worker died after the maintenance gate was raised, recover the
+        # interrupted attempt first. PREPARED is then safe to orchestrate again;
+        # any phase after cutover began is rolled back by the recovery command.
+        if read_maintenance_state() is not None:
+            call_command(
+                "recover_orchestrated_restore",
+                operation_id=operation_id,
+                verbosity=0,
+            )
+            payload = journal.read()
+            phase = payload["phase"]
+            if phase in {"COMPLETED", "ROLLED_BACK"}:
+                return {"status": phase, "restore_id": restore_id, "operation_id": operation_id}
 
-    if phase != "PREPARED":
-        raise RestoreError(
-            "عملیات Restore در وضعیت قابل شروع مجدد نیست؛ "
-            f"مرحله Journal: {phase}."
-        )
+        if phase != "PREPARED":
+            raise RestoreError(
+                "عملیات Restore در وضعیت قابل شروع مجدد نیست؛ "
+                f"مرحله Journal: {phase}."
+            )
 
-    service_units = list(getattr(settings, "RESTORE_SERVICE_UNITS", []) or [])
-    if not service_units:
-        message = (
-            "سرویس‌های برنامه برای Cutover پیکربندی نشده‌اند؛ "
-            "داده اصلی تغییر نکرد."
-        )
+        service_units = list(getattr(settings, "RESTORE_SERVICE_UNITS", []) or [])
+        if not service_units:
+            raise RestoreError(
+                "سرویس‌های برنامه برای Cutover پیکربندی نشده‌اند؛ "
+                "داده اصلی تغییر نکرد."
+            )
+
         Restore.objects.filter(
             pk=restore_id,
-            status=Restore.Status.PREPARED,
+            status__in=(Restore.Status.PREPARED, Restore.Status.RESTORING),
         ).update(
-            status=Restore.Status.FAILED,
-            error_message=message,
-            completed_at=timezone.now(),
+            status=Restore.Status.RESTORING,
+            started_at=timezone.now(),
+            error_message="در حال توقف امن سرویس‌ها و آماده‌سازی انتقال نهایی.",
             updated_at=timezone.now(),
         )
-        raise RestoreError(message)
-
-    Restore.objects.filter(
-        pk=restore_id,
-        status__in=(Restore.Status.PREPARED, Restore.Status.RESTORING),
-    ).update(
-        status=Restore.Status.RESTORING,
-        started_at=timezone.now(),
-        error_message="در حال توقف امن سرویس‌ها و آماده‌سازی انتقال نهایی.",
-        updated_at=timezone.now(),
-    )
-    command_options = ["--operation-id", operation_id]
-    for unit in service_units:
-        command_options.extend(["--service-unit", unit])
-    try:
+        command_options = ["--operation-id", operation_id]
+        for unit in service_units:
+            command_options.extend(["--service-unit", unit])
         call_command("orchestrate_staged_restore", *command_options, verbosity=1)
+
+        final_phase = journal.read()["phase"]
+        return {
+            "status": final_phase,
+            "restore_id": restore_id,
+            "operation_id": operation_id,
+        }
     except Exception as exc:
-        # A failure before maintenance/cutover is safe to report as terminal.
-        # If maintenance is still owned, keep the operation visible for recovery.
-        if read_maintenance_state() is None and journal.read()["phase"] == "PREPARED":
+        # A surviving maintenance marker means the live system is deliberately
+        # gated. Retry recovery in this dedicated worker instead of leaving the
+        # operation stranded. If maintenance was safely removed and no cutover
+        # began, report a terminal preflight failure to the admin history.
+        if read_maintenance_state() is not None:
+            raise self.retry(exc=exc, countdown=30)
+
+        current_phase = journal.read()["phase"]
+        if current_phase == "PREPARED":
             Restore.objects.filter(
                 pk=restore_id,
-                status=Restore.Status.RESTORING,
+                status__in=(Restore.Status.PREPARED, Restore.Status.RESTORING),
             ).update(
                 status=Restore.Status.FAILED,
-                error_message=("اجرای Cutover آغاز نشد: " + str(exc))[:4000],
+                error_message=("اجرای خودکار Restore ناموفق بود: " + str(exc))[:4000],
                 completed_at=timezone.now(),
                 updated_at=timezone.now(),
             )
         raise
 
-    final_phase = journal.read()["phase"]
-    return {
-        "status": final_phase,
-        "restore_id": restore_id,
-        "operation_id": operation_id,
-    }
 
-
-@shared_task
 def run_restore(restore_id):
     """Prepare the archive, then hand cutover to the dedicated worker queue."""
     try:
