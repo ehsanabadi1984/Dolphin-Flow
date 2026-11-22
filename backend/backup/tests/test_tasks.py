@@ -163,6 +163,30 @@ class BackupTaskTests(TestCase):
         )
         self.assertEqual(result["status"], "CUTOVER_QUEUED")
 
+    def test_interrupted_restore_preparation_is_reconciled_before_cutover_dispatch(self):
+        restore = Restore.objects.create(
+            archive_filename="DolphinFlow_Backup_interrupted.dfbak",
+            status=Restore.Status.RESTORING,
+        )
+        with mock.patch(
+            "backup.tasks.recover_interrupted_restore_preparation",
+            return_value={
+                "status": "CUTOVER_PENDING",
+                "restore_id": restore.pk,
+                "operation_id": "c" * 32,
+            },
+        ), mock.patch(
+            "backup.tasks.run_restore_cutover.apply_async"
+        ) as mocked_cutover:
+            result = run_restore(restore.pk)
+
+        mocked_cutover.assert_called_once_with(
+            args=(restore.pk, "c" * 32),
+            queue="restore_cutover",
+            task_id=f"restore-cutover-{'c' * 32}",
+        )
+        self.assertEqual(result["status"], "CUTOVER_QUEUED")
+
     def test_prepared_restore_is_dispatched_after_preparation_task_redelivery(self):
         from tempfile import TemporaryDirectory
         from pathlib import Path
