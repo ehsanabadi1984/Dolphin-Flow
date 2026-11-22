@@ -2,6 +2,7 @@ import hashlib
 import logging
 import shutil
 from datetime import timedelta
+from pathlib import Path
 
 from celery import shared_task
 from django.core.management import call_command
@@ -351,10 +352,20 @@ def run_restore_cutover(self, restore_id, operation_id):
 
     service_units = list(getattr(settings, "RESTORE_SERVICE_UNITS", []) or [])
     if not service_units:
-        raise RestoreError(
+        message = (
             "سرویس‌های برنامه برای Cutover پیکربندی نشده‌اند؛ "
-            "اجرای Restore متوقف شد و داده اصلی تغییر نکرد."
+            "داده اصلی تغییر نکرد."
         )
+        Restore.objects.filter(
+            pk=restore_id,
+            status=Restore.Status.PREPARED,
+        ).update(
+            status=Restore.Status.FAILED,
+            error_message=message,
+            completed_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        raise RestoreError(message)
 
     Restore.objects.filter(
         pk=restore_id,
