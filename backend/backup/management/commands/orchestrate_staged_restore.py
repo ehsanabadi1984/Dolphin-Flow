@@ -137,23 +137,45 @@ class Command(BaseCommand):
                     raise RestoreError("دیتابیس staging آماده نیست.")
                 if payload["media"].get("included") and not payload["media"].get("prepared"):
                     raise RestoreError("Media staging آماده نیست.")
-                if read_maintenance_state() is not None:
-                    raise RestoreError("Maintenance از قبل فعال است؛ مالکیت آن متعلق به این عملیات نیست.")
-
-                active_units = self._active_units(units)
-                if not active_units:
-                    raise RestoreError("هیچ سرویس برنامه‌ای فعال نیست؛ توقف کامل قابل اثبات نیست.")
-                journal.update(restore={
-                    "orchestrator": {
-                        "service_units": list(units),
-                        "previously_active_units": list(active_units),
-                    }
-                })
-                activate_maintenance(operation_id)
-                maintenance_owned = True
-
-                self.stdout.write("۱/۶ توقف Daphne، Celery و سرویس‌های اعلام‌شده...")
-                self._stop(active_units)
+                maintenance_state = read_maintenance_state()
+                if maintenance_state is not None:
+                    if maintenance_state.get("operation_id") != operation_id:
+                        raise RestoreError(
+                            "Maintenance فعال متعلق به عملیات دیگری است."
+                        )
+                    orchestrator_state = (
+                        payload.get("restore", {}).get("orchestrator", {})
+                    )
+                    if orchestrator_state.get("service_units") != list(units):
+                        raise RestoreError(
+                            "فهرست سرویس‌های Journal با تنظیمات فعلی مطابقت ندارد."
+                        )
+                    active_units = list(
+                        orchestrator_state.get("previously_active_units") or []
+                    )
+                    if not active_units or not set(active_units).issubset(set(units)):
+                        raise RestoreError(
+                            "فهرست سرویس‌های فعال پیش از توقف در Journal معتبر نیست."
+                        )
+                    maintenance_owned = True
+                    self.stdout.write(
+                        "ادامه عملیات دارای Maintenance؛ تکمیل توقف سرویس‌ها..."
+                    )
+                    self._stop(self._active_units(units))
+                else:
+                    active_units = self._active_units(units)
+                    if not active_units:
+                        raise RestoreError("هیچ سرویس برنامه‌ای فعال نیست؛ توقف کامل قابل اثبات نیست.")
+                    journal.update(restore={
+                        "orchestrator": {
+                            "service_units": list(units),
+                            "previously_active_units": list(active_units),
+                        }
+                    })
+                    activate_maintenance(operation_id)
+                    maintenance_owned = True
+                    self.stdout.write("۱/۶ توقف Daphne، Celery و سرویس‌های اعلام‌شده...")
+                    self._stop(active_units)
                 assert_systemd_services_stopped(units)
                 close_restore_worker_connection()
                 database_state = assert_database_quiescent()
