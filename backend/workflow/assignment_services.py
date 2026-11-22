@@ -7,24 +7,20 @@ from .models import (
     WorkflowStep,
     WorkflowStepAssignmentHistory,
     WorkflowStepExecution,
-    WorkflowPermission,
 )
 
 
 class WorkflowStepAssignmentService:
     """Resolve and persist the assignee for an individual step execution."""
 
-    ACTION_CODE = "EXECUTE"
-
     @staticmethod
     def get_eligible_assignees(*, workflow, step):
         if not workflow or not step or step.workflow_id != workflow.pk:
             return []
 
-        return WorkflowAuthorizationService.get_users_with_step_action_permission(
+        return WorkflowAuthorizationService.get_users_with_step_execute_permission(
             workflow=workflow,
             step=step,
-            action_code=WorkflowStepAssignmentService.ACTION_CODE,
         )
 
     @staticmethod

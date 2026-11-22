@@ -116,8 +116,7 @@ class WorkflowExecutionTests(TestCase):
                 workflow=self.workflow,
                 step=step,
                 user=self.user,
-                action=WorkflowPermission.Action.STEP_ACTION,
-                action_code="EXECUTE",
+                action=WorkflowPermission.Action.EXECUTE,
                 effect=WorkflowPermission.Effect.ALLOW,
             )
 
@@ -127,8 +126,7 @@ class WorkflowExecutionTests(TestCase):
                 workflow=self.workflow,
                 step=step,
                 user=self.destination_user,
-                action=WorkflowPermission.Action.STEP_ACTION,
-                action_code="EXECUTE",
+                action=WorkflowPermission.Action.EXECUTE,
                 effect=WorkflowPermission.Effect.ALLOW,
             )
 
@@ -136,6 +134,15 @@ class WorkflowExecutionTests(TestCase):
         WorkflowPermission.objects.create(
             workflow=self.workflow,
             user=self.user,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+    def grant_step_execute_permission(self, *, user, step):
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=step,
+            user=user,
             action=WorkflowPermission.Action.EXECUTE,
             effect=WorkflowPermission.Effect.ALLOW,
         )
@@ -946,8 +953,7 @@ class WorkflowExecutionTests(TestCase):
             workflow=self.workflow,
             step=self.step_one,
             user=self.user,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
+            action=WorkflowPermission.Action.EXECUTE,
         ).delete()
 
         with self.assertRaises(ValidationError):
@@ -965,10 +971,9 @@ class WorkflowExecutionTests(TestCase):
         self.grant_start_permission()
         self.step_one.assigned_to = self.user
         self.step_one.save(update_fields=["assigned_to"])
-        self.grant_step_action_permission(
+        self.grant_step_execute_permission(
             user=self.user,
             step=self.step_one,
-            action_code="EXECUTE",
         )
 
         instance = self.start_instance()
@@ -1552,10 +1557,9 @@ class WorkflowExecutionTests(TestCase):
         self.transition_two.save(update_fields=["accept_notification_policy"])
         self.step_three.assigned_to = self.destination_user
         self.step_three.save(update_fields=["assigned_to"])
-        self.grant_step_action_permission(
+        self.grant_step_execute_permission(
             user=self.destination_user,
             step=self.step_three,
-            action_code="EXECUTE",
         )
         self.grant_step_action_permission(
             user=self.destination_user,
@@ -1591,8 +1595,7 @@ class WorkflowExecutionTests(TestCase):
             workflow=self.workflow,
             step=self.step_one,
             user=self.user,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
+            action=WorkflowPermission.Action.EXECUTE,
         ).delete()
         self.grant_step_action_permission(
             user=self.destination_user,
@@ -1924,13 +1927,11 @@ class WorkflowExecutionTests(TestCase):
             workflow=self.workflow,
             step=self.step_one,
             user=self.user,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
+            action=WorkflowPermission.Action.EXECUTE,
         ).delete()
-        self.grant_step_action_permission(
+        self.grant_step_execute_permission(
             user=self.destination_user,
             step=self.step_one,
-            action_code="EXECUTE",
         )
         self.grant_step_action_permission(
             user=self.destination_user,
@@ -2030,15 +2031,13 @@ class WorkflowExecutionTests(TestCase):
             workflow=self.workflow,
             step=self.step_two,
             user=self.user,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
+            action=WorkflowPermission.Action.EXECUTE,
         ).delete()
         WorkflowPermission.objects.filter(
             workflow=self.workflow,
             step=self.step_two,
             user=self.destination_user,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
+            action=WorkflowPermission.Action.EXECUTE,
         ).delete()
 
         with self.assertRaises(ValidationError):
@@ -2321,8 +2320,7 @@ class WorkflowExecutionConcurrencyTests(TransactionTestCase):
                 workflow=self.workflow,
                 step=step,
                 user=self.user,
-                action=WorkflowPermission.Action.STEP_ACTION,
-                action_code="EXECUTE",
+                action=WorkflowPermission.Action.EXECUTE,
                 effect=WorkflowPermission.Effect.ALLOW,
             )
 

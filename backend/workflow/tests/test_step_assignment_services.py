@@ -70,8 +70,7 @@ class WorkflowStepAssignmentServiceTests(TestCase):
             workflow=self.workflow,
             step=step,
             user=user,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
+            action=WorkflowPermission.Action.EXECUTE,
             effect=effect,
         )
 
@@ -94,13 +93,35 @@ class WorkflowStepAssignmentServiceTests(TestCase):
             {self.candidate_a.pk, self.candidate_b.pk},
         )
 
+    def test_candidates_ignore_step_action_execute_subtype(self):
+        WorkflowPermission.objects.filter(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.candidate_a,
+            action=WorkflowPermission.Action.EXECUTE,
+        ).delete()
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.candidate_a,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="EXECUTE",
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        users = WorkflowStepAssignmentService.get_eligible_assignees(
+            workflow=self.workflow,
+            step=self.step,
+        )
+        self.assertNotIn(self.candidate_a.pk, {user.pk for user in users})
+        self.assertIn(self.candidate_b.pk, {user.pk for user in users})
+
     def test_candidates_exclude_user_denied_despite_role_allow(self):
         WorkflowPermission.objects.create(
             workflow=self.workflow,
             step=self.step,
             role=WorkflowMembership.Role.EXECUTOR,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
+            action=WorkflowPermission.Action.EXECUTE,
             effect=WorkflowPermission.Effect.ALLOW,
         )
         self.grant_execute(
