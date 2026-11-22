@@ -363,7 +363,6 @@ def run_restore_cutover(self, restore_id, operation_id):
             status__in=(Restore.Status.PREPARED, Restore.Status.RESTORING),
         ).update(
             status=Restore.Status.RESTORING,
-            started_at=timezone.now(),
             error_message="در حال توقف امن سرویس‌ها و آماده‌سازی انتقال نهایی.",
             updated_at=timezone.now(),
         )
