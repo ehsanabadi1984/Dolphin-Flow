@@ -140,9 +140,55 @@ class BackupTaskTests(TestCase):
             return_value={
                 "status": "PREPARED",
                 "restore_id": restore.pk,
+                "operation_id": "a" * 32,
             },
-        ) as mocked_run:
+        ) as mocked_run, mock.patch(
+            "backup.tasks.run_restore_cutover.apply_async"
+        ) as mocked_cutover:
             result = run_restore(restore.pk)
 
         mocked_run.assert_called_once_with()
-        self.assertEqual(result["status"], "PREPARED")
+        mocked_cutover.assert_called_once_with(
+            args=(restore.pk, "a" * 32),
+            queue="restore_cutover",
+            task_id=f"restore-cutover-{'a' * 32}",
+        )
+        self.assertEqual(result["status"], "CUTOVER_QUEUED")
+
+    def test_prepared_restore_is_dispatched_after_preparation_task_redelivery(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+
+        from backup.restore_journal import RestoreJournal
+
+        restore = Restore.objects.create(
+            archive_filename="DolphinFlow_Backup_prepared.dfbak",
+            status=Restore.Status.PREPARED,
+        )
+        with TemporaryDirectory() as temp:
+            journal_root = Path(temp) / ".restore-journal"
+            RestoreJournal.new(
+                restore.pk,
+                root=journal_root,
+                database={"prepared": True},
+                media={"included": False},
+            )
+            with mock.patch(
+                "backup.tasks.inspect_restore_journals",
+                return_value=[{
+                    "restore_id": restore.pk,
+                    "operation_id": "b" * 32,
+                    "phase": "PREPARED",
+                    "status": "PREPARED",
+                }],
+            ), mock.patch(
+                "backup.tasks.run_restore_cutover.apply_async"
+            ) as mocked_cutover:
+                result = run_restore(restore.pk)
+
+        mocked_cutover.assert_called_once_with(
+            args=(restore.pk, "b" * 32),
+            queue="restore_cutover",
+            task_id=f"restore-cutover-{'b' * 32}",
+        )
+        self.assertEqual(result["status"], "CUTOVER_QUEUED")
