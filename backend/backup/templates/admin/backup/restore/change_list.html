@@ -103,6 +103,12 @@
     max-width: 420px;
 }
 
+.df-restore-progress {
+    color: #64748b;
+    font-size: 13px;
+    max-width: 420px;
+}
+
 </style>
 
 
@@ -169,7 +175,7 @@
 
                     <td>
                         {% if restore.error_message %}
-                            <div class="df-restore-error">
+                            <div class="{% if restore.status == 'FAILED' %}df-restore-error{% else %}df-restore-progress{% endif %}">
                                 {{ restore.error_message }}
                             </div>
                         {% else %}
@@ -197,9 +203,9 @@
     {% if has_active_restore %}
         <p class="df-restore-note">
             {% if restores.0.status == "PREPARED" %}
-                بازیابی آماده انتقال است؛ برای نهایی‌شدن باید مرحله Cutover با توقف کنترل‌شده سرویس‌ها اجرا شود.
+                آماده‌سازی کامل شده است؛ مرحله انتقال نهایی به‌صورت خودکار توسط سرویس اختصاصی بازیابی اجرا می‌شود.
             {% else %}
-                یک بازیابی در حال اجراست؛ صفحه به‌صورت خودکار به‌روزرسانی می‌شود.
+                بازیابی به‌صورت خودکار در حال اجراست. هنگام انتقال دیتابیس ممکن است سامانه موقتاً در دسترس نباشد؛ پس از پایان، نتیجه در همین صفحه نمایش داده می‌شود.
             {% endif %}
         </p>
     {% endif %}
