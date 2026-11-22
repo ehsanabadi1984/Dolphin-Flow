@@ -11,6 +11,56 @@ from backup.tasks import replicate_backup_to_network, run_backup, run_restore
 
 
 class BackupTaskTests(TestCase):
+    def test_interrupted_preparation_without_journal_is_requeued(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+
+        from backup.staged_restore_preparation import recover_interrupted_restore_preparation
+
+        restore = Restore.objects.create(
+            archive_filename="interrupted.dfbak",
+            status=Restore.Status.RESTORING,
+        )
+        with TemporaryDirectory() as temp, override_settings(
+            BACKUP_ROOT=temp,
+            RESTORE_JOURNAL_ROOT=Path(temp) / ".restore-journal",
+        ):
+            result = recover_interrupted_restore_preparation(restore)
+
+        restore.refresh_from_db()
+        self.assertEqual(result["status"], "RETRY_PREPARATION")
+        self.assertEqual(restore.status, Restore.Status.QUEUED)
+
+    def test_interrupted_preparation_with_complete_journal_is_promoted_to_prepared(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+
+        from backup.restore_journal import RestoreJournal
+        from backup.staged_restore_preparation import recover_interrupted_restore_preparation
+
+        restore = Restore.objects.create(
+            archive_filename="prepared.dfbak",
+            status=Restore.Status.RESTORING,
+        )
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / ".restore-journal"
+            with override_settings(
+                BACKUP_ROOT=temp,
+                RESTORE_JOURNAL_ROOT=root,
+            ):
+                journal = RestoreJournal.new(
+                    restore.pk,
+                    root=root,
+                    database={"prepared": True},
+                    media={"included": False},
+                )
+                result = recover_interrupted_restore_preparation(restore)
+
+        restore.refresh_from_db()
+        self.assertEqual(result["status"], "PREPARED")
+        self.assertEqual(result["operation_id"], journal.operation_id)
+        self.assertEqual(restore.status, Restore.Status.PREPARED)
+
     def test_restore_cutover_task_can_resume_during_maintenance(self):
         from backup.restore_maintenance_tasks import RestoreMaintenanceAwareTask
         from backup.tasks import RestoreCutoverTask
