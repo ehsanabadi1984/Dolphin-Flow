@@ -82,8 +82,6 @@ class OrchestratedRestoreCommandTests(TestCase):
                 return {"status": "VALIDATING"}
 
             cutover_class.return_value.run.side_effect = complete
-            activate_maintenance(journal.operation_id)
-
             self._invoke(journal.operation_id, unit)
 
             self.assertEqual(journal.read()["phase"], "COMPLETED")
