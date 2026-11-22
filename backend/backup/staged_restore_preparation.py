@@ -15,6 +15,136 @@ from .staged_restore import StagedDatabaseRestore
 logger = logging.getLogger(__name__)
 
 
+def recover_interrupted_restore_preparation(restore):
+    """Reconcile a worker crash during staging without touching live resources.
+
+    Fully prepared journals are handed to the cutover worker. Incomplete
+    preparation journals are cleaned only when their generated DB/media paths
+    can be proven to belong to this Restore; ambiguous resources are preserved.
+    """
+    root = getattr(
+        settings,
+        "RESTORE_JOURNAL_ROOT",
+        Path(settings.BACKUP_ROOT) / ".restore-journal",
+    )
+    matches = [
+        item for item in inspect_restore_journals(root=root)
+        if item.get("restore_id") == restore.pk
+    ]
+    if not matches:
+        restore.__class__.objects.filter(
+            pk=restore.pk,
+            status=restore.Status.RESTORING,
+        ).update(
+            status=restore.Status.QUEUED,
+            started_at=None,
+            error_message="آماده‌سازی قبلی پیش از ایجاد Journal متوقف شد؛ تلاش مجدد آغاز می‌شود.",
+        )
+        return {"status": "RETRY_PREPARATION", "restore_id": restore.pk}
+
+    if len(matches) != 1 or matches[0].get("status") == "INVALID":
+        raise RestoreError(
+            "وضعیت Journal آماده‌سازی مبهم است؛ منابع موقت برای جلوگیری از حذف اشتباه حفظ شدند."
+        )
+
+    item = matches[0]
+    journal = RestoreJournal(item["operation_id"], root=root)
+    payload = journal.read()
+    phase = payload["phase"]
+    database = payload["database"]
+    media = payload["media"]
+    fully_prepared = (
+        phase == "PREPARED"
+        and database.get("prepared") is True
+        and (not media.get("included") or media.get("prepared") is True)
+    )
+    orchestrator = payload.get("restore", {}).get("orchestrator")
+
+    if fully_prepared:
+        restore.__class__.objects.filter(
+            pk=restore.pk,
+            status=restore.Status.RESTORING,
+        ).update(status=restore.Status.PREPARED, error_message="")
+        return {
+            "status": "PREPARED",
+            "restore_id": restore.pk,
+            "operation_id": journal.operation_id,
+        }
+
+    if orchestrator:
+        return {
+            "status": "CUTOVER_PENDING",
+            "restore_id": restore.pk,
+            "operation_id": journal.operation_id,
+        }
+
+    if phase == "ROLLED_BACK":
+        restore.__class__.objects.filter(
+            pk=restore.pk,
+            status=restore.Status.RESTORING,
+        ).update(
+            status=restore.Status.QUEUED,
+            started_at=None,
+            error_message="آماده‌سازی نیمه‌تمام پاک‌سازی شد؛ تلاش مجدد آغاز می‌شود.",
+        )
+        return {"status": "RETRY_PREPARATION", "restore_id": restore.pk}
+
+    if phase not in {"PREPARED", "ROLLBACK_REQUIRED"}:
+        raise RestoreError(
+            f"مرحله Journal برای بازیابی آماده‌سازی معتبر نیست: {phase}."
+        )
+
+    journal.update(
+        phase="ROLLBACK_REQUIRED",
+        error="Interrupted staging preparation cleanup.",
+    )
+
+    staging_name = database.get("staging_name")
+    expected_prefix = f"dolphinflow_restore_{restore.pk}_"
+    if (
+        not isinstance(staging_name, str)
+        or not staging_name.startswith(expected_prefix)
+        or len(staging_name) != len(expected_prefix) + 12
+        or any(char not in "0123456789abcdef" for char in staging_name[len(expected_prefix):])
+        or staging_name == settings.DATABASES["default"]["NAME"]
+    ):
+        raise RestoreError("نام دیتابیس staging برای پاک‌سازی امن معتبر نیست.")
+
+    staged_database = StagedDatabaseRestore(restore.pk)
+    staged_database.database_name = staging_name
+    staged_database._created = True
+    staged_database.drop_database()
+
+    if media.get("included") and media.get("staging_path"):
+        media_root = Path(media.get("media_root") or settings.MEDIA_ROOT).absolute()
+        stage_path = Path(media["staging_path"]).absolute()
+        expected_media_prefix = f".{media_root.name}.restore-{restore.pk}-"
+        if (
+            media_root.resolve() != Path(settings.MEDIA_ROOT).absolute().resolve()
+            or stage_path.parent.resolve() != media_root.parent.resolve()
+            or not stage_path.name.startswith(expected_media_prefix)
+            or len(stage_path.name) != len(expected_media_prefix) + 16
+            or any(char not in "0123456789abcdef" for char in stage_path.name[len(expected_media_prefix):])
+            or stage_path.is_symlink()
+        ):
+            raise RestoreError("مسیر staging رسانه برای پاک‌سازی امن معتبر نیست.")
+        staged_media = StagedMediaRestore(restore.pk, media_root=media_root)
+        staged_media.stage_dir = stage_path
+        staged_media._stage_created = True
+        staged_media.cleanup()
+
+    journal.update(phase="ROLLED_BACK", error="Interrupted staging resources cleaned safely.")
+    restore.__class__.objects.filter(
+        pk=restore.pk,
+        status=restore.Status.RESTORING,
+    ).update(
+        status=restore.Status.QUEUED,
+        started_at=None,
+        error_message="آماده‌سازی نیمه‌تمام پاک‌سازی شد؛ تلاش مجدد آغاز می‌شود.",
+    )
+    return {"status": "RETRY_PREPARATION", "restore_id": restore.pk}
+
+
 class StagedRestorePreparationService(RestoreService):
     """Validate and prepare a restore without changing the live DB or MEDIA_ROOT.
 
