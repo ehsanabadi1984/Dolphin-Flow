@@ -1,0 +1,18 @@
+[Unit]
+Description=Restore Integration Test - Dedicated Cutover Worker
+After=network.target
+
+[Service]
+Type=simple
+User=restoretest
+WorkingDirectory=/app
+EnvironmentFile=/run/restore-test.env
+ExecStart=/opt/venv/bin/celery -A config worker --queues=restore_cutover --concurrency=1 --prefetch-multiplier=1 --hostname=restore-test@%H
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=300
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

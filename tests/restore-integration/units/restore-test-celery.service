@@ -1,0 +1,14 @@
+[Unit]
+Description=Restore Integration Test - Celery Worker
+After=network.target
+
+[Service]
+Type=simple
+User=restoretest
+WorkingDirectory=/app
+EnvironmentFile=/run/restore-test.env
+ExecStart=/opt/venv/bin/celery -A config worker --loglevel=INFO
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,85 @@
+name: dolphin-restore-integration
+
+services:
+  postgres:
+    image: postgres:17.11
+    environment:
+      POSTGRES_DB: dolphin_restore_test
+      POSTGRES_USER: restore_test
+      POSTGRES_PASSWORD: isolated_test_password
+    volumes:
+      - restore_pgdata:/var/lib/postgresql/data
+    networks:
+      - restore_test_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U restore_test -d dolphin_restore_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - restore_redisdata:/data
+    networks:
+      - restore_test_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  systemd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    privileged: true
+    ports:
+      - "127.0.0.1:18001:8001"
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+    volumes:
+      - ../../backend:/app:ro
+      - restore_media:/restore-media
+      - restore_backups:/test-backups
+    environment:
+      DB_NAME: dolphin_restore_test
+      DB_USER: restore_test
+      DB_PASSWORD: isolated_test_password
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost:18001,http://127.0.0.1:18001"
+      DJANGO_SECRET_KEY: isolated-restore-test-secret
+      BACKUP_ROOT: /test-backups
+      MEDIA_ROOT: /restore-media/media
+      PG_DUMP_PATH: /usr/lib/postgresql/17/bin/pg_dump
+      PG_RESTORE_PATH: /usr/lib/postgresql/17/bin/pg_restore
+      MAGFA_DOMAIN: ""
+      MAGFA_USERNAME: ""
+      MAGFA_PASSWORD: ""
+      MAGFA_SENDER: ""
+      SMS_CREDENTIALS_ENCRYPTION_KEY: ""
+      RESTORE_SERVICE_UNITS: restore-test-daphne.service,restore-test-celery.service,restore-test-celery-beat.service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - restore_test_net
+
+volumes:
+  restore_pgdata:
+  restore_redisdata:
+  restore_media:
+  restore_backups:
+
+networks:
+  restore_test_net:

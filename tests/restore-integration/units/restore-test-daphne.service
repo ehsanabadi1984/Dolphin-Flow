@@ -1,0 +1,14 @@
+[Unit]
+Description=Restore Integration Test - Daphne
+After=network.target
+
+[Service]
+Type=simple
+User=restoretest
+WorkingDirectory=/app
+EnvironmentFile=/run/restore-test.env
+ExecStart=/opt/venv/bin/daphne -b 0.0.0.0 -p 8001 config.asgi:application
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
