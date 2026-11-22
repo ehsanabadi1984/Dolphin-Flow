@@ -344,7 +344,7 @@ def run_restore_cutover(self, restore_id, operation_id):
         raise RestoreError("شناسه Restore با Journal عملیات مطابقت ندارد.")
 
     phase = payload["phase"]
-    if phase in {"COMPLETED", "ROLLED_BACK"}:
+    if phase in {"COMPLETED", "ROLLED_BACK"} and read_maintenance_state() is None:
         return {"status": phase, "restore_id": restore_id, "operation_id": operation_id}
 
     try:
