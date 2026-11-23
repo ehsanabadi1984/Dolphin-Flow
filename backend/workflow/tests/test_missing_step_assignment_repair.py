@@ -4,6 +4,7 @@ from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase
 
 from workflow.models import (
@@ -67,17 +68,6 @@ class RepairMissingStepAssignmentsCommandTests(TestCase):
             assigned_to=None,
             is_submitted=False,
         )
-
-    def _write_plan(self):
-        handle = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
-        handle.close()
-        Path(handle.name).unlink()
-        call_command(
-            "repair_missing_step_assignments",
-            plan_out=handle.name,
-            stdout=open(Path(handle.name + ".log"), "w", encoding="utf-8"),
-        )
-        return Path(handle.name)
 
     def test_dry_run_does_not_change_execution_or_create_history(self):
         output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
@@ -213,7 +203,7 @@ class RepairMissingStepAssignmentsCommandTests(TestCase):
                 json.dumps(plan, ensure_ascii=False),
                 encoding="utf-8",
             )
-            with self.assertRaises(Exception):
+            with self.assertRaises(CommandError):
                 call_command(
                     "repair_missing_step_assignments",
                     apply=True,
