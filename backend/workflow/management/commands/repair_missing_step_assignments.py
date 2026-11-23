@@ -58,15 +58,12 @@ class Command(BaseCommand):
             "--plan-file",
             help="فایل JSON تولیدشده در dry-run که دامنه دقیق عملیات apply را مشخص می‌کند.",
         )
-        parser.add_argument(
-            "--database",
-            default="default",
-            help="نام اتصال دیتابیس Django (پیش‌فرض: default).",
-        )
 
     def handle(self, *args, **options):
-        self.database = options["database"]
-        self.db = __import__("django").db.connections[self.database]
+        # Assignment services use Django's default connection. Keep the command's
+        # database scope explicit rather than pretending non-default aliases work.
+        self.database = "default"
+        self.db = connection
 
         if options["apply"]:
             if not options["plan_file"] or options["plan_out"]:
