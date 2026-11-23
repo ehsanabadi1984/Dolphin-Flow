@@ -188,6 +188,35 @@ class RepairMissingStepAssignmentsCommandTests(TestCase):
         finally:
             Path(output.name).unlink(missing_ok=True)
 
+    def test_dry_run_skips_assignee_without_effective_execute_permission(self):
+        WorkflowPermission.objects.filter(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=WorkflowPermission.Action.EXECUTE,
+        ).delete()
+        output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        output.close()
+        Path(output.name).unlink()
+        try:
+            call_command(
+                "repair_missing_step_assignments",
+                plan_out=output.name,
+            )
+            plan = json.loads(Path(output.name).read_text(encoding="utf-8"))
+            self.assertEqual(plan["items"][0]["status"], "SKIP")
+            self.assertIn("مجوز مؤثر EXECUTE", plan["items"][0]["reason"])
+            self.execution.refresh_from_db()
+            self.assertIsNone(self.execution.assigned_to_id)
+            self.assertFalse(
+                WorkflowStepAssignmentHistory.objects.filter(
+                    step_execution=self.execution
+                ).exists()
+            )
+        finally:
+            Path(output.name).unlink(missing_ok=True)
+
+
     def test_apply_rejects_modified_plan_file(self):
         output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
         output.close()
