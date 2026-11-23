@@ -242,3 +242,133 @@ class RepairMissingStepAssignmentsCommandTests(TestCase):
             self.assertIsNone(self.execution.assigned_to_id)
         finally:
             Path(output.name).unlink(missing_ok=True)
+
+
+    def test_dry_run_skips_inactive_fixed_assignee(self):
+        User.objects.filter(pk=self.user.pk).update(is_active=False)
+        output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        output.close()
+        Path(output.name).unlink()
+        try:
+            call_command("repair_missing_step_assignments", plan_out=output.name)
+            plan = json.loads(Path(output.name).read_text(encoding="utf-8"))
+            self.assertEqual(plan["items"][0]["status"], "SKIP")
+            self.assertIn("غیرفعال", plan["items"][0]["reason"])
+            self.execution.refresh_from_db()
+            self.assertIsNone(self.execution.assigned_to_id)
+        finally:
+            Path(output.name).unlink(missing_ok=True)
+
+    def test_dry_run_skips_assignee_without_active_membership(self):
+        WorkflowMembership.objects.filter(
+            workflow=self.workflow, user=self.user
+        ).update(is_active=False)
+        output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        output.close()
+        Path(output.name).unlink()
+        try:
+            call_command("repair_missing_step_assignments", plan_out=output.name)
+            plan = json.loads(Path(output.name).read_text(encoding="utf-8"))
+            self.assertEqual(plan["items"][0]["status"], "SKIP")
+            self.assertIn("عضو فعال", plan["items"][0]["reason"])
+            self.execution.refresh_from_db()
+            self.assertIsNone(self.execution.assigned_to_id)
+        finally:
+            Path(output.name).unlink(missing_ok=True)
+
+    def test_dry_run_skips_inactive_workflow(self):
+        Workflow.objects.filter(pk=self.workflow.pk).update(is_active=False)
+        output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        output.close()
+        Path(output.name).unlink()
+        try:
+            call_command("repair_missing_step_assignments", plan_out=output.name)
+            plan = json.loads(Path(output.name).read_text(encoding="utf-8"))
+            self.assertEqual(plan["items"][0]["status"], "SKIP")
+            self.assertIn("گردش‌کار غیرفعال", plan["items"][0]["reason"])
+        finally:
+            Path(output.name).unlink(missing_ok=True)
+
+    def test_dry_run_skips_inactive_current_step(self):
+        WorkflowStep.objects.filter(pk=self.step.pk).update(is_active=False)
+        output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        output.close()
+        Path(output.name).unlink()
+        try:
+            call_command("repair_missing_step_assignments", plan_out=output.name)
+            plan = json.loads(Path(output.name).read_text(encoding="utf-8"))
+            self.assertEqual(plan["items"][0]["status"], "SKIP")
+            self.assertIn("مرحله غیرفعال", plan["items"][0]["reason"])
+        finally:
+            Path(output.name).unlink(missing_ok=True)
+
+    def test_dry_run_skips_step_whose_policy_is_no_longer_fixed(self):
+        WorkflowStep.objects.filter(pk=self.step.pk).update(
+            assignment_policy=WorkflowStep.AssignmentPolicy.INSTANCE_STARTER
+        )
+        output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        output.close()
+        Path(output.name).unlink()
+        try:
+            call_command("repair_missing_step_assignments", plan_out=output.name)
+            plan = json.loads(Path(output.name).read_text(encoding="utf-8"))
+            self.assertEqual(plan["items"][0]["status"], "SKIP")
+            self.assertIn("FIXED نیست", plan["items"][0]["reason"])
+        finally:
+            Path(output.name).unlink(missing_ok=True)
+
+    def test_dry_run_excludes_already_submitted_execution(self):
+        WorkflowStepExecution.objects.filter(pk=self.execution.pk).update(
+            is_submitted=True
+        )
+        output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        output.close()
+        Path(output.name).unlink()
+        try:
+            call_command("repair_missing_step_assignments", plan_out=output.name)
+            plan = json.loads(Path(output.name).read_text(encoding="utf-8"))
+            self.assertEqual(plan["items"], [])
+            self.execution.refresh_from_db()
+            self.assertIsNone(self.execution.assigned_to_id)
+        finally:
+            Path(output.name).unlink(missing_ok=True)
+
+    def test_dry_run_excludes_execution_that_already_has_assignee(self):
+        WorkflowStepExecution.objects.filter(pk=self.execution.pk).update(
+            assigned_to=self.user
+        )
+        output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        output.close()
+        Path(output.name).unlink()
+        try:
+            call_command("repair_missing_step_assignments", plan_out=output.name)
+            plan = json.loads(Path(output.name).read_text(encoding="utf-8"))
+            self.assertEqual(plan["items"], [])
+            self.execution.refresh_from_db()
+            self.assertEqual(self.execution.assigned_to_id, self.user.pk)
+        finally:
+            Path(output.name).unlink(missing_ok=True)
+
+    def test_apply_revalidates_membership_after_dry_run(self):
+        output = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        output.close()
+        Path(output.name).unlink()
+        try:
+            call_command("repair_missing_step_assignments", plan_out=output.name)
+            WorkflowMembership.objects.filter(
+                workflow=self.workflow, user=self.user
+            ).update(is_active=False)
+            call_command(
+                "repair_missing_step_assignments",
+                apply=True,
+                plan_file=output.name,
+            )
+            self.execution.refresh_from_db()
+            self.assertIsNone(self.execution.assigned_to_id)
+            self.assertFalse(
+                WorkflowStepAssignmentHistory.objects.filter(
+                    step_execution=self.execution
+                ).exists()
+            )
+        finally:
+            Path(output.name).unlink(missing_ok=True)
