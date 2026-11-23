@@ -235,7 +235,9 @@ class Command(BaseCommand):
             raise CommandError(
                 "هویت دیتابیس با دیتابیسی که dry-run روی آن اجرا شده یکسان نیست."
             )
-        if not isinstance(plan.get("items"), list):
+        if not isinstance(plan.get("items"), list) or any(
+            not isinstance(item, dict) for item in plan["items"]
+        ):
             raise CommandError("فهرست نامزدهای فایل طرح معتبر نیست.")
         return plan
 
