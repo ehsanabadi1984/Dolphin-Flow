@@ -289,10 +289,12 @@ class Command(BaseCommand):
                         .select_for_update()
                         .get(pk=item["execution_id"])
                     )
+                    # Lock only the WorkflowStep row. select_related() here
+                    # would introduce an outer join to nullable assigned_to;
+                    # PostgreSQL rejects FOR UPDATE on the nullable side.
                     step = (
                         WorkflowStep.objects.using(self.database)
-                        .select_for_update()
-                        .select_related("workflow", "assigned_to")
+                        .select_for_update(of=("self",))
                         .get(pk=item["step_id"])
                     )
                 except (
