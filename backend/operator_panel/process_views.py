@@ -203,18 +203,19 @@ def my_processes(request):
             if match
         )
         form_number_parsed = False
+        # A date-first legacy value can also syntactically match the newer
+        # id-first pattern when both segments are six digits. Evaluate every
+        # valid interpretation so zero-padded legacy IDs remain searchable.
         for matched_number in matched_numbers:
             try:
                 form_date = datetime.strptime(
                     matched_number.group("date"), "%y%m%d"
                 ).date()
             except ValueError:
-                # Try the other supported format before treating the date as invalid.
                 continue
             form_pk = int(matched_number.group("pk"))
             search_filter |= Q(pk=form_pk, started_at__date=form_date)
             form_number_parsed = True
-            break
         if not form_number_parsed and search.isdigit():
             search_filter |= Q(pk=int(search))
         matching_form_ids = ProcessFormSearchService.matching_instance_ids(
