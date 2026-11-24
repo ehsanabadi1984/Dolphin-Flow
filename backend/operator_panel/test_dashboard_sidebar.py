@@ -225,9 +225,15 @@ class StartWorkflowFailureTests(DashboardSidebarBase):
         )
 
     def test_successful_start_still_redirects_to_instance(self):
-        # Starting now creates an execution assignment, so the starter's
-        # role must also be eligible to EXECUTE the first step.
-        self.grant_role_action_permissions()
+        # Starting now resolves the initial execution assignee, so the
+        # starter must be the single EXECUTE-eligible candidate.
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            action=WorkflowPermission.Action.EXECUTE,
+            step=self.step_one,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
         WorkflowPermission.objects.create(
             workflow=self.workflow,
             user=self.user,
