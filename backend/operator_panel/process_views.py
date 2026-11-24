@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
@@ -10,7 +11,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from workflow.models import WorkflowInstance
+from workflow.models import WorkflowInstance, WorkflowStep
 from workflow.acceptance_queue_services import PendingAcceptanceQueueService
 from workflow.services import WorkflowExecutionService
 from workflow.process_summary_services import ProcessSummaryService
@@ -59,6 +60,7 @@ def pending_acceptance_detail(request, transition_execution_id):
             "transition",
             "transition__from_step",
             "transition__to_step",
+            "transition__reject_to_step",
         )
         .first()
     )
@@ -75,6 +77,7 @@ def pending_acceptance_detail(request, transition_execution_id):
         transition_execution.instance_id,
         _pending_acceptance=True,
         _pending_acceptance_step=transition_execution.transition.to_step,
+        _pending_acceptance_transition_execution=transition_execution,
     )
 
 
@@ -125,9 +128,37 @@ def reject_pending_acceptance(request, transition_execution_id):
         )
 
     try:
+        selected_assignee = None
+        selected_assignee_id = request.POST.get("selected_assignee", "").strip()
+        reject_to_step = transition_execution.transition.reject_to_step
+        requires_manual_selection = (
+            reject_to_step is not None
+            and reject_to_step.assignment_policy
+            == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        )
+        if requires_manual_selection:
+            if not selected_assignee_id.isdigit():
+                raise ValidationError(
+                    "انتخاب مسئول مرحله بازگشت الزامی است."
+                )
+            selected_assignee = (
+                get_user_model().objects
+                .filter(pk=int(selected_assignee_id))
+                .first()
+            )
+            if selected_assignee is None:
+                raise ValidationError(
+                    "کاربر انتخاب‌شده برای مسئول مرحله بازگشت وجود ندارد."
+                )
+        elif selected_assignee_id:
+            raise ValidationError(
+                "انتخاب دستی مسئول برای سیاست تخصیص مرحله بازگشت مجاز نیست."
+            )
+
         WorkflowExecutionService.reject_transition_execution(
             transition_execution=transition_execution,
             user=request.user,
+            selected_assignee=selected_assignee,
         )
     except ValidationError as exc:
         messages.error(request, str(exc))
