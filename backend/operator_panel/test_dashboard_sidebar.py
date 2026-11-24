@@ -147,12 +147,22 @@ class DashboardSidebarBase(TestCase):
         step=None,
         status=WorkflowInstance.Status.ACTIVE,
     ):
-        return WorkflowInstance.objects.create(
+        current_step = step or self.step_one
+        instance = WorkflowInstance.objects.create(
             workflow=self.workflow,
-            current_step=step or self.step_one,
+            current_step=current_step,
             started_by=started_by,
             status=status,
         )
+        if status == WorkflowInstance.Status.ACTIVE:
+            WorkflowStepExecution.objects.create(
+                instance=instance,
+                workflow_step=current_step,
+                performed_by=started_by,
+                assigned_to=current_step.assigned_to,
+                is_submitted=False,
+            )
+        return instance
 
     def get_client(self):
         client = Client(enforce_csrf_checks=False)
