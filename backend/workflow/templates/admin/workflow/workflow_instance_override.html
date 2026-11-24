@@ -36,6 +36,15 @@
             </div>
 
             <div class="form-row">
+                {{ form.selected_assignee.errors }}
+                {{ form.selected_assignee.label_tag }}
+                {{ form.selected_assignee }}
+                {% if form.selected_assignee.help_text %}
+                    <div class="help">{{ form.selected_assignee.help_text }}</div>
+                {% endif %}
+            </div>
+
+            <div class="form-row">
                 {{ form.reason.errors }}
                 {{ form.reason.label_tag }}
                 {{ form.reason }}
