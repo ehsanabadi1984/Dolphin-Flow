@@ -624,7 +624,7 @@ class WorkflowStepAssignmentHistory(models.Model):
         POLICY = "POLICY", "سیاست تخصیص"
         MANUAL = "MANUAL", "تغییر دستی"
         ACCEPTANCE = "ACCEPTANCE", "پذیرش مرحله"
-        REJECTION = "REJECTION", "انتخاب هنگام رد انتقال"
+        REJECTION = "REJECTION", "تخصیص هنگام رد انتقال"
         OVERRIDE = "OVERRIDE", "تغییر توسط مدیر"
 
     step_execution = models.ForeignKey(
