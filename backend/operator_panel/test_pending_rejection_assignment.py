@@ -1,10 +1,12 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from workflow.services import WorkflowExecutionService
 from workflow.models import (
     FieldAccess,
     FormDefinition,
@@ -214,6 +216,27 @@ class PendingRejectionAssignmentTests(TestCase):
         self.assertEqual(
             history.source,
             WorkflowStepAssignmentHistory.Source.REJECTION,
+        )
+
+    def test_service_itself_requires_selection_for_previous_completer_return(self):
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.reject_transition_execution(
+                transition_execution=self.transition_execution,
+                user=self.rejector,
+            )
+
+        self.transition_execution.refresh_from_db()
+        self.instance.refresh_from_db()
+        self.assertEqual(
+            self.transition_execution.status,
+            WorkflowTransitionExecution.Status.PENDING,
+        )
+        self.assertEqual(self.instance.current_step_id, self.source_step.pk)
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=self.instance,
+                workflow_step=self.return_step,
+            ).exists()
         )
 
     def test_reject_without_required_selection_keeps_pending_unchanged(self):
