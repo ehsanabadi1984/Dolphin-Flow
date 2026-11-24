@@ -426,7 +426,11 @@ class WorkflowOverrideServiceTests(TestCase):
     def test_override_resolves_step_completer_policy(self):
         source_execution = self.instance.step_executions.get(workflow_step=self.step_a)
         source_execution.completed_by = self.operator
-        source_execution.save(update_fields=["completed_by"])
+        source_execution.is_submitted = True
+        source_execution.submitted_at = timezone.now()
+        source_execution.save(
+            update_fields=["completed_by", "is_submitted", "submitted_at"]
+        )
         self.step_b.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
         self.step_b.assignment_source_step = self.step_a
         self.step_b.save(update_fields=["assignment_policy", "assignment_source_step"])
