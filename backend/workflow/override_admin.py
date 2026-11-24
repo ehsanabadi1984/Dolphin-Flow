@@ -56,7 +56,10 @@ class WorkflowInstanceOverrideForm(forms.Form):
         if self.is_bound:
             target_step_id = self.data.get(self.add_prefix("target_step"))
             if target_step_id:
-                selected_step = target_steps.filter(pk=target_step_id).first()
+                try:
+                    selected_step = target_steps.filter(pk=target_step_id).first()
+                except (TypeError, ValueError):
+                    selected_step = None
 
         candidate_ids = set()
         if selected_step is not None:
