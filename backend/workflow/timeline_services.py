@@ -93,6 +93,12 @@ def build_instance_timeline_events(instance):
             or (override_assignment.reason if override_assignment else "")
             or "—"
         )
+        event_actor = execution.entered_by or execution.performed_by
+        event_actor_source = (
+            "entered_by" if execution.entered_by_id
+            else "performed_by_legacy" if execution.performed_by_id
+            else "unknown"
+        )
         event = _event(
             "override" if is_override else "step",
             f"step-{execution.pk}",
@@ -102,8 +108,16 @@ def build_instance_timeline_events(instance):
                 if is_override
                 else f"ورود به مرحله «{execution.workflow_step.name}»"
             ),
-            execution.entered_by or execution.performed_by,
+            event_actor,
             "" if is_override else execution.notes,
+            user_role_label=(
+                "ثبت‌کننده ورود به مرحله"
+                if event_actor_source == "entered_by"
+                else "عامل ثبت‌شده در داده Legacy (performed_by؛ نه لزوماً تکمیل‌کننده)"
+                if event_actor_source == "performed_by_legacy"
+                else "عامل ثبت نشده"
+            ),
+            user_source=event_actor_source,
             execution_id=execution.pk,
             override_from_step=override_from_step,
             override_to_step=override_to_step,
@@ -157,15 +171,28 @@ def build_instance_timeline_events(instance):
         WorkflowTransitionExecution.objects.filter(instance=instance)
         .select_related(
             "transition__from_step", "transition__to_step",
+            "transition__reject_to_step",
             "performed_by", "accepted_by", "rejected_by",
+            "proposed_assignee",
         )
     )
     for transition_execution in transitions:
         transition = transition_execution.transition
-        destination = (
-            transition.to_step.name if transition.to_step_id
-            else "تکمیل فرآیند"
+        is_rejected = (
+            transition_execution.status
+            == WorkflowTransitionExecution.Status.REJECTED
         )
+        if is_rejected:
+            destination = (
+                transition.reject_to_step.name
+                if transition.reject_to_step_id
+                else "مقصد بازگشت ثبت نشده"
+            )
+        else:
+            destination = (
+                transition.to_step.name if transition.to_step_id
+                else "تکمیل فرآیند"
+            )
         route = f"{transition.from_step.name} → {destination}"
         events.append(
             _event(
@@ -185,13 +212,21 @@ def build_instance_timeline_events(instance):
                     transition_execution.accepted_by
                     or transition_execution.rejected_by
                 ),
+                proposed_assignee=_user_label(
+                    transition_execution.proposed_assignee
+                ),
+                proposed_assignee_id=transition_execution.proposed_assignee_id,
+                requires_acceptance=transition.requires_acceptance,
                 notes=transition_execution.notes,
             )
         )
-        if transition_execution.status in {
-            WorkflowTransitionExecution.Status.ACCEPTED,
-            WorkflowTransitionExecution.Status.REJECTED,
-        }:
+        if (
+            transition.requires_acceptance
+            and transition_execution.status in {
+                WorkflowTransitionExecution.Status.ACCEPTED,
+                WorkflowTransitionExecution.Status.REJECTED,
+            }
+        ):
             decision_user = (
                 transition_execution.accepted_by
                 if transition_execution.status
@@ -216,6 +251,11 @@ def build_instance_timeline_events(instance):
                     resolved_at=transition_execution.resolved_at,
                     from_step=transition.from_step.name,
                     to_step=destination,
+                    proposed_assignee=_user_label(
+                        transition_execution.proposed_assignee
+                    ),
+                    proposed_assignee_id=transition_execution.proposed_assignee_id,
+                    timestamp_missing=transition_execution.resolved_at is None,
                 )
             )
 
