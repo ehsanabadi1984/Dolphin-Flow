@@ -227,6 +227,8 @@ class StartWorkflowFailureTests(DashboardSidebarBase):
     def test_successful_start_still_redirects_to_instance(self):
         # Starting now resolves the initial execution assignee, so the
         # starter must be the single EXECUTE-eligible candidate.
+        self.step_one.assignment_policy = WorkflowStep.AssignmentPolicy.INSTANCE_STARTER
+        self.step_one.save(update_fields=["assignment_policy"])
         WorkflowPermission.objects.create(
             workflow=self.workflow,
             user=self.user,
