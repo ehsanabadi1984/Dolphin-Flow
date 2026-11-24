@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -141,12 +139,6 @@ class PendingRejectionAssignmentTests(TestCase):
             started_by=self.sender,
             status=WorkflowInstance.Status.ACTIVE,
         )
-        self.transition_execution = WorkflowTransitionExecution.objects.create(
-            instance=self.instance,
-            transition=self.transition,
-            performed_by=self.sender,
-            status=WorkflowTransitionExecution.Status.PENDING,
-        )
         # The REJECT-specific manual choice must not depend on a historical
         # completed_by value; it is the rejector who chooses the return owner.
         WorkflowStepExecution.objects.create(
@@ -154,7 +146,13 @@ class PendingRejectionAssignmentTests(TestCase):
             workflow_step=self.source_step,
             performed_by=self.sender,
             is_submitted=True,
-            submitted_at=timezone.now() - timedelta(minutes=1),
+            submitted_at=timezone.now(),
+        )
+        self.transition_execution = WorkflowTransitionExecution.objects.create(
+            instance=self.instance,
+            transition=self.transition,
+            performed_by=self.sender,
+            status=WorkflowTransitionExecution.Status.PENDING,
         )
         self.client.force_login(self.rejector)
 
