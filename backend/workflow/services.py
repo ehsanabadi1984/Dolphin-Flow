@@ -335,8 +335,8 @@ class WorkflowExecutionService:
         )
 
         # Recover the latest submitted source execution preceding this
-        # transition. Do not filter by completed_by: a missing completer must
-        # become a notification issue, not block rejection.
+        # transition. The REJECT-specific manual selection below does not
+        # depend on that execution's completed_by value.
         previous_execution = (
             WorkflowStepExecution.objects
             .filter(
