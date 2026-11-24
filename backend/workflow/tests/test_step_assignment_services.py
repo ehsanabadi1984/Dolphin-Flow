@@ -275,6 +275,26 @@ class WorkflowStepAssignmentServiceTests(TestCase):
         )
         self.assertEqual(resolved.pk, self.candidate_b.pk)
 
+    def test_step_completer_does_not_trust_an_older_explicit_execution(self):
+        self.step.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
+        self.step.assignment_source_step = self.source_step
+        self.step.save()
+        older = self.make_execution(
+            self.source_step,
+            completed_by=self.candidate_a,
+        )
+        self.make_execution(
+            self.source_step,
+            completed_by=self.candidate_b,
+        )
+        resolved = WorkflowStepAssignmentService.resolve_assignee(
+            workflow=self.workflow,
+            step=self.step,
+            instance=self.instance,
+            previous_execution=older,
+        )
+        self.assertEqual(resolved.pk, self.candidate_b.pk)
+
     def test_step_completer_does_not_fall_back_when_latest_completion_has_no_completer(self):
         self.step.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
         self.step.assignment_source_step = self.source_step
