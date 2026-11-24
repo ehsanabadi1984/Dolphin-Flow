@@ -865,8 +865,15 @@ def _get_historical_view_step(
     if performed_by is not None:
         executions = executions.filter(performed_by=performed_by)
     if assigned_to is not None:
+        # Legacy submitted executions predate execution-level assignment.
+        # Keep their historical read path available only when the execution
+        # has no recorded assignee and the step's legacy default matches.
         executions = executions.filter(
-            assigned_to=assigned_to,
+            Q(assigned_to=assigned_to)
+            | Q(
+                assigned_to__isnull=True,
+                workflow_step__assigned_to=assigned_to,
+            )
         )
 
     executions = (
