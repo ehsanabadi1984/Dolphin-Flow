@@ -99,8 +99,7 @@ class WorkflowOverrideServiceTests(TestCase):
             workflow=self.workflow,
             step=self.step_b,
             user=self.operator,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
+            action=WorkflowPermission.Action.EXECUTE,
             effect=WorkflowPermission.Effect.ALLOW,
         )
 
