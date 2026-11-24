@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from django.urls import reverse
 
 from workflow.acceptance_queue_services import PendingAcceptanceQueueService
@@ -41,6 +44,7 @@ class PendingAcceptanceActionViewTests(TestCase):
             code="PENDING_ACTION_SEND",
             order=1,
             is_active=True,
+            assigned_to=self.sender,
         )
         self.step_two = WorkflowStep.objects.create(
             workflow=self.workflow,
@@ -48,6 +52,7 @@ class PendingAcceptanceActionViewTests(TestCase):
             code="PENDING_ACTION_RECEIVE",
             order=2,
             is_active=True,
+            assigned_to=self.receiver,
         )
         self.transition = WorkflowTransition.objects.create(
             workflow=self.workflow,
@@ -90,11 +95,35 @@ class PendingAcceptanceActionViewTests(TestCase):
             effect=WorkflowPermission.Effect.ALLOW,
         )
 
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_one,
+            user=self.sender,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_two,
+            user=self.receiver,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
         self.instance = WorkflowInstance.objects.create(
             workflow=self.workflow,
             current_step=self.step_one,
             started_by=self.sender,
             status=WorkflowInstance.Status.ACTIVE,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step_one,
+            performed_by=self.sender,
+            entered_by=self.sender,
+            completed_by=self.sender,
+            is_submitted=True,
+            submitted_at=timezone.now() - timedelta(minutes=1),
         )
         self.execution = WorkflowTransitionExecution.objects.create(
             instance=self.instance,
@@ -257,6 +286,7 @@ class PendingAcceptanceEndToEndTests(TestCase):
             code="PENDING_E2E_SEND",
             order=1,
             is_active=True,
+            assigned_to=self.sender,
         )
         self.step_two = WorkflowStep.objects.create(
             workflow=self.workflow,
@@ -264,6 +294,7 @@ class PendingAcceptanceEndToEndTests(TestCase):
             code="PENDING_E2E_REVIEW",
             order=2,
             is_active=True,
+            assigned_to=self.sender,
         )
         self.step_three = WorkflowStep.objects.create(
             workflow=self.workflow,
@@ -271,6 +302,7 @@ class PendingAcceptanceEndToEndTests(TestCase):
             code="PENDING_E2E_RECEIVE",
             order=3,
             is_active=True,
+            assigned_to=self.receiver,
         )
 
         self.step_one_to_two = WorkflowTransition.objects.create(
@@ -320,6 +352,19 @@ class PendingAcceptanceEndToEndTests(TestCase):
             action=WorkflowPermission.Action.TRANSITION,
             effect=WorkflowPermission.Effect.ALLOW,
         )
+
+        for step, assignee in (
+            (self.step_one, self.sender),
+            (self.step_two, self.sender),
+            (self.step_three, self.receiver),
+        ):
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                step=step,
+                user=assignee,
+                action=WorkflowPermission.Action.EXECUTE,
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
 
         for action_code in ("ACCEPT", "REJECT"):
             WorkflowPermission.objects.create(
