@@ -31,6 +31,7 @@ from django.utils import timezone
 from accounts.models import Job
 from operator_panel import dashboard_services as dashboard_q
 from operator_panel.dashboard_services import DashboardService
+from operator_panel.dashboard_enhancements import DashboardEnhancementService
 from workflow.authorization import WorkflowAuthorizationService
 from workflow.models import (
     FormData,
@@ -714,6 +715,43 @@ class TaskPredicateTests(DashboardSidebarBase):
         self.assertEqual(context["summary"]["pending"], 0)
         self.assertEqual(len(context["my_tasks"]), 1)
         self.assertEqual(len(context["pending_actions"]), 0)
+
+    def test_active_execution_assignee_overrides_step_default_in_dashboard(self):
+        self.grant_role_action_permissions()
+        self.step_one.assigned_to = self.other
+        self.step_one.save(update_fields=["assigned_to"])
+        instance = self.create_active_instance(started_by=self.other)
+        execution = instance.step_executions.get(is_submitted=False)
+        execution.assigned_to = self.user
+        execution.save(update_fields=["assigned_to"])
+
+        service = DashboardService(self.user)
+        counts = service.get_sidebar_counts()
+        context = service.get_context()
+
+        self.assertEqual(counts["tasks"], 1)
+        self.assertEqual(counts["pending"], 0)
+        self.assertIn(instance, context["my_tasks"])
+        self.assertNotIn(instance, context["pending_actions"])
+        self.assertIn(
+            instance,
+            service.dashboard_timeline_queryset(),
+        )
+
+    def test_waiting_for_others_uses_active_execution_assignee(self):
+        self.step_one.assigned_to = self.user
+        self.step_one.save(update_fields=["assigned_to"])
+        instance = self.create_active_instance(started_by=self.user)
+        execution = instance.step_executions.get(is_submitted=False)
+        execution.assigned_to = self.other
+        execution.save(update_fields=["assigned_to"])
+
+        service = DashboardEnhancementService(self.user)
+        self.assertIn(instance, service.waiting_for_others_queryset())
+
+        execution.assigned_to = self.user
+        execution.save(update_fields=["assigned_to"])
+        self.assertNotIn(instance, service.waiting_for_others_queryset())
 
     def test_assigned_but_not_actionable_is_not_counted(self):
         self.step_one.assigned_to = self.user
