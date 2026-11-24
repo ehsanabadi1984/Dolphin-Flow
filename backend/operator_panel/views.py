@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.http import JsonResponse
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.urls import reverse
 from workflow.device_services import DeviceService
 from workflow.notification_services import NotificationService
