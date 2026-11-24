@@ -413,6 +413,7 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
             code="TIMELINE_PENDING_RESOLUTION",
             from_step=self.step,
             to_step=target_step,
+            requires_acceptance=True,
         )
         WorkflowTransitionExecution.objects.create(
             instance=self.instance,
