@@ -1,9 +1,15 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from workflow.models import (
+    FieldAccess,
+    FormDefinition,
+    FormField,
+    FormSection,
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
@@ -65,6 +71,33 @@ class PendingRejectionAssignmentTests(TestCase):
             is_active=True,
             assignment_policy=WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS,
         )
+        self.form = FormDefinition.objects.create(
+            workflow=self.workflow,
+            name="Pending Rejection Form",
+            is_active=True,
+        )
+        self.section = FormSection.objects.create(
+            form=self.form,
+            name="Main",
+            code="PENDING_REJECTION_SECTION",
+            order=1,
+        )
+        self.field = FormField.objects.create(
+            section=self.section,
+            name="Description",
+            code="description",
+            label="Description",
+            field_type=FormField.FieldType.TEXT,
+            order=1,
+            is_active=True,
+        )
+        FieldAccess.objects.create(
+            field=self.field,
+            step=self.destination_step,
+            user=self.rejector,
+            can_view=True,
+            can_edit=False,
+        )
         self.transition = WorkflowTransition.objects.create(
             workflow=self.workflow,
             name="Review to Receive",
@@ -119,7 +152,7 @@ class PendingRejectionAssignmentTests(TestCase):
             workflow_step=self.source_step,
             performed_by=self.sender,
             is_submitted=True,
-            submitted_at=timezone.now() - timezone.timedelta(minutes=1),
+            submitted_at=timezone.now() - timedelta(minutes=1),
         )
         self.client.force_login(self.rejector)
 
