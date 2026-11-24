@@ -55,7 +55,7 @@ class WorkflowStepAssignmentService:
         return assignee
 
     @staticmethod
-    def _validate_policy_configuration(*, step):
+    def validate_policy_configuration(*, step):
         policy = step.assignment_policy
         source_step = step.assignment_source_step
 
@@ -87,7 +87,7 @@ class WorkflowStepAssignmentService:
         if not instance or instance.workflow_id != workflow.pk:
             raise ValidationError("نمونه فرآیند با فرآیند مرحله مقصد هم‌خوانی ندارد.")
 
-        WorkflowStepAssignmentService._validate_policy_configuration(step=step)
+        WorkflowStepAssignmentService.validate_policy_configuration(step=step)
 
         if step.assignment_policy == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS:
             if selected_assignee is None:
@@ -124,7 +124,7 @@ class WorkflowStepAssignmentService:
         if not instance or instance.workflow_id != workflow.pk:
             raise ValidationError("نمونه فرآیند با فرآیند مرحله مقصد هم‌خوانی ندارد.")
 
-        WorkflowStepAssignmentService._validate_policy_configuration(step=step)
+        WorkflowStepAssignmentService.validate_policy_configuration(step=step)
         policy = step.assignment_policy
 
         if policy == WorkflowStep.AssignmentPolicy.FIXED:
