@@ -250,6 +250,7 @@ class WorkflowExecutionService:
         *,
         transition_execution,
         user,
+        selected_assignee=None,
     ):
         """
         Resolve a pending acceptance-required transition as rejected.
@@ -352,12 +353,34 @@ class WorkflowExecutionService:
                 "اجرای تکمیل‌شده مرحله مبدأ برای این درخواست رد پیدا نشد."
             )
 
-        assignee = WorkflowStepAssignmentService.resolve_assignee(
-            workflow=instance.workflow,
-            step=reject_to_step,
-            instance=instance,
-            previous_execution=previous_execution,
+        manual_selection = (
+            reject_to_step.assignment_policy
+            == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
         )
+        if manual_selection:
+            if selected_assignee is None:
+                raise ValidationError(
+                    "برای مرحله بازگشت، انتخاب مسئول توسط ردکننده الزامی است."
+                )
+            # REJECT is an explicit exception to PREVIOUS_COMPLETER_SELECTS:
+            # the rejector, not the previous step completer, chooses the
+            # return-step assignee. Validate current membership and EXECUTE.
+            assignee = WorkflowStepAssignmentService.validate_assignee(
+                workflow=instance.workflow,
+                step=reject_to_step,
+                assignee=selected_assignee,
+            )
+        else:
+            if selected_assignee is not None:
+                raise ValidationError(
+                    "انتخاب دستی مسئول برای سیاست تخصیص این مرحله مجاز نیست."
+                )
+            assignee = WorkflowStepAssignmentService.resolve_assignee(
+                workflow=instance.workflow,
+                step=reject_to_step,
+                instance=instance,
+                previous_execution=previous_execution,
+            )
 
         step_execution = WorkflowStepExecution.objects.create(
             instance=instance,
@@ -369,8 +392,12 @@ class WorkflowExecutionService:
             execution=step_execution,
             assignee=assignee,
             changed_by=user,
-            source=WorkflowStepAssignmentHistory.Source.POLICY,
-            reason="تخصیص مسئول مرحله بازگشت پس از رد انتقال",
+            source=WorkflowStepAssignmentHistory.Source.REJECTION,
+            reason=(
+                "انتخاب مسئول مرحله بازگشت توسط ردکننده"
+                if manual_selection
+                else "تخصیص مسئول مرحله بازگشت پس از رد انتقال"
+            ),
         )
 
         transition_execution.status = (
