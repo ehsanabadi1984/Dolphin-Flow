@@ -18,7 +18,11 @@ from workflow.process_summary_services import ProcessSummaryService
 from .process_form_search_services import ProcessFormSearchService
 
 from .dashboard_enhancements import DashboardEnhancementService
-from .dashboard_services import DashboardService, _can_take_action_q
+from .dashboard_services import (
+    DashboardService,
+    _active_execution_assigned_to,
+    _can_take_action_q,
+)
 
 
 FORM_NUMBER_PATTERN = re.compile(r"^(?P<pk>\d+)-(?P<date>\d{6})$")
@@ -260,7 +264,7 @@ def assigned_tasks(request):
     service = DashboardService(request.user)
     instances = (
         service._accessible_active_queryset()
-        .filter(current_step__assigned_to_id=request.user.pk)
+        .filter(_active_execution_assigned_to(request.user))
         .filter(_can_take_action_q(request.user))
     )
 
