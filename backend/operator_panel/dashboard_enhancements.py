@@ -1,8 +1,10 @@
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from accounts.models import UserPreference
 
 from .dashboard_services import DashboardService
+from workflow.models import WorkflowStepExecution
 from workflow.process_summary_services import ProcessSummaryService
 
 
@@ -88,14 +90,19 @@ class DashboardEnhancementService:
 
     def waiting_for_others_queryset(self):
         """The user's own active processes currently assigned to another operator."""
+        assigned_to_other = Exists(
+            WorkflowStepExecution.objects.filter(
+                instance_id=OuterRef("pk"),
+                workflow_step_id=OuterRef("current_step_id"),
+                is_submitted=False,
+                assigned_to__isnull=False,
+            ).exclude(assigned_to=self.user)
+        )
         return (
             self.dashboard._my_active_queryset()
-            .filter(
-                current_step__isnull=False,
-                current_step__assigned_to__isnull=False,
-            )
-            .exclude(current_step__assigned_to_id=self.user.pk)
-            .select_related("current_step", "current_step__assigned_to")
+            .filter(current_step__isnull=False)
+            .filter(assigned_to_other)
+            .select_related("current_step")
             .order_by("-started_at")
         )
 
