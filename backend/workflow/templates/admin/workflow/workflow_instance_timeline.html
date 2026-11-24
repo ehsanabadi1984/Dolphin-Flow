@@ -121,7 +121,7 @@
                     </div>
 
                     <div class="timeline-event-user">
-                        <strong>کاربر:</strong>
+                        <strong>{{ event.user_role_label|default:"کاربر" }}:</strong>
                         {{ event.user|default:"—" }}
                     </div>
 
@@ -283,6 +283,14 @@
                                     <strong>{{ event.transition_status|default:"—" }}</strong>
                                 </div>
                             </div>
+                            {% if event.proposed_assignee_id %}
+                                <div class="timeline-detail-grid">
+                                    <div>
+                                        <span>مسئول پیشنهادی مرحله مقصد</span>
+                                        <strong>{{ event.proposed_assignee }}</strong>
+                                    </div>
+                                </div>
+                            {% endif %}
                             {% if event.notes %}
                                 <div class="timeline-transition-notes">
                                     <span>یادداشت انتقال</span>
@@ -316,6 +324,12 @@
                                     {% endif %}
                                 </strong>
                             </div>
+                            {% if event.proposed_assignee_id %}
+                                <div>
+                                    <span>مسئول پیشنهادی مرحله مقصد</span>
+                                    <strong>{{ event.proposed_assignee }}</strong>
+                                </div>
+                            {% endif %}
                         </div>
 
                     {% elif event.type == "file_share" %}
