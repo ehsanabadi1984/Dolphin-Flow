@@ -1043,7 +1043,21 @@
     {% if pending_acceptance_can_reject %}
     <form method="post" data-workflow-transition action="{% url 'operator_panel:reject_pending_acceptance' request.resolver_match.kwargs.transition_execution_id %}">
       {% csrf_token %}
-      <button type="submit" class="df-button df-button-secondary">رد دریافت</button>
+      {% if pending_acceptance_reject_requires_assignee %}
+      <div class="df-form-field df-transition-assignee">
+        <label for="pending-reject-assignee">مسئول مرحله بازگشت «{{ pending_acceptance_reject_step.name }}»</label>
+        <select id="pending-reject-assignee" name="selected_assignee" required>
+          <option value="">انتخاب مسئول مرحله بازگشت</option>
+          {% for candidate in pending_acceptance_reject_candidates %}
+            <option value="{{ candidate.pk }}">{{ candidate.get_full_name|default:candidate.username }}</option>
+          {% endfor %}
+        </select>
+        {% if not pending_acceptance_reject_candidates %}
+          <p class="df-field-error">برای این مرحله هیچ مسئول واجد شرایطی با مجوز EXECUTE پیدا نشد؛ رد انتقال فعلاً ممکن نیست.</p>
+        {% endif %}
+      </div>
+      {% endif %}
+      <button type="submit" class="df-button df-button-secondary"{% if pending_acceptance_reject_requires_assignee and not pending_acceptance_reject_candidates %} disabled{% endif %}>رد دریافت</button>
     </form>
     {% endif %}
   </section>
