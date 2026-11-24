@@ -733,12 +733,14 @@ class TaskPredicateTests(DashboardSidebarBase):
         self.assertEqual(counts["pending"], 0)
         self.assertIn(instance, context["my_tasks"])
         self.assertNotIn(instance, context["pending_actions"])
+        FormData.objects.create(instance=instance)
         self.assertIn(
             instance,
             service.dashboard_timeline_queryset(),
         )
 
     def test_waiting_for_others_uses_active_execution_assignee(self):
+        self.grant_role_action_permissions()
         self.step_one.assigned_to = self.user
         self.step_one.save(update_fields=["assigned_to"])
         instance = self.create_active_instance(started_by=self.user)
