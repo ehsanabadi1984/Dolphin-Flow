@@ -146,20 +146,34 @@ class WorkflowStepAssignmentService:
                 == step.assignment_source_step_id
             ):
                 source_execution = previous_execution
-            else:
-                source_execution = (
-                    WorkflowStepExecution.objects
-                    .filter(
-                        instance=instance,
-                        workflow_step=step.assignment_source_step,
+                if (
+                    not source_execution.is_submitted
+                    or source_execution.submitted_at is None
+                ):
+                    raise ValidationError(
+                        "نوبت اجرای مرحله مرجع تکمیل‌شده و دارای زمان ثبت نیست."
                     )
+            else:
+                source_executions = WorkflowStepExecution.objects.filter(
+                    instance=instance,
+                    workflow_step=step.assignment_source_step,
+                    is_submitted=True,
+                )
+                if source_executions.filter(submitted_at__isnull=True).exists():
+                    raise ValidationError(
+                        "زمان تکمیل یکی از نوبت‌های مرحله مرجع ثبت نشده و ترتیب آن‌ها قابل اثبات نیست."
+                    )
+                source_execution = (
+                    source_executions
+                    .filter(submitted_at__isnull=False)
                     .select_related("completed_by")
-                    .order_by("-performed_at", "-pk")
+                    .order_by("-submitted_at", "-pk")
                     .first()
                 )
+
             if source_execution is None or source_execution.completed_by is None:
                 raise ValidationError(
-                    "برای مرحله مرجع، تکمیل‌کننده معتبر و ثبت‌شده‌ای وجود ندارد."
+                    "آخرین نوبت تکمیل‌شده مرحله مرجع، تکمیل‌کننده ثبت‌شده ندارد."
                 )
             assignee = source_execution.completed_by
 
