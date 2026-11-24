@@ -285,7 +285,14 @@ def dashboard(request):
 
 
 @login_required
-def workflow_instance(request, instance_id, _return_save_result=False, _pending_acceptance=False, _pending_acceptance_step=None):
+def workflow_instance(
+    request,
+    instance_id,
+    _return_save_result=False,
+    _pending_acceptance=False,
+    _pending_acceptance_step=None,
+    _pending_acceptance_transition_execution=None,
+):
     """
     Display and save a workflow instance form.
 
@@ -430,6 +437,9 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
 
     pending_acceptance_can_accept = False
     pending_acceptance_can_reject = False
+    pending_acceptance_reject_requires_assignee = False
+    pending_acceptance_reject_candidates = []
+    pending_acceptance_reject_step = None
     if _pending_acceptance and _pending_acceptance_step is not None:
         pending_acceptance_can_accept = WorkflowAuthorizationService.has_permission(
             user=request.user,
@@ -445,6 +455,25 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
             action_code="REJECT",
             step=_pending_acceptance_step,
         )
+        if (
+            _pending_acceptance_transition_execution is not None
+            and _pending_acceptance_transition_execution.transition.reject_to_step_id
+        ):
+            pending_acceptance_reject_step = (
+                _pending_acceptance_transition_execution.transition.reject_to_step
+            )
+            pending_acceptance_reject_requires_assignee = (
+                pending_acceptance_can_reject
+                and pending_acceptance_reject_step.assignment_policy
+                == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+            )
+            if pending_acceptance_reject_requires_assignee:
+                pending_acceptance_reject_candidates = (
+                    WorkflowStepAssignmentService.get_eligible_assignees(
+                        workflow=instance.workflow,
+                        step=pending_acceptance_reject_step,
+                    )
+                )
 
     has_pending_acceptance = instance.transition_executions.filter(
         status=WorkflowTransitionExecution.Status.PENDING,
@@ -804,6 +833,9 @@ def workflow_instance(request, instance_id, _return_save_result=False, _pending_
             "pending_acceptance": _pending_acceptance,
             "pending_acceptance_can_accept": pending_acceptance_can_accept,
             "pending_acceptance_can_reject": pending_acceptance_can_reject,
+            "pending_acceptance_reject_requires_assignee": pending_acceptance_reject_requires_assignee,
+            "pending_acceptance_reject_candidates": pending_acceptance_reject_candidates,
+            "pending_acceptance_reject_step": pending_acceptance_reject_step,
         },
     )
 
