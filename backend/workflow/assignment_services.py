@@ -138,38 +138,37 @@ class WorkflowStepAssignmentService:
                 raise ValidationError("شروع‌کننده نمونه فرآیند مشخص نیست.")
 
         elif policy == WorkflowStep.AssignmentPolicy.STEP_COMPLETER:
-            source_execution = None
+            source_executions = WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=step.assignment_source_step,
+                is_submitted=True,
+            )
+            if source_executions.filter(submitted_at__isnull=True).exists():
+                raise ValidationError(
+                    "زمان تکمیل یکی از نوبت‌های مرحله مرجع ثبت نشده و ترتیب آن‌ها قابل اثبات نیست."
+                )
+
             if (
                 previous_execution is not None
                 and previous_execution.instance_id == instance.pk
                 and previous_execution.workflow_step_id
                 == step.assignment_source_step_id
+                and (
+                    not previous_execution.is_submitted
+                    or previous_execution.submitted_at is None
+                )
             ):
-                source_execution = previous_execution
-                if (
-                    not source_execution.is_submitted
-                    or source_execution.submitted_at is None
-                ):
-                    raise ValidationError(
-                        "نوبت اجرای مرحله مرجع تکمیل‌شده و دارای زمان ثبت نیست."
-                    )
-            else:
-                source_executions = WorkflowStepExecution.objects.filter(
-                    instance=instance,
-                    workflow_step=step.assignment_source_step,
-                    is_submitted=True,
+                raise ValidationError(
+                    "نوبت اجرای مرحله مرجع تکمیل‌شده و دارای زمان ثبت نیست."
                 )
-                if source_executions.filter(submitted_at__isnull=True).exists():
-                    raise ValidationError(
-                        "زمان تکمیل یکی از نوبت‌های مرحله مرجع ثبت نشده و ترتیب آن‌ها قابل اثبات نیست."
-                    )
-                source_execution = (
-                    source_executions
-                    .filter(submitted_at__isnull=False)
-                    .select_related("completed_by")
-                    .order_by("-submitted_at", "-pk")
-                    .first()
-                )
+
+            source_execution = (
+                source_executions
+                .filter(submitted_at__isnull=False)
+                .select_related("completed_by")
+                .order_by("-submitted_at", "-pk")
+                .first()
+            )
 
             if source_execution is None or source_execution.completed_by is None:
                 raise ValidationError(
