@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
@@ -123,7 +121,7 @@ class PendingAcceptanceActionViewTests(TestCase):
             entered_by=self.sender,
             completed_by=self.sender,
             is_submitted=True,
-            submitted_at=timezone.now() - timedelta(minutes=1),
+            submitted_at=timezone.now(),
         )
         self.execution = WorkflowTransitionExecution.objects.create(
             instance=self.instance,
