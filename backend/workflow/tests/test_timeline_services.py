@@ -145,6 +145,7 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
             code="TIMELINE_TRANSITION",
             from_step=self.step_one,
             to_step=self.step_two,
+            requires_acceptance=True,
         )
         resolved_at = timezone.now()
         transition_execution = WorkflowTransitionExecution.objects.create(
@@ -336,6 +337,62 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         ]
 
         self.assertEqual(step_ids, sorted(step_ids))
+
+    def test_accepted_transition_without_acceptance_does_not_create_resolution_event(self):
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow, name="انتقال عادی",
+            code="TIMELINE_NO_ACCEPTANCE", from_step=self.step_one,
+            to_step=self.step_two, requires_acceptance=False,
+        )
+        WorkflowTransitionExecution.objects.create(
+            instance=self.instance, transition=transition,
+            performed_by=self.starter,
+            status=WorkflowTransitionExecution.Status.ACCEPTED,
+            accepted_by=self.reviewer, resolved_at=timezone.now(),
+        )
+        events = build_instance_timeline_events(self.instance)
+        self.assertEqual([event["type"] for event in events], ["start", "transition"])
+
+    def test_rejected_transition_uses_return_step_and_exposes_proposed_assignee(self):
+        return_step = WorkflowStep.objects.create(
+            workflow=self.workflow, name="مرحله بازگشت",
+            code="TIMELINE_RETURN_STEP", order=3,
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow, name="ارسال برای تأیید",
+            code="TIMELINE_REJECT_ROUTE", from_step=self.step_one,
+            to_step=self.step_two, reject_to_step=return_step,
+            requires_acceptance=True,
+        )
+        execution = WorkflowTransitionExecution.objects.create(
+            instance=self.instance, transition=transition,
+            performed_by=self.starter,
+            status=WorkflowTransitionExecution.Status.REJECTED,
+            rejected_by=self.reviewer, proposed_assignee=self.assignee,
+            resolved_at=None,
+        )
+        events = build_instance_timeline_events(self.instance)
+        request_event = next(e for e in events if e["type"] == "transition")
+        resolution_event = next(e for e in events if e["type"] == "transition_resolution")
+        self.assertEqual(request_event["to_step"], "مرحله بازگشت")
+        self.assertEqual(request_event["proposed_assignee"], "Ali Rezaei")
+        self.assertEqual(resolution_event["to_step"], "مرحله بازگشت")
+        self.assertEqual(resolution_event["proposed_assignee"], "Ali Rezaei")
+        self.assertIsNone(resolution_event["performed_at"])
+        self.assertTrue(resolution_event["timestamp_missing"])
+        self.assertEqual(resolution_event["id"], f"transition-resolution-{execution.pk}")
+
+    def test_legacy_step_actor_is_explicitly_labeled_and_not_misidentified_as_completer(self):
+        execution = WorkflowStepExecution.objects.create(
+            instance=self.instance, workflow_step=self.step_one,
+            performed_by=self.reviewer, entered_by=None, completed_by=None,
+        )
+        event = next(e for e in build_instance_timeline_events(self.instance)
+                     if e["id"] == f"step-{execution.pk}")
+        self.assertEqual(event["user"], "timeline-reviewer")
+        self.assertEqual(event["user_source"], "performed_by_legacy")
+        self.assertIn("Legacy", event["user_role_label"])
+        self.assertEqual(event["completed_by"], "—")
 
     def test_rejects_non_instance_argument(self):
         with self.assertRaises(TypeError):
