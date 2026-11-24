@@ -5,16 +5,29 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
+from django.contrib.auth import get_user_model
 
 from .admin import WorkflowInstanceAdmin, dolphin_admin_site
 from .models import WorkflowInstance, WorkflowStep
+from .assignment_services import WorkflowStepAssignmentService
 from .override_services import WorkflowOverrideService
+
+User = get_user_model()
 
 
 class WorkflowInstanceOverrideForm(forms.Form):
     target_step = forms.ModelChoiceField(
         queryset=WorkflowStep.objects.none(),
         label="مرحله مقصد",
+    )
+    selected_assignee = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        required=False,
+        label="مسئول مرحله مقصد",
+        help_text=(
+            "برای مراحلی با سیاست «انتخاب توسط تکمیل‌کننده مرحله قبل»، "
+            "مسئول باید توسط Admin انتخاب شود."
+        ),
     )
     reason = forms.CharField(
         label="دلیل اصلاح مسیر",
@@ -26,7 +39,7 @@ class WorkflowInstanceOverrideForm(forms.Form):
     def __init__(self, *args, instance, **kwargs):
         super().__init__(*args, **kwargs)
         self.instance = instance
-        self.fields["target_step"].queryset = (
+        target_steps = (
             WorkflowStep.objects
             .filter(
                 workflow=instance.workflow,
@@ -35,6 +48,64 @@ class WorkflowInstanceOverrideForm(forms.Form):
             .exclude(pk=instance.current_step_id)
             .order_by("order")
         )
+        self.fields["target_step"].queryset = target_steps
+
+        # On GET, show candidates eligible for any selectable manual-assignment
+        # target. On POST, narrow the queryset to the selected target step.
+        selected_step = None
+        if self.is_bound:
+            target_step_id = self.data.get(self.add_prefix("target_step"))
+            if target_step_id:
+                selected_step = target_steps.filter(pk=target_step_id).first()
+
+        candidate_ids = set()
+        if selected_step is not None:
+            if (
+                selected_step.assignment_policy
+                == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+            ):
+                candidate_ids = {
+                    user.pk
+                    for user in WorkflowStepAssignmentService.get_eligible_assignees(
+                        workflow=instance.workflow,
+                        step=selected_step,
+                    )
+                }
+        elif not self.is_bound:
+            manual_steps = target_steps.filter(
+                assignment_policy=WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+            )
+            for step in manual_steps:
+                candidate_ids.update(
+                    user.pk
+                    for user in WorkflowStepAssignmentService.get_eligible_assignees(
+                        workflow=instance.workflow,
+                        step=step,
+                    )
+                )
+
+        self.fields["selected_assignee"].queryset = User.objects.filter(
+            pk__in=candidate_ids,
+            is_active=True,
+        ).order_by("username")
+
+    def clean(self):
+        cleaned_data = super().clean()
+        target_step = cleaned_data.get("target_step")
+        selected_assignee = cleaned_data.get("selected_assignee")
+
+        if (
+            target_step
+            and target_step.assignment_policy
+            == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+            and selected_assignee is None
+        ):
+            self.add_error(
+                "selected_assignee",
+                "برای این سیاست تخصیص، انتخاب مسئول مرحله مقصد الزامی است.",
+            )
+
+        return cleaned_data
 
 
 class WorkflowInstanceOverrideAdmin(WorkflowInstanceAdmin):
@@ -89,6 +160,7 @@ class WorkflowInstanceOverrideAdmin(WorkflowInstanceAdmin):
                     target_step=form.cleaned_data["target_step"],
                     performed_by=request.user,
                     reason=form.cleaned_data["reason"],
+                    selected_assignee=form.cleaned_data["selected_assignee"],
                 )
             except ValidationError as exc:
                 form.add_error(None, exc.message)
