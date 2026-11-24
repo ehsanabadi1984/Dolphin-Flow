@@ -249,6 +249,37 @@ class PendingRejectionAssignmentTests(TestCase):
             ).exists()
         )
 
+    def test_reject_fails_closed_for_invalid_previous_completer_policy_configuration(self):
+        self.return_step.assignment_source_step = self.source_step
+        self.return_step.save(update_fields=["assignment_source_step"])
+
+        response = self.client.post(
+            reverse(
+                "operator_panel:reject_pending_acceptance",
+                args=[self.transition_execution.pk],
+            ),
+            {"selected_assignee": str(self.candidate.pk)},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("operator_panel:pending_acceptances"),
+        )
+        self.transition_execution.refresh_from_db()
+        self.instance.refresh_from_db()
+
+        self.assertEqual(
+            self.transition_execution.status,
+            WorkflowTransitionExecution.Status.PENDING,
+        )
+        self.assertEqual(self.instance.current_step_id, self.source_step.pk)
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=self.instance,
+                workflow_step=self.return_step,
+            ).exists()
+        )
+
     def test_reject_revalidates_selected_user_execute_permission(self):
         response = self.client.post(
             reverse(
