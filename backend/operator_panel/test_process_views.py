@@ -18,12 +18,110 @@ from workflow.models import (
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
+    WorkflowPermission,
     WorkflowStep,
+    WorkflowStepExecution,
     WorkflowStepExecution,
 )
 
 
 User = get_user_model()
+
+
+class AssignedTasksExecutionAssigneeTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="assigned_tasks_current_owner",
+            password="test-password",
+        )
+        self.step_default_user = User.objects.create_user(
+            username="assigned_tasks_step_default",
+            password="test-password",
+        )
+        self.workflow = Workflow.objects.create(
+            name="Assigned Tasks WF",
+            code="ASSIGNED_TASKS_WF",
+            is_active=True,
+        )
+        for member in (self.user, self.step_default_user):
+            WorkflowMembership.objects.create(
+                workflow=self.workflow,
+                user=member,
+                role=WorkflowMembership.Role.EXECUTOR,
+                is_active=True,
+            )
+        self.step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Assigned Tasks Step",
+            code="ASSIGNED_TASKS_STEP",
+            order=1,
+            is_active=True,
+            assigned_to=self.step_default_user,
+        )
+        for action in (
+            WorkflowPermission.Action.VIEW,
+            WorkflowPermission.Action.EXECUTE,
+        ):
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                role=WorkflowMembership.Role.EXECUTOR,
+                action=action,
+                step=self.step,
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
+
+    def create_instance_with_execution(self, *, assigned_to, is_submitted=False):
+        instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+            started_by=self.step_default_user,
+            status=WorkflowInstance.Status.ACTIVE,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step,
+            performed_by=self.step_default_user,
+            assigned_to=assigned_to,
+            is_submitted=is_submitted,
+        )
+        return instance
+
+    def get_assigned_instance_ids(self, user):
+        client = Client()
+        client.force_login(user)
+        response = client.get(reverse("operator_panel:assigned_tasks"))
+        self.assertEqual(response.status_code, 200)
+        return {
+            instance.pk
+            for instance in response.context["instances"]
+        }
+
+    def test_assigned_tasks_uses_active_execution_assignee_not_step_default(self):
+        instance = self.create_instance_with_execution(
+            assigned_to=self.user,
+        )
+
+        self.assertIn(
+            instance.pk,
+            self.get_assigned_instance_ids(self.user),
+        )
+        self.assertNotIn(
+            instance.pk,
+            self.get_assigned_instance_ids(self.step_default_user),
+        )
+
+    def test_assigned_tasks_excludes_unassigned_and_submitted_executions(self):
+        unassigned_instance = self.create_instance_with_execution(
+            assigned_to=None,
+        )
+        submitted_instance = self.create_instance_with_execution(
+            assigned_to=self.user,
+            is_submitted=True,
+        )
+
+        visible_ids = self.get_assigned_instance_ids(self.user)
+        self.assertNotIn(unassigned_instance.pk, visible_ids)
+        self.assertNotIn(submitted_instance.pk, visible_ids)
 
 
 class MyProcessesSummaryWiringTests(TestCase):
