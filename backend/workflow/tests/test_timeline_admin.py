@@ -271,6 +271,7 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
             code="TIMELINE_RENDER_TRANSITION",
             from_step=self.step,
             to_step=target_step,
+            requires_acceptance=True,
         )
         WorkflowTransitionExecution.objects.create(
             instance=self.instance,
@@ -336,6 +337,46 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         self.assertContains(response, "تکمیل فرآیند")
         self.assertContains(response, "انجام‌دهنده تکمیل")
         self.assertContains(response, "تغییر مسئول")
+
+    def test_rejected_transition_renders_return_route_and_proposed_assignee(self):
+        self.grant_workflow_view()
+        return_step = WorkflowStep.objects.create(
+            workflow=self.workflow, name="مرحله بازگشت",
+            code="TIMELINE_ADMIN_RETURN", order=2,
+        )
+        destination = WorkflowStep.objects.create(
+            workflow=self.workflow, name="مقصد عادی",
+            code="TIMELINE_ADMIN_NORMAL_DEST", order=3,
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow, name="انتقال نیازمند تأیید",
+            code="TIMELINE_ADMIN_REJECT", from_step=self.step,
+            to_step=destination, reject_to_step=return_step,
+            requires_acceptance=True,
+        )
+        WorkflowTransitionExecution.objects.create(
+            instance=self.instance, transition=transition,
+            performed_by=self.viewer, rejected_by=self.starter,
+            proposed_assignee=self.viewer,
+            status=WorkflowTransitionExecution.Status.REJECTED,
+            resolved_at=None,
+        )
+        response = self.client.get(self.timeline_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "مرحله بازگشت")
+        self.assertNotContains(response, "مقصد عادی")
+        self.assertContains(response, "مسئول پیشنهادی مرحله مقصد")
+        self.assertContains(response, "زمان دقیق ثبت نشده است")
+
+    def test_legacy_step_actor_is_labeled_in_timeline(self):
+        self.grant_workflow_view()
+        WorkflowStepExecution.objects.create(
+            instance=self.instance, workflow_step=self.step,
+            performed_by=self.starter, entered_by=None, completed_by=None,
+        )
+        response = self.client.get(self.timeline_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "عامل ثبت‌شده در داده Legacy")
 
     def test_override_is_distinct_and_null_resolution_timestamp_does_not_break_timeline(self):
         self.grant_workflow_view()
