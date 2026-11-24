@@ -343,5 +343,5 @@ class PendingRejectionAssignmentTests(TestCase):
         )
         self.assertEqual(
             history.source,
-            WorkflowStepAssignmentHistory.Source.POLICY,
+            WorkflowStepAssignmentHistory.Source.REJECTION,
         )
