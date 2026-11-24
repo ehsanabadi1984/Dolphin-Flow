@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
                     ("POLICY", "سیاست تخصیص"),
                     ("MANUAL", "تغییر دستی"),
                     ("ACCEPTANCE", "پذیرش مرحله"),
-                    ("REJECTION", "انتخاب هنگام رد انتقال"),
+                    ("REJECTION", "تخصیص هنگام رد انتقال"),
                     ("OVERRIDE", "تغییر توسط مدیر"),
                 ],
                 max_length=20,
