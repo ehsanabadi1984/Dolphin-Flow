@@ -304,6 +304,18 @@ def _deny_allow_q(prefix):
     )
 
 
+def _active_execution_assigned_to(user):
+    """Match instances whose active current-step execution belongs to user."""
+    return Exists(
+        WorkflowStepExecution.objects.filter(
+            instance_id=OuterRef("pk"),
+            workflow_step_id=OuterRef("current_step_id"),
+            is_submitted=False,
+            assigned_to=user,
+        )
+    )
+
+
 def _meaningful_instance_q():
     """Return instances that have persisted workflow data."""
     return (
@@ -550,7 +562,12 @@ class DashboardService:
             )
             .filter(
                 Q(started_by=self.user)
-                | Q(current_step__assigned_to=self.user)
+                | Q(Exists(WorkflowStepExecution.objects.filter(
+                    instance_id=OuterRef("pk"),
+                    workflow_step_id=OuterRef("current_step_id"),
+                    is_submitted=False,
+                    assigned_to=self.user,
+                )))
                 | participated
             )
             .select_related("workflow", "current_step")
@@ -583,7 +600,7 @@ class DashboardService:
     def get_sidebar_counts(self):
         accessible = self._accessible_active_queryset()
         actionable = _can_take_action_q(self.user)
-        assigned_to_me = Q(current_step__assigned_to_id=self.user.pk)
+        assigned_to_me = Q(_active_execution_assigned_to(self.user))
 
         return {
             "active": self._my_active_queryset().count(),
@@ -641,9 +658,9 @@ class DashboardService:
             _can_take_action_q(self.user),
         )
         if assigned_only:
-            queryset = queryset.filter(current_step__assigned_to_id=self.user.pk)
+            queryset = queryset.filter(_active_execution_assigned_to(self.user))
         elif exclude_assigned:
-            queryset = queryset.exclude(current_step__assigned_to_id=self.user.pk)
+            queryset = queryset.exclude(_active_execution_assigned_to(self.user))
         return list(queryset[:PENDING_LIST_LIMIT])
 
     def _attach_dashboard_state(self, instances, *, now):
