@@ -353,6 +353,9 @@ class WorkflowExecutionService:
                 "اجرای تکمیل‌شده مرحله مبدأ برای این درخواست رد پیدا نشد."
             )
 
+        WorkflowStepAssignmentService.validate_policy_configuration(
+            step=reject_to_step,
+        )
         manual_selection = (
             reject_to_step.assignment_policy
             == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
