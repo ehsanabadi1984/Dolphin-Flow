@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.utils import timezone
 
 from workflow.assignment_services import WorkflowStepAssignmentService
 from workflow.models import (
@@ -81,6 +82,7 @@ class WorkflowStepAssignmentServiceTests(TestCase):
             performed_by=self.starter,
             completed_by=completed_by,
             is_submitted=completed_by is not None,
+            submitted_at=timezone.now() if completed_by is not None else None,
         )
 
     def test_candidates_use_effective_step_action_execute_permission(self):
@@ -228,6 +230,128 @@ class WorkflowStepAssignmentServiceTests(TestCase):
         )
         self.assertEqual(resolved.pk, self.candidate_b.pk)
         self.assertEqual(source_execution.completed_by_id, resolved.pk)
+
+    def test_step_completer_ignores_newer_unsubmitted_execution(self):
+        self.step.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
+        self.step.assignment_source_step = self.source_step
+        self.step.save()
+        completed = self.make_execution(
+            self.source_step,
+            completed_by=self.candidate_a,
+        )
+        incomplete = self.make_execution(self.source_step)
+        resolved = WorkflowStepAssignmentService.resolve_assignee(
+            workflow=self.workflow,
+            step=self.step,
+            instance=self.instance,
+        )
+        self.assertEqual(resolved.pk, self.candidate_a.pk)
+        self.assertNotEqual(completed.pk, incomplete.pk)
+
+    def test_step_completer_uses_latest_submitted_at_not_latest_created_at(self):
+        self.step.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
+        self.step.assignment_source_step = self.source_step
+        self.step.save()
+        older_completion = self.make_execution(
+            self.source_step,
+            completed_by=self.candidate_a,
+        )
+        newer_completion = self.make_execution(
+            self.source_step,
+            completed_by=self.candidate_b,
+        )
+        WorkflowStepExecution.objects.filter(pk=older_completion.pk).update(
+            submitted_at=timezone.now() - timezone.timedelta(days=2),
+            performed_at=timezone.now(),
+        )
+        WorkflowStepExecution.objects.filter(pk=newer_completion.pk).update(
+            submitted_at=timezone.now() - timezone.timedelta(days=1),
+            performed_at=timezone.now() - timezone.timedelta(days=3),
+        )
+        resolved = WorkflowStepAssignmentService.resolve_assignee(
+            workflow=self.workflow,
+            step=self.step,
+            instance=self.instance,
+        )
+        self.assertEqual(resolved.pk, self.candidate_b.pk)
+
+    def test_step_completer_does_not_fall_back_when_latest_completion_has_no_completer(self):
+        self.step.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
+        self.step.assignment_source_step = self.source_step
+        self.step.save()
+        self.make_execution(self.source_step, completed_by=self.candidate_a)
+        latest = self.make_execution(self.source_step)
+        WorkflowStepExecution.objects.filter(pk=latest.pk).update(
+            is_submitted=True,
+            submitted_at=timezone.now() + timezone.timedelta(seconds=1),
+        )
+        with self.assertRaises(ValidationError):
+            WorkflowStepAssignmentService.resolve_assignee(
+                workflow=self.workflow,
+                step=self.step,
+                instance=self.instance,
+            )
+
+    def test_step_completer_rejects_explicit_unsubmitted_execution(self):
+        self.step.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
+        self.step.assignment_source_step = self.source_step
+        self.step.save()
+        incomplete = self.make_execution(self.source_step)
+        with self.assertRaises(ValidationError):
+            WorkflowStepAssignmentService.resolve_assignee(
+                workflow=self.workflow,
+                step=self.step,
+                instance=self.instance,
+                previous_execution=incomplete,
+            )
+
+    def test_step_completer_uses_configured_source_when_explicit_execution_is_from_other_step(self):
+        self.step.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
+        self.step.assignment_source_step = self.source_step
+        self.step.save()
+        source = self.make_execution(
+            self.source_step,
+            completed_by=self.candidate_b,
+        )
+        unrelated = self.make_execution(self.step, completed_by=self.candidate_a)
+        resolved = WorkflowStepAssignmentService.resolve_assignee(
+            workflow=self.workflow,
+            step=self.step,
+            instance=self.instance,
+            previous_execution=unrelated,
+        )
+        self.assertEqual(resolved.pk, self.candidate_b.pk)
+        self.assertNotEqual(source.pk, unrelated.pk)
+
+    def test_step_completer_fails_closed_when_submitted_execution_has_no_timestamp(self):
+        self.step.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
+        self.step.assignment_source_step = self.source_step
+        self.step.save()
+        completed = self.make_execution(
+            self.source_step,
+            completed_by=self.candidate_a,
+        )
+        WorkflowStepExecution.objects.filter(pk=completed.pk).update(
+            submitted_at=None,
+        )
+        with self.assertRaises(ValidationError):
+            WorkflowStepAssignmentService.resolve_assignee(
+                workflow=self.workflow,
+                step=self.step,
+                instance=self.instance,
+            )
+
+    def test_step_completer_requires_a_completed_source_execution(self):
+        self.step.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
+        self.step.assignment_source_step = self.source_step
+        self.step.save()
+        self.make_execution(self.source_step)
+        with self.assertRaises(ValidationError):
+            WorkflowStepAssignmentService.resolve_assignee(
+                workflow=self.workflow,
+                step=self.step,
+                instance=self.instance,
+            )
 
     def test_step_completer_rejects_missing_or_invalid_source_step(self):
         self.step.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
