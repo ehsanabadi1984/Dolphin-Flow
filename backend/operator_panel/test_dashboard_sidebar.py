@@ -225,6 +225,9 @@ class StartWorkflowFailureTests(DashboardSidebarBase):
         )
 
     def test_successful_start_still_redirects_to_instance(self):
+        # Starting now creates an execution assignment, so the starter's
+        # role must also be eligible to EXECUTE the first step.
+        self.grant_role_action_permissions()
         WorkflowPermission.objects.create(
             workflow=self.workflow,
             user=self.user,
@@ -531,7 +534,8 @@ class AbandonedStartConsistencyTests(DashboardSidebarBase):
         )
         content = response.content.decode()
         meaningful_number = meaningful.started_at.strftime("%y%m%d") + f"-{meaningful.pk:06d}"
-        abandoned_number = abandoned.started_at.strftime("%y%m%d") + f"-{abandoned.pk:06d}"
+        meaningful_number = f"{meaningful.pk}-{meaningful.started_at.strftime('%y%m%d')}"
+        abandoned_number = f"{abandoned.pk}-{abandoned.started_at.strftime('%y%m%d')}"
         self.assertIn(f"<span>#{meaningful_number}</span>", content)
         self.assertNotIn(f"<span>#{abandoned_number}</span>", content)
 
@@ -747,6 +751,7 @@ class TaskPredicateTests(DashboardSidebarBase):
         execution = instance.step_executions.get(is_submitted=False)
         execution.assigned_to = self.other
         execution.save(update_fields=["assigned_to"])
+        FormData.objects.create(instance=instance, data={"note": "waiting"})
 
         service = DashboardEnhancementService(self.user)
         self.assertIn(instance, service.waiting_for_others_queryset())
