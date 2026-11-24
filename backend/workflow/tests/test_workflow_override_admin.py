@@ -2,7 +2,6 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.test import TestCase
 
-from workflow.admin import dolphin_admin_site
 from workflow.models import (
     Workflow,
     WorkflowInstance,
