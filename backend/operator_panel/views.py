@@ -547,7 +547,11 @@ def workflow_instance(
                 performed_by=request.user,
                 is_submitted=True,
             ).exists()
-            and instance.current_step.assigned_to_id != request.user.pk
+            and not instance.step_executions.filter(
+                workflow_step=instance.current_step,
+                is_submitted=False,
+                assigned_to=request.user,
+            ).exists()
         )
     ):
         historical_step = _get_historical_view_step(
@@ -862,7 +866,7 @@ def _get_historical_view_step(
         executions = executions.filter(performed_by=performed_by)
     if assigned_to is not None:
         executions = executions.filter(
-            workflow_step__assigned_to=assigned_to,
+            assigned_to=assigned_to,
         )
 
     executions = (
