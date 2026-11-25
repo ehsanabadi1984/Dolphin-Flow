@@ -256,6 +256,8 @@ class WorkflowStepAssignmentService:
 
         WorkflowStepAssignmentHistory.objects.create(
             step_execution=locked_execution,
+            instance=locked_execution.instance,
+            workflow_step=step,
             previous_assignee=previous_assignee,
             new_assignee=assignee,
             changed_by=changed_by,

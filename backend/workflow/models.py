@@ -629,9 +629,27 @@ class WorkflowStepAssignmentHistory(models.Model):
 
     step_execution = models.ForeignKey(
         WorkflowStepExecution,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assignment_history",
+        verbose_name="نوبت اجرا (در صورت وجود)",
+    )
+
+    instance = models.ForeignKey(
+        WorkflowInstance,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="assignment_history",
+        verbose_name="نمونه فرآیند",
+    )
+
+    workflow_step = models.ForeignKey(
+        WorkflowStep,
         on_delete=models.PROTECT,
         related_name="assignment_history",
-        verbose_name="نوبت اجرا",
+        verbose_name="مرحله",
     )
 
     previous_assignee = models.ForeignKey(
@@ -684,10 +702,107 @@ class WorkflowStepAssignmentHistory(models.Model):
         verbose_name_plural = "تاریخچه تخصیص مسئولان مراحل"
 
     def __str__(self):
+        target = self.step_execution or self.workflow_step or "—"
         return (
-            f"{self.step_execution} - "
+            f"{target} - "
             f"{self.previous_assignee or '—'} → "
             f"{self.new_assignee or '—'}"
+        )
+
+
+class WorkflowInstanceEvent(models.Model):
+    class EventType(models.TextChoices):
+        STEP_ENTERED = "STEP_ENTERED", "ورود به مرحله"
+        OVERRIDE = "OVERRIDE", "اصلاح مسیر توسط مدیر"
+
+    instance = models.ForeignKey(
+        WorkflowInstance,
+        on_delete=models.PROTECT,
+        related_name="audit_events",
+        verbose_name="نمونه فرآیند",
+    )
+
+    workflow_step = models.ForeignKey(
+        WorkflowStep,
+        on_delete=models.PROTECT,
+        related_name="instance_events",
+        verbose_name="مرحله",
+    )
+
+    event_type = models.CharField(
+        max_length=20,
+        choices=EventType.choices,
+        verbose_name="نوع رویداد",
+    )
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="workflow_instance_events",
+        verbose_name="عامل ثبت رویداد",
+    )
+
+    actor_label = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="نام ثبت‌شده عامل در زمان رویداد",
+    )
+
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="workflow_instance_event_assignments",
+        verbose_name="مسئول ثبت‌شده در زمان ورود",
+    )
+
+    assigned_to_label = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="نام ثبت‌شده مسئول در زمان ورود",
+    )
+
+    # Deliberately not a ForeignKey: the source execution may later be deleted.
+    execution_id = models.PositiveBigIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="شناسه تاریخی نوبت اجرا",
+    )
+
+    occurred_at = models.DateTimeField(
+        db_index=True,
+        verbose_name="زمان وقوع رویداد",
+    )
+
+    details = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="جزئیات و snapshot رویداد",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["occurred_at", "pk"]
+        verbose_name = "رویداد فرآیند"
+        verbose_name_plural = "رویدادهای فرآیند"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["instance", "execution_id"],
+                condition=models.Q(execution_id__isnull=False),
+                name="uniq_wf_event_instance_execution",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.instance} - {self.get_event_type_display()} - "
+            f"{self.workflow_step}"
         )
 
 
