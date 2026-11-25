@@ -96,17 +96,22 @@ class SLAMonitorService:
                     .get(pk=execution.instance_id)
                 )
 
-                execution = (
-                    WorkflowStepExecution.objects
-                    .select_for_update(of=("self",))
-                    .select_related(
-                        "workflow_step",
-                        "workflow_step__workflow",
-                        "assigned_to",
-                        "instance",
+                try:
+                    execution = (
+                        WorkflowStepExecution.objects
+                        .select_for_update(of=("self",))
+                        .select_related(
+                            "workflow_step",
+                            "workflow_step__workflow",
+                            "assigned_to",
+                            "instance",
+                        )
+                        .get(pk=execution.pk)
                     )
-                    .get(pk=execution.pk)
-                )
+                except WorkflowStepExecution.DoesNotExist:
+                    # An override may have deleted this unfinished execution
+                    # while the monitor was waiting for the instance lock.
+                    continue
 
                 if (
                     instance.status != WorkflowInstance.Status.ACTIVE
