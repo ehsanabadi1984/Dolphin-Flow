@@ -147,6 +147,8 @@ class SLAMonitorServiceTests(TestCase):
             instance=instance,
             workflow_step=self.step,
             performed_by=self.user,
+            assigned_to=self.executor,
+            assigned_at=started_at,
             sla_started_at=started_at,
             sla_warning_at=warning_at,
             sla_due_at=due_at,
@@ -455,6 +457,58 @@ class SLAMonitorServiceTests(TestCase):
                 self.executor.id,
             },
         )
+
+    def test_sla_warning_uses_execution_assignee_not_step_default(self):
+        actual_assignee = get_user_model().objects.create_user(
+            username="sla_actual_assignee",
+            password="test-password",
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=actual_assignee,
+            role=WorkflowMembership.Role.EXECUTOR,
+        )
+        execution = self.create_execution(
+            started_at=self.make_datetime(10),
+            warning_at=self.make_datetime(12),
+            due_at=self.make_datetime(14),
+        )
+        execution.assigned_to = actual_assignee
+        execution.save(update_fields=["assigned_to"])
+
+        SLAMonitorService.process_active_slas(now=self.make_datetime(12))
+
+        notifications = Notification.objects.filter(
+            notification_type=Notification.NotificationType.SLA_WARNING,
+            workflow_instance=execution.instance,
+            workflow_step=self.step,
+        )
+        self.assertSetEqual(
+            set(notifications.values_list("recipient_id", flat=True)),
+            {actual_assignee.pk},
+        )
+
+    def test_sla_warning_does_not_fall_back_to_step_default_without_execution_assignee(self):
+        execution = self.create_execution(
+            started_at=self.make_datetime(10),
+            warning_at=self.make_datetime(12),
+            due_at=self.make_datetime(14),
+        )
+        execution.assigned_to = None
+        execution.save(update_fields=["assigned_to"])
+
+        result = SLAMonitorService.process_active_slas(now=self.make_datetime(12))
+
+        self.assertEqual(result["warning_count"], 0)
+        self.assertFalse(
+            Notification.objects.filter(
+                notification_type=Notification.NotificationType.SLA_WARNING,
+                workflow_instance=execution.instance,
+                workflow_step=self.step,
+            ).exists()
+        )
+        execution.refresh_from_db()
+        self.assertIsNone(execution.sla_warning_sent_at)
 
     def test_warning_notifies_only_assigned_executor(self):
         viewer = get_user_model().objects.create_user(
