@@ -271,6 +271,18 @@ class WorkflowOverrideServiceTests(TestCase):
             notification=notification,
             status=SMSDelivery.Status.PENDING,
         )
+        in_flight_notification = Notification.objects.create(
+            recipient=self.operator,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="پیامک در حال ارسال",
+            message="ارسال آن قبلاً آغاز شده است.",
+            workflow_instance=self.instance,
+            workflow_step=self.step_c,
+        )
+        in_flight_delivery = SMSDelivery.objects.create(
+            notification=in_flight_notification,
+            status=SMSDelivery.Status.SENDING,
+        )
 
         WorkflowOverrideService.override_instance_step(
             instance=self.instance,
@@ -281,9 +293,11 @@ class WorkflowOverrideServiceTests(TestCase):
 
         notification.refresh_from_db()
         delivery.refresh_from_db()
+        in_flight_delivery.refresh_from_db()
         self.assertTrue(notification.is_read)
         self.assertEqual(delivery.status, SMSDelivery.Status.SKIPPED)
         self.assertIn("منسوخ", delivery.last_error)
+        self.assertEqual(in_flight_delivery.status, SMSDelivery.Status.SENDING)
 
     def test_override_audit_note_survives_step_submission(self):
         new_execution = WorkflowOverrideService.override_instance_step(
