@@ -20,7 +20,7 @@ class SLAMonitorService:
         step_execution,
         notification_type,
     ):
-        responsible_user = step_execution.workflow_step.assigned_to
+        responsible_user = step_execution.assigned_to
 
         if (
             responsible_user is None
@@ -76,7 +76,7 @@ class SLAMonitorService:
             .select_related(
                 "workflow_step",
                 "workflow_step__workflow",
-                "workflow_step__assigned_to",
+                "assigned_to",
                 "instance",
             )
         )
@@ -120,24 +120,25 @@ class SLAMonitorService:
                     step_execution=execution,
                     now=now,
                 ):
-                    SLAMonitorService.notify_workflow_members(
+                    notified = SLAMonitorService.notify_workflow_members(
                         step_execution=execution,
                         notification_type=Notification.NotificationType.SLA_WARNING,
                     )
 
-                    SLAService.mark_warning_sent(
-                        step_execution=execution,
-                        sent_at=now,
-                    )
-
-                    warning_count += 1
-
-                    transaction.on_commit(
-                        lambda instance_id=execution.instance_id, workflow_id=execution.workflow_step.workflow_id: WorkflowRealtimeService.notify_instance_changed(
-                            instance_id=instance_id,
-                            workflow_id=workflow_id,
+                    if notified:
+                        SLAService.mark_warning_sent(
+                            step_execution=execution,
+                            sent_at=now,
                         )
-                    )
+
+                        warning_count += 1
+
+                        transaction.on_commit(
+                            lambda instance_id=execution.instance_id, workflow_id=execution.workflow_step.workflow_id: WorkflowRealtimeService.notify_instance_changed(
+                                instance_id=instance_id,
+                                workflow_id=workflow_id,
+                            )
+                        )
 
                 if (
                     execution.sla_breached_at is None
