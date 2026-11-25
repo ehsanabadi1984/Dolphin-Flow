@@ -406,6 +406,7 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         self.assertContains(response, "زمان دقیق ثبت نشده است")
 
     def test_override_stopped_sla_is_rendered_as_stopped_not_active(self):
+        self.grant_workflow_view()
         started_at = timezone.now() - timedelta(hours=2)
         stopped_at = timezone.now()
         WorkflowInstanceEvent.objects.create(
