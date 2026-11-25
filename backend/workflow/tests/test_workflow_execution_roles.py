@@ -1,343 +1,150 @@
-import os
-
-os.environ.setdefault(
-    "DJANGO_SETTINGS_MODULE",
-    "config.settings",
-)
-
-import django
-
-django.setup()
-
+from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
-
-from accounts.models import User
+from django.test import TestCase
 
 from workflow.models import (
     Workflow,
-    WorkflowStep,
-    WorkflowTransition,
-    WorkflowInstance,
-    WorkflowStepExecution,
-    WorkflowTransitionExecution,
     WorkflowMembership,
     WorkflowPermission,
+    WorkflowStep,
+    WorkflowTransition,
 )
-
 from workflow.services import WorkflowExecutionService
 
 
-TEST_WORKFLOW_CODE = "AUTH_ROLE_EXEC_TEST"
-TEST_USERNAME = "auth_role_exec_user"
+User = get_user_model()
 
 
-def reset_test_data():
-    WorkflowTransitionExecution.objects.filter(
-        instance__workflow__code=TEST_WORKFLOW_CODE
-    ).delete()
+class WorkflowExecutionRolePermissionTests(TestCase):
+    """Regression tests for role/user TRANSITION permission precedence."""
 
-    WorkflowStepExecution.objects.filter(
-        instance__workflow__code=TEST_WORKFLOW_CODE
-    ).delete()
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="auth_role_exec_user",
+            password="test-password",
+            is_active=True,
+        )
+        self.workflow = Workflow.objects.create(
+            name="Authorization Role Execution Test",
+            code="AUTH_ROLE_EXEC_TEST",
+            is_active=True,
+        )
+        self.step_one = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Test Step One",
+            code="ROLE_STEP_ONE",
+            order=1,
+            is_active=True,
+            assigned_to=self.user,
+        )
+        self.step_two = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Test Step Two",
+            code="ROLE_STEP_TWO",
+            order=2,
+            is_active=True,
+            assigned_to=self.user,
+        )
+        self.transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="Test Transition",
+            code="ROLE_TRANSITION",
+            from_step=self.step_one,
+            to_step=self.step_two,
+            is_active=True,
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
 
-    WorkflowInstance.objects.filter(
-        workflow__code=TEST_WORKFLOW_CODE
-    ).delete()
+        # START and EXECUTE are prerequisites for starting and owning the
+        # initial step. TRANSITION is granted independently per test.
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            role=WorkflowMembership.Role.EXECUTOR,
+            action=WorkflowPermission.Action.START,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            role=WorkflowMembership.Role.EXECUTOR,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
 
-    WorkflowPermission.objects.filter(
-        workflow__code=TEST_WORKFLOW_CODE
-    ).delete()
+    def _grant_role_transition(self, effect):
+        return WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            role=WorkflowMembership.Role.EXECUTOR,
+            transition=self.transition,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=effect,
+        )
 
-    WorkflowTransition.objects.filter(
-        workflow__code=TEST_WORKFLOW_CODE
-    ).delete()
+    def _grant_user_transition(self, effect):
+        return WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            transition=self.transition,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=effect,
+        )
 
-    WorkflowStep.objects.filter(
-        workflow__code=TEST_WORKFLOW_CODE
-    ).delete()
+    def _start_instance(self):
+        return WorkflowExecutionService.start_workflow(
+            workflow=self.workflow,
+            user=self.user,
+        )
 
-    WorkflowMembership.objects.filter(
-        workflow__code=TEST_WORKFLOW_CODE
-    ).delete()
-
-    Workflow.objects.filter(
-        code=TEST_WORKFLOW_CODE
-    ).delete()
-
-    User.objects.filter(
-        username=TEST_USERNAME
-    ).delete()
-
-
-def setup_test_environment():
-    user = User.objects.create_user(
-        username=TEST_USERNAME,
-        password="test-password",
-        is_active=True,
-    )
-
-    workflow = Workflow.objects.create(
-        name="Authorization Role Execution Test",
-        code=TEST_WORKFLOW_CODE,
-        is_active=True,
-    )
-
-    step_one = WorkflowStep.objects.create(
-        workflow=workflow,
-        name="Test Step One",
-        code="ROLE_STEP_ONE",
-        order=1,
-        is_active=True,
-    )
-
-    step_two = WorkflowStep.objects.create(
-        workflow=workflow,
-        name="Test Step Two",
-        code="ROLE_STEP_TWO",
-        order=2,
-        is_active=True,
-    )
-
-    transition = WorkflowTransition.objects.create(
-        workflow=workflow,
-        name="Test Transition",
-        code="ROLE_TRANSITION",
-        from_step=step_one,
-        to_step=step_two,
-        is_active=True,
-    )
-
-    membership = WorkflowMembership.objects.create(
-        workflow=workflow,
-        user=user,
-        role=WorkflowMembership.Role.EXECUTOR,
-        is_active=True,
-    )
-
-    return (
-        user,
-        workflow,
-        step_one,
-        step_two,
-        transition,
-        membership,
-    )
-
-
-def start_instance(user, workflow):
-    return WorkflowExecutionService.start_workflow(
-        workflow=workflow,
-        user=user,
-    )
-
-
-def test_role_allow():
-    print("[TEST] 1. Role ALLOW")
-
-    user, workflow, _, _, transition, _ = setup_test_environment()
-
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        action=WorkflowPermission.Action.EXECUTE,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        action=WorkflowPermission.Action.START,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        transition=transition,
-        action=WorkflowPermission.Action.TRANSITION,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    instance = start_instance(user, workflow)
-
-    WorkflowExecutionService.execute_transition(
-        instance=instance,
-        transition=transition,
-        user=user,
-    )
-
-    print("[PASS] Role ALLOW -> transition executed")
-
-
-def test_user_deny_overrides_role_allow():
-    print("[TEST] 2. User DENY overrides Role ALLOW")
-
-    reset_test_data()
-
-    user, workflow, _, _, transition, _ = setup_test_environment()
-
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        action=WorkflowPermission.Action.EXECUTE,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        action=WorkflowPermission.Action.START,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        transition=transition,
-        action=WorkflowPermission.Action.TRANSITION,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        transition=transition,
-        user=user,
-        action=WorkflowPermission.Action.TRANSITION,
-        effect=WorkflowPermission.Effect.DENY,
-    )
-
-    instance = start_instance(user, workflow)
-
-    try:
-        WorkflowExecutionService.execute_transition(
+    def _execute_transition(self, instance):
+        return WorkflowExecutionService.execute_transition(
             instance=instance,
-            transition=transition,
-            user=user,
+            transition=self.transition,
+            user=self.user,
         )
-    except PermissionDenied:
-        print(
-            "[PASS] User DENY overrides Role ALLOW "
-            "-> transition blocked"
-        )
-        return
 
-    raise AssertionError(
-        "Transition should have been denied"
-    )
+    def test_role_allow(self):
+        """Role ALLOW grants permission to execute the transition."""
+        self._grant_role_transition(WorkflowPermission.Effect.ALLOW)
+        instance = self._start_instance()
 
+        result = self._execute_transition(instance)
 
-def test_user_allow_overrides_role_deny():
-    print("[TEST] 3. User ALLOW overrides Role DENY")
+        self.assertIsNotNone(result)
+        self.assertEqual(instance.current_step_id, self.step_two.pk)
 
-    reset_test_data()
+    def test_user_deny_overrides_role_allow(self):
+        """An explicit user DENY overrides role-based TRANSITION ALLOW."""
+        self._grant_role_transition(WorkflowPermission.Effect.ALLOW)
+        self._grant_user_transition(WorkflowPermission.Effect.DENY)
+        instance = self._start_instance()
 
-    user, workflow, _, _, transition, _ = setup_test_environment()
+        with self.assertRaises(PermissionDenied):
+            self._execute_transition(instance)
 
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        action=WorkflowPermission.Action.EXECUTE,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
+        instance.refresh_from_db()
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
 
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        action=WorkflowPermission.Action.START,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
+    def test_user_allow_overrides_role_deny(self):
+        """An explicit user ALLOW overrides role-based TRANSITION DENY."""
+        self._grant_role_transition(WorkflowPermission.Effect.DENY)
+        self._grant_user_transition(WorkflowPermission.Effect.ALLOW)
+        instance = self._start_instance()
 
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        transition=transition,
-        action=WorkflowPermission.Action.TRANSITION,
-        effect=WorkflowPermission.Effect.DENY,
-    )
+        result = self._execute_transition(instance)
 
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        transition=transition,
-        user=user,
-        action=WorkflowPermission.Action.TRANSITION,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
+        self.assertIsNotNone(result)
+        self.assertEqual(instance.current_step_id, self.step_two.pk)
 
-    instance = start_instance(user, workflow)
+    def test_no_transition_permission(self):
+        """START and EXECUTE alone do not grant TRANSITION permission."""
+        instance = self._start_instance()
 
-    WorkflowExecutionService.execute_transition(
-        instance=instance,
-        transition=transition,
-        user=user,
-    )
+        with self.assertRaises(PermissionDenied):
+            self._execute_transition(instance)
 
-    print(
-        "[PASS] User ALLOW overrides Role DENY "
-        "-> transition executed"
-    )
-
-
-def test_no_permission():
-    print("[TEST] 4. No permission")
-
-    reset_test_data()
-
-    user, workflow, _, _, transition, _ = setup_test_environment()
-
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        action=WorkflowPermission.Action.EXECUTE,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    WorkflowPermission.objects.create(
-        workflow=workflow,
-        role=WorkflowMembership.Role.EXECUTOR,
-        action=WorkflowPermission.Action.START,
-        effect=WorkflowPermission.Effect.ALLOW,
-    )
-
-    instance = start_instance(user, workflow)
-
-    try:
-        WorkflowExecutionService.execute_transition(
-            instance=instance,
-            transition=transition,
-            user=user,
-        )
-    except PermissionDenied:
-        print(
-            "[PASS] No transition permission "
-            "-> transition blocked"
-        )
-        return
-
-    raise AssertionError(
-        "Transition should have been denied"
-    )
-
-
-def main():
-    print("=" * 60)
-    print("WORKFLOW ROLE/USER EXECUTION AUTHORIZATION TEST")
-    print("=" * 60)
-
-    try:
-        reset_test_data()
-
-        test_role_allow()
-        test_user_deny_overrides_role_allow()
-        test_user_allow_overrides_role_deny()
-        test_no_permission()
-
-        print("=" * 60)
-        print("ROLE/USER EXECUTION AUTHORIZATION TEST PASSED")
-        print("=" * 60)
-
-    finally:
-        reset_test_data()
-
-
-if __name__ == "__main__":
-    main()
+        instance.refresh_from_db()
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
