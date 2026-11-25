@@ -462,6 +462,45 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         self.assertTrue(resolution_event["timestamp_missing"])
         self.assertEqual(resolution_event["id"], f"transition-resolution-{execution.pk}")
 
+    def test_superseded_transition_creates_independent_resolution_event(self):
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="انتقال نیازمند تأیید",
+            code="TIMELINE_SUPERSEDED",
+            from_step=self.step_one,
+            to_step=self.step_two,
+            requires_acceptance=True,
+        )
+        resolved_at = timezone.now()
+        execution = WorkflowTransitionExecution.objects.create(
+            instance=self.instance,
+            transition=transition,
+            performed_by=self.starter,
+            status=WorkflowTransitionExecution.Status.SUPERSEDED,
+            resolved_at=resolved_at,
+        )
+
+        events = build_instance_timeline_events(self.instance)
+        request_event = next(
+            event for event in events
+            if event["id"] == f"transition-{execution.pk}"
+        )
+        resolution_event = next(
+            event for event in events
+            if event["id"] == f"transition-resolution-{execution.pk}"
+        )
+
+        self.assertEqual(request_event["transition_status_code"], "SUPERSEDED")
+        self.assertEqual(
+            resolution_event["title"],
+            "تعیین تکلیف انتقال: منسوخ‌شده بر اثر اصلاح مسیر",
+        )
+        self.assertEqual(resolution_event["transition_status"], "SUPERSEDED")
+        self.assertEqual(resolution_event["performed_at"], resolved_at)
+        self.assertEqual(resolution_event["resolution_actor_label"], "اصلاح مدیریتی مسیر")
+        self.assertEqual(resolution_event["user"], "—")
+        self.assertIn("به معنی پذیرش یا رد درخواست نیست", resolution_event["description"])
+
     def test_legacy_step_actor_is_explicitly_labeled_and_not_misidentified_as_completer(self):
         execution = WorkflowStepExecution.objects.create(
             instance=self.instance, workflow_step=self.step_one,
