@@ -5,6 +5,7 @@ from django.utils import timezone
 from .authorization import WorkflowAuthorizationService
 from .models import (
     WorkflowStep,
+    WorkflowInstanceEvent,
     WorkflowStepAssignmentHistory,
     WorkflowStepExecution,
 )
@@ -74,14 +75,8 @@ class WorkflowStepAssignmentService:
             )
 
     @staticmethod
-    def resolve_override_assignee(
-        *,
-        workflow,
-        step,
-        instance,
-        selected_assignee=None,
-    ):
-        """Resolve an assignee for an administrative step override."""
+    def get_override_assignee_state(*, workflow, step, instance):
+        """Return the assignee decision required for an administrative override."""
         if not workflow or not step or step.workflow_id != workflow.pk:
             raise ValidationError("مرحله مقصد متعلق به فرآیند مشخص‌شده نیست.")
         if not instance or instance.workflow_id != workflow.pk:
@@ -89,26 +84,123 @@ class WorkflowStepAssignmentService:
 
         WorkflowStepAssignmentService.validate_policy_configuration(step=step)
 
+        # The latest entry event is authoritative, including when its assignee
+        # snapshot is empty or its user is no longer eligible. Never fall back
+        # to an older assignee in that case.
+        previous_event = (
+            WorkflowInstanceEvent.objects
+            .filter(instance=instance, workflow_step=step)
+            .select_related("assigned_to")
+            .order_by("-occurred_at", "-pk")
+            .first()
+        )
+        if previous_event is not None:
+            if previous_event.assigned_to_id is None:
+                return {
+                    "required": True,
+                    "assignee": None,
+                    "reason": "آخرین ورود به این مرحله مسئول معتبر و قابل بازیابی ندارد.",
+                }
+            try:
+                assignee = WorkflowStepAssignmentService.validate_assignee(
+                    workflow=workflow,
+                    step=step,
+                    assignee=previous_event.assigned_to,
+                )
+            except ValidationError as exc:
+                return {
+                    "required": True,
+                    "assignee": None,
+                    "reason": str(exc),
+                }
+            return {"required": False, "assignee": assignee, "reason": ""}
+
+        # Compatibility path for executions created before independent entry
+        # events were introduced (or legacy fixtures/data not yet backfilled).
+        previous_execution = (
+            WorkflowStepExecution.objects
+            .filter(instance=instance, workflow_step=step)
+            .select_related("assigned_to")
+            .order_by("-performed_at", "-pk")
+            .first()
+        )
+        if previous_execution is not None:
+            if previous_execution.assigned_to_id is None:
+                return {
+                    "required": True,
+                    "assignee": None,
+                    "reason": "اجرای تاریخی این مرحله مسئول مشخصی ندارد.",
+                }
+            try:
+                assignee = WorkflowStepAssignmentService.validate_assignee(
+                    workflow=workflow,
+                    step=step,
+                    assignee=previous_execution.assigned_to,
+                )
+            except ValidationError as exc:
+                return {
+                    "required": True,
+                    "assignee": None,
+                    "reason": str(exc),
+                }
+            return {"required": False, "assignee": assignee, "reason": ""}
+
+        # A first-time entry follows the configured policy. Policies that
+        # cannot determine one eligible user require an explicit admin choice.
         if step.assignment_policy == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS:
-            if selected_assignee is None:
-                raise ValidationError("برای اصلاح مسیر، انتخاب مسئول مرحله مقصد توسط Admin الزامی است.")
-            assignee = selected_assignee
-            return WorkflowStepAssignmentService.validate_assignee(
+            return {
+                "required": True,
+                "assignee": None,
+                "reason": "این سیاست برای ورود از مسیر Override نیازمند انتخاب صریح مدیر است.",
+            }
+        try:
+            assignee = WorkflowStepAssignmentService.resolve_assignee(
                 workflow=workflow,
                 step=step,
-                assignee=assignee,
+                instance=instance,
             )
+        except ValidationError as exc:
+            return {
+                "required": True,
+                "assignee": None,
+                "reason": str(exc),
+            }
+        return {"required": False, "assignee": assignee, "reason": ""}
 
-        if selected_assignee is not None:
-            raise ValidationError(
-                "انتخاب دستی مسئول فقط برای سیاست انتخاب توسط تکمیل‌کننده مرحله قبل مجاز است."
-            )
-
-        return WorkflowStepAssignmentService.resolve_assignee(
+    @staticmethod
+    def resolve_override_assignee(
+        *,
+        workflow,
+        step,
+        instance,
+        selected_assignee=None,
+    ):
+        """Resolve and revalidate the assignee for an administrative override."""
+        state = WorkflowStepAssignmentService.get_override_assignee_state(
             workflow=workflow,
             step=step,
             instance=instance,
         )
+        if state["required"]:
+            if selected_assignee is None:
+                raise ValidationError(
+                    state["reason"] or "برای اصلاح مسیر، انتخاب مسئول توسط Admin الزامی است."
+                )
+            return WorkflowStepAssignmentService.validate_assignee(
+                workflow=workflow,
+                step=step,
+                assignee=selected_assignee,
+            )
+
+        resolved_assignee = state["assignee"]
+        if (
+            selected_assignee is not None
+            and selected_assignee.pk != resolved_assignee.pk
+        ):
+            raise ValidationError(
+                "برای ورود مجدد به این مرحله باید مسئول معتبر آخرین ورود حفظ شود."
+            )
+        return resolved_assignee
 
     @staticmethod
     def resolve_assignee(
