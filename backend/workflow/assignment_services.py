@@ -82,8 +82,6 @@ class WorkflowStepAssignmentService:
         if not instance or instance.workflow_id != workflow.pk:
             raise ValidationError("نمونه فرآیند با فرآیند مرحله مقصد هم‌خوانی ندارد.")
 
-        WorkflowStepAssignmentService.validate_policy_configuration(step=step)
-
         # The latest entry event is authoritative, including when its assignee
         # snapshot is empty or its user is no longer eligible. Never fall back
         # to an older assignee in that case.
