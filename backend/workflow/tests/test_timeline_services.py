@@ -172,7 +172,7 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         events = build_instance_timeline_events(self.instance)
         step_event = next(event for event in events if event["type"] == "step")
 
-        self.assertEqual(step_event["sla_stopped_at"], stopped_at.isoformat())
+        self.assertEqual(step_event["sla_stopped_at"], stopped_at)
         self.assertEqual(step_event["sla_stop_reason"], "OVERRIDE")
         self.assertTrue(step_event["sla_stopped"])
         self.assertFalse(step_event["sla_completed"])
