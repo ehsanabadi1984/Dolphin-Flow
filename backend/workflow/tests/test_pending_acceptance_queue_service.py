@@ -42,6 +42,7 @@ class PendingAcceptanceQueueServiceTests(TestCase):
             code="PENDING_QUEUE_STEP_ONE",
             order=1,
             is_active=True,
+            assigned_to=self.sender,
         )
         self.step_two = WorkflowStep.objects.create(
             workflow=self.workflow,
@@ -49,6 +50,7 @@ class PendingAcceptanceQueueServiceTests(TestCase):
             code="PENDING_QUEUE_STEP_TWO",
             order=2,
             is_active=True,
+            assigned_to=self.sender,
         )
         self.step_three = WorkflowStep.objects.create(
             workflow=self.workflow,
@@ -56,6 +58,7 @@ class PendingAcceptanceQueueServiceTests(TestCase):
             code="PENDING_QUEUE_STEP_THREE",
             order=3,
             is_active=True,
+            assigned_to=self.sender,
         )
 
         self.transition_one = WorkflowTransition.objects.create(
