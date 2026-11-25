@@ -1172,7 +1172,10 @@ def _get_edit_mode(*, instance, request):
 
     if (
         current_step_execution is not None
-        and current_step_execution.is_submitted
+        and (
+            current_step_execution.is_submitted
+            or current_step_execution.assigned_to_id != request.user.pk
+        )
     ):
         return False
 

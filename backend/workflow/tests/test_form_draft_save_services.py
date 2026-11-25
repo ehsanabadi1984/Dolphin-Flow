@@ -85,6 +85,7 @@ class FormDraftSaveServiceContractTests(TestCase):
             instance=self.instance,
             workflow_step=self.step,
             performed_by=self.user,
+            assigned_to=self.user,
         )
         FieldAccess.objects.create(
             field=self.form_field,
@@ -3548,3 +3549,54 @@ class FormDraftSaveServiceContractTests(TestCase):
         self.assertTrue(third_result.saved)
         self.assertEqual(snapshot(), before_resave)
 
+
+
+    def test_only_active_execution_assignee_can_save_draft(self):
+        other_user = get_user_model().objects.create_user(
+            username="draft-save-other-user",
+            password="password",
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                user=other_user,
+                submitted_data={"customer_name": "Unauthorized"},
+            )
+
+        self.assertFalse(
+            FormData.objects.filter(instance=self.instance).exists()
+        )
+
+    def test_execution_without_assignee_cannot_save_draft(self):
+        self.execution.assigned_to = None
+        self.execution.save(update_fields=["assigned_to"])
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={"customer_name": "Unassigned"},
+            )
+
+        self.assertFalse(
+            FormData.objects.filter(instance=self.instance).exists()
+        )
+
+    def test_previous_execution_assignee_cannot_save_after_reassignment(self):
+        other_user = get_user_model().objects.create_user(
+            username="draft-save-new-assignee",
+            password="password",
+        )
+        WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step,
+            performed_by=other_user,
+            assigned_to=other_user,
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(
+                submitted_data={"customer_name": "Stale assignee"},
+            )
+
+        self.assertFalse(
+            FormData.objects.filter(instance=self.instance).exists()
+        )

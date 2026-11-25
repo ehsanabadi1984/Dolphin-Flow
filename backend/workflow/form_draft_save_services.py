@@ -34,10 +34,17 @@ class FormDraftSaveService:
     @classmethod
     def save(cls, *, instance, step, user, submitted_data, edit_mode):
         with transaction.atomic():
+            instance = (
+                instance.__class__.objects
+                .select_for_update()
+                .select_related("workflow")
+                .get(pk=instance.pk)
+            )
             form = cls._get_form(instance=instance)
             cls._validate_context(
                 instance=instance,
                 step=step,
+                user=user,
                 edit_mode=edit_mode,
             )
             permission_context = PermissionContext.build(
@@ -90,20 +97,28 @@ class FormDraftSaveService:
         return form
 
     @staticmethod
-    def _validate_context(*, instance, step, edit_mode):
+    def _validate_context(*, instance, step, user, edit_mode):
         if step is None:
             raise ValidationError("مرحله فرآیند برای ذخیره فرم مشخص نشده است.")
         if instance.workflow_id != step.workflow_id:
             raise ValidationError("مرحله انتخاب‌شده متعلق به فرآیند این نمونه نیست.")
         if instance.current_step_id != step.pk:
             raise ValidationError("این مرحله، مرحله فعلی فرآیند نیست.")
-        execution = instance.step_executions.filter(
-            workflow_step=step,
-        ).order_by("-performed_at").first()
+        execution = (
+            instance.step_executions
+            .select_for_update()
+            .filter(workflow_step=step)
+            .order_by("-performed_at", "-pk")
+            .first()
+        )
         if execution is None:
             raise ValidationError("اجرای فعالی برای مرحله فعلی پیدا نشد.")
         if execution.is_submitted:
             raise ValidationError("فرم این مرحله قبلاً ارسال شده و قابل ویرایش نیست.")
+        if execution.assigned_to_id != user.pk:
+            raise ValidationError(
+                "فقط مسئول اجرای فعال این مرحله اجازه ذخیره پیش‌نویس را دارد."
+            )
         if not edit_mode:
             raise ValidationError("فرم در حالت ویرایش نیست و قابل ذخیره نیست.")
 
