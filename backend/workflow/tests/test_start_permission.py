@@ -80,8 +80,7 @@ class StartPermissionBaseTestCase(TestCase):
             workflow=self.workflow,
             step=self.step_one,
             user=self.assignee,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
+            action=WorkflowPermission.Action.EXECUTE,
             effect=WorkflowPermission.Effect.ALLOW,
         )
 
@@ -131,8 +130,7 @@ class StartPermissionServiceTests(StartPermissionBaseTestCase):
             workflow=self.workflow,
             step=self.step_one,
             user=self.assignee,
-            action=WorkflowPermission.Action.STEP_ACTION,
-            action_code="EXECUTE",
+            action=WorkflowPermission.Action.EXECUTE,
         ).delete()
 
         from django.core.exceptions import ValidationError
