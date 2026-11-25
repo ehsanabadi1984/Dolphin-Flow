@@ -1915,7 +1915,7 @@ class WorkflowExecutionTests(TestCase):
         self.assertIsNotNone(returned_execution.assigned_at)
         self.assertEqual(
             returned_execution.assignment_history.get().source,
-            WorkflowStepAssignmentHistory.Source.POLICY,
+            WorkflowStepAssignmentHistory.Source.REJECTION,
         )
 
     def test_reject_execution_assignment_policy_does_not_change_admin_notification_recipient(self):
