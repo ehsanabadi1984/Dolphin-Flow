@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from accounts.models import User, UserContactMethod, UserPreference
 from workflow.models import (
-    Notification, SMSDelivery, SMSTemplate, SMSProviderConfiguration, SMSProviderConfigRevision, Workflow, WorkflowInstance, WorkflowSMSSettings,
+    Notification, SMSDelivery, SMSTemplate, SMSProviderConfiguration, SMSProviderConfigRevision, Workflow, WorkflowInstance, WorkflowStepExecution, WorkflowSMSSettings,
     WorkflowStep, WorkflowStepSMSRule, WorkflowTransition,
     WorkflowTransitionExecution,
 )
@@ -325,6 +325,93 @@ class SMSDispatchTests(TestCase):
             SMSDispatcher.dispatch(self.notification.pk),
             SMSDelivery.Status.SKIPPED,
         )
+
+    def test_dispatch_skips_queued_action_sms_for_a_step_that_is_no_longer_current(self):
+        instance = WorkflowInstance.objects.create(
+            workflow=self.step.workflow,
+            started_by=self.user,
+            current_step=self.step,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step,
+            performed_by=self.user,
+            assigned_to=self.user,
+            is_submitted=False,
+        )
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="اقدام قدیمی",
+            message="این اقدام دیگر جاری نیست.",
+            workflow_instance=instance,
+            workflow_step=self.step,
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+        destination = WorkflowStep.objects.create(
+            workflow=self.step.workflow,
+            name="Destination",
+            order=2,
+        )
+        instance.current_step = destination
+        instance.save(update_fields=["current_step"])
+
+        with patch("workflow.sms_services.MagfaSMSProvider.send") as mock_send:
+            result = SMSDispatcher.dispatch(notification.pk)
+
+        self.assertEqual(result, SMSDelivery.Status.SKIPPED)
+        mock_send.assert_not_called()
+        delivery.refresh_from_db()
+        self.assertIn("مرحله جاری", delivery.last_error)
+
+    def test_dispatch_skips_queued_sms_for_superseded_acceptance(self):
+        instance = WorkflowInstance.objects.create(
+            workflow=self.step.workflow,
+            started_by=self.user,
+            current_step=self.step,
+        )
+        destination = WorkflowStep.objects.create(
+            workflow=self.step.workflow,
+            name="Acceptance destination",
+            order=2,
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.step.workflow,
+            from_step=self.step,
+            to_step=destination,
+            name="Pending acceptance",
+        )
+        transition_execution = WorkflowTransitionExecution.objects.create(
+            instance=instance,
+            transition=transition,
+            performed_by=self.user,
+            status=WorkflowTransitionExecution.Status.SUPERSEDED,
+            resolved_at=timezone.now(),
+        )
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="درخواست پذیرش منسوخ‌شده",
+            message="این درخواست دیگر معتبر نیست.",
+            workflow_instance=instance,
+            workflow_step=destination,
+            transition_execution=transition_execution,
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+
+        with patch("workflow.sms_services.MagfaSMSProvider.send") as mock_send:
+            result = SMSDispatcher.dispatch(notification.pk)
+
+        self.assertEqual(result, SMSDelivery.Status.SKIPPED)
+        mock_send.assert_not_called()
+        delivery.refresh_from_db()
+        self.assertIn("منسوخ", delivery.last_error)
 
     def test_step_entered_rule_applies_to_notification_for_entered_destination_step(self):
         origin = WorkflowStep.objects.create(
