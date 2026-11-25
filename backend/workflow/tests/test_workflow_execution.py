@@ -26,9 +26,11 @@ from workflow.models import (
     WorkflowTransition,
     WorkflowTransitionExecution,
     WorkflowTransitionNotificationIssue,
+    WorkflowInstanceEvent,
 )
 from workflow.form_draft_save_services import FormDraftSaveService
 from workflow.services import WorkflowExecutionService
+from workflow.override_services import WorkflowOverrideService
 
 
 User = get_user_model()
@@ -2251,6 +2253,18 @@ class WorkflowExecutionConcurrencyTests(TransactionTestCase):
             username="concurrency_accept_two",
             password="test-password",
         )
+        self.override_admin_one = User.objects.create_user(
+            username="concurrency_override_admin_one",
+            password="test-password",
+            is_active=True,
+            is_staff=True,
+        )
+        self.override_admin_two = User.objects.create_user(
+            username="concurrency_override_admin_two",
+            password="test-password",
+            is_active=True,
+            is_staff=True,
+        )
 
         self.workflow = Workflow.objects.create(
             name="Concurrency Acceptance Test",
@@ -2574,3 +2588,96 @@ class WorkflowExecutionConcurrencyTests(TransactionTestCase):
             0,
         )
         self.assertEqual(instance.current_step_id, self.step_one.pk)
+
+    def test_concurrent_submit_and_override_leave_one_consistent_active_execution(self):
+        instance = WorkflowExecutionService.start_workflow(
+            workflow=self.workflow,
+            user=self.user,
+        )
+
+        results = self._run_two_actions(
+            lambda: WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_one,
+                user=self.user,
+            ),
+            lambda: WorkflowOverrideService.override_instance_step(
+                instance=instance,
+                target_step=self.step_two,
+                performed_by=self.override_admin_one,
+                reason="هم‌زمانی ارسال و اصلاح مسیر",
+            ),
+        )
+
+        self.assertEqual(sum(result[0] == "success" for result in results), 1)
+        self.assertEqual(sum(result[0] == "error" for result in results), 1)
+
+        instance.refresh_from_db()
+        self.assertEqual(instance.current_step_id, self.step_two.pk)
+        active_executions = WorkflowStepExecution.objects.filter(
+            instance=instance,
+            is_submitted=False,
+        )
+        self.assertEqual(active_executions.count(), 1)
+        self.assertEqual(active_executions.get().workflow_step_id, self.step_two.pk)
+
+        source_executions = WorkflowStepExecution.objects.filter(
+            instance=instance,
+            workflow_step=self.step_one,
+        )
+        transition_executions = WorkflowTransitionExecution.objects.filter(
+            instance=instance,
+            transition=self.transition_one,
+        )
+        submit_won = source_executions.filter(is_submitted=True).exists()
+        self.assertEqual(source_executions.count(), 1 if submit_won else 0)
+        self.assertEqual(transition_executions.count(), 1 if submit_won else 0)
+
+    def test_concurrent_overrides_to_same_step_create_only_one_active_execution(self):
+        instance = WorkflowExecutionService.start_workflow(
+            workflow=self.workflow,
+            user=self.user,
+        )
+
+        results = self._run_two_actions(
+            lambda: WorkflowOverrideService.override_instance_step(
+                instance=instance,
+                target_step=self.step_two,
+                performed_by=self.override_admin_one,
+                reason="اصلاح مسیر هم‌زمان اول",
+            ),
+            lambda: WorkflowOverrideService.override_instance_step(
+                instance=instance,
+                target_step=self.step_two,
+                performed_by=self.override_admin_two,
+                reason="اصلاح مسیر هم‌زمان دوم",
+            ),
+        )
+
+        self.assertEqual(sum(result[0] == "success" for result in results), 1)
+        self.assertEqual(sum(result[0] == "error" for result in results), 1)
+
+        instance.refresh_from_db()
+        self.assertEqual(instance.current_step_id, self.step_two.pk)
+        active_executions = WorkflowStepExecution.objects.filter(
+            instance=instance,
+            is_submitted=False,
+        )
+        self.assertEqual(active_executions.count(), 1)
+        self.assertEqual(active_executions.get().workflow_step_id, self.step_two.pk)
+        self.assertEqual(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_one,
+                is_submitted=False,
+            ).count(),
+            0,
+        )
+        self.assertEqual(
+            WorkflowInstanceEvent.objects.filter(
+                instance=instance,
+                workflow_step=self.step_two,
+                event_type=WorkflowInstanceEvent.EventType.OVERRIDE,
+            ).count(),
+            1,
+        )
