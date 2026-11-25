@@ -100,6 +100,16 @@ class PendingAcceptanceQueueServiceTests(TestCase):
             effect=WorkflowPermission.Effect.ALLOW,
         )
 
+        for step in (self.step_one, self.step_two, self.step_three):
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                step=step,
+                user=self.sender,
+                action=WorkflowPermission.Action.EXECUTE,
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
+
+
         WorkflowPermission.objects.create(
             workflow=self.workflow,
             transition=self.transition_one,
@@ -403,12 +413,14 @@ class PendingAcceptanceQueueServiceTests(TestCase):
             name="Step A",
             code="PENDING_QUEUE_STEP_A",
             order=1,
+            assigned_to=self.sender,
         )
         step_b = WorkflowStep.objects.create(
             workflow=workflow_two,
             name="Step B",
             code="PENDING_QUEUE_STEP_B",
             order=2,
+            assigned_to=self.sender,
         )
         transition = WorkflowTransition.objects.create(
             workflow=workflow_two,
@@ -434,6 +446,16 @@ class PendingAcceptanceQueueServiceTests(TestCase):
             action=WorkflowPermission.Action.START,
             effect=WorkflowPermission.Effect.ALLOW,
         )
+
+        for step in (step_a, step_b):
+            WorkflowPermission.objects.create(
+                workflow=workflow_two,
+                step=step,
+                user=self.sender,
+                action=WorkflowPermission.Action.EXECUTE,
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
+
         WorkflowPermission.objects.create(
             workflow=workflow_two,
             transition=transition,
