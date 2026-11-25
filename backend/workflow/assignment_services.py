@@ -93,17 +93,32 @@ class WorkflowStepAssignmentService:
             .first()
         )
         if previous_event is not None:
-            if previous_event.assigned_to_id is None:
+            historical_assignee = previous_event.assigned_to
+            latest_assignment = (
+                WorkflowStepAssignmentHistory.objects
+                .filter(
+                    instance=instance,
+                    workflow_step=step,
+                    created_at__gte=previous_event.occurred_at,
+                )
+                .select_related("new_assignee")
+                .order_by("-created_at", "-pk")
+                .first()
+            )
+            if latest_assignment is not None:
+                historical_assignee = latest_assignment.new_assignee
+
+            if historical_assignee is None:
                 return {
                     "required": True,
                     "assignee": None,
-                    "reason": "آخرین ورود به این مرحله مسئول معتبر و قابل بازیابی ندارد.",
+                    "reason": "آخرین ورود یا تغییر تخصیص این مرحله مسئول معتبر و قابل بازیابی ندارد.",
                 }
             try:
                 assignee = WorkflowStepAssignmentService.validate_assignee(
                     workflow=workflow,
                     step=step,
-                    assignee=previous_event.assigned_to,
+                    assignee=historical_assignee,
                 )
             except ValidationError as exc:
                 return {
