@@ -201,11 +201,6 @@ class WorkflowExecutionService:
             source=WorkflowStepAssignmentHistory.Source.ACCEPTANCE,
             reason="تخصیص مسئول مقصد هنگام پذیرش انتقال",
         )
-        WorkflowInstanceEventService.record_step_entry(
-            execution=step_execution,
-            actor=user,
-        )
-
         transition_execution.status = (
             WorkflowTransitionExecution.Status.ACCEPTED
         )
@@ -223,6 +218,11 @@ class WorkflowExecutionService:
 
         SLAService.start_sla_if_configured(
             step_execution=step_execution,
+        )
+
+        WorkflowInstanceEventService.record_step_entry(
+            execution=step_execution,
+            actor=user,
         )
 
         instance.current_step = transition.to_step
@@ -816,13 +816,13 @@ class WorkflowExecutionService:
                     else "تخصیص مسئول هنگام ورود به مرحله"
                 ),
             )
+            SLAService.start_sla_if_configured(
+                step_execution=step_execution,
+            )
+
             WorkflowInstanceEventService.record_step_entry(
                 execution=step_execution,
                 actor=user,
-            )
-
-            SLAService.start_sla_if_configured(
-                step_execution=step_execution,
             )
 
             instance.current_step = transition.to_step

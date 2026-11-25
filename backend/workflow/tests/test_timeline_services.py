@@ -17,6 +17,7 @@ from workflow.models import (
     WorkflowTransitionExecution,
 )
 from workflow.timeline_services import build_instance_timeline_events
+from workflow.instance_event_services import WorkflowInstanceEventService
 
 
 User = get_user_model()
@@ -110,6 +111,49 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         self.assertTrue(step_event["is_submitted"])
         self.assertEqual(step_event["sla_warning_sent_at"], execution.sla_warning_sent_at)
         self.assertTrue(step_event["sla_completed"])
+
+    def test_entry_and_assignment_history_survive_deleting_unsubmitted_execution(self):
+        execution = WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step_one,
+            performed_by=self.starter,
+            entered_by=self.starter,
+            assigned_to=self.assignee,
+        )
+        assignment = WorkflowStepAssignmentHistory.objects.create(
+            step_execution=execution,
+            instance=self.instance,
+            workflow_step=self.step_one,
+            previous_assignee=None,
+            new_assignee=self.assignee,
+            changed_by=self.reviewer,
+            source=WorkflowStepAssignmentHistory.Source.INITIAL,
+            reason="تخصیص اولیه",
+        )
+        audit_event = WorkflowInstanceEventService.record_step_entry(
+            execution=execution,
+            actor=self.starter,
+        )
+
+        execution_id = execution.pk
+        execution.delete()
+
+        audit_event.refresh_from_db()
+        assignment.refresh_from_db()
+        self.assertIsNone(assignment.step_execution_id)
+        self.assertEqual(audit_event.execution_id, execution_id)
+
+        events = build_instance_timeline_events(self.instance)
+        step_event = next(event for event in events if event["type"] == "step")
+        assignment_event = next(
+            event for event in events if event["type"] == "assignment"
+        )
+        self.assertEqual(step_event["execution_id"], execution_id)
+        self.assertEqual(step_event["user"], "Sara Ahmadi")
+        self.assertEqual(step_event["assigned_to"], "Ali Rezaei")
+        self.assertFalse(step_event["is_submitted"])
+        self.assertEqual(assignment_event["id"], f"assignment-{assignment.pk}")
+        self.assertEqual(assignment_event["description"], "تخصیص اولیه")
 
     def test_assignment_history_is_a_separate_timeline_event(self):
         execution = WorkflowStepExecution.objects.create(

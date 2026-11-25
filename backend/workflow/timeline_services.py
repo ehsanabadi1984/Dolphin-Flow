@@ -63,8 +63,36 @@ def build_instance_timeline_events(instance):
         item.execution_id for item in audit_events
         if item.execution_id is not None
     }
+    live_executions = {
+        execution.pk: execution
+        for execution in WorkflowStepExecution.objects.filter(
+            instance=instance,
+            pk__in=event_execution_ids,
+        ).select_related("entered_by", "performed_by", "assigned_to", "completed_by")
+    }
     for audit_event in audit_events:
-        details = audit_event.details or {}
+        details = dict(audit_event.details or {})
+        live_execution = live_executions.get(audit_event.execution_id)
+        if live_execution is not None:
+            live_data = (
+                live_execution.data
+                if isinstance(live_execution.data, dict) else {}
+            )
+            details.update({
+                "notes": live_execution.notes or "",
+                "is_submitted": live_execution.is_submitted,
+                "submitted_at": live_execution.submitted_at,
+                "assigned_at": live_execution.assigned_at,
+                "completed_by_label": _user_label(live_execution.completed_by),
+                "sla_started_at": live_execution.sla_started_at,
+                "sla_due_at": live_execution.sla_due_at,
+                "sla_warning_at": live_execution.sla_warning_at,
+                "sla_warning_sent_at": live_execution.sla_warning_sent_at,
+                "sla_completed_at": live_execution.sla_completed_at,
+                "sla_breached_at": live_execution.sla_breached_at,
+                "history": live_data.get("history"),
+                "override": live_data.get("override", details.get("override")),
+            })
         override_metadata = details.get("override")
         override_metadata = (
             override_metadata if isinstance(override_metadata, dict) else {}

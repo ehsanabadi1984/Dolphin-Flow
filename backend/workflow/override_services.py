@@ -118,14 +118,14 @@ class WorkflowOverrideService:
             source=WorkflowStepAssignmentHistory.Source.OVERRIDE,
             reason=reason,
         )
+        SLAService.start_sla_if_configured(
+            step_execution=step_execution,
+        )
+
         WorkflowInstanceEventService.record_step_entry(
             execution=step_execution,
             actor=performed_by,
             event_type="OVERRIDE",
-        )
-
-        SLAService.start_sla_if_configured(
-            step_execution=step_execution,
         )
 
         instance.current_step = target_step
