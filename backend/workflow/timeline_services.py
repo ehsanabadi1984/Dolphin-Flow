@@ -1,5 +1,7 @@
 """Read-only event aggregation for a single workflow instance timeline."""
 
+from django.utils.dateparse import parse_datetime
+
 from workflow.models import (
     FileShareMessageEvent,
     WorkflowInstance,
@@ -8,6 +10,12 @@ from workflow.models import (
     WorkflowInstanceEvent,
     WorkflowTransitionExecution,
 )
+
+
+def _timeline_datetime(value):
+    if isinstance(value, str):
+        return parse_datetime(value) or value
+    return value
 
 
 def _user_label(user):
@@ -144,13 +152,13 @@ def build_instance_timeline_events(instance):
             submitted_at=details.get("submitted_at"),
             is_submitted=bool(details.get("is_submitted")),
             history=details.get("history"),
-            sla_started_at=details.get("sla_started_at"),
-            sla_due_at=details.get("sla_due_at"),
-            sla_warning_at=details.get("sla_warning_at"),
-            sla_warning_sent_at=details.get("sla_warning_sent_at"),
-            sla_completed_at=details.get("sla_completed_at"),
-            sla_breached_at=details.get("sla_breached_at"),
-            sla_stopped_at=details.get("sla_stopped_at"),
+            sla_started_at=_timeline_datetime(details.get("sla_started_at")),
+            sla_due_at=_timeline_datetime(details.get("sla_due_at")),
+            sla_warning_at=_timeline_datetime(details.get("sla_warning_at")),
+            sla_warning_sent_at=_timeline_datetime(details.get("sla_warning_sent_at")),
+            sla_completed_at=_timeline_datetime(details.get("sla_completed_at")),
+            sla_breached_at=_timeline_datetime(details.get("sla_breached_at")),
+            sla_stopped_at=_timeline_datetime(details.get("sla_stopped_at")),
             sla_stop_reason=details.get("sla_stop_reason", ""),
             sla_completed=bool(details.get("sla_completed_at")),
             sla_breached=bool(details.get("sla_breached_at")),
