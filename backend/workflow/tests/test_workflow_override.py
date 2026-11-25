@@ -28,6 +28,7 @@ from workflow.models import (
     WorkflowTransitionExecution,
 )
 from workflow.override_services import WorkflowOverrideService
+from workflow.sms_services import SMSDispatcher
 from workflow.timeline_services import build_instance_timeline_events
 
 
@@ -298,6 +299,43 @@ class WorkflowOverrideServiceTests(TestCase):
         self.assertEqual(delivery.status, SMSDelivery.Status.SKIPPED)
         self.assertIn("منسوخ", delivery.last_error)
         self.assertEqual(in_flight_delivery.status, SMSDelivery.Status.SENDING)
+
+    def test_override_skips_queued_sla_warning_and_breach_sms(self):
+        notifications = []
+        deliveries = []
+        for notification_type in (
+            Notification.NotificationType.SLA_WARNING,
+            Notification.NotificationType.SLA_BREACHED,
+        ):
+            notification = Notification.objects.create(
+                recipient=self.operator,
+                notification_type=notification_type,
+                title="SLA notification",
+                message="This SLA notification belongs to the old step.",
+                workflow_instance=self.instance,
+                workflow_step=self.step_c,
+            )
+            notifications.append(notification)
+            deliveries.append(
+                SMSDelivery.objects.create(
+                    notification=notification,
+                    status=SMSDelivery.Status.PENDING,
+                )
+            )
+
+        WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="اصلاح مسیر در حالی که پیامک SLA در صف است",
+        )
+
+        for notification, delivery in zip(notifications, deliveries):
+            result = SMSDispatcher.dispatch(notification.pk)
+            delivery.refresh_from_db()
+            self.assertEqual(result, SMSDelivery.Status.SKIPPED)
+            self.assertEqual(delivery.status, SMSDelivery.Status.SKIPPED)
+            self.assertIn("مرحله جاری", delivery.last_error)
 
     def test_override_audit_note_survives_step_submission(self):
         new_execution = WorkflowOverrideService.override_instance_step(
