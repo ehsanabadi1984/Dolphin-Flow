@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from workflow.models import (
     Notification,
+    SMSDelivery,
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
@@ -222,6 +223,10 @@ class WorkflowOverrideServiceTests(TestCase):
             workflow_step=self.step_b,
             transition_execution=pending,
         )
+        delivery = SMSDelivery.objects.create(
+            notification=notification,
+            status=SMSDelivery.Status.PENDING,
+        )
 
         WorkflowOverrideService.override_instance_step(
             instance=self.instance,
@@ -239,6 +244,36 @@ class WorkflowOverrideServiceTests(TestCase):
         self.assertIsNotNone(pending.resolved_at)
         self.assertTrue(notification.is_read)
         self.assertIsNotNone(notification.read_at)
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.status, SMSDelivery.Status.SKIPPED)
+        self.assertIn("منسوخ", delivery.last_error)
+
+    def test_override_skips_pending_sms_for_action_notification_on_departed_step(self):
+        notification = Notification.objects.create(
+            recipient=self.operator,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="اقدام مرحله جاری",
+            message="لطفاً مرحله را انجام دهید.",
+            workflow_instance=self.instance,
+            workflow_step=self.step_c,
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+
+        WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="اصلاح مسیر مرحله",
+        )
+
+        notification.refresh_from_db()
+        delivery.refresh_from_db()
+        self.assertTrue(notification.is_read)
+        self.assertEqual(delivery.status, SMSDelivery.Status.SKIPPED)
+        self.assertIn("منسوخ", delivery.last_error)
 
     def test_override_audit_note_survives_step_submission(self):
         new_execution = WorkflowOverrideService.override_instance_step(
