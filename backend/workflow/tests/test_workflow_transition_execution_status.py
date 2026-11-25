@@ -91,7 +91,7 @@ class WorkflowTransitionExecutionStatusTests(TestCase):
     def test_status_choices_are_explicit(self):
         self.assertEqual(
             set(WorkflowTransitionExecution.Status.values),
-            {"PENDING", "ACCEPTED", "REJECTED"},
+            {"PENDING", "ACCEPTED", "REJECTED", "SUPERSEDED"},
         )
 
     def test_acceptance_actors_are_stored_independently(self):
