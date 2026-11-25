@@ -31,6 +31,7 @@ def _event(event_type, event_id, timestamp, title, user=None, description="",
         "is_submitted": False,
         "sla_completed": False,
         "sla_breached": False,
+        "sla_stopped": False,
         **extra,
     }
 
