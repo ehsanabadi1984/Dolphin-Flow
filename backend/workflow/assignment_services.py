@@ -128,6 +128,37 @@ class WorkflowStepAssignmentService:
                 }
             return {"required": False, "assignee": assignee, "reason": ""}
 
+        # If an event is unavailable, detached assignment history is still
+        # authoritative evidence of the last known assignee for this instance
+        # and step.
+        previous_assignment = (
+            WorkflowStepAssignmentHistory.objects
+            .filter(instance=instance, workflow_step=step)
+            .select_related("new_assignee")
+            .order_by("-created_at", "-pk")
+            .first()
+        )
+        if previous_assignment is not None:
+            if previous_assignment.new_assignee_id is None:
+                return {
+                    "required": True,
+                    "assignee": None,
+                    "reason": "آخرین سابقه تخصیص این مرحله مسئول مشخصی ندارد.",
+                }
+            try:
+                assignee = WorkflowStepAssignmentService.validate_assignee(
+                    workflow=workflow,
+                    step=step,
+                    assignee=previous_assignment.new_assignee,
+                )
+            except ValidationError as exc:
+                return {
+                    "required": True,
+                    "assignee": None,
+                    "reason": str(exc),
+                }
+            return {"required": False, "assignee": assignee, "reason": ""}
+
         # Compatibility path for executions created before independent entry
         # events were introduced (or legacy fixtures/data not yet backfilled).
         previous_execution = (
