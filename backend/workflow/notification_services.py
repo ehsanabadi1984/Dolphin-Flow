@@ -345,7 +345,7 @@ class WorkflowTransitionNotificationService:
 
         notification = NotificationService.create(
             recipient=recipient,
-            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
             title=title,
             message=message,
             workflow_instance=instance,
