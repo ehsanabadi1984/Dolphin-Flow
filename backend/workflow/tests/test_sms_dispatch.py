@@ -15,7 +15,8 @@ from workflow.models import (
 )
 from workflow.sms_services import (
     MagfaSMSProvider, SMSDispatcher, build_sms_message,
-    prepare_sms_delivery_snapshot, resolve_notification_step, _message_parts,
+    prepare_sms_delivery_snapshot, resolve_notification_step,
+    resolve_sms_notification_type, _message_parts,
 )
 
 
@@ -737,3 +738,77 @@ class SMSRecoveryTests(TestCase):
 
         self.delivery.refresh_from_db()
         self.assertIsNone(self.delivery.last_queued_at)
+
+    def test_pending_sla_sms_is_skipped_after_reentering_the_same_step(self):
+        instance = WorkflowInstance.objects.create(
+            workflow=self.step.workflow,
+            current_step=self.step,
+            started_by=self.user,
+            status=WorkflowInstance.Status.ACTIVE,
+        )
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.SLA_WARNING,
+            title="هشدار SLA",
+            message="مهلت مرحله رو به پایان است.",
+            workflow_instance=instance,
+            workflow_step=self.step,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step,
+            performed_by=self.user,
+            assigned_to=self.user,
+            is_submitted=False,
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+
+        result = SMSDispatcher.dispatch(notification.pk)
+
+        delivery.refresh_from_db()
+        self.assertEqual(result, SMSDelivery.Status.SKIPPED)
+        self.assertEqual(delivery.status, SMSDelivery.Status.SKIPPED)
+        self.assertIn("ورود قبلی", delivery.last_error)
+
+    def test_transition_outcome_is_not_misclassified_as_step_entered(self):
+        target_step = WorkflowStep.objects.create(
+            workflow=self.step.workflow,
+            name="Outcome target",
+            order=2,
+        )
+        instance = WorkflowInstance.objects.create(
+            workflow=self.step.workflow,
+            current_step=target_step,
+            started_by=self.user,
+            status=WorkflowInstance.Status.ACTIVE,
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.step.workflow,
+            name="Outcome transition",
+            from_step=self.step,
+            to_step=target_step,
+        )
+        transition_execution = WorkflowTransitionExecution.objects.create(
+            instance=instance,
+            transition=transition,
+            performed_by=self.user,
+            status=WorkflowTransitionExecution.Status.ACCEPTED,
+        )
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
+            title="انتقال تأیید شد",
+            message="انتقال تأیید شد.",
+            workflow_instance=instance,
+            workflow_step=target_step,
+            transition_execution=transition_execution,
+        )
+
+        self.assertEqual(
+            resolve_sms_notification_type(notification),
+            Notification.NotificationType.TRANSITION_EXECUTED,
+        )
+
