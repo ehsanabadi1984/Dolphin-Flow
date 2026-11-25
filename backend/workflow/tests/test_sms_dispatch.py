@@ -791,6 +791,17 @@ class SMSRecoveryTests(TestCase):
             from_step=self.step,
             to_step=target_step,
         )
+        outcome_assignee = User.objects.create_user(
+            username="outcome-assignee",
+            password="test",
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=target_step,
+            performed_by=self.user,
+            assigned_to=outcome_assignee,
+            is_submitted=False,
+        )
         transition_execution = WorkflowTransitionExecution.objects.create(
             instance=instance,
             transition=transition,
@@ -810,5 +821,12 @@ class SMSRecoveryTests(TestCase):
         self.assertEqual(
             resolve_sms_notification_type(notification),
             Notification.NotificationType.TRANSITION_EXECUTED,
+        )
+        self.assertEqual(
+            SMSDispatcher._obsolete_action_required_reason(
+                notification,
+                instance=instance,
+            ),
+            "",
         )
 
