@@ -60,7 +60,7 @@ class SMSDispatchTests(TestCase):
         )
         from workflow.sms_services import _build_sms_content
         message, source = _build_sms_content(self.notification, template)
-        self.assertEqual(message, "فرآیند 1\nسلام sms-recipient؛ مرحله Dynamic step")
+        self.assertEqual(\n            message,\n            f"فرآیند {self.notification.workflow_instance_id}\\nسلام sms-recipient؛ مرحله Dynamic step",\n        )
         self.assertEqual(source, "TEMPLATE")
 
     def test_legacy_sms_template_keeps_its_original_single_body_output(self):
