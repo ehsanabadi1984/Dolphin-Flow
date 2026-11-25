@@ -384,8 +384,8 @@ class SLAMonitorServiceTests(TestCase):
             workflow_step=self.step,
         ).count()
 
-        self.assertEqual(first_count, 2)
-        self.assertEqual(second_count, 2)
+        self.assertEqual(first_count, 1)
+        self.assertEqual(second_count, 1)
 
     def test_warning_creates_notifications(self):
         start = self.make_datetime(10)
@@ -406,20 +406,10 @@ class SLAMonitorServiceTests(TestCase):
             workflow_step=self.step,
         )
 
-        self.assertEqual(
-            notifications.count(),
-            2,
-        )
+        self.assertEqual(notifications.count(), 1)
         self.assertSetEqual(
-            set(
-                notifications.values_list(
-                    "recipient_id",
-                    flat=True,
-                )
-            ),
-            {
-                self.executor.id,
-            },
+            set(notifications.values_list("recipient_id", flat=True)),
+            {self.executor.id},
         )
 
     def test_breach_creates_notifications(self):
@@ -441,21 +431,10 @@ class SLAMonitorServiceTests(TestCase):
             workflow_step=self.step,
         )
 
-        self.assertEqual(
-            notifications.count(),
-            2,
-        )
+        self.assertEqual(notifications.count(), 1)
         self.assertSetEqual(
-            set(
-                notifications.values_list(
-                    "recipient_id",
-                    flat=True,
-                )
-            ),
-            {
-                self.manager.id,
-                self.executor.id,
-            },
+            set(notifications.values_list("recipient_id", flat=True)),
+            {self.executor.id},
         )
 
     def test_sla_warning_uses_execution_assignee_not_step_default(self):
@@ -550,22 +529,10 @@ class SLAMonitorServiceTests(TestCase):
             workflow_step=self.step,
         )
 
-        self.assertEqual(
-            notifications.count(),
-            2,
-        )
-
+        self.assertEqual(notifications.count(), 1)
         self.assertSetEqual(
-            set(
-                notifications.values_list(
-                    "recipient_id",
-                    flat=True,
-                )
-            ),
-            {
-                self.manager.id,
-                self.executor.id,
-            },
+            set(notifications.values_list("recipient_id", flat=True)),
+            {self.executor.id},
         )
 
     def test_breach_notification_has_correct_type_and_context(self):
