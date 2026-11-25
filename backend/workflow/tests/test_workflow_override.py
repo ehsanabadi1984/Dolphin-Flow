@@ -6,6 +6,8 @@ import django
 
 django.setup()
 
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -781,7 +783,7 @@ class WorkflowOverrideServiceTests(TestCase):
             action=WorkflowPermission.Action.EXECUTE,
             effect=WorkflowPermission.Effect.ALLOW,
         )
-        event_time = timezone.now() - timezone.timedelta(minutes=5)
+        event_time = timezone.now() - timedelta(minutes=5)
         WorkflowInstanceEvent.objects.create(
             instance=self.instance,
             workflow_step=self.step_b,
