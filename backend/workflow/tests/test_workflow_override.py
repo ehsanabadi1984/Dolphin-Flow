@@ -635,6 +635,13 @@ class WorkflowOverrideServiceTests(TestCase):
             assignment_policy=WorkflowStep.AssignmentPolicy.FIXED,
             assigned_to=self.operator,
         )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=legacy_step,
+            user=self.operator,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
         WorkflowStepExecution.objects.create(
             instance=self.instance,
             workflow_step=legacy_step,
@@ -667,6 +674,13 @@ class WorkflowOverrideServiceTests(TestCase):
             is_active=True,
             assignment_policy=WorkflowStep.AssignmentPolicy.FIXED,
             assigned_to=self.operator,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=first_entry_step,
+            user=self.operator,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
         )
 
         new_execution = WorkflowOverrideService.override_instance_step(
@@ -738,6 +752,13 @@ class WorkflowOverrideServiceTests(TestCase):
             order=11,
             assignment_policy=WorkflowStep.AssignmentPolicy.FIXED,
             assigned_to=self.operator,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=intermediate_step,
+            user=self.operator,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
         )
         WorkflowOverrideService.override_instance_step(
             instance=self.instance,
