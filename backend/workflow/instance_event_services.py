@@ -14,7 +14,7 @@ class WorkflowInstanceEventService:
     """Persist an execution's entry/override event independently of its row."""
 
     @staticmethod
-    def record_step_entry(*, execution, actor=None, event_type=None):
+    def record_step_entry(*, execution, actor=None, event_type=None, sla_stopped_at=None, sla_stop_reason=''):
         data = execution.data if isinstance(execution.data, dict) else {}
         override = data.get("override")
         if event_type is None:
@@ -72,7 +72,11 @@ class WorkflowInstanceEventService:
             "history": data.get("history"),
             "override": override if isinstance(override, dict) else {},
         }
-        return WorkflowInstanceEvent.objects.get_or_create(
+        if sla_stopped_at is not None:
+            details["sla_stopped_at"] = sla_stopped_at.isoformat()
+            details["sla_stop_reason"] = sla_stop_reason or ""
+
+        event, created = WorkflowInstanceEvent.objects.get_or_create(
             instance_id=execution.instance_id,
             execution_id=execution.pk,
             defaults={
@@ -85,4 +89,11 @@ class WorkflowInstanceEventService:
                 "occurred_at": execution.performed_at,
                 "details": details,
             },
-        )[0]
+        )
+        if not created and sla_stopped_at is not None:
+            existing_details = dict(event.details or {})
+            existing_details["sla_stopped_at"] = sla_stopped_at.isoformat()
+            existing_details["sla_stop_reason"] = sla_stop_reason or ""
+            event.details = existing_details
+            event.save(update_fields=["details"])
+        return event
