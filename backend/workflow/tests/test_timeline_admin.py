@@ -15,6 +15,7 @@ from workflow.models import (
     FileShareMessageEvent,
     Workflow,
     WorkflowInstance,
+    WorkflowInstanceEvent,
     WorkflowMembership,
     WorkflowPermission,
     WorkflowStep,
@@ -403,6 +404,36 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         self.assertNotContains(response, "مقصد عادی")
         self.assertContains(response, "مسئول پیشنهادی مرحله مقصد")
         self.assertContains(response, "زمان دقیق ثبت نشده است")
+
+    def test_override_stopped_sla_is_rendered_as_stopped_not_active(self):
+        started_at = timezone.now() - timedelta(hours=2)
+        stopped_at = timezone.now()
+        WorkflowInstanceEvent.objects.create(
+            instance=self.instance,
+            workflow_step=self.step,
+            event_type=WorkflowInstanceEvent.EventType.STEP_ENTERED,
+            actor=self.starter,
+            actor_label=self.starter.get_username(),
+            assigned_to=None,
+            occurred_at=started_at,
+            details={
+                "is_submitted": False,
+                "sla_started_at": started_at.isoformat(),
+                "sla_due_at": (started_at + timedelta(hours=4)).isoformat(),
+                "sla_warning_at": (started_at + timedelta(hours=3)).isoformat(),
+                "sla_stopped_at": stopped_at.isoformat(),
+                "sla_stop_reason": "OVERRIDE",
+            },
+        )
+
+        response = self.client.get(
+            reverse("admin:workflow_workflowinstance_timeline", args=[self.instance.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "متوقف‌شده بر اثر اصلاح مسیر")
+        self.assertContains(response, "SLA متوقف شد")
+        self.assertNotContains(response, "SLA تکمیل شد")
 
     def test_legacy_step_actor_is_labeled_in_timeline(self):
         self.grant_workflow_view()
