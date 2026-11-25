@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.test import TestCase
+from django.utils import timezone
 
 from workflow.models import (
     Workflow,
@@ -139,3 +140,33 @@ class WorkflowOverrideAdminTests(TestCase):
                 entered_by=self.admin,
             ).exists()
         )
+
+
+    def test_post_reuses_valid_historical_assignee_without_manual_selection(self):
+        self.target_step.assignment_policy = WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        self.target_step.save(update_fields=["assignment_policy"])
+        WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.target_step,
+            performed_by=self.operator,
+            assigned_to=self.operator,
+            assigned_at=timezone.now(),
+            is_submitted=True,
+            submitted_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "target_step": self.target_step.pk,
+                "reason": "بازگشت با مسئول معتبر قبلی",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        execution = WorkflowStepExecution.objects.get(
+            instance=self.instance,
+            workflow_step=self.target_step,
+            entered_by=self.admin,
+        )
+        self.assertEqual(execution.assigned_to_id, self.operator.pk)
