@@ -10,6 +10,7 @@ from workflow.models import (
     FileShareMessageEvent,
     Workflow,
     WorkflowInstance,
+    WorkflowInstanceEvent,
     WorkflowStep,
     WorkflowStepAssignmentHistory,
     WorkflowStepExecution,
@@ -141,6 +142,42 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         self.assertEqual(event["completed_by"], "Ali Rezaei")
         self.assertEqual(event["submitted_at"], submitted_at)
         self.assertTrue(event["sla_completed"])
+
+    def test_override_preserves_sla_as_stopped_not_completed(self):
+        started_at = timezone.now() - timedelta(hours=2)
+        stopped_at = timezone.now()
+        execution = WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step_one,
+            performed_by=self.starter,
+            entered_by=self.starter,
+            assigned_to=self.assignee,
+            sla_started_at=started_at,
+            sla_due_at=started_at + timedelta(hours=4),
+            sla_warning_at=started_at + timedelta(hours=3),
+        )
+        audit_event = WorkflowInstanceEventService.record_step_entry(
+            execution=execution,
+            actor=self.starter,
+        )
+        WorkflowInstanceEventService.record_step_entry(
+            execution=execution,
+            actor=self.starter,
+            sla_stopped_at=stopped_at,
+            sla_stop_reason="OVERRIDE",
+        )
+
+        execution.delete()
+        audit_event.refresh_from_db()
+        events = build_instance_timeline_events(self.instance)
+        step_event = next(event for event in events if event["type"] == "step")
+
+        self.assertEqual(step_event["sla_stopped_at"], stopped_at.isoformat())
+        self.assertEqual(step_event["sla_stop_reason"], "OVERRIDE")
+        self.assertTrue(step_event["sla_stopped"])
+        self.assertFalse(step_event["sla_completed"])
+        self.assertFalse(step_event["sla_breached"])
+        self.assertIsNone(step_event["sla_completed_at"])
 
     def test_entry_and_assignment_history_survive_deleting_unsubmitted_execution(self):
         execution = WorkflowStepExecution.objects.create(
