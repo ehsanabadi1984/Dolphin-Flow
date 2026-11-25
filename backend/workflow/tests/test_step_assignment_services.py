@@ -454,6 +454,8 @@ class WorkflowStepAssignmentServiceTests(TestCase):
         self.assertIsNone(history.previous_assignee_id)
         self.assertEqual(history.new_assignee_id, self.candidate_a.pk)
         self.assertEqual(history.changed_by_id, self.starter.pk)
+        self.assertEqual(history.instance_id, execution.instance_id)
+        self.assertEqual(history.workflow_step_id, execution.workflow_step_id)
 
     def test_assign_execution_is_idempotent_for_same_assignee(self):
         execution = self.make_execution()
