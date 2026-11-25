@@ -419,25 +419,18 @@ class WorkflowOverrideServiceTests(TestCase):
             ).exists()
         )
 
-    def test_previous_completer_selects_requires_admin_selection(self):
+    def test_previous_completer_policy_reuses_valid_historical_assignee(self):
         self.step_b.assignment_policy = WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
         self.step_b.save(update_fields=["assignment_policy"])
 
-        with self.assertRaises(ValidationError):
-            WorkflowOverrideService.override_instance_step(
-                instance=self.instance,
-                target_step=self.step_b,
-                performed_by=self.admin,
-                reason="اصلاح مسیر بدون مسئول",
-            )
-
-        self.assertFalse(
-            WorkflowStepExecution.objects.filter(
-                instance=self.instance,
-                workflow_step=self.step_b,
-                entered_by=self.admin,
-            ).exists()
+        new_execution = WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="حفظ مسئول تاریخی با سیاست انتخابی",
         )
+
+        self.assertEqual(new_execution.assigned_to, self.operator)
 
     def test_previous_completer_selects_accepts_selected_eligible_assignee(self):
         self.step_b.assignment_policy = WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
@@ -484,12 +477,23 @@ class WorkflowOverrideServiceTests(TestCase):
         )
 
     def test_override_resolves_instance_starter_policy(self):
-        self.step_b.assignment_policy = WorkflowStep.AssignmentPolicy.INSTANCE_STARTER
-        self.step_b.save(update_fields=["assignment_policy"])
+        policy_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Starter policy",
+            order=8,
+            assignment_policy=WorkflowStep.AssignmentPolicy.INSTANCE_STARTER,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=policy_step,
+            user=self.operator,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
 
         new_execution = WorkflowOverrideService.override_instance_step(
             instance=self.instance,
-            target_step=self.step_b,
+            target_step=policy_step,
             performed_by=self.admin,
             reason="تخصیص به شروع‌کننده",
         )
@@ -503,25 +507,47 @@ class WorkflowOverrideServiceTests(TestCase):
         source_execution.save(
             update_fields=["completed_by", "is_submitted", "submitted_at"]
         )
-        self.step_b.assignment_policy = WorkflowStep.AssignmentPolicy.STEP_COMPLETER
-        self.step_b.assignment_source_step = self.step_a
-        self.step_b.save(update_fields=["assignment_policy", "assignment_source_step"])
+        policy_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Step completer policy",
+            order=9,
+            assignment_policy=WorkflowStep.AssignmentPolicy.STEP_COMPLETER,
+            assignment_source_step=self.step_a,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=policy_step,
+            user=self.operator,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
 
         new_execution = WorkflowOverrideService.override_instance_step(
             instance=self.instance,
-            target_step=self.step_b,
+            target_step=policy_step,
             performed_by=self.admin,
             reason="تخصیص به تکمیل‌کننده مرجع",
         )
         self.assertEqual(new_execution.assigned_to, self.operator)
 
     def test_override_resolves_auto_single_policy(self):
-        self.step_b.assignment_policy = WorkflowStep.AssignmentPolicy.AUTO_SINGLE
-        self.step_b.save(update_fields=["assignment_policy"])
+        policy_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Auto single policy",
+            order=10,
+            assignment_policy=WorkflowStep.AssignmentPolicy.AUTO_SINGLE,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=policy_step,
+            user=self.operator,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
 
         new_execution = WorkflowOverrideService.override_instance_step(
             instance=self.instance,
-            target_step=self.step_b,
+            target_step=policy_step,
             performed_by=self.admin,
             reason="تخصیص خودکار یگانه",
         )
