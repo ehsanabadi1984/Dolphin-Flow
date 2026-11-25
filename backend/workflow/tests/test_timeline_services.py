@@ -112,6 +112,36 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         self.assertEqual(step_event["sla_warning_sent_at"], execution.sla_warning_sent_at)
         self.assertTrue(step_event["sla_completed"])
 
+    def test_timeline_reads_live_submission_and_sla_state_for_preserved_event(self):
+        execution = WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step_one,
+            performed_by=self.starter,
+            entered_by=self.starter,
+            assigned_to=self.assignee,
+        )
+        WorkflowInstanceEventService.record_step_entry(
+            execution=execution,
+            actor=self.starter,
+        )
+        submitted_at = timezone.now()
+        execution.is_submitted = True
+        execution.completed_by = self.assignee
+        execution.submitted_at = submitted_at
+        execution.sla_completed_at = submitted_at
+        execution.save(update_fields=[
+            "is_submitted", "completed_by", "submitted_at", "sla_completed_at",
+        ])
+
+        event = next(
+            item for item in build_instance_timeline_events(self.instance)
+            if item["type"] == "step"
+        )
+        self.assertTrue(event["is_submitted"])
+        self.assertEqual(event["completed_by"], "Ali Rezaei")
+        self.assertEqual(event["submitted_at"], submitted_at)
+        self.assertTrue(event["sla_completed"])
+
     def test_entry_and_assignment_history_survive_deleting_unsubmitted_execution(self):
         execution = WorkflowStepExecution.objects.create(
             instance=self.instance,
