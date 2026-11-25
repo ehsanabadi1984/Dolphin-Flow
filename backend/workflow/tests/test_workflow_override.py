@@ -178,7 +178,7 @@ class WorkflowOverrideServiceTests(TestCase):
             "OVERRIDE",
         )
         self.assertIn("sla_stopped_at", preserved_event.details)
-        self.assertNotIn("sla_completed_at", preserved_event.details)
+        self.assertIsNone(preserved_event.details["sla_completed_at"])
         old_assignment.refresh_from_db()
         self.assertIsNone(old_assignment.step_execution_id)
         self.assertEqual(old_assignment.instance_id, self.instance.pk)
