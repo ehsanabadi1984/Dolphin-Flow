@@ -340,6 +340,40 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         self.assertContains(response, "انجام‌دهنده تکمیل")
         self.assertContains(response, "تغییر مسئول")
 
+    def test_superseded_transition_renders_management_resolution_in_timeline(self):
+        self.grant_workflow_view()
+        target_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="مرحله مقصد",
+            code="TIMELINE_SUPERSEDED_TARGET",
+            order=2,
+        )
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="ارسال برای تأیید",
+            code="TIMELINE_SUPERSEDED_ADMIN",
+            from_step=self.step,
+            to_step=target_step,
+            requires_acceptance=True,
+        )
+        WorkflowTransitionExecution.objects.create(
+            instance=self.instance,
+            transition=transition,
+            performed_by=self.viewer,
+            status=WorkflowTransitionExecution.Status.SUPERSEDED,
+            resolved_at=timezone.now(),
+        )
+
+        response = self.client.get(self.timeline_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "تعیین تکلیف انتقال")
+        self.assertContains(response, "منسوخ‌شده بر اثر اصلاح مسیر")
+        self.assertContains(response, "اصلاح مدیریتی مسیر")
+        self.assertContains(response, "این درخواست در پی اصلاح مدیریتی مسیر منسوخ شد")
+        self.assertContains(response, "مرحله اول")
+        self.assertContains(response, "مرحله مقصد")
+
     def test_rejected_transition_renders_return_route_and_proposed_assignee(self):
         self.grant_workflow_view()
         return_step = WorkflowStep.objects.create(
