@@ -324,14 +324,33 @@ def build_instance_timeline_events(instance):
             and transition_execution.status in {
                 WorkflowTransitionExecution.Status.ACCEPTED,
                 WorkflowTransitionExecution.Status.REJECTED,
+                WorkflowTransitionExecution.Status.SUPERSEDED,
             }
         ):
-            decision_user = (
-                transition_execution.accepted_by
-                if transition_execution.status
-                == WorkflowTransitionExecution.Status.ACCEPTED
-                else transition_execution.rejected_by
+            is_superseded = (
+                transition_execution.status
+                == WorkflowTransitionExecution.Status.SUPERSEDED
             )
+            if is_superseded:
+                decision_user = None
+                resolution_description = (
+                    "این درخواست در پی اصلاح مدیریتی مسیر منسوخ شد؛ "
+                    "این رویداد به معنی پذیرش یا رد درخواست نیست."
+                )
+                resolution_actor_label = "اصلاح مدیریتی مسیر"
+            else:
+                decision_user = (
+                    transition_execution.accepted_by
+                    if transition_execution.status
+                    == WorkflowTransitionExecution.Status.ACCEPTED
+                    else transition_execution.rejected_by
+                )
+                resolution_description = (
+                    "زمان دقیق ثبت نشده است."
+                    if transition_execution.resolved_at is None
+                    else ""
+                )
+                resolution_actor_label = "تصمیم‌گیرنده"
             outcome = transition_execution.get_status_display()
             events.append(
                 _event(
@@ -340,14 +359,11 @@ def build_instance_timeline_events(instance):
                     transition_execution.resolved_at,
                     f"تعیین تکلیف انتقال: {outcome}",
                     decision_user,
-                    (
-                        "زمان دقیق ثبت نشده است."
-                        if transition_execution.resolved_at is None
-                        else ""
-                    ),
+                    resolution_description,
                     transition_execution_id=transition_execution.pk,
                     transition_status=transition_execution.status,
                     resolved_at=transition_execution.resolved_at,
+                    resolution_actor_label=resolution_actor_label,
                     from_step=transition.from_step.name,
                     to_step=destination,
                     proposed_assignee=_user_label(
