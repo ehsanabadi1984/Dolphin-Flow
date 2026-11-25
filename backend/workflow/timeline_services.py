@@ -149,8 +149,11 @@ def build_instance_timeline_events(instance):
             sla_warning_sent_at=details.get("sla_warning_sent_at"),
             sla_completed_at=details.get("sla_completed_at"),
             sla_breached_at=details.get("sla_breached_at"),
+            sla_stopped_at=details.get("sla_stopped_at"),
+            sla_stop_reason=details.get("sla_stop_reason", ""),
             sla_completed=bool(details.get("sla_completed_at")),
             sla_breached=bool(details.get("sla_breached_at")),
+            sla_stopped=bool(details.get("sla_stopped_at")),
         )
         event["user"] = actor_label or "—"
         events.append(event)
