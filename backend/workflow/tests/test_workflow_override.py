@@ -120,7 +120,10 @@ class WorkflowOverrideServiceTests(TestCase):
             instance=self.instance,
             workflow_step=self.step_b,
             performed_by=self.operator,
+            assigned_to=self.operator,
+            assigned_at=timezone.now(),
             is_submitted=True,
+            submitted_at=timezone.now(),
         )
         self.current_execution = WorkflowStepExecution.objects.create(
             instance=self.instance,
@@ -535,3 +538,154 @@ class WorkflowOverrideServiceTests(TestCase):
             selected_assignee=self.operator,
         )
 
+
+
+    def test_override_reuses_latest_historical_assignee_instead_of_step_default(self):
+        self.step_b.assigned_to = None
+        self.step_b.save(update_fields=["assigned_to"])
+
+        new_execution = WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="بازگشت با مسئول تاریخی",
+        )
+
+        self.assertEqual(new_execution.assigned_to_id, self.operator.pk)
+
+    def test_override_requires_selection_when_historical_assignee_is_no_longer_eligible(self):
+        replacement = User.objects.create_user(
+            username="override_replacement",
+            password="test-password",
+            is_active=True,
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=replacement,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_b,
+            user=replacement,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowMembership.objects.filter(
+            workflow=self.workflow,
+            user=self.operator,
+        ).update(is_active=False)
+
+        with self.assertRaises(ValidationError):
+            WorkflowOverrideService.override_instance_step(
+                instance=self.instance,
+                target_step=self.step_b,
+                performed_by=self.admin,
+                reason="مسئول قبلی دیگر مجاز نیست",
+            )
+
+        new_execution = WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="انتخاب مسئول جایگزین",
+            selected_assignee=replacement,
+        )
+        self.assertEqual(new_execution.assigned_to_id, replacement.pk)
+
+    def test_override_requires_selection_for_legacy_entry_without_assignee(self):
+        legacy_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Legacy without assignee",
+            order=5,
+            is_active=True,
+            assignment_policy=WorkflowStep.AssignmentPolicy.FIXED,
+            assigned_to=self.operator,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=legacy_step,
+            performed_by=self.operator,
+            is_submitted=True,
+        )
+
+        with self.assertRaises(ValidationError):
+            WorkflowOverrideService.override_instance_step(
+                instance=self.instance,
+                target_step=legacy_step,
+                performed_by=self.admin,
+                reason="ورود تاریخی بدون مسئول",
+            )
+
+        selected_execution = WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=legacy_step,
+            performed_by=self.admin,
+            reason="تعیین صریح مسئول",
+            selected_assignee=self.operator,
+        )
+        self.assertEqual(selected_execution.assigned_to_id, self.operator.pk)
+
+    def test_first_override_entry_uses_unambiguous_assignment_policy(self):
+        first_entry_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="First entry",
+            order=6,
+            is_active=True,
+            assignment_policy=WorkflowStep.AssignmentPolicy.FIXED,
+            assigned_to=self.operator,
+        )
+
+        new_execution = WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=first_entry_step,
+            performed_by=self.admin,
+            reason="ورود نخست با سیاست ثابت",
+        )
+        self.assertEqual(new_execution.assigned_to_id, self.operator.pk)
+
+    def test_first_override_entry_requires_selection_for_ambiguous_auto_single(self):
+        second_operator = User.objects.create_user(
+            username="override_second_operator",
+            password="test-password",
+            is_active=True,
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=second_operator,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        ambiguous_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Ambiguous auto",
+            order=7,
+            is_active=True,
+            assignment_policy=WorkflowStep.AssignmentPolicy.AUTO_SINGLE,
+        )
+        for user in (self.operator, second_operator):
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                step=ambiguous_step,
+                user=user,
+                action=WorkflowPermission.Action.EXECUTE,
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
+
+        with self.assertRaises(ValidationError):
+            WorkflowOverrideService.override_instance_step(
+                instance=self.instance,
+                target_step=ambiguous_step,
+                performed_by=self.admin,
+                reason="سیاست خودکار مبهم",
+            )
+
+        selected_execution = WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=ambiguous_step,
+            performed_by=self.admin,
+            reason="انتخاب مدیر برای سیاست مبهم",
+            selected_assignee=second_operator,
+        )
+        self.assertEqual(selected_execution.assigned_to_id, second_operator.pk)
