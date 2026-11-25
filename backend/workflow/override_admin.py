@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
@@ -62,11 +63,22 @@ class WorkflowInstanceOverrideForm(forms.Form):
                     selected_step = None
 
         candidate_ids = set()
+        self.assignee_state = None
         if selected_step is not None:
-            if (
-                selected_step.assignment_policy
-                == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
-            ):
+            try:
+                self.assignee_state = WorkflowStepAssignmentService.get_override_assignee_state(
+                    workflow=instance.workflow,
+                    step=selected_step,
+                    instance=instance,
+                )
+            except ValidationError as exc:
+                self.assignee_state = {
+                    "required": True,
+                    "assignee": None,
+                    "reason": str(exc),
+                }
+
+            if self.assignee_state["required"]:
                 candidate_ids = {
                     user.pk
                     for user in WorkflowStepAssignmentService.get_eligible_assignees(
@@ -74,18 +86,33 @@ class WorkflowInstanceOverrideForm(forms.Form):
                         step=selected_step,
                     )
                 }
+            else:
+                resolved = self.assignee_state["assignee"]
+                candidate_ids = {resolved.pk}
+                self.fields["selected_assignee"].initial = resolved
+                self.fields["selected_assignee"].disabled = True
+                self.fields["selected_assignee"].help_text = (
+                    "مسئول معتبر آخرین ورود به این مرحله (یا سیاست تخصیص مرحله جدید) "
+                    "به‌صورت خودکار حفظ شده است."
+                )
         elif not self.is_bound:
-            manual_steps = target_steps.filter(
-                assignment_policy=WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
-            )
-            for step in manual_steps:
-                candidate_ids.update(
-                    user.pk
-                    for user in WorkflowStepAssignmentService.get_eligible_assignees(
+            for step in target_steps:
+                try:
+                    state = WorkflowStepAssignmentService.get_override_assignee_state(
                         workflow=instance.workflow,
                         step=step,
+                        instance=instance,
                     )
-                )
+                except ValidationError:
+                    state = {"required": True}
+                if state.get("required"):
+                    candidate_ids.update(
+                        user.pk
+                        for user in WorkflowStepAssignmentService.get_eligible_assignees(
+                            workflow=instance.workflow,
+                            step=step,
+                        )
+                    )
 
         self.fields["selected_assignee"].queryset = User.objects.filter(
             pk__in=candidate_ids,
@@ -99,13 +126,14 @@ class WorkflowInstanceOverrideForm(forms.Form):
 
         if (
             target_step
-            and target_step.assignment_policy
-            == WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+            and self.assignee_state
+            and self.assignee_state.get("required")
             and selected_assignee is None
         ):
             self.add_error(
                 "selected_assignee",
-                "برای این سیاست تخصیص، انتخاب مسئول مرحله مقصد الزامی است.",
+                self.assignee_state.get("reason")
+                or "برای این مرحله، انتخاب مسئول توسط Admin الزامی است.",
             )
 
         return cleaned_data
