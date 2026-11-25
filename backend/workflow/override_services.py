@@ -85,7 +85,7 @@ class WorkflowOverrideService:
         if from_step is not None:
             unfinished = list(
                 WorkflowStepExecution.objects
-                .select_for_update()
+                .select_for_update(of=("self",))
                 .filter(
                     instance=instance,
                     workflow_step=from_step,
