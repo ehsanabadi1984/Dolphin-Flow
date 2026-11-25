@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workflow.models import (
+    Notification,
     Workflow,
     WorkflowInstance,
     WorkflowMembership,
@@ -159,6 +160,129 @@ class PendingAcceptanceQueueServiceTests(TestCase):
             instance=instance,
             transition=self.transition_two,
             user=self.sender,
+        )
+
+    def test_start_notifies_the_resolved_initial_execution_assignee(self):
+        self.step_one.assigned_to = self.receiver
+        self.step_one.save(update_fields=["assigned_to"])
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_one,
+            user=self.receiver,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+
+        instance = WorkflowExecutionService.start_workflow(
+            workflow=self.workflow,
+            user=self.sender,
+        )
+
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.receiver,
+                notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                workflow_instance=instance,
+                workflow_step=self.step_one,
+            ).exists()
+        )
+
+    def test_accept_notifies_destination_assignee_separately_from_outcome_recipient(self):
+        pending = self.create_pending()
+        self.step_three.assigned_to = self.receiver
+        self.step_three.save(update_fields=["assigned_to"])
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_three,
+            user=self.receiver,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        self.grant_step_action(
+            user=self.receiver,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+
+        WorkflowExecutionService.accept_transition_execution(
+            transition_execution=pending,
+            user=self.receiver,
+        )
+
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.receiver,
+                notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                workflow_step=self.step_three,
+                workflow_instance=pending.instance,
+            ).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.sender,
+                notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
+                transition_execution=pending,
+            ).exists()
+        )
+
+    def test_reject_notifies_return_step_assignee_separately_from_outcome_recipient(self):
+        pending = self.create_pending()
+        self.step_one.assigned_to = self.receiver
+        self.step_one.save(update_fields=["assigned_to"])
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_one,
+            user=self.receiver,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        self.grant_step_action(
+            user=self.receiver,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        WorkflowExecutionService.reject_transition_execution(
+            transition_execution=pending,
+            user=self.receiver,
+        )
+
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.receiver,
+                notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                workflow_step=self.step_one,
+                workflow_instance=pending.instance,
+            ).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.sender,
+                notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
+                transition_execution=pending,
+            ).exists()
+        )
+
+    def test_websocket_publish_failure_does_not_fail_notification_creation(self):
+        from unittest.mock import patch
+        from workflow.notification_services import NotificationService
+
+        with patch(
+            "workflow.notification_services._schedule_sms_safely"
+        ), patch(
+            "workflow.notification_services.async_to_sync",
+            side_effect=RuntimeError("websocket unavailable"),
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                notification = NotificationService.create(
+                    recipient=self.receiver,
+                    notification_type=Notification.NotificationType.WORKFLOW_STARTED,
+                    title="شروع فرآیند",
+                    message="فرآیند آغاز شد",
+                )
+
+        self.assertTrue(
+            Notification.objects.filter(pk=notification.pk).exists()
         )
 
     def test_returns_pending_acceptance_execution_with_accept_permission(self):
