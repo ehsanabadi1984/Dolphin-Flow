@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from .models import (
     Notification,
+    SMSDelivery,
     WorkflowInstance,
     WorkflowStepAssignmentHistory,
     WorkflowStepExecution,
@@ -103,6 +104,10 @@ class WorkflowOverrideService:
                 WorkflowInstanceEventService.record_step_entry(
                     execution=unfinished[0],
                     actor=unfinished[0].entered_by or unfinished[0].performed_by,
+                    sla_stopped_at=(
+                        now if unfinished[0].sla_started_at is not None else None
+                    ),
+                    sla_stop_reason="OVERRIDE",
                 )
 
         pending_transitions = []
@@ -124,20 +129,47 @@ class WorkflowOverrideService:
                     status=WorkflowTransitionExecution.Status.SUPERSEDED,
                     resolved_at=now,
                 )
+                stale_notification_ids = list(
+                    Notification.objects.filter(
+                        workflow_instance=instance,
+                        transition_execution_id__in=pending_ids,
+                        notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                    ).values_list("pk", flat=True)
+                )
                 Notification.objects.filter(
-                    workflow_instance=instance,
-                    transition_execution_id__in=pending_ids,
-                    notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                    pk__in=stale_notification_ids,
                     is_read=False,
                 ).update(is_read=True, read_at=now)
+            else:
+                stale_notification_ids = []
 
-            # An action-required notification for the step being left is stale.
+            # Action-required notifications for the step being left are stale.
+            step_notification_ids = list(
+                Notification.objects.filter(
+                    workflow_instance=instance,
+                    workflow_step=from_step,
+                    notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                ).values_list("pk", flat=True)
+            )
+            stale_notification_ids = list(
+                set(stale_notification_ids).union(step_notification_ids)
+            )
             Notification.objects.filter(
-                workflow_instance=instance,
-                workflow_step=from_step,
-                notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                pk__in=step_notification_ids,
                 is_read=False,
             ).update(is_read=True, read_at=now)
+
+            # A queued message for an obsolete action must not be sent later.
+            # SENDING/SENT/UNKNOWN deliveries are deliberately left untouched.
+            if stale_notification_ids:
+                SMSDelivery.objects.filter(
+                    notification_id__in=stale_notification_ids,
+                    status=SMSDelivery.Status.PENDING,
+                ).update(
+                    status=SMSDelivery.Status.SKIPPED,
+                    last_error="اعلان اقدام به‌دلیل اصلاح مسیر فرآیند منسوخ شد.",
+                    updated_at=now,
+                )
         override_note = (
             f"{WorkflowOverrideService.OVERRIDE_NOTE_PREFIX} "
             f"{from_step_name} → {target_step.name} | "
