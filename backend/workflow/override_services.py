@@ -12,6 +12,7 @@ from .assignment_services import WorkflowStepAssignmentService
 from .notification_services import NotificationService
 from .realtime_services import WorkflowRealtimeService
 from .sla_services import SLAService
+from .instance_event_services import WorkflowInstanceEventService
 
 
 class WorkflowOverrideService:
@@ -116,6 +117,11 @@ class WorkflowOverrideService:
             changed_by=performed_by,
             source=WorkflowStepAssignmentHistory.Source.OVERRIDE,
             reason=reason,
+        )
+        WorkflowInstanceEventService.record_step_entry(
+            execution=step_execution,
+            actor=performed_by,
+            event_type="OVERRIDE",
         )
 
         SLAService.start_sla_if_configured(

@@ -53,6 +53,7 @@ def preserve_existing_history(apps, schema_editor):
             "submitted_at": _iso(execution.submitted_at),
             "assigned_at": _iso(execution.assigned_at),
             "completed_by_id": execution.completed_by_id,
+            "completed_by_label": _user_label(execution.completed_by),
             "sla_started_at": _iso(execution.sla_started_at),
             "sla_due_at": _iso(execution.sla_due_at),
             "sla_warning_at": _iso(execution.sla_warning_at),

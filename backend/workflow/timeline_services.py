@@ -5,6 +5,7 @@ from workflow.models import (
     WorkflowInstance,
     WorkflowStepAssignmentHistory,
     WorkflowStepExecution,
+    WorkflowInstanceEvent,
     WorkflowTransitionExecution,
 )
 
@@ -54,8 +55,81 @@ def build_instance_timeline_events(instance):
         )
     ]
 
+    audit_events = list(
+        WorkflowInstanceEvent.objects.filter(instance=instance)
+        .select_related("workflow_step", "actor", "assigned_to")
+    )
+    event_execution_ids = {
+        item.execution_id for item in audit_events
+        if item.execution_id is not None
+    }
+    for audit_event in audit_events:
+        details = audit_event.details or {}
+        override_metadata = details.get("override")
+        override_metadata = (
+            override_metadata if isinstance(override_metadata, dict) else {}
+        )
+        is_override = (
+            audit_event.event_type == WorkflowInstanceEvent.EventType.OVERRIDE
+        )
+        actor_label = (
+            audit_event.actor_label
+            or _user_label(audit_event.actor)
+        )
+        assigned_to_label = (
+            audit_event.assigned_to_label
+            or _user_label(audit_event.assigned_to)
+        )
+        event = _event(
+            "override" if is_override else "step",
+            f"step-{audit_event.execution_id or audit_event.pk}",
+            audit_event.occurred_at,
+            (
+                "اصلاح مسیر فرآیند"
+                if is_override
+                else f"ورود به مرحله «{audit_event.workflow_step.name}»"
+            ),
+            audit_event.actor,
+            "" if is_override else details.get("notes", ""),
+            user_role_label=(
+                "ثبت‌کننده ورود به مرحله"
+                if details.get("actor_source") == "entered_by"
+                else "عامل ثبت‌شده در داده Legacy (performed_by؛ نه لزوماً تکمیل‌کننده)"
+                if details.get("actor_source") == "performed_by_legacy"
+                else "عامل ثبت نشده"
+            ),
+            user_source=details.get("actor_source", "unknown"),
+            execution_id=audit_event.execution_id,
+            override_from_step=(
+                override_metadata.get("from_step_name") or "—"
+            ),
+            override_to_step=(
+                override_metadata.get("to_step_name")
+                or audit_event.workflow_step.name
+            ),
+            override_reason=override_metadata.get("reason") or "—",
+            entered_by=actor_label or "—",
+            assigned_to=assigned_to_label or "—",
+            assigned_at=details.get("assigned_at"),
+            completed_by=details.get("completed_by_label") or "—",
+            submitted_at=details.get("submitted_at"),
+            is_submitted=bool(details.get("is_submitted")),
+            history=details.get("history"),
+            sla_started_at=details.get("sla_started_at"),
+            sla_due_at=details.get("sla_due_at"),
+            sla_warning_at=details.get("sla_warning_at"),
+            sla_warning_sent_at=details.get("sla_warning_sent_at"),
+            sla_completed_at=details.get("sla_completed_at"),
+            sla_breached_at=details.get("sla_breached_at"),
+            sla_completed=bool(details.get("sla_completed_at")),
+            sla_breached=bool(details.get("sla_breached_at")),
+        )
+        event["user"] = actor_label or "—"
+        events.append(event)
+
     executions = (
         WorkflowStepExecution.objects.filter(instance=instance)
+        .exclude(pk__in=event_execution_ids)
         .select_related(
             "workflow_step", "performed_by", "entered_by",
             "assigned_to", "completed_by",
@@ -141,16 +215,13 @@ def build_instance_timeline_events(instance):
         events.append(event)
 
     assignments = (
-        WorkflowStepAssignmentHistory.objects.filter(
-            step_execution__instance=instance
-        )
+        WorkflowStepAssignmentHistory.objects.filter(instance=instance)
         .select_related(
-            "step_execution__workflow_step",
-            "previous_assignee", "new_assignee", "changed_by",
+            "workflow_step", "previous_assignee", "new_assignee", "changed_by",
         )
     )
     for assignment in assignments:
-        step_name = assignment.step_execution.workflow_step.name
+        step_name = assignment.workflow_step.name
         events.append(
             _event(
                 "assignment",

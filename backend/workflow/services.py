@@ -20,6 +20,7 @@ from .models import (
 )
 from .form_draft_submit_services import FormDraftSubmitService
 from .assignment_services import WorkflowStepAssignmentService
+from .instance_event_services import WorkflowInstanceEventService
 
 
 class WorkflowExecutionService:
@@ -199,6 +200,10 @@ class WorkflowExecutionService:
             changed_by=user,
             source=WorkflowStepAssignmentHistory.Source.ACCEPTANCE,
             reason="تخصیص مسئول مقصد هنگام پذیرش انتقال",
+        )
+        WorkflowInstanceEventService.record_step_entry(
+            execution=step_execution,
+            actor=user,
         )
 
         transition_execution.status = (
@@ -402,6 +407,10 @@ class WorkflowExecutionService:
                 else "تخصیص مسئول مرحله بازگشت پس از رد انتقال"
             ),
         )
+        WorkflowInstanceEventService.record_step_entry(
+            execution=step_execution,
+            actor=user,
+        )
 
         transition_execution.status = (
             WorkflowTransitionExecution.Status.REJECTED
@@ -509,6 +518,10 @@ class WorkflowExecutionService:
             changed_by=user,
             source=WorkflowStepAssignmentHistory.Source.INITIAL,
             reason="تخصیص اولیه هنگام شروع فرآیند",
+        )
+        WorkflowInstanceEventService.record_step_entry(
+            execution=step_execution,
+            actor=user,
         )
 
         SLAService.start_sla_if_configured(
@@ -802,6 +815,10 @@ class WorkflowExecutionService:
                     if manual_destination
                     else "تخصیص مسئول هنگام ورود به مرحله"
                 ),
+            )
+            WorkflowInstanceEventService.record_step_entry(
+                execution=step_execution,
+                actor=user,
             )
 
             SLAService.start_sla_if_configured(
