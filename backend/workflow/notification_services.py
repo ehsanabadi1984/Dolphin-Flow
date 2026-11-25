@@ -66,17 +66,22 @@ class NotificationService:
         }
 
         def publish_notification():
-            channel_layer = get_channel_layer()
+            try:
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    f"user_notifications_{recipient.id}",
+                    {
+                        "type": "notification_message",
+                        "notification": notification_payload,
+                    },
+                )
+            except Exception:
+                import logging
 
-            async_to_sync(
-                channel_layer.group_send
-            )(
-                f"user_notifications_{recipient.id}",
-                {
-                    "type": "notification_message",
-                    "notification": notification_payload,
-                },
-            )
+                logging.getLogger(__name__).exception(
+                    "Unable to publish WebSocket notification %s",
+                    notification.pk,
+                )
         # Queue SMS first so a later WebSocket callback failure cannot suppress it.
         # The WebSocket callback and payload remain unchanged.
         transaction.on_commit(
