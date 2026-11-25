@@ -189,12 +189,22 @@ class PendingAcceptanceQueueServiceTests(TestCase):
 
     def test_accept_notifies_destination_assignee_separately_from_outcome_recipient(self):
         pending = self.create_pending()
-        self.step_three.assigned_to = self.receiver
+        destination_assignee = User.objects.create_user(
+            username="pending_accept_destination_assignee",
+            password="test-password",
+        )
+        self.step_three.assigned_to = destination_assignee
         self.step_three.save(update_fields=["assigned_to"])
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=destination_assignee,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
         WorkflowPermission.objects.create(
             workflow=self.workflow,
             step=self.step_three,
-            user=self.receiver,
+            user=destination_assignee,
             action=WorkflowPermission.Action.EXECUTE,
             effect=WorkflowPermission.Effect.ALLOW,
         )
@@ -211,7 +221,7 @@ class PendingAcceptanceQueueServiceTests(TestCase):
 
         self.assertTrue(
             Notification.objects.filter(
-                recipient=self.receiver,
+                recipient=destination_assignee,
                 notification_type=Notification.NotificationType.ACTION_REQUIRED,
                 workflow_step=self.step_three,
                 workflow_instance=pending.instance,
@@ -227,12 +237,22 @@ class PendingAcceptanceQueueServiceTests(TestCase):
 
     def test_reject_notifies_return_step_assignee_separately_from_outcome_recipient(self):
         pending = self.create_pending()
-        self.step_one.assigned_to = self.receiver
+        return_assignee = User.objects.create_user(
+            username="pending_reject_return_assignee",
+            password="test-password",
+        )
+        self.step_one.assigned_to = return_assignee
         self.step_one.save(update_fields=["assigned_to"])
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=return_assignee,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
         WorkflowPermission.objects.create(
             workflow=self.workflow,
             step=self.step_one,
-            user=self.receiver,
+            user=return_assignee,
             action=WorkflowPermission.Action.EXECUTE,
             effect=WorkflowPermission.Effect.ALLOW,
         )
@@ -249,7 +269,7 @@ class PendingAcceptanceQueueServiceTests(TestCase):
 
         self.assertTrue(
             Notification.objects.filter(
-                recipient=self.receiver,
+                recipient=return_assignee,
                 notification_type=Notification.NotificationType.ACTION_REQUIRED,
                 workflow_step=self.step_one,
                 workflow_instance=pending.instance,
