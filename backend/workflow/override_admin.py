@@ -1,6 +1,5 @@
 from django import forms
 from django.contrib import admin
-from django.core.exceptions import ValidationError
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
