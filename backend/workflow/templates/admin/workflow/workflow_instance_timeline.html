@@ -141,6 +141,10 @@
                                     <span class="timeline-sla-state success">
                                         تکمیل شده
                                     </span>
+                                {% elif event.sla_stopped_at %}
+                                    <span class="timeline-sla-state">
+                                        متوقف‌شده بر اثر اصلاح مسیر
+                                    </span>
                                 {% else %}
                                     <span class="timeline-sla-state active">
                                         در حال اجرا
@@ -206,6 +210,13 @@
 
                                 {% endif %}
 
+
+                                {% if event.sla_stopped_at %}
+                                    <div class="timeline-sla-item">
+                                        <span class="timeline-sla-label">توقف</span>
+                                        <strong>{{ event.sla_stopped_at|date:"Y/m/d H:i:s" }}</strong>
+                                    </div>
+                                {% endif %}
 
                                 {% if event.sla_breached_at %}
 
@@ -530,6 +541,12 @@
                             {% if event.sla_breached %}
                                 <span class="timeline-badge danger">
                                     SLA نقض شد
+                                </span>
+                            {% endif %}
+
+                            {% if event.sla_stopped %}
+                                <span class="timeline-badge">
+                                    SLA متوقف شد
                                 </span>
                             {% endif %}
 
