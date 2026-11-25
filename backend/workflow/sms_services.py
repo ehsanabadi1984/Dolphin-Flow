@@ -560,28 +560,34 @@ class SMSDispatcher:
 
     @staticmethod
     def _obsolete_action_required_reason(notification, *, instance=None):
-        if notification.notification_type != Notification.NotificationType.ACTION_REQUIRED:
+        guarded_types = {
+            Notification.NotificationType.ACTION_REQUIRED,
+            Notification.NotificationType.SLA_WARNING,
+            Notification.NotificationType.SLA_BREACHED,
+        }
+        if notification.notification_type not in guarded_types:
             return ""
 
         transition_execution = notification.transition_execution
-        if (
-            transition_execution is not None
-            and transition_execution.status == WorkflowTransitionExecution.Status.SUPERSEDED
-        ):
-            return "درخواست اقدام به‌دلیل اصلاح مسیر منسوخ شده است."
-
-        if (
-            transition_execution is not None
-            and transition_execution.status == WorkflowTransitionExecution.Status.PENDING
-        ):
-            transition = transition_execution.transition
+        if notification.notification_type == Notification.NotificationType.ACTION_REQUIRED:
             if (
-                instance is None
-                or instance.status != WorkflowInstance.Status.ACTIVE
-                or instance.current_step_id != transition.from_step_id
+                transition_execution is not None
+                and transition_execution.status == WorkflowTransitionExecution.Status.SUPERSEDED
             ):
-                return "درخواست پذیرش دیگر مربوط به مرحله جاری فرآیند نیست."
-            return ""
+                return "درخواست اقدام به‌دلیل اصلاح مسیر منسوخ شده است."
+
+            if (
+                transition_execution is not None
+                and transition_execution.status == WorkflowTransitionExecution.Status.PENDING
+            ):
+                transition = transition_execution.transition
+                if (
+                    instance is None
+                    or instance.status != WorkflowInstance.Status.ACTIVE
+                    or instance.current_step_id != transition.from_step_id
+                ):
+                    return "درخواست پذیرش دیگر مربوط به مرحله جاری فرآیند نیست."
+                return ""
 
         if instance is None or notification.workflow_step_id is None:
             return ""
@@ -590,7 +596,7 @@ class SMSDispatcher:
             instance.status != WorkflowInstance.Status.ACTIVE
             or instance.current_step_id != notification.workflow_step_id
         ):
-            return "اعلان اقدام مربوط به مرحله جاری فرآیند نیست."
+            return "اعلان مربوط به مرحله جاری فرآیند نیست."
 
         active_execution = (
             WorkflowStepExecution.objects
@@ -605,9 +611,9 @@ class SMSDispatcher:
         if active_execution is None:
             return "برای این مرحله اجرای فعال و ارسال‌نشده‌ای وجود ندارد."
         if active_execution.performed_at > notification.created_at:
-            return "اعلان اقدام متعلق به ورود قبلی به مرحله است."
+            return "اعلان متعلق به ورود قبلی به مرحله است."
         if active_execution.assigned_to_id != notification.recipient_id:
-            return "اعلان اقدام برای مسئول قبلی مرحله ثبت شده است."
+            return "اعلان برای مسئول قبلی مرحله ثبت شده است."
 
         return ""
 
