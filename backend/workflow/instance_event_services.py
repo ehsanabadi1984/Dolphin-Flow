@@ -14,7 +14,14 @@ class WorkflowInstanceEventService:
     """Persist an execution's entry/override event independently of its row."""
 
     @staticmethod
-    def record_step_entry(*, execution, actor=None, event_type=None, sla_stopped_at=None, sla_stop_reason=''):
+    def record_step_entry(
+        *,
+        execution,
+        actor=None,
+        event_type=None,
+        sla_stopped_at=None,
+        sla_stop_reason="",
+    ):
         data = execution.data if isinstance(execution.data, dict) else {}
         override = data.get("override")
         if event_type is None:
