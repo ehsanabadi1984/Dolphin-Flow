@@ -235,6 +235,12 @@
                             </div>
 
 
+                            {% if event.sla_stop_reason %}
+                                <div class="timeline-sla-warning">
+                                    علت توقف: اصلاح مسیر توسط مدیر
+                                </div>
+                            {% endif %}
+
                             {% if event.sla_warning_sent_at %}
 
                                 <div class="timeline-sla-warning">
