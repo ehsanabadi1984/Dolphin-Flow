@@ -320,6 +320,24 @@ class PendingAcceptanceQueueServiceTests(TestCase):
             .exists()
         )
 
+    def test_superseded_acceptance_is_excluded_from_pending_queue(self):
+        execution = self.create_pending()
+        self.grant_step_action(
+            user=self.receiver,
+            step=self.step_three,
+            action_code="ACCEPT",
+        )
+        execution.status = WorkflowTransitionExecution.Status.SUPERSEDED
+        execution.resolved_at = timezone.now()
+        execution.save(update_fields=["status", "resolved_at"])
+
+        self.assertFalse(
+            PendingAcceptanceQueueService(self.receiver)
+            .get_queryset()
+            .filter(pk=execution.pk)
+            .exists()
+        )
+
     def test_non_acceptance_transition_is_excluded(self):
         instance = WorkflowExecutionService.start_workflow(
             workflow=self.workflow,
