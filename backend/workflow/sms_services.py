@@ -15,7 +15,15 @@ from django.template import Context, Engine, TemplateSyntaxError
 from django.template.base import TextNode, VariableNode
 
 from accounts.models import UserContactMethod
-from .models import Notification, SMSDelivery, WorkflowSMSSettings, WorkflowStepSMSRule
+from .models import (
+    Notification,
+    SMSDelivery,
+    WorkflowInstance,
+    WorkflowStepExecution,
+    WorkflowSMSSettings,
+    WorkflowStepSMSRule,
+    WorkflowTransitionExecution,
+)
 
 _GSM_BASIC = set(
     "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡"
@@ -426,6 +434,7 @@ class SMSDispatcher:
                 "recipient",
                 "workflow_step",
                 "transition_execution__transition__from_step",
+                "transition_execution__transition__to_step",
                 "file_share_message__workflow_step",
                 "file_share_message__transition_execution__transition__from_step",
             ).get(pk=notification_id)
@@ -439,6 +448,22 @@ class SMSDispatcher:
         # concurrent workers; SENDING is committed before the network call so
         # a worker crash cannot cause an automatic duplicate submission.
         with transaction.atomic():
+            instance = None
+            if notification.workflow_instance_id:
+                instance = (
+                    WorkflowInstance.objects
+                    .select_for_update()
+                    .get(pk=notification.workflow_instance_id)
+                )
+                # Reload transition status after taking the instance lock. Override
+                # uses the same lock before marking a transition SUPERSEDED.
+                notification = Notification.objects.select_related(
+                    "recipient",
+                    "workflow_step",
+                    "transition_execution__transition__from_step",
+                    "transition_execution__transition__to_step",
+                ).get(pk=notification_id)
+
             delivery = SMSDelivery.objects.select_for_update().get(pk=delivery.pk)
             if delivery.status in (
                 SMSDelivery.Status.SENT,
@@ -446,6 +471,16 @@ class SMSDispatcher:
                 SMSDelivery.Status.SENDING,
                 SMSDelivery.Status.UNKNOWN,
             ):
+                return delivery.status
+
+            obsolete_reason = cls._obsolete_action_required_reason(
+                notification,
+                instance=instance,
+            )
+            if obsolete_reason:
+                delivery.status = SMSDelivery.Status.SKIPPED
+                delivery.last_error = obsolete_reason
+                delivery.save(update_fields=("status", "last_error", "updated_at"))
                 return delivery.status
 
             reason, contact = cls._eligibility(notification)
@@ -522,6 +557,54 @@ class SMSDispatcher:
             updated_at=timezone.now(),
         )
         return SMSDelivery.Status.SENT
+
+    @staticmethod
+    def _obsolete_action_required_reason(notification, *, instance=None):
+        if notification.notification_type != Notification.NotificationType.ACTION_REQUIRED:
+            return ""
+
+        transition_execution = notification.transition_execution
+        if (
+            transition_execution is not None
+            and transition_execution.status == WorkflowTransitionExecution.Status.SUPERSEDED
+        ):
+            return "درخواست اقدام به‌دلیل اصلاح مسیر منسوخ شده است."
+
+        if transition_execution is not None and transition_execution.status == WorkflowTransitionExecution.Status.PENDING:
+            transition = transition_execution.transition
+            if (
+                instance is None
+                or instance.status != WorkflowInstance.Status.ACTIVE
+                or instance.current_step_id != transition.from_step_id
+            ):
+                return "درخواست پذیرش دیگر مربوط به مرحله جاری فرآیند نیست."
+            return ""
+
+        if instance is None or notification.workflow_step_id is None:
+            return ""
+
+        if (
+            instance.status != WorkflowInstance.Status.ACTIVE
+            or instance.current_step_id != notification.workflow_step_id
+        ):
+            return "اعلان اقدام مربوط به مرحله جاری فرآیند نیست."
+
+        active_execution = (
+            WorkflowStepExecution.objects
+            .filter(
+                instance_id=instance.pk,
+                workflow_step_id=notification.workflow_step_id,
+                is_submitted=False,
+            )
+            .order_by("-performed_at", "-pk")
+            .first()
+        )
+        if active_execution is None:
+            return "برای این مرحله اجرای فعال و ارسال‌نشده‌ای وجود ندارد."
+        if active_execution.performed_at > notification.created_at:
+            return "اعلان اقدام متعلق به ورود قبلی به مرحله است."
+
+        return ""
 
     @staticmethod
     def _eligibility(notification):
