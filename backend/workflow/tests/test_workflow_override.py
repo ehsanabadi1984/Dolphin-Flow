@@ -138,7 +138,11 @@ class WorkflowOverrideServiceTests(TestCase):
     def test_override_creates_new_unsubmitted_execution(self):
         self.current_execution.assigned_to = self.operator
         self.current_execution.assigned_at = timezone.now()
-        self.current_execution.save(update_fields=["assigned_to", "assigned_at"])
+        self.current_execution.sla_started_at = timezone.now() - timedelta(hours=1)
+        self.current_execution.sla_due_at = timezone.now() + timedelta(hours=1)
+        self.current_execution.save(update_fields=[
+            "assigned_to", "assigned_at", "sla_started_at", "sla_due_at",
+        ])
         old_assignment = WorkflowStepAssignmentHistory.objects.create(
             step_execution=self.current_execution,
             instance=self.instance,
@@ -169,6 +173,12 @@ class WorkflowOverrideServiceTests(TestCase):
         self.assertEqual(preserved_event.workflow_step_id, self.step_c.pk)
         self.assertFalse(preserved_event.details["is_submitted"])
         self.assertEqual(preserved_event.assigned_to_id, self.operator.pk)
+        self.assertEqual(
+            preserved_event.details["sla_stop_reason"],
+            "OVERRIDE",
+        )
+        self.assertIn("sla_stopped_at", preserved_event.details)
+        self.assertNotIn("sla_completed_at", preserved_event.details)
         old_assignment.refresh_from_db()
         self.assertIsNone(old_assignment.step_execution_id)
         self.assertEqual(old_assignment.instance_id, self.instance.pk)
