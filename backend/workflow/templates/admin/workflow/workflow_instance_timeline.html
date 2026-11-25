@@ -311,9 +311,21 @@
                                 <strong>{{ event.from_step|default:"—" }} → {{ event.to_step|default:"—" }}</strong>
                             </div>
                             <div>
-                                <span>تصمیم‌گیرنده</span>
-                                <strong>{{ event.user|default:"—" }}</strong>
+                                <span>{{ event.resolution_actor_label|default:"تصمیم‌گیرنده" }}</span>
+                                <strong>
+                                    {% if event.transition_status_code == "SUPERSEDED" %}
+                                        اصلاح مدیریتی مسیر
+                                    {% else %}
+                                        {{ event.user|default:"—" }}
+                                    {% endif %}
+                                </strong>
                             </div>
+                            {% if event.description %}
+                                <div>
+                                    <span>توضیح</span>
+                                    <strong>{{ event.description }}</strong>
+                                </div>
+                            {% endif %}
                             <div>
                                 <span>زمان تصمیم</span>
                                 <strong>
