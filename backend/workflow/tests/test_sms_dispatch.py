@@ -673,72 +673,6 @@ class SMSDispatchTests(TestCase):
         self.assertEqual(result["id"], 12345)
 
 
-class SMSRecoveryTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(username="sms-recovery", password="test")
-        self.notification = Notification.objects.create(
-            recipient=self.user,
-            notification_type=Notification.NotificationType.ACTION_REQUIRED,
-            title="Recovery test",
-            message="Recovery test",
-        )
-        self.delivery = SMSDelivery.objects.create(
-            notification=self.notification,
-            status=SMSDelivery.Status.SENDING,
-        )
-
-    @override_settings(SMS_DELIVERY_STALE_AFTER=600)
-    def test_abandoned_sending_delivery_becomes_unknown_without_resend(self):
-        from workflow.tasks import reconcile_stale_sms_deliveries
-        SMSDelivery.objects.filter(pk=self.delivery.pk).update(
-            updated_at=timezone.now() - timedelta(minutes=11),
-        )
-        self.assertEqual(reconcile_stale_sms_deliveries(), 1)
-        self.delivery.refresh_from_db()
-        self.assertEqual(self.delivery.status, SMSDelivery.Status.UNKNOWN)
-
-    def test_unexpected_error_after_send_claim_becomes_unknown(self):
-        from workflow.tasks import dispatch_sms_notification
-        with patch("workflow.sms_services.SMSDispatcher.dispatch", side_effect=RuntimeError("provider result persistence failed")):
-            result = dispatch_sms_notification.run(self.notification.pk)
-        self.assertEqual(result, SMSDelivery.Status.UNKNOWN)
-        self.delivery.refresh_from_db()
-        self.assertEqual(self.delivery.status, SMSDelivery.Status.UNKNOWN)
-
-
-    @override_settings(SMS_PENDING_REQUEUE_AFTER=60)
-    def test_pending_outbox_is_not_enqueued_repeatedly(self):
-        from workflow.tasks import requeue_pending_sms_deliveries
-
-        SMSDelivery.objects.filter(pk=self.delivery.pk).update(
-            status=SMSDelivery.Status.PENDING,
-            last_queued_at=timezone.now() - timedelta(minutes=2),
-        )
-        with patch("workflow.tasks.dispatch_sms_notification.delay") as mock_delay:
-            self.assertEqual(requeue_pending_sms_deliveries(), 1)
-            self.assertEqual(requeue_pending_sms_deliveries(), 0)
-
-        mock_delay.assert_called_once_with(self.notification.pk)
-        self.delivery.refresh_from_db()
-        self.assertGreater(self.delivery.last_queued_at, timezone.now() - timedelta(seconds=10))
-
-    @override_settings(SMS_PENDING_REQUEUE_AFTER=60)
-    def test_failed_broker_enqueue_releases_outbox_claim(self):
-        from workflow.tasks import requeue_pending_sms_deliveries
-
-        SMSDelivery.objects.filter(pk=self.delivery.pk).update(
-            status=SMSDelivery.Status.PENDING,
-            last_queued_at=None,
-        )
-        with patch(
-            "workflow.tasks.dispatch_sms_notification.delay",
-            side_effect=RuntimeError("broker unavailable"),
-        ):
-            self.assertEqual(requeue_pending_sms_deliveries(), 0)
-
-        self.delivery.refresh_from_db()
-        self.assertIsNone(self.delivery.last_queued_at)
-
     def test_pending_sla_sms_is_skipped_after_reentering_the_same_step(self):
         instance = WorkflowInstance.objects.create(
             workflow=self.step.workflow,
@@ -830,3 +764,69 @@ class SMSRecoveryTests(TestCase):
             "",
         )
 
+
+class SMSRecoveryTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="sms-recovery", password="test")
+        self.notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="Recovery test",
+            message="Recovery test",
+        )
+        self.delivery = SMSDelivery.objects.create(
+            notification=self.notification,
+            status=SMSDelivery.Status.SENDING,
+        )
+
+    @override_settings(SMS_DELIVERY_STALE_AFTER=600)
+    def test_abandoned_sending_delivery_becomes_unknown_without_resend(self):
+        from workflow.tasks import reconcile_stale_sms_deliveries
+        SMSDelivery.objects.filter(pk=self.delivery.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=11),
+        )
+        self.assertEqual(reconcile_stale_sms_deliveries(), 1)
+        self.delivery.refresh_from_db()
+        self.assertEqual(self.delivery.status, SMSDelivery.Status.UNKNOWN)
+
+    def test_unexpected_error_after_send_claim_becomes_unknown(self):
+        from workflow.tasks import dispatch_sms_notification
+        with patch("workflow.sms_services.SMSDispatcher.dispatch", side_effect=RuntimeError("provider result persistence failed")):
+            result = dispatch_sms_notification.run(self.notification.pk)
+        self.assertEqual(result, SMSDelivery.Status.UNKNOWN)
+        self.delivery.refresh_from_db()
+        self.assertEqual(self.delivery.status, SMSDelivery.Status.UNKNOWN)
+
+
+    @override_settings(SMS_PENDING_REQUEUE_AFTER=60)
+    def test_pending_outbox_is_not_enqueued_repeatedly(self):
+        from workflow.tasks import requeue_pending_sms_deliveries
+
+        SMSDelivery.objects.filter(pk=self.delivery.pk).update(
+            status=SMSDelivery.Status.PENDING,
+            last_queued_at=timezone.now() - timedelta(minutes=2),
+        )
+        with patch("workflow.tasks.dispatch_sms_notification.delay") as mock_delay:
+            self.assertEqual(requeue_pending_sms_deliveries(), 1)
+            self.assertEqual(requeue_pending_sms_deliveries(), 0)
+
+        mock_delay.assert_called_once_with(self.notification.pk)
+        self.delivery.refresh_from_db()
+        self.assertGreater(self.delivery.last_queued_at, timezone.now() - timedelta(seconds=10))
+
+    @override_settings(SMS_PENDING_REQUEUE_AFTER=60)
+    def test_failed_broker_enqueue_releases_outbox_claim(self):
+        from workflow.tasks import requeue_pending_sms_deliveries
+
+        SMSDelivery.objects.filter(pk=self.delivery.pk).update(
+            status=SMSDelivery.Status.PENDING,
+            last_queued_at=None,
+        )
+        with patch(
+            "workflow.tasks.dispatch_sms_notification.delay",
+            side_effect=RuntimeError("broker unavailable"),
+        ):
+            self.assertEqual(requeue_pending_sms_deliveries(), 0)
+
+        self.delivery.refresh_from_db()
+        self.assertIsNone(self.delivery.last_queued_at)
