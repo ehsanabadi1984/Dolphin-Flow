@@ -60,18 +60,22 @@ class WorkflowExecutionRolePermissionTests(TestCase):
             is_active=True,
         )
 
-        # START and EXECUTE are prerequisites for starting and owning the
-        # initial step. TRANSITION is granted independently per test.
+        # EXECUTE is step-scoped: grant it on both the initial and
+        # destination steps so assignment validation can succeed.
+        for step in (self.step_one, self.step_two):
+            WorkflowPermission.objects.create(
+                workflow=self.workflow,
+                step=step,
+                role=WorkflowMembership.Role.EXECUTOR,
+                action=WorkflowPermission.Action.EXECUTE,
+                effect=WorkflowPermission.Effect.ALLOW,
+            )
+
+        # START is workflow-scoped and independent from EXECUTE.
         WorkflowPermission.objects.create(
             workflow=self.workflow,
             role=WorkflowMembership.Role.EXECUTOR,
             action=WorkflowPermission.Action.START,
-            effect=WorkflowPermission.Effect.ALLOW,
-        )
-        WorkflowPermission.objects.create(
-            workflow=self.workflow,
-            role=WorkflowMembership.Role.EXECUTOR,
-            action=WorkflowPermission.Action.EXECUTE,
             effect=WorkflowPermission.Effect.ALLOW,
         )
 
@@ -114,6 +118,7 @@ class WorkflowExecutionRolePermissionTests(TestCase):
         result = self._execute_transition(instance)
 
         self.assertIsNotNone(result)
+        instance.refresh_from_db()
         self.assertEqual(instance.current_step_id, self.step_two.pk)
 
     def test_user_deny_overrides_role_allow(self):
@@ -137,6 +142,7 @@ class WorkflowExecutionRolePermissionTests(TestCase):
         result = self._execute_transition(instance)
 
         self.assertIsNotNone(result)
+        instance.refresh_from_db()
         self.assertEqual(instance.current_step_id, self.step_two.pk)
 
     def test_no_transition_permission(self):
