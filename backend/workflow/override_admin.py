@@ -79,6 +79,10 @@ class WorkflowInstanceOverrideForm(forms.Form):
                 }
 
             if self.assignee_state["required"]:
+                self.fields["selected_assignee"].help_text = (
+                    self.assignee_state.get("reason")
+                    or "برای این مرحله باید یک مسئول واجد شرایط انتخاب کنید."
+                )
                 candidate_ids = {
                     user.pk
                     for user in WorkflowStepAssignmentService.get_eligible_assignees(
