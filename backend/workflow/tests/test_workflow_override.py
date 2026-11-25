@@ -760,3 +760,53 @@ class WorkflowOverrideServiceTests(TestCase):
             reason="بازگشت به مرحله قبلی",
         )
         self.assertEqual(returned_execution.assigned_to_id, self.operator.pk)
+
+
+    def test_override_uses_latest_assignment_history_after_entry_event(self):
+        replacement = User.objects.create_user(
+            username="override_reassigned_operator",
+            password="test-password",
+            is_active=True,
+        )
+        WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=replacement,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step_b,
+            user=replacement,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        event_time = timezone.now() - timezone.timedelta(minutes=5)
+        WorkflowInstanceEvent.objects.create(
+            instance=self.instance,
+            workflow_step=self.step_b,
+            event_type=WorkflowInstanceEvent.EventType.STEP_ENTERED,
+            actor=self.operator,
+            actor_label=self.operator.username,
+            assigned_to=self.operator,
+            assigned_to_label=self.operator.username,
+            occurred_at=event_time,
+            details={},
+        )
+        WorkflowStepAssignmentHistory.objects.create(
+            instance=self.instance,
+            workflow_step=self.step_b,
+            previous_assignee=self.operator,
+            new_assignee=replacement,
+            changed_by=self.admin,
+            source=WorkflowStepAssignmentHistory.Source.MANUAL,
+            reason="تغییر مسئول پس از ورود",
+        )
+
+        new_execution = WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="بازگشت با آخرین تخصیص",
+        )
+        self.assertEqual(new_execution.assigned_to_id, replacement.pk)
