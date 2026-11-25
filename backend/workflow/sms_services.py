@@ -603,6 +603,8 @@ class SMSDispatcher:
             return "برای این مرحله اجرای فعال و ارسال‌نشده‌ای وجود ندارد."
         if active_execution.performed_at > notification.created_at:
             return "اعلان اقدام متعلق به ورود قبلی به مرحله است."
+        if active_execution.assigned_to_id != notification.recipient_id:
+            return "اعلان اقدام برای مسئول قبلی مرحله ثبت شده است."
 
         return ""
 
