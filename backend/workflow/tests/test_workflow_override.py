@@ -527,16 +527,20 @@ class WorkflowOverrideServiceTests(TestCase):
         )
         self.assertEqual(new_execution.assigned_to, self.operator)
 
-    def test_override_rejects_manual_selection_for_other_policies(self):
-        self.assertRaises(
-            ValidationError,
-            WorkflowOverrideService.override_instance_step,
-            instance=self.instance,
-            target_step=self.step_b,
-            performed_by=self.admin,
-            reason="انتخاب دستی غیرمجاز",
-            selected_assignee=self.operator,
+    def test_override_rejects_changing_a_valid_historical_assignee(self):
+        other_user = User.objects.create_user(
+            username="override_other_candidate",
+            password="test-password",
+            is_active=True,
         )
+        with self.assertRaises(ValidationError):
+            WorkflowOverrideService.override_instance_step(
+                instance=self.instance,
+                target_step=self.step_b,
+                performed_by=self.admin,
+                reason="تغییر مسئول تاریخی",
+                selected_assignee=other_user,
+            )
 
 
 
