@@ -253,6 +253,8 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         )
         WorkflowStepAssignmentHistory.objects.create(
             step_execution=execution,
+            instance=self.instance,
+            workflow_step=execution.workflow_step,
             previous_assignee=None,
             new_assignee=self.starter,
             changed_by=self.viewer,
@@ -401,6 +403,8 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         )
         WorkflowStepAssignmentHistory.objects.create(
             step_execution=execution,
+            instance=self.instance,
+            workflow_step=execution.workflow_step,
             previous_assignee=None,
             new_assignee=self.starter,
             changed_by=self.viewer,

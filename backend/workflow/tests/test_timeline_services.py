@@ -120,6 +120,8 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         )
         assignment = WorkflowStepAssignmentHistory.objects.create(
             step_execution=execution,
+            instance=self.instance,
+            workflow_step=execution.workflow_step,
             previous_assignee=None,
             new_assignee=self.assignee,
             changed_by=self.reviewer,
@@ -265,6 +267,8 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         )
         WorkflowStepAssignmentHistory.objects.create(
             step_execution=execution,
+            instance=self.instance,
+            workflow_step=execution.workflow_step,
             previous_assignee=None,
             new_assignee=self.assignee,
             changed_by=self.reviewer,
@@ -294,6 +298,8 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         )
         WorkflowStepAssignmentHistory.objects.create(
             step_execution=execution,
+            instance=self.instance,
+            workflow_step=execution.workflow_step,
             previous_assignee=None,
             new_assignee=self.assignee,
             changed_by=self.reviewer,
