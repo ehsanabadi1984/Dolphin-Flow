@@ -963,6 +963,7 @@ class WorkflowTransitionExecution(models.Model):
         PENDING = "PENDING", "در انتظار تأیید"
         ACCEPTED = "ACCEPTED", "تأیید شده"
         REJECTED = "REJECTED", "رد شده"
+        SUPERSEDED = "SUPERSEDED", "منسوخ‌شده بر اثر اصلاح مسیر"
 
     status = models.CharField(
         max_length=20,

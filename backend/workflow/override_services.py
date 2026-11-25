@@ -7,6 +7,7 @@ from .models import (
     WorkflowInstance,
     WorkflowStepAssignmentHistory,
     WorkflowStepExecution,
+    WorkflowTransitionExecution,
 )
 from .assignment_services import WorkflowStepAssignmentService
 from .notification_services import NotificationService
@@ -78,6 +79,65 @@ class WorkflowOverrideService:
         now = timezone.now()
         from_step = instance.current_step
         from_step_name = from_step.name if from_step else "—"
+
+        # Preserve the entry snapshot before removing an unfinished execution.
+        # Submitted executions represent completed work and must remain intact.
+        if from_step is not None:
+            unfinished = list(
+                WorkflowStepExecution.objects
+                .select_for_update()
+                .filter(
+                    instance=instance,
+                    workflow_step=from_step,
+                    is_submitted=False,
+                )
+                .select_related(
+                    "entered_by", "performed_by", "assigned_to", "completed_by",
+                )
+            )
+            if len(unfinished) > 1:
+                raise ValidationError(
+                    "برای مرحله فعلی بیش از یک اجرای ارسال‌نشده وجود دارد؛ اصلاح مسیر متوقف شد."
+                )
+            if unfinished:
+                WorkflowInstanceEventService.record_step_entry(
+                    execution=unfinished[0],
+                    actor=unfinished[0].entered_by or unfinished[0].performed_by,
+                )
+
+        pending_transitions = []
+        if from_step is not None:
+            pending_transitions = list(
+                WorkflowTransitionExecution.objects
+                .select_for_update()
+                .filter(
+                    instance=instance,
+                    transition__from_step=from_step,
+                    status=WorkflowTransitionExecution.Status.PENDING,
+                )
+            )
+            if pending_transitions:
+                pending_ids = [item.pk for item in pending_transitions]
+                WorkflowTransitionExecution.objects.filter(
+                    pk__in=pending_ids,
+                ).update(
+                    status=WorkflowTransitionExecution.Status.SUPERSEDED,
+                    resolved_at=now,
+                )
+                Notification.objects.filter(
+                    workflow_instance=instance,
+                    transition_execution_id__in=pending_ids,
+                    notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                    is_read=False,
+                ).update(is_read=True, read_at=now)
+
+            # An action-required notification for the step being left is stale.
+            Notification.objects.filter(
+                workflow_instance=instance,
+                workflow_step=from_step,
+                notification_type=Notification.NotificationType.ACTION_REQUIRED,
+                is_read=False,
+            ).update(is_read=True, read_at=now)
         override_note = (
             f"{WorkflowOverrideService.OVERRIDE_NOTE_PREFIX} "
             f"{from_step_name} → {target_step.name} | "
@@ -138,6 +198,11 @@ class WorkflowOverrideService:
             update_fields.extend(["status", "completed_at"])
 
         instance.save(update_fields=update_fields)
+
+        # The event and assignment history are now independent of the execution.
+        # Remove only the unfinished execution of the step being left.
+        if from_step is not None and unfinished:
+            unfinished[0].delete()
 
         recipient = step_execution.assigned_to
         if (

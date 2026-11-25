@@ -137,8 +137,18 @@ class WorkflowOverrideServiceTests(TestCase):
         )
 
         self.instance.refresh_from_db()
-        self.current_execution.refresh_from_db()
         new_execution.refresh_from_db()
+
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(pk=self.current_execution.pk).exists()
+        )
+        from workflow.models import WorkflowInstanceEvent
+        preserved_event = WorkflowInstanceEvent.objects.get(
+            instance=self.instance,
+            execution_id=self.current_execution.pk,
+        )
+        self.assertEqual(preserved_event.workflow_step_id, self.step_c.pk)
+        self.assertFalse(preserved_event.details["is_submitted"])
 
         self.assertEqual(self.instance.current_step_id, self.step_b.id)
         self.assertEqual(self.instance.status, WorkflowInstance.Status.ACTIVE)
@@ -162,8 +172,50 @@ class WorkflowOverrideServiceTests(TestCase):
                 "reason": "اصلاح اشتباه مسیر",
             },
         )
-        self.assertTrue(self.current_execution.pk != new_execution.pk)
-        self.assertFalse(self.current_execution.is_submitted)
+        self.assertNotEqual(self.current_execution.pk, new_execution.pk)
+
+
+    def test_override_supersedes_pending_transition_and_closes_its_action_notification(self):
+        transition = WorkflowTransition.objects.create(
+            workflow=self.workflow,
+            name="Pending route",
+            code="OVERRIDE_PENDING_ROUTE",
+            from_step=self.step_c,
+            to_step=self.step_b,
+            requires_acceptance=True,
+        )
+        pending = WorkflowTransitionExecution.objects.create(
+            instance=self.instance,
+            transition=transition,
+            performed_by=self.operator,
+            status=WorkflowTransitionExecution.Status.PENDING,
+        )
+        notification = Notification.objects.create(
+            recipient=self.operator,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="Pending acceptance",
+            message="Please decide",
+            workflow_instance=self.instance,
+            workflow_step=self.step_b,
+            transition_execution=pending,
+        )
+
+        WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="اصلاح مسیر در انتظار پذیرش",
+        )
+
+        pending.refresh_from_db()
+        notification.refresh_from_db()
+        self.assertEqual(
+            pending.status,
+            WorkflowTransitionExecution.Status.SUPERSEDED,
+        )
+        self.assertIsNotNone(pending.resolved_at)
+        self.assertTrue(notification.is_read)
+        self.assertIsNotNone(notification.read_at)
 
     def test_override_audit_note_survives_step_submission(self):
         new_execution = WorkflowOverrideService.override_instance_step(
