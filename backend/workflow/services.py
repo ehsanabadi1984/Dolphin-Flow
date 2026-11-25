@@ -407,11 +407,6 @@ class WorkflowExecutionService:
                 else "تخصیص مسئول مرحله بازگشت پس از رد انتقال"
             ),
         )
-        WorkflowInstanceEventService.record_step_entry(
-            execution=step_execution,
-            actor=user,
-        )
-
         transition_execution.status = (
             WorkflowTransitionExecution.Status.REJECTED
         )
@@ -429,6 +424,11 @@ class WorkflowExecutionService:
 
         SLAService.start_sla_if_configured(
             step_execution=step_execution,
+        )
+
+        WorkflowInstanceEventService.record_step_entry(
+            execution=step_execution,
+            actor=user,
         )
 
         instance.current_step = reject_to_step
@@ -519,13 +519,13 @@ class WorkflowExecutionService:
             source=WorkflowStepAssignmentHistory.Source.INITIAL,
             reason="تخصیص اولیه هنگام شروع فرآیند",
         )
+        SLAService.start_sla_if_configured(
+            step_execution=step_execution,
+        )
+
         WorkflowInstanceEventService.record_step_entry(
             execution=step_execution,
             actor=user,
-        )
-
-        SLAService.start_sla_if_configured(
-            step_execution=step_execution,
         )
 
         transaction.on_commit(
