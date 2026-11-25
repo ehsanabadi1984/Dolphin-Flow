@@ -20,6 +20,7 @@ from workflow.models import (
     WorkflowStep,
     WorkflowStepAssignmentHistory,
     WorkflowStepExecution,
+    WorkflowInstanceEvent,
     WorkflowTransition,
     WorkflowTransitionExecution,
 )
@@ -129,6 +130,19 @@ class WorkflowOverrideServiceTests(TestCase):
         )
 
     def test_override_creates_new_unsubmitted_execution(self):
+        self.current_execution.assigned_to = self.operator
+        self.current_execution.assigned_at = timezone.now()
+        self.current_execution.save(update_fields=["assigned_to", "assigned_at"])
+        old_assignment = WorkflowStepAssignmentHistory.objects.create(
+            step_execution=self.current_execution,
+            instance=self.instance,
+            workflow_step=self.step_c,
+            new_assignee=self.operator,
+            changed_by=self.operator,
+            source=WorkflowStepAssignmentHistory.Source.POLICY,
+            reason="تخصیص پیش از اصلاح مسیر",
+        )
+
         new_execution = WorkflowOverrideService.override_instance_step(
             instance=self.instance,
             target_step=self.step_b,
@@ -142,13 +156,17 @@ class WorkflowOverrideServiceTests(TestCase):
         self.assertFalse(
             WorkflowStepExecution.objects.filter(pk=self.current_execution.pk).exists()
         )
-        from workflow.models import WorkflowInstanceEvent
         preserved_event = WorkflowInstanceEvent.objects.get(
             instance=self.instance,
             execution_id=self.current_execution.pk,
         )
         self.assertEqual(preserved_event.workflow_step_id, self.step_c.pk)
         self.assertFalse(preserved_event.details["is_submitted"])
+        self.assertEqual(preserved_event.assigned_to_id, self.operator.pk)
+        old_assignment.refresh_from_db()
+        self.assertIsNone(old_assignment.step_execution_id)
+        self.assertEqual(old_assignment.instance_id, self.instance.pk)
+        self.assertEqual(old_assignment.workflow_step_id, self.step_c.pk)
 
         self.assertEqual(self.instance.current_step_id, self.step_b.id)
         self.assertEqual(self.instance.status, WorkflowInstance.Status.ACTIVE)
