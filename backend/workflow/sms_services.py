@@ -570,7 +570,10 @@ class SMSDispatcher:
         ):
             return "درخواست اقدام به‌دلیل اصلاح مسیر منسوخ شده است."
 
-        if transition_execution is not None and transition_execution.status == WorkflowTransitionExecution.Status.PENDING:
+        if (
+            transition_execution is not None
+            and transition_execution.status == WorkflowTransitionExecution.Status.PENDING
+        ):
             transition = transition_execution.transition
             if (
                 instance is None
