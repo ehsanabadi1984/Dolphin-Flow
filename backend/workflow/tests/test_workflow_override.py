@@ -719,3 +719,44 @@ class WorkflowOverrideServiceTests(TestCase):
             selected_assignee=second_operator,
         )
         self.assertEqual(selected_execution.assigned_to_id, second_operator.pk)
+
+
+    def test_returning_to_deleted_execution_reuses_independent_entry_event_assignee(self):
+        first_entry = WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="ورود نخست به مرحله مقصد",
+        )
+        first_entry_id = first_entry.pk
+
+        intermediate_step = WorkflowStep.objects.create(
+            workflow=self.workflow,
+            name="Intermediate",
+            order=11,
+            assignment_policy=WorkflowStep.AssignmentPolicy.FIXED,
+            assigned_to=self.operator,
+        )
+        WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=intermediate_step,
+            performed_by=self.admin,
+            reason="خروج از مرحله مقصد",
+        )
+
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(pk=first_entry_id).exists()
+        )
+        preserved_event = WorkflowInstanceEvent.objects.get(
+            instance=self.instance,
+            execution_id=first_entry_id,
+        )
+        self.assertEqual(preserved_event.assigned_to_id, self.operator.pk)
+
+        returned_execution = WorkflowOverrideService.override_instance_step(
+            instance=self.instance,
+            target_step=self.step_b,
+            performed_by=self.admin,
+            reason="بازگشت به مرحله قبلی",
+        )
+        self.assertEqual(returned_execution.assigned_to_id, self.operator.pk)
