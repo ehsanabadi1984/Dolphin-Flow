@@ -102,7 +102,7 @@ class SLAMonitorService:
                     .select_related(
                         "workflow_step",
                         "workflow_step__workflow",
-                        "workflow_step__assigned_to",
+                        "assigned_to",
                         "instance",
                     )
                     .get(pk=execution.pk)
