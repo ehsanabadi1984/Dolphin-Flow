@@ -367,6 +367,51 @@ class SMSDispatchTests(TestCase):
         delivery.refresh_from_db()
         self.assertIn("مرحله جاری", delivery.last_error)
 
+    def test_dispatch_skips_old_step_sms_after_reentry_to_the_same_step(self):
+        instance = WorkflowInstance.objects.create(
+            workflow=self.step.workflow,
+            started_by=self.user,
+            current_step=self.step,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step,
+            performed_by=self.user,
+            assigned_to=self.user,
+            is_submitted=True,
+            submitted_at=timezone.now(),
+        )
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title="اقدام ورود قبلی",
+            message="این اعلان متعلق به نوبت قبلی است.",
+            workflow_instance=instance,
+            workflow_step=self.step,
+        )
+        Notification.objects.filter(pk=notification.pk).update(
+            created_at=timezone.now() - timedelta(minutes=1),
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step,
+            performed_by=self.user,
+            assigned_to=self.user,
+            is_submitted=False,
+        )
+        delivery = SMSDelivery.objects.create(
+            notification=notification,
+            status=SMSDelivery.Status.PENDING,
+        )
+
+        with patch("workflow.sms_services.MagfaSMSProvider.send") as mock_send:
+            result = SMSDispatcher.dispatch(notification.pk)
+
+        self.assertEqual(result, SMSDelivery.Status.SKIPPED)
+        mock_send.assert_not_called()
+        delivery.refresh_from_db()
+        self.assertIn("ورود قبلی", delivery.last_error)
+
     def test_dispatch_skips_queued_sms_for_superseded_acceptance(self):
         instance = WorkflowInstance.objects.create(
             workflow=self.step.workflow,
