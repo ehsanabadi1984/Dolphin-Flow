@@ -24,6 +24,26 @@ from .instance_event_services import WorkflowInstanceEventService
 
 
 class WorkflowExecutionService:
+    @staticmethod
+    def _notify_execution_assignee(*, instance, execution, transition_execution=None):
+        recipient = execution.assigned_to
+        actor_id = execution.entered_by_id or execution.performed_by_id
+        if recipient is None or not recipient.is_active or recipient.pk == actor_id:
+            return None
+
+        return NotificationService.create(
+            recipient=recipient,
+            notification_type=Notification.NotificationType.ACTION_REQUIRED,
+            title=f"فرآیند «{instance.workflow.name}» نیازمند اقدام شماست",
+            message=(
+                f"فرآیند «{instance.workflow.name}» وارد مرحله "
+                f"«{execution.workflow_step.name}» شده و نیازمند اقدام شماست."
+            ),
+            workflow_instance=instance,
+            workflow_step=execution.workflow_step,
+            transition_execution=transition_execution,
+        )
+
 
     @staticmethod
     def _get_active_step_execution(*, instance):
@@ -238,6 +258,11 @@ class WorkflowExecutionService:
             source_execution=previous_execution,
             result_execution=step_execution,
         )
+        WorkflowExecutionService._notify_execution_assignee(
+            instance=instance,
+            execution=step_execution,
+            transition_execution=transition_execution,
+        )
 
         transaction.on_commit(
             lambda: WorkflowRealtimeService.notify_instance_changed(
@@ -444,6 +469,11 @@ class WorkflowExecutionService:
             source_execution=previous_execution,
             result_execution=step_execution,
         )
+        WorkflowExecutionService._notify_execution_assignee(
+            instance=instance,
+            execution=step_execution,
+            transition_execution=transition_execution,
+        )
 
         transaction.on_commit(
             lambda: WorkflowRealtimeService.notify_instance_changed(
@@ -526,6 +556,10 @@ class WorkflowExecutionService:
         WorkflowInstanceEventService.record_step_entry(
             execution=step_execution,
             actor=user,
+        )
+        WorkflowExecutionService._notify_execution_assignee(
+            instance=instance,
+            execution=step_execution,
         )
 
         transaction.on_commit(
