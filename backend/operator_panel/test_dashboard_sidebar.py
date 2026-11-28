@@ -709,8 +709,8 @@ class LimitBeforeFilterTests(DashboardSidebarBase):
 
 
 class TaskPredicateTests(DashboardSidebarBase):
-    """E: sidebar task badge and dashboard my-tasks share one predicate:
-    assigned to the user AND actionable."""
+    """E: task badge and my-tasks require assignment plus effective EXECUTE;
+    pending_actions retains the broader EXECUTE-or-TRANSITION predicate."""
 
     def test_assigned_and_actionable_counts_as_task(self):
         self.grant_role_action_permissions()
@@ -1738,8 +1738,8 @@ class TaskSemanticMatrixTests(DashboardSidebarBase):
     """Review #4: task counting is assigned-to-me AND actionable, with
     the same predicate on the sidebar badge, KPI, and list."""
 
-    def test_assigned_with_transition_only_counts_as_task(self):
-        # VIEW + TRANSITION (no EXECUTE) is still actionable.
+    def test_assigned_with_transition_only_is_not_a_task(self):
+        # VIEW + TRANSITION without EXECUTE cannot execute an assigned task.
         WorkflowPermission.objects.create(
             workflow=self.workflow,
             role=WorkflowMembership.Role.EXECUTOR,
@@ -1759,8 +1759,38 @@ class TaskSemanticMatrixTests(DashboardSidebarBase):
         self.create_active_instance(started_by=self.other)
 
         counts = DashboardService(self.user).get_sidebar_counts()
-        self.assertEqual(counts["tasks"], 1)
+        context = DashboardService(self.user).get_context()
+        self.assertEqual(counts["tasks"], 0)
         self.assertEqual(counts["pending"], 0)
+        self.assertEqual(context["my_tasks"], [])
+        self.assertEqual(context["pending_actions"], [])
+
+    def test_unassigned_transition_only_remains_pending_action(self):
+        # Preserve pending_actions: VIEW + TRANSITION still qualifies when
+        # the active execution is not assigned to this user.
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            role=WorkflowMembership.Role.EXECUTOR,
+            action=WorkflowPermission.Action.VIEW,
+            step=self.step_one,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            role=WorkflowMembership.Role.EXECUTOR,
+            action=WorkflowPermission.Action.TRANSITION,
+            transition=self.transition,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
+        instance = self.create_active_instance(started_by=self.other)
+
+        service = DashboardService(self.user)
+        counts = service.get_sidebar_counts()
+        context = service.get_context()
+        self.assertEqual(counts["tasks"], 0)
+        self.assertEqual(counts["pending"], 1)
+        self.assertEqual(context["my_tasks"], [])
+        self.assertEqual([item.pk for item in context["pending_actions"]], [instance.pk])
 
     def test_assigned_with_view_only_is_not_a_task(self):
         WorkflowPermission.objects.create(
