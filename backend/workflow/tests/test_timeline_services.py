@@ -222,6 +222,51 @@ class WorkflowInstanceTimelineServiceTests(TestCase):
         self.assertEqual(assignment_event["id"], f"assignment-{assignment.pk}")
         self.assertEqual(assignment_event["description"], "تخصیص اولیه")
 
+    def test_step_entry_keeps_initial_assignee_snapshot_after_reassignment(self):
+        initial_assigned_at = timezone.now() - timedelta(minutes=20)
+        execution = WorkflowStepExecution.objects.create(
+            instance=self.instance,
+            workflow_step=self.step_one,
+            performed_by=self.starter,
+            entered_by=self.starter,
+            assigned_to=self.assignee,
+            assigned_at=initial_assigned_at,
+        )
+        WorkflowInstanceEventService.record_step_entry(
+            execution=execution,
+            actor=self.starter,
+        )
+
+        reassigned_at = timezone.now()
+        execution.assigned_to = self.reviewer
+        execution.assigned_at = reassigned_at
+        execution.save(update_fields=["assigned_to", "assigned_at"])
+        assignment = WorkflowStepAssignmentHistory.objects.create(
+            step_execution=execution,
+            instance=self.instance,
+            workflow_step=self.step_one,
+            previous_assignee=self.assignee,
+            new_assignee=self.reviewer,
+            changed_by=self.starter,
+            source=WorkflowStepAssignmentHistory.Source.MANUAL,
+            reason="تغییر مسئول پس از ورود",
+        )
+
+        events = build_instance_timeline_events(self.instance)
+        step_event = next(event for event in events if event["type"] == "step")
+        assignment_event = next(
+            event for event in events
+            if event["type"] == "assignment"
+            and event["id"] == f"assignment-{assignment.pk}"
+        )
+
+        self.assertEqual(step_event["assigned_to"], "Ali Rezaei")
+        self.assertEqual(step_event["assigned_at"], initial_assigned_at)
+        self.assertEqual(assignment_event["previous_assignee"], "Ali Rezaei")
+        self.assertEqual(assignment_event["new_assignee"], "timeline-reviewer")
+        self.assertEqual(assignment_event["assignment_action_label"], "تغییر مسئول")
+        self.assertIn("تغییر مسئول مرحله", assignment_event["title"])
+
     def test_assignment_history_is_a_separate_timeline_event(self):
         execution = WorkflowStepExecution.objects.create(
             instance=self.instance,
