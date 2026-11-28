@@ -1597,7 +1597,7 @@ class WorkflowExecutionTests(TestCase):
         )
         self.assertEqual(
             notification.notification_type,
-            Notification.NotificationType.ACTION_REQUIRED,
+            Notification.NotificationType.TRANSITION_EXECUTED,
         )
         self.assertEqual(
             notification.title,
@@ -1633,7 +1633,7 @@ class WorkflowExecutionTests(TestCase):
         )
         self.assertEqual(
             notification.notification_type,
-            Notification.NotificationType.ACTION_REQUIRED,
+            Notification.NotificationType.TRANSITION_EXECUTED,
         )
         self.assertEqual(
             notification.title,
