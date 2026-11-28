@@ -15,7 +15,7 @@ from .form_draft_normal_field_apply_services import FormDraftNormalFieldApplySer
 from .form_draft_permission_services import FormDraftPermissionService
 from .form_draft_structural_validation_services import FormDraftStructuralValidationService
 from .form_draft_value_validation_services import FormDraftValueValidationService
-from .models import FormData, FormDefinition
+from .models import FormData, FormDefinition, WorkflowInstance
 from .permission_context import PermissionContext
 from .assignment_services import WorkflowStepAssignmentService
 
@@ -99,7 +99,7 @@ class FormDraftSaveService:
 
     @staticmethod
     def _validate_context(*, instance, step, user, edit_mode):
-        if instance.status != instance.Status.ACTIVE:
+        if instance.status != WorkflowInstance.Status.ACTIVE:
             raise ValidationError("ذخیره پیش‌نویس فقط برای فرآیند فعال مجاز است.")
         if step is None:
             raise ValidationError("مرحله فرآیند برای ذخیره فرم مشخص نشده است.")
