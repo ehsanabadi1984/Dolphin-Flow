@@ -1183,6 +1183,148 @@ class WorkflowExecutionTests(TestCase):
             ).exists()
         )
 
+    def test_step_completer_assigns_latest_reference_step_completer_in_full_cycle(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.grant_transition_permission(self.transition_two)
+
+        # The starter begins the workflow, but the first step is executed
+        # by a different user. The destination policy must use that source
+        # completer rather than the current step's completer.
+        self.step_one.assignment_policy = WorkflowStep.AssignmentPolicy.FIXED
+        self.step_one.assigned_to = self.destination_user
+        self.step_one.save(update_fields=["assignment_policy", "assigned_to"])
+        self.step_three.assignment_policy = (
+            WorkflowStep.AssignmentPolicy.STEP_COMPLETER
+        )
+        self.step_three.assignment_source_step = self.step_one
+        self.step_three.save(
+            update_fields=["assignment_policy", "assignment_source_step"]
+        )
+        self.grant_step_execute_permission(
+            user=self.destination_user,
+            step=self.step_three,
+        )
+
+        instance = self.start_instance()
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.destination_user,
+        )
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_two,
+            user=self.user,
+        )
+
+        instance.refresh_from_db()
+        source_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_one,
+        )
+        destination_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_three,
+        )
+        self.assertEqual(source_execution.completed_by_id, self.destination_user.pk)
+        self.assertEqual(instance.current_step_id, self.step_three.pk)
+        self.assertEqual(destination_execution.entered_by_id, self.user.pk)
+        self.assertEqual(
+            destination_execution.assigned_to_id,
+            self.destination_user.pk,
+        )
+        self.assertEqual(
+            destination_execution.assignment_history.get().source,
+            WorkflowStepAssignmentHistory.Source.POLICY,
+        )
+
+    def test_step_completer_without_destination_execute_permission_rolls_back_submit(self):
+        self.grant_start_permission()
+        self.grant_transition_permission(self.transition_one)
+        self.grant_transition_permission(self.transition_two)
+
+        self.step_one.assignment_policy = WorkflowStep.AssignmentPolicy.FIXED
+        self.step_one.assigned_to = self.destination_user
+        self.step_one.save(update_fields=["assignment_policy", "assigned_to"])
+        self.step_three.assignment_policy = (
+            WorkflowStep.AssignmentPolicy.STEP_COMPLETER
+        )
+        self.step_three.assignment_source_step = self.step_one
+        self.step_three.save(
+            update_fields=["assignment_policy", "assignment_source_step"]
+        )
+        # destination_user deliberately has no EXECUTE permission on step_three.
+
+        instance = self.start_instance()
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=self.transition_one,
+            user=self.destination_user,
+        )
+
+        with self.assertRaises(ValidationError):
+            WorkflowExecutionService.execute_transition(
+                instance=instance,
+                transition=self.transition_two,
+                user=self.user,
+            )
+
+        instance.refresh_from_db()
+        current_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_two,
+        )
+        self.assertEqual(instance.current_step_id, self.step_two.pk)
+        self.assertFalse(current_execution.is_submitted)
+        self.assertIsNone(current_execution.completed_by_id)
+        self.assertFalse(
+            WorkflowStepExecution.objects.filter(
+                instance=instance,
+                workflow_step=self.step_three,
+            ).exists()
+        )
+        self.assertFalse(
+            WorkflowTransitionExecution.objects.filter(
+                instance=instance,
+                transition=self.transition_two,
+            ).exists()
+        )
+
+    def test_rejector_selects_assignee_when_return_step_uses_previous_completer_policy(self):
+        transition_execution = self._create_pending_acceptance_execution()
+        self.step_one.assignment_policy = (
+            WorkflowStep.AssignmentPolicy.PREVIOUS_COMPLETER_SELECTS
+        )
+        self.step_one.save(update_fields=["assignment_policy"])
+        self.grant_step_action_permission(
+            user=self.destination_user,
+            step=self.step_three,
+            action_code="REJECT",
+        )
+
+        WorkflowExecutionService.reject_transition_execution(
+            transition_execution=transition_execution,
+            user=self.destination_user,
+            selected_assignee=self.destination_user,
+        )
+
+        instance = WorkflowInstance.objects.get(pk=transition_execution.instance_id)
+        returned_execution = WorkflowStepExecution.objects.get(
+            instance=instance,
+            workflow_step=self.step_one,
+            is_submitted=False,
+        )
+        self.assertEqual(instance.current_step_id, self.step_one.pk)
+        self.assertEqual(
+            returned_execution.assigned_to_id,
+            self.destination_user.pk,
+        )
+        self.assertEqual(
+            returned_execution.assignment_history.get().source,
+            WorkflowStepAssignmentHistory.Source.REJECTION,
+        )
+
     def _create_pending_acceptance_execution(self):
         self.grant_start_permission()
         self.grant_transition_permission(self.transition_one)
