@@ -352,7 +352,7 @@ class Command(BaseCommand):
                         execution=execution,
                         assignee=assignee,
                         changed_by=None,
-                        source=WorkflowStepAssignmentHistory.Source.POLICY,
+                        source=WorkflowStepAssignmentHistory.Source.MIGRATION,
                         reason=REPAIR_REASON,
                     )
                 except ValidationError as exc:
