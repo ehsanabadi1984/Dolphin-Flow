@@ -25,6 +25,8 @@ from workflow.models import (
     RepeatableGroupAccess,
     Workflow,
     WorkflowInstance,
+    WorkflowMembership,
+    WorkflowPermission,
     WorkflowStep,
     WorkflowStepExecution,
     InstanceDevice,
@@ -46,6 +48,7 @@ class FormDraftSaveServiceContractTests(TestCase):
         self.workflow = Workflow.objects.create(
             name="Draft Save Workflow",
             code="DRAFT_SAVE_WF",
+            is_active=True,
         )
         self.step = WorkflowStep.objects.create(
             workflow=self.workflow,
@@ -76,10 +79,24 @@ class FormDraftSaveServiceContractTests(TestCase):
             code="DRAFT_SECTION_2",
             order=2,
         )
+        self.membership = WorkflowMembership.objects.create(
+            workflow=self.workflow,
+            user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        self.execute_permission = WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
         self.instance = WorkflowInstance.objects.create(
             workflow=self.workflow,
             current_step=self.step,
             started_by=self.user,
+            status=WorkflowInstance.Status.ACTIVE,
         )
         self.execution = WorkflowStepExecution.objects.create(
             instance=self.instance,
@@ -3596,6 +3613,55 @@ class FormDraftSaveServiceContractTests(TestCase):
             self.call(
                 submitted_data={"customer_name": "Stale assignee"},
             )
+
+        self.assertFalse(
+            FormData.objects.filter(instance=self.instance).exists()
+        )
+
+
+    def test_user_without_execute_permission_cannot_save_draft(self):
+        self.execute_permission.delete()
+
+        with self.assertRaises(ValidationError):
+            self.call(submitted_data={"customer_name": "No execute permission"})
+
+        self.assertFalse(
+            FormData.objects.filter(instance=self.instance).exists()
+        )
+
+    def test_explicit_execute_deny_overrides_allow_for_draft_save(self):
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            step=self.step,
+            user=self.user,
+            action=WorkflowPermission.Action.EXECUTE,
+            effect=WorkflowPermission.Effect.DENY,
+        )
+
+        with self.assertRaises(ValidationError):
+            self.call(submitted_data={"customer_name": "Explicit deny"})
+
+        self.assertFalse(
+            FormData.objects.filter(instance=self.instance).exists()
+        )
+
+    def test_inactive_membership_cannot_save_draft(self):
+        self.membership.is_active = False
+        self.membership.save(update_fields=["is_active"])
+
+        with self.assertRaises(ValidationError):
+            self.call(submitted_data={"customer_name": "Inactive membership"})
+
+        self.assertFalse(
+            FormData.objects.filter(instance=self.instance).exists()
+        )
+
+    def test_non_active_instance_cannot_save_draft(self):
+        self.instance.status = WorkflowInstance.Status.SUSPENDED
+        self.instance.save(update_fields=["status"])
+
+        with self.assertRaises(ValidationError):
+            self.call(submitted_data={"customer_name": "Suspended instance"})
 
         self.assertFalse(
             FormData.objects.filter(instance=self.instance).exists()
