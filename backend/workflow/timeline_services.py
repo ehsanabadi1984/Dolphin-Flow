@@ -91,7 +91,6 @@ def build_instance_timeline_events(instance):
                 "notes": live_execution.notes or "",
                 "is_submitted": live_execution.is_submitted,
                 "submitted_at": live_execution.submitted_at,
-                "assigned_at": live_execution.assigned_at,
                 "completed_by_label": _user_label(live_execution.completed_by),
                 "sla_started_at": live_execution.sla_started_at,
                 "sla_due_at": live_execution.sla_due_at,
@@ -267,9 +266,18 @@ def build_instance_timeline_events(instance):
                 "assignment",
                 f"assignment-{assignment.pk}",
                 assignment.created_at,
-                f"تغییر مسئول مرحله «{step_name}»",
+                (
+                    f"تغییر مسئول مرحله «{step_name}»"
+                    if assignment.previous_assignee_id is not None
+                    else f"تخصیص مسئول مرحله «{step_name}»"
+                ),
                 assignment.changed_by,
                 assignment.reason,
+                assignment_action_label=(
+                    "تغییر مسئول"
+                    if assignment.previous_assignee_id is not None
+                    else "تخصیص مسئول"
+                ),
                 previous_assignee=_user_label(assignment.previous_assignee),
                 new_assignee=_user_label(assignment.new_assignee),
                 assignment_source=assignment.get_source_display(),
