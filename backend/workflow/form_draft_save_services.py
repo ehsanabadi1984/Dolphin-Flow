@@ -17,6 +17,7 @@ from .form_draft_structural_validation_services import FormDraftStructuralValida
 from .form_draft_value_validation_services import FormDraftValueValidationService
 from .models import FormData, FormDefinition
 from .permission_context import PermissionContext
+from .assignment_services import WorkflowStepAssignmentService
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,8 @@ class FormDraftSaveService:
 
     @staticmethod
     def _validate_context(*, instance, step, user, edit_mode):
+        if instance.status != instance.Status.ACTIVE:
+            raise ValidationError("ذخیره پیش‌نویس فقط برای فرآیند فعال مجاز است.")
         if step is None:
             raise ValidationError("مرحله فرآیند برای ذخیره فرم مشخص نشده است.")
         if instance.workflow_id != step.workflow_id:
@@ -119,6 +122,11 @@ class FormDraftSaveService:
             raise ValidationError(
                 "فقط مسئول اجرای فعال این مرحله اجازه ذخیره پیش‌نویس را دارد."
             )
+        WorkflowStepAssignmentService.validate_assignee(
+            workflow=instance.workflow,
+            step=step,
+            assignee=user,
+        )
         if not edit_mode:
             raise ValidationError("فرم در حالت ویرایش نیست و قابل ذخیره نیست.")
 
