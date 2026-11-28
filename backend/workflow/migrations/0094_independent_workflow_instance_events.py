@@ -28,6 +28,12 @@ def preserve_existing_history(apps, schema_editor):
         assignment.instance_id = execution.instance_id
         assignment.save(update_fields=["workflow_step", "instance"])
 
+    override_execution_ids = set(
+        AssignmentHistory.objects
+        .filter(source="OVERRIDE")
+        .values_list("step_execution_id", flat=True)
+    )
+
     for execution in (
         StepExecution.objects
         .filter(instance_id__isnull=False)
@@ -36,10 +42,10 @@ def preserve_existing_history(apps, schema_editor):
     ):
         data = execution.data if isinstance(execution.data, dict) else {}
         override = data.get("override")
-        has_override = isinstance(override, dict) or AssignmentHistory.objects.filter(
-            step_execution_id=execution.pk,
-            source="OVERRIDE",
-        ).exists()
+        has_override = (
+            isinstance(override, dict)
+            or execution.pk in override_execution_ids
+        )
         actor = execution.entered_by or execution.performed_by
         details = {
             "execution_id": execution.pk,
@@ -143,6 +149,23 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "رویدادهای فرآیند",
                 "ordering": ["occurred_at", "pk"],
             },
+        ),
+        migrations.AlterField(
+            model_name="workflowstepassignmenthistory",
+            name="source",
+            field=models.CharField(
+                choices=[
+                    ("INITIAL", "تخصیص اولیه"),
+                    ("POLICY", "سیاست تخصیص"),
+                    ("MANUAL", "تغییر دستی"),
+                    ("ACCEPTANCE", "پذیرش مرحله"),
+                    ("REJECTION", "تخصیص هنگام رد انتقال"),
+                    ("OVERRIDE", "تغییر توسط مدیر"),
+                    ("MIGRATION", "بازیابی داده‌های قدیمی"),
+                ],
+                max_length=20,
+                verbose_name="منشأ تخصیص",
+            ),
         ),
         migrations.RunPython(preserve_existing_history, migrations.RunPython.noop),
         migrations.AlterField(
