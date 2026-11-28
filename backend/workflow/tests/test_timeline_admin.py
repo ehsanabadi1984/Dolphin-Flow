@@ -339,7 +339,7 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         self.assertContains(response, "مدرک بررسی")
         self.assertContains(response, "تکمیل فرآیند")
         self.assertContains(response, "انجام‌دهنده تکمیل")
-        self.assertContains(response, "تغییر مسئول")
+        self.assertContains(response, "تخصیص مسئول")
 
     def test_superseded_transition_renders_management_resolution_in_timeline(self):
         self.grant_workflow_view()
