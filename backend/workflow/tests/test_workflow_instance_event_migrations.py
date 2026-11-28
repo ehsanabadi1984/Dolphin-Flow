@@ -1,5 +1,4 @@
-from django.conf import settings
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth import get_user_model
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
@@ -12,17 +11,20 @@ class WorkflowInstanceEventMigrationTests(TransactionTestCase):
 
     def setUp(self):
         super().setUp()
-        executor = MigrationExecutor(connection)
-        executor.migrate([self.migrate_from])
-        old_apps = executor.loader.project_state([self.migrate_from]).apps
-
-        User = old_apps.get_model(*settings.AUTH_USER_MODEL.split("."))
-        user = User.objects.create(
+        # Create the user against the latest schema before rolling workflow
+        # migrations back. The historical accounts_user table at 0093 does
+        # not yet contain fields introduced by later account migrations.
+        user = get_user_model().objects.create_user(
             username="workflow_event_migration",
-            password=make_password("test-password"),
+            password="test-password",
             first_name="Migration",
             last_name="Actor",
         )
+        self.user_id = user.pk
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
+        old_apps = executor.loader.project_state([self.migrate_from]).apps
         Workflow = old_apps.get_model("workflow", "Workflow")
         WorkflowStep = old_apps.get_model("workflow", "WorkflowStep")
         WorkflowInstance = old_apps.get_model("workflow", "WorkflowInstance")
@@ -46,17 +48,17 @@ class WorkflowInstanceEventMigrationTests(TransactionTestCase):
         instance = WorkflowInstance.objects.create(
             workflow=workflow,
             current_step=step,
-            started_by=user,
+            started_by_id=self.user_id,
             status="ACTIVE",
         )
 
         self.override_data_execution = StepExecution.objects.create(
             instance=instance,
             workflow_step=step,
-            performed_by=user,
-            entered_by=user,
-            assigned_to=user,
-            completed_by=user,
+            performed_by_id=self.user_id,
+            entered_by_id=self.user_id,
+            assigned_to_id=self.user_id,
+            completed_by_id=self.user_id,
             is_submitted=True,
             submitted_at=timezone.now(),
             notes="override stored in execution data",
@@ -65,38 +67,37 @@ class WorkflowInstanceEventMigrationTests(TransactionTestCase):
         self.override_history_execution = StepExecution.objects.create(
             instance=instance,
             workflow_step=step,
-            performed_by=user,
-            entered_by=user,
-            assigned_to=user,
+            performed_by_id=self.user_id,
+            entered_by_id=self.user_id,
+            assigned_to_id=self.user_id,
             is_submitted=False,
             data={},
         )
         self.regular_execution = StepExecution.objects.create(
             instance=instance,
             workflow_step=step,
-            performed_by=user,
-            entered_by=user,
-            assigned_to=user,
+            performed_by_id=self.user_id,
+            entered_by_id=self.user_id,
+            assigned_to_id=self.user_id,
             is_submitted=False,
             data={"history": [{"status": "entered"}]},
         )
         AssignmentHistory.objects.create(
             step_execution=self.override_history_execution,
-            previous_assignee=user,
-            new_assignee=user,
-            changed_by=user,
+            previous_assignee_id=self.user_id,
+            new_assignee_id=self.user_id,
+            changed_by_id=self.user_id,
             source="OVERRIDE",
             reason="legacy override history",
         )
         self.assignment_history = AssignmentHistory.objects.create(
             step_execution=self.regular_execution,
             previous_assignee=None,
-            new_assignee=user,
-            changed_by=user,
+            new_assignee_id=self.user_id,
+            changed_by_id=self.user_id,
             source="POLICY",
             reason="legacy policy assignment",
         )
-        self.user_id = user.pk
         self.instance_id = instance.pk
 
         executor = MigrationExecutor(connection)
