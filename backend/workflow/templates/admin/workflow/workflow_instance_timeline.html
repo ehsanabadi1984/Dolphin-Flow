@@ -90,7 +90,7 @@
                                 {% elif event.type == "override" %}
                                     اصلاح مدیریتی مسیر
                                 {% elif event.type == "assignment" %}
-                                    تغییر مسئول
+                                    {{ event.assignment_action_label|default:"تخصیص/تغییر مسئول" }}
                                 {% elif event.type == "transition_resolution" %}
                                     تعیین تکلیف انتقال
                                 {% elif event.type == "file_share" %}
