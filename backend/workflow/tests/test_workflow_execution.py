@@ -1593,6 +1593,7 @@ class WorkflowExecutionTests(TestCase):
             workflow_instance_id=transition_execution.instance_id,
             workflow_step=self.step_three,
             transition_execution=transition_execution,
+            notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
         )
         self.assertEqual(
             notification.notification_type,
@@ -1628,6 +1629,7 @@ class WorkflowExecutionTests(TestCase):
             workflow_instance_id=transition_execution.instance_id,
             workflow_step=self.step_one,
             transition_execution=transition_execution,
+            notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
         )
         self.assertEqual(
             notification.notification_type,
@@ -1670,6 +1672,7 @@ class WorkflowExecutionTests(TestCase):
 
         notification = Notification.objects.get(
             transition_execution=transition_execution,
+            notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
         )
         self.assertEqual(notification.recipient, fixed_recipient)
         self.assertNotEqual(notification.recipient, self.destination_user)
@@ -1702,6 +1705,7 @@ class WorkflowExecutionTests(TestCase):
 
         notification = Notification.objects.get(
             transition_execution=transition_execution,
+            notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
         )
         self.assertEqual(notification.recipient, fixed_recipient)
         self.assertNotEqual(notification.recipient, self.destination_user)
@@ -1808,6 +1812,7 @@ class WorkflowExecutionTests(TestCase):
 
         notification = Notification.objects.get(
             transition_execution=transition_execution,
+            notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
         )
         self.assertEqual(notification.recipient_id, starter.pk)
         self.assertNotEqual(notification.recipient_id, self.user.pk)
@@ -1838,6 +1843,7 @@ class WorkflowExecutionTests(TestCase):
 
         notification = Notification.objects.get(
             transition_execution=transition_execution,
+            notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
         )
         self.assertEqual(notification.recipient_id, starter.pk)
         self.assertNotEqual(notification.recipient_id, self.user.pk)
@@ -1883,7 +1889,10 @@ class WorkflowExecutionTests(TestCase):
             "RECIPIENT_INACTIVE",
         )
         self.assertFalse(
-            Notification.objects.filter(transition_execution=resolved).exists()
+            Notification.objects.filter(
+                transition_execution=resolved,
+                notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
+            ).exists()
         )
 
     def test_reject_succeeds_and_records_issue_for_inactive_fixed_recipient(self):
@@ -1927,7 +1936,10 @@ class WorkflowExecutionTests(TestCase):
             "RECIPIENT_INACTIVE",
         )
         self.assertFalse(
-            Notification.objects.filter(transition_execution=resolved).exists()
+            Notification.objects.filter(
+                transition_execution=resolved,
+                notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
+            ).exists()
         )
 
     def test_accept_succeeds_and_records_issue_when_source_completer_is_missing(self):
@@ -1960,7 +1972,10 @@ class WorkflowExecutionTests(TestCase):
             1,
         )
         self.assertFalse(
-            Notification.objects.filter(transition_execution=resolved).exists()
+            Notification.objects.filter(
+                transition_execution=resolved,
+                notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
+            ).exists()
         )
 
     def test_reject_succeeds_and_records_issue_when_source_completer_is_missing(self):
@@ -1993,7 +2008,10 @@ class WorkflowExecutionTests(TestCase):
             1,
         )
         self.assertFalse(
-            Notification.objects.filter(transition_execution=resolved).exists()
+            Notification.objects.filter(
+                transition_execution=resolved,
+                notification_type=Notification.NotificationType.TRANSITION_EXECUTED,
+            ).exists()
         )
 
     def test_accept_transition_execution_resolves_pending_transition(self):
