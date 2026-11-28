@@ -626,6 +626,7 @@ class WorkflowStepAssignmentHistory(models.Model):
         ACCEPTANCE = "ACCEPTANCE", "پذیرش مرحله"
         REJECTION = "REJECTION", "تخصیص هنگام رد انتقال"
         OVERRIDE = "OVERRIDE", "تغییر توسط مدیر"
+        MIGRATION = "MIGRATION", "بازیابی داده‌های قدیمی"
 
     step_execution = models.ForeignKey(
         WorkflowStepExecution,
