@@ -1,5 +1,7 @@
 from collections import defaultdict
 
+from django.db.models import F
+
 from .form_field_value_resolution_services import FormFieldValueResolver
 from .formula_services import FormulaService
 from .models import FormData, FormField, FormRepeatableGroup, WorkflowStep, WorkflowStepExecution
@@ -109,10 +111,15 @@ class ProcessSummaryService:
             WorkflowStepExecution.objects
             .filter(
                 instance_id=instance.pk,
-                performed_by_id=user.pk,
+                is_submitted=True,
+                completed_by_id=user.pk,
             )
             .select_related("workflow_step")
-            .order_by("-performed_at", "-pk")
+            .order_by(
+                F("submitted_at").desc(nulls_last=True),
+                "-performed_at",
+                "-pk",
+            )
             .first()
         )
         if execution is not None:
@@ -136,10 +143,16 @@ class ProcessSummaryService:
             WorkflowStepExecution.objects
             .filter(
                 instance_id__in=instance_ids,
-                performed_by_id=user.pk,
+                is_submitted=True,
+                completed_by_id=user.pk,
             )
             .select_related("workflow_step")
-            .order_by("instance_id", "-performed_at", "-pk")
+            .order_by(
+                "instance_id",
+                F("submitted_at").desc(nulls_last=True),
+                "-performed_at",
+                "-pk",
+            )
         )
         for execution in executions:
             steps_by_instance.setdefault(
