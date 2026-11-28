@@ -502,6 +502,6 @@ class WorkflowInstanceTimelineHttpTests(WorkflowInstanceTimelineAdminSetup, Test
         self.assertContains(response, "مرحله مقصد")
         self.assertContains(response, "مسئول مرحله مقصد")
         self.assertContains(response, "اصلاح آزمایشی مسیر")
-        self.assertContains(response, "تغییر مسئول")
+        self.assertContains(response, "تخصیص مسئول")
         self.assertContains(response, "مسئول جدید")
         self.assertContains(response, "زمان دقیق ثبت نشده است")
