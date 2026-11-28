@@ -965,11 +965,88 @@ class WorkflowStepSMSRuleInline(admin.TabularInline):
         return () if request.user.is_superuser else self.fields
 
 
+class WorkflowStepAdminForm(forms.ModelForm):
+    class Media:
+        js = (
+            "workflow/js/workflow-step-assignment-admin.js",
+        )
+
+    class Meta:
+        model = WorkflowStep
+        fields = "__all__"
+        help_texts = {
+            "assigned_to": (
+                "فقط برای سیاست «مسئول ثابت» استفاده می‌شود؛ "
+                "برای سایر سیاست‌ها نادیده گرفته می‌شود."
+            ),
+            "assignment_source_step": (
+                "فقط برای سیاست «تکمیل‌کننده مرحله مرجع» لازم است "
+                "و باید متعلق به همین فرآیند باشد."
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        workflow_id = self.data.get(self.add_prefix("workflow"))
+        if not workflow_id and self.instance and self.instance.pk:
+            workflow_id = self.instance.workflow_id
+        if not workflow_id:
+            workflow_id = self.initial.get("workflow")
+
+        if workflow_id:
+            self.fields["assignment_source_step"].queryset = (
+                WorkflowStep.objects
+                .filter(workflow_id=workflow_id)
+                .order_by("order", "pk")
+            )
+        else:
+            self.fields["assignment_source_step"].queryset = (
+                WorkflowStep.objects.none()
+            )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        policy = cleaned_data.get("assignment_policy")
+        assigned_to = cleaned_data.get("assigned_to")
+        workflow = cleaned_data.get("workflow")
+        source_step = cleaned_data.get("assignment_source_step")
+
+        if (
+            policy == WorkflowStep.AssignmentPolicy.FIXED
+            and assigned_to is None
+        ):
+            self.add_error(
+                "assigned_to",
+                "برای سیاست «مسئول ثابت»، انتخاب مسئول الزامی است.",
+            )
+
+        if policy == WorkflowStep.AssignmentPolicy.STEP_COMPLETER:
+            if source_step is None:
+                self.add_error(
+                    "assignment_source_step",
+                    "برای این سیاست، انتخاب مرحله مرجع الزامی است.",
+                )
+            elif workflow and source_step.workflow_id != workflow.pk:
+                self.add_error(
+                    "assignment_source_step",
+                    "مرحله مرجع باید متعلق به همین فرآیند باشد.",
+                )
+        elif source_step is not None:
+            self.add_error(
+                "assignment_source_step",
+                "مرحله مرجع فقط برای سیاست «تکمیل‌کننده مرحله مرجع» قابل استفاده است.",
+            )
+
+        return cleaned_data
+
+
 @admin.register(
     WorkflowStep,
     site=dolphin_admin_site,
 )
 class WorkflowStepAdmin(admin.ModelAdmin):
+    form = WorkflowStepAdminForm
 
     admin_category = "workflows"
     admin_section = "definition"
