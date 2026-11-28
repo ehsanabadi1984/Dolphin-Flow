@@ -116,7 +116,7 @@ class RepairMissingStepAssignmentsCommandTests(TestCase):
             self.assertIsNone(history.changed_by_id)
             self.assertEqual(
                 history.source,
-                WorkflowStepAssignmentHistory.Source.POLICY,
+                WorkflowStepAssignmentHistory.Source.MIGRATION,
             )
             self.assertIn("repair_missing_step_assignments", history.reason)
         finally:
