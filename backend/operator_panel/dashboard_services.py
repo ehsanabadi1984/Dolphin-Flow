@@ -605,7 +605,7 @@ class DashboardService:
         return {
             "active": self._my_active_queryset().count(),
             "tasks": accessible.filter(
-                actionable,
+                _deny_allow_q(prefix="execute"),
                 assigned_to_me,
             ).count(),
             "pending": accessible.filter(
@@ -658,7 +658,10 @@ class DashboardService:
             _can_take_action_q(self.user),
         )
         if assigned_only:
-            queryset = queryset.filter(_active_execution_assigned_to(self.user))
+            queryset = queryset.filter(
+                _deny_allow_q(prefix="execute"),
+                _active_execution_assigned_to(self.user),
+            )
         elif exclude_assigned:
             queryset = queryset.exclude(_active_execution_assigned_to(self.user))
         return list(queryset[:PENDING_LIST_LIMIT])
