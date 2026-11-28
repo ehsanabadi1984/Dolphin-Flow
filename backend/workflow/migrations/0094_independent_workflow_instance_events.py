@@ -10,7 +10,9 @@ def _user_label(user):
     full_name = " ".join(
         part for part in (user.first_name, user.last_name) if part
     ).strip()
-    return full_name or user.get_username()
+    # Historical custom User models may not inherit AbstractUser methods.
+    # Read concrete fields only so this migration works across old states.
+    return full_name or getattr(user, "username", "") or getattr(user, "email", "") or str(user.pk)
 
 
 def _iso(value):
