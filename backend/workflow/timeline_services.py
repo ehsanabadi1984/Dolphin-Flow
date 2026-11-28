@@ -146,7 +146,7 @@ def build_instance_timeline_events(instance):
             override_reason=override_metadata.get("reason") or "—",
             entered_by=actor_label or "—",
             assigned_to=assigned_to_label or "—",
-            assigned_at=details.get("assigned_at"),
+            assigned_at=_timeline_datetime(details.get("assigned_at")),
             completed_by=details.get("completed_by_label") or "—",
             submitted_at=details.get("submitted_at"),
             is_submitted=bool(details.get("is_submitted")),
