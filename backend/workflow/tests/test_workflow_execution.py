@@ -1187,6 +1187,13 @@ class WorkflowExecutionTests(TestCase):
         self.grant_start_permission()
         self.grant_transition_permission(self.transition_one)
         self.grant_transition_permission(self.transition_two)
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            transition=self.transition_one,
+            user=self.destination_user,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
 
         # The starter begins the workflow, but the first step is executed
         # by a different user. The destination policy must use that source
@@ -1243,6 +1250,13 @@ class WorkflowExecutionTests(TestCase):
         self.grant_start_permission()
         self.grant_transition_permission(self.transition_one)
         self.grant_transition_permission(self.transition_two)
+        WorkflowPermission.objects.create(
+            workflow=self.workflow,
+            transition=self.transition_one,
+            user=self.destination_user,
+            action=WorkflowPermission.Action.TRANSITION,
+            effect=WorkflowPermission.Effect.ALLOW,
+        )
 
         self.step_one.assignment_policy = WorkflowStep.AssignmentPolicy.FIXED
         self.step_one.assigned_to = self.destination_user
