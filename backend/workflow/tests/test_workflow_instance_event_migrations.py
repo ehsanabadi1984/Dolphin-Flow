@@ -1,4 +1,5 @@
-from django.contrib.auth import get_user_model
+from django.conf import settings
+from django.contrib.auth.hashers import make_password
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
@@ -15,9 +16,10 @@ class WorkflowInstanceEventMigrationTests(TransactionTestCase):
         executor.migrate([self.migrate_from])
         old_apps = executor.loader.project_state([self.migrate_from]).apps
 
-        user = get_user_model().objects.create_user(
+        User = old_apps.get_model(*settings.AUTH_USER_MODEL.split("."))
+        user = User.objects.create(
             username="workflow_event_migration",
-            password="test-password",
+            password=make_password("test-password"),
             first_name="Migration",
             last_name="Actor",
         )
