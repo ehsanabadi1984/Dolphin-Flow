@@ -18,6 +18,7 @@ from workflow.models import (
     WorkflowInstance,
     WorkflowMembership,
     WorkflowStep,
+    WorkflowStepExecution,
 )
 from workflow.formula_services import FormulaService
 from workflow.process_summary_services import ProcessSummaryService
@@ -1413,3 +1414,156 @@ class ProcessSummaryServiceTests(TestCase):
         self.assertEqual(result[second_instance.pk], [{"label": "مقدار", "value": "B"}])
         self.assertEqual(len(form_data_queries), 1)
         self.assertEqual(len(row_queries), 1)
+
+
+
+class ProcessSummaryExecutionAttributionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            username="summary_completion_user",
+            password="test-password",
+        )
+        cls.other_user = User.objects.create_user(
+            username="summary_performed_user",
+            password="test-password",
+        )
+        cls.workflow = Workflow.objects.create(
+            name="Summary Completion Workflow",
+            code="SUMMARY_COMPLETION_WORKFLOW",
+        )
+        cls.first_step = WorkflowStep.objects.create(
+            workflow=cls.workflow,
+            name="First Step",
+            code="SUMMARY_COMPLETION_FIRST",
+            order=1,
+        )
+        cls.second_step = WorkflowStep.objects.create(
+            workflow=cls.workflow,
+            name="Second Step",
+            code="SUMMARY_COMPLETION_SECOND",
+            order=2,
+        )
+        cls.instance = WorkflowInstance.objects.create(
+            workflow=cls.workflow,
+            current_step=cls.second_step,
+        )
+
+    def create_execution(
+        self,
+        *,
+        instance=None,
+        step=None,
+        completed_by=None,
+        is_submitted=False,
+        submitted_at=None,
+    ):
+        return WorkflowStepExecution.objects.create(
+            instance=instance or self.instance,
+            workflow_step=step or self.first_step,
+            performed_by=self.other_user,
+            completed_by=completed_by,
+            is_submitted=is_submitted,
+            submitted_at=submitted_at,
+        )
+
+    def test_single_summary_uses_latest_submitted_execution_completed_by_user(self):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        now = timezone.now()
+        self.create_execution(
+            step=self.first_step,
+            completed_by=self.user,
+            is_submitted=True,
+            submitted_at=now - timedelta(days=2),
+        )
+        self.create_execution(
+            step=self.second_step,
+            completed_by=self.user,
+            is_submitted=False,
+            submitted_at=now + timedelta(days=1),
+        )
+        self.create_execution(
+            step=self.second_step,
+            completed_by=None,
+            is_submitted=True,
+            submitted_at=now + timedelta(days=2),
+        )
+
+        step = ProcessSummaryService._summary_step_for_instance(
+            self.instance,
+            user=self.user,
+        )
+
+        self.assertEqual(step.pk, self.first_step.pk)
+
+    def test_single_summary_does_not_fallback_to_performed_by_for_legacy_completion(self):
+        from django.utils import timezone
+
+        self.create_execution(
+            step=self.second_step,
+            completed_by=None,
+            is_submitted=True,
+            submitted_at=timezone.now(),
+        )
+        self.create_execution(
+            step=self.second_step,
+            completed_by=self.user,
+            is_submitted=False,
+            submitted_at=timezone.now(),
+        )
+
+        step = ProcessSummaryService._summary_step_for_instance(
+            self.instance,
+            user=self.user,
+        )
+
+        self.assertEqual(step.pk, self.first_step.pk)
+
+    def test_batch_summary_uses_completed_by_and_keeps_execution_lookup_batched(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        second_instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.second_step,
+        )
+        now = timezone.now()
+        self.create_execution(
+            instance=self.instance,
+            step=self.first_step,
+            completed_by=self.user,
+            is_submitted=True,
+            submitted_at=now - timedelta(days=1),
+        )
+        self.create_execution(
+            instance=self.instance,
+            step=self.second_step,
+            completed_by=None,
+            is_submitted=True,
+            submitted_at=now + timedelta(days=1),
+        )
+        self.create_execution(
+            instance=second_instance,
+            step=self.second_step,
+            completed_by=self.user,
+            is_submitted=False,
+            submitted_at=now + timedelta(days=2),
+        )
+
+        with CaptureQueriesContext(connection) as queries:
+            steps = ProcessSummaryService._summary_steps_for_instances(
+                [self.instance, second_instance],
+                user=self.user,
+            )
+
+        execution_table = WorkflowStepExecution._meta.db_table.lower()
+        execution_queries = [
+            query["sql"].lower()
+            for query in queries.captured_queries
+            if f'from "{execution_table}"' in query["sql"].lower()
+        ]
+        self.assertEqual(len(execution_queries), 1)
+        self.assertEqual(steps[self.instance.pk].pk, self.first_step.pk)
+        self.assertEqual(steps[second_instance.pk].pk, self.first_step.pk)
